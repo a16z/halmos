@@ -1,0 +1,2 @@
+crytic-compile
+z3-solver

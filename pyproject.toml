@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=61.0", "setuptools_scm[toml]>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+
+[project]
+name = "symtest"
+description = "SymTest: Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode"
+readme = "README.md"
+authors = [
+    { name="Daejun Park" },
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.6"
+dependencies = [
+    "crytic-compile",
+    "z3-solver",
+]
+dynamic = ["version"]
+
+[project.scripts]
+symtest = "symtest.__main__:main"
+
+[project.urls]
+"Homepage" = "https://github.com/a16z/symtest"
