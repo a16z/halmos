@@ -187,7 +187,6 @@ def run(
     end = timer()
 
     # check assertion violations
-    passfail = color_good('[PASS]')
     normal = 0
     models = []
     stuck = []
@@ -222,10 +221,14 @@ def run(
                     models.append((model, idx, ex))
                 else:
                     models.append((None, idx, ex))
-                passfail = color_warn('[FAIL]')
         else:
             stuck.append((opcode, idx, ex))
-            passfail = color_warn('[FAIL]')
+
+    passed = (normal > 0 and len(models) == 0 and len(stuck) == 0)
+    if passed:
+        passfail = color_good('[PASS]')
+    else:
+        passfail = color_warn('[FAIL]')
 
     # print result
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {end - start:0.2f}s, bounds: [{', '.join(dyn_param_size)}])")
@@ -253,7 +256,7 @@ def run(
             json.dump(steps, json_file)
 
     # exitcode
-    if normal > 0 and len(models) == 0 and len(stuck) == 0:
+    if passed:
         return 0
     else:
         return 1
