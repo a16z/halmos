@@ -144,13 +144,12 @@ class Exec:
     cnts: Dict[str,int] # opcode -> #executed
     calldata: List[Byte]
     sha3s: List[Tuple[Word,Word]]
-    fs_sha3: Dict[int,Word]
     storages: List[Tuple[Any,Any]]
     path: List[Any]
     calls: List[Any]
     jumps: List[Dict[str,int]]
 
-    def __init__(self, pgm: List[Opcode], code: List[str], st: State, pc: int, sol: Solver, storage: Dict[Any,Any], output: Any, log: List[Tuple[List[Word], Any]], balance: Any, cnts: Dict[str,int], calldata: List[Byte], sha3s: List[Any], fs_sha3: Dict[int,Word], storages: List[Any], path: List[Any], calls: List[Any], jumps: List[Dict[str,int]]) -> None:
+    def __init__(self, pgm: List[Opcode], code: List[str], st: State, pc: int, sol: Solver, storage: Dict[Any,Any], output: Any, log: List[Tuple[List[Word], Any]], balance: Any, cnts: Dict[str,int], calldata: List[Byte], sha3s: List[Any], storages: List[Any], path: List[Any], calls: List[Any], jumps: List[Dict[str,int]]) -> None:
         self.pgm = pgm
         self.code = code
         self.st = st
@@ -163,7 +162,6 @@ class Exec:
         self.cnts = cnts
         self.calldata = calldata
         self.sha3s = sha3s
-        self.fs_sha3 = fs_sha3
         self.storages = storages
         self.path = path
         self.calls = calls
@@ -539,7 +537,7 @@ def jumpi(ex: Exec, stack: List[Exec], step_id: int) -> None:
         new_sol.add(ex.sol.assertions())
         new_path = deepcopy(ex.path)
         new_path.append(str(cond_true))
-        new_ex = Exec(ex.pgm, ex.code, deepcopy(ex.st), target, new_sol, deepcopy(ex.storage), deepcopy(ex.output), deepcopy(ex.log), deepcopy(ex.balance), deepcopy(ex.cnts), ex.calldata, deepcopy(ex.sha3s), deepcopy(ex.fs_sha3), deepcopy(ex.storages), new_path, deepcopy(ex.calls), deepcopy(ex.jumps))
+        new_ex = Exec(ex.pgm, ex.code, deepcopy(ex.st), target, new_sol, deepcopy(ex.storage), deepcopy(ex.output), deepcopy(ex.log), deepcopy(ex.balance), deepcopy(ex.cnts), ex.calldata, deepcopy(ex.sha3s), deepcopy(ex.storages), new_path, deepcopy(ex.calls), deepcopy(ex.jumps))
         stack.append((new_ex, step_id))
     ex.sol.pop()
 
@@ -852,11 +850,11 @@ def run(ex0: Exec) -> Tuple[List[Exec], Steps]:
 
     return (out, steps)
 
-def sevm(ops: List[Opcode], code: List[str], sol: Solver = SolverFor('QF_AUFBV'), storage = {}, output: Any = None, log = [], balance: Any = BitVec('balance', 256), cnts: Dict[str,int] = defaultdict(int), calldata = None, opts = {}, sha3s = [], fs_sha3 = {}, storages = [], path = [], calls = [], jumps = []) -> Tuple[List[Exec], Steps]:
+def sevm(ops: List[Opcode], code: List[str], sol: Solver = SolverFor('QF_AUFBV'), storage = {}, output: Any = None, log = [], balance: Any = BitVec('balance', 256), cnts: Dict[str,int] = defaultdict(int), calldata = None, opts = {}, sha3s = [], storages = [], path = [], calls = [], jumps = []) -> Tuple[List[Exec], Steps]:
     global options
     options = opts
     st = State()
-    ex = Exec(ops_to_pgm(ops), code, st, 0, sol, storage, output, log, balance + f_callvalue(), cnts, calldata, sha3s, fs_sha3, storages, path, calls, jumps)
+    ex = Exec(ops_to_pgm(ops), code, st, 0, sol, storage, output, log, balance + f_callvalue(), cnts, calldata, sha3s, storages, path, calls, jumps)
     return run(ex)
 
 if __name__ == '__main__':
