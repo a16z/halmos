@@ -353,36 +353,6 @@ f_sdiv = Function('evm_sdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_smod', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp',  BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
-def wadd(w1: Word, w2: Word) -> Word:
-    if eq(w1.sort(), BoolSort()):
-        w1 = If(w1, con(1), con(0))
-    if eq(w2.sort(), BoolSort()):
-        w2 = If(w2, con(1), con(0))
-    return f_add(w1, w2)
-
-def wsub(w1: Word, w2: Word) -> Word:
-    if eq(w1.sort(), BoolSort()):
-        w1 = If(w1, con(1), con(0))
-    if eq(w2.sort(), BoolSort()):
-        w2 = If(w2, con(1), con(0))
-    return f_sub(w1, w2)
-
-def wmul(w1: Word, w2: Word) -> Word:
-    if eq(w1.sort(), BoolSort()):
-        w1 = If(w1, con(1), con(0))
-    if eq(w2.sort(), BoolSort()):
-        w2 = If(w2, con(1), con(0))
-    if options.get('mul'):
-        return w1 * w2
-    else:
-        return f_mul(w1, w2)
-
-def wdiv(w1: Word, w2: Word) -> Word:
-    if options.get('div'):
-        return UDiv(w1, w2) # unsigned div (bvdiv)
-    else:
-        return f_div(w1, w2)
-
 def b2i(w: Word) -> Word:
     if w.decl().name() == 'true':
         return con(1)
@@ -408,15 +378,17 @@ def arith(op: str, w1: Word, w2: Word) -> Word:
         if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
             return w1 + w2
         else:
-            return wadd(w1, w2)
+            return f_add(w1, w2)
     elif op == 'SUB':
         if options.get('sub'):
             return w1 - w2
         if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
             return w1 - w2
         else:
-            return wsub(w1, w2)
+            return f_sub(w1, w2)
     elif op == 'MUL':
+        if options.get('mul'):
+            return w1 * w2
         if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
             return w1 * w2
         elif w1.decl().name() == 'bv':
@@ -426,7 +398,7 @@ def arith(op: str, w1: Word, w2: Word) -> Word:
             elif is_power_of_two(i1):
                 return w2 << int(math.log(i1,2))
             else:
-                return wmul(w1, w2)
+                return f_mul(w1, w2)
         elif w2.decl().name() == 'bv':
             i2: int = int(str(w2)) # must be concrete
             if i2 == 0:
@@ -434,10 +406,12 @@ def arith(op: str, w1: Word, w2: Word) -> Word:
             elif is_power_of_two(i2):
                 return w1 << int(math.log(i2,2))
             else:
-                return wmul(w1, w2)
+                return f_mul(w1, w2)
         else:
-            return wmul(w1, w2)
+            return f_mul(w1, w2)
     elif op == 'DIV':
+        if options.get('div'):
+            return UDiv(w1, w2) # unsigned div (bvdiv)
         if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
             return UDiv(w1, w2)
         elif w2.decl().name() == 'bv':
@@ -447,9 +421,9 @@ def arith(op: str, w1: Word, w2: Word) -> Word:
             elif is_power_of_two(i2):
                 return UDiv(w1, w2)
             else:
-                return wdiv(w1, w2)
+                return f_div(w1, w2)
         else:
-            return wdiv(w1, w2)
+            return f_div(w1, w2)
     elif op == 'MOD':
         if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
             return URem(w1, w2)
