@@ -464,10 +464,7 @@ def call(ex: Exec, static: bool) -> None:
     if not arg_size >= 0: raise ValueError(arg_size)
     if not ret_size >= 0: raise ValueError(ret_size)
 
-    if options.get('sub'):
-        ex.balance = ex.balance - fund
-    else:
-        ex.balance = f_sub(ex.balance, fund)
+    ex.balance = arith('SUB', ex.balance, fund)
 
     # push exit code
     if arg_size > 0:
