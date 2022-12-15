@@ -132,21 +132,21 @@ def ops_to_pgm(ops: List[Opcode]) -> List[Opcode]:
     return pgm
 
 class Exec:
-    pgm: List[Opcode]
-    code: List[str]
-    st: State
+    pgm: List[Opcode] # opcode map: pc -> opcode
+    code: List[str] # opcode sequence
+    st: State # stack and memory
     pc: int
     sol: Solver
-    storage: Dict[int,Any]
-    output: Any
-    log: List[Tuple[List[Word], Any]]
+    storage: Dict[int,Any] # storage slot -> value
+    output: Any # returndata
+    log: List[Tuple[List[Word], Any]] # event logs emitted
     balance: Any
-    cnts: Dict[str,int] # opcode -> #executed
+    cnts: Dict[str,int] # opcode -> frequency
     calldata: List[Byte]
-    sha3s: List[Tuple[Word,Word]]
-    storages: List[Tuple[Any,Any]]
-    path: List[Any]
-    calls: List[Any]
+    sha3s: List[Tuple[Word,Word]] # sha3 hashes generated
+    storages: List[Tuple[Any,Any]] # storage updates
+    path: List[Any] # path conditions
+    calls: List[Any] # external calls
     jumps: List[Dict[str,int]]
 
     def __init__(self, pgm: List[Opcode], code: List[str], st: State, pc: int, sol: Solver, storage: Dict[Any,Any], output: Any, log: List[Tuple[List[Word], Any]], balance: Any, cnts: Dict[str,int], calldata: List[Byte], sha3s: List[Any], storages: List[Any], path: List[Any], calls: List[Any], jumps: List[Dict[str,int]]) -> None:
