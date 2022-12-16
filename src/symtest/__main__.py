@@ -42,7 +42,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
     parser.add_argument('--debug', action='store_true', help='run in debug mode')
     parser.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
-    parser.add_argument('--print-memory', action=argparse.BooleanOptionalAction, default=True, help='print local memory states in verbose mode')
     parser.add_argument('--print-revert', action=argparse.BooleanOptionalAction, default=False, help='print reverting paths in verbose mode')
 
     cryticparser.init(parser)
@@ -83,7 +82,7 @@ def run(
     funselector: str,
     arrlen: Dict,
     args: argparse.Namespace,
-    opts: Dict
+    options: Dict
 ) -> int:
     #
     # bytecode
@@ -96,8 +95,8 @@ def run(
     # solver
     #
 
-    sol = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
-    sol.set(timeout=args.solver_timeout_branching)
+    solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
+    solver.set(timeout=args.solver_timeout_branching)
 
     #
     # calldata
@@ -185,7 +184,15 @@ def run(
 
     start = timer()
 
-    (exs, steps) = sevm(ops, code, sol, storage, balance = orig_balance, calldata = cd, opts = opts)
+    sevm = SEVM(options)
+    (exs, steps) = sevm.execute(
+        ops,
+        code,
+        calldata = cd,
+        storage = storage,
+        solver = solver,
+        balance = orig_balance,
+    )
 
     # check assertion violations
     normal = 0
@@ -199,12 +206,12 @@ def run(
         elif opcode == 'REVERT':
             # Panic(1) # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
             if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
-                res = ex.sol.check()
-                if res == sat: model = ex.sol.model()
+                res = ex.solver.check()
+                if res == sat: model = ex.solver.model()
                 if res == unknown:
                     sol2 = SolverFor('QF_AUFBV', ctx=Context())
                     sol2.set(timeout=args.solver_timeout_assertion)
-                    sol2.from_string(ex.sol.sexpr())
+                    sol2.from_string(ex.solver.sexpr())
                     res = sol2.check()
                     if res == sat: model = sol2.model()
                 if res == unknown and args.solver_subprocess:
@@ -212,7 +219,7 @@ def run(
                     if args.verbose >= 4: print(f'z3 -smt2 {fname}')
                     with open(fname, 'w') as f:
                         f.write('(set-logic QF_AUFBV)\n')
-                        f.write(ex.sol.to_smt2())
+                        f.write(ex.solver.to_smt2())
                     res_str = subprocess.run(['z3', fname], capture_output=True, text=True).stdout.strip()
                     if args.verbose >= 4: print(res_str)
                     if res_str == 'unsat':
@@ -280,7 +287,7 @@ def main() -> int:
 
     args = parse_args()
 
-    opts = {
+    options = {
         'verbose': args.verbose,
         'debug': args.debug,
         'log': args.log,
@@ -288,19 +295,18 @@ def main() -> int:
         'sub': not args.uninterpreted_sub,
         'mul': not args.uninterpreted_mul,
         'div': not args.uninterpreted_div,
-        'memory': args.print_memory,
         'srcmap': args.use_srcmap,
         'timeout': args.solver_timeout_branching,
     }
 
     if args.width is not None:
-        opts['max_width'] = args.width
+        options['max_width'] = args.width
 
     if args.depth is not None:
-        opts['max_depth'] = args.depth
+        options['max_depth'] = args.depth
 
     if args.loop is not None:
-        opts['max_loop'] = args.loop
+        options['max_loop'] = args.loop
 
     arrlen = {}
     if args.array_lengths:
@@ -345,7 +351,7 @@ def main() -> int:
         for funsig in funsigs:
             funselector = methodIdentifiers[funsig]
             funname = funsig.split('(')[0]
-            exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, opts)
+            exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, options)
             num_failed += exitcode
 
     # exitcode
