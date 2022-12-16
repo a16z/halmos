@@ -10,11 +10,6 @@ from z3 import *
 from .byte2op import SrcMap, Opcode, decode
 from .utils import groupby_gas
 
-# z3 options
-set_option(timeout=500)
-set_option(max_width=240)
-set_param(max_lines=100000000)
-
 options = {}
 
 Word = Any # z3 expression (including constants)
@@ -514,6 +509,7 @@ def jumpi(ex: Exec, stack: List[Exec], step_id: int) -> None:
     ex.sol.add(cond_true)
     if ex.sol.check() != unsat: # jump
         new_sol = SolverFor('QF_AUFBV')
+        new_sol.set(timeout=options['timeout'])
         new_sol.add(ex.sol.assertions())
         new_path = deepcopy(ex.path)
         new_path.append(str(cond_true))

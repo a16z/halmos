@@ -34,6 +34,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--uninterpreted-mul', '--uf-mul', action=argparse.BooleanOptionalAction, default=False, help='encode `*` as uninterpreted function')
     parser.add_argument('--uninterpreted-div', '--uf-div', action=argparse.BooleanOptionalAction, default=True,  help='encode `/` as uninterpreted function')
 
+    parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
+    parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
+    parser.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
+
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
     parser.add_argument('--debug', action='store_true', help='run in debug mode')
     parser.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
@@ -98,6 +102,7 @@ def run(
     #
 
     sol = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
+    sol.set(timeout=args.solver_timeout_branching)
 
     #
     # calldata
@@ -184,8 +189,8 @@ def run(
     #
 
     start = timer()
+
     (exs, steps) = sevm(ops, code, sol, storage, balance = orig_balance, calldata = cd, opts = opts)
-    end = timer()
 
     # check assertion violations
     normal = 0
@@ -201,12 +206,13 @@ def run(
             if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
                 res = ex.sol.check()
                 if res == sat: model = ex.sol.model()
-               #if res == unknown:
-               #    sol2 = SolverFor('QF_AUFBV', ctx=Context())
-               #    sol2.from_string(ex.sol.sexpr())
-               #    res = sol2.check()
-               #    if res == sat: model = sol2.model()
                 if res == unknown:
+                    sol2 = SolverFor('QF_AUFBV', ctx=Context())
+                    sol2.set(timeout=args.solver_timeout_assertion)
+                    sol2.from_string(ex.sol.sexpr())
+                    res = sol2.check()
+                    if res == sat: model = sol2.model()
+                if res == unknown and args.solver_subprocess:
                     fname = f'/tmp/{uuid.uuid4().hex}.smt2'
                     if args.verbose >= 4: print(f'z3 -smt2 {fname}')
                     with open(fname, 'w') as f:
@@ -224,6 +230,8 @@ def run(
                     models.append((None, idx, ex))
         else:
             stuck.append((opcode, idx, ex))
+
+    end = timer()
 
     passed = (normal > 0 and len(models) == 0 and len(stuck) == 0)
     if passed:
@@ -264,6 +272,14 @@ def run(
 
 def main() -> int:
     #
+    # z3 global options
+    #
+
+    set_option(max_width=240)
+    set_option(max_lines=100000000)
+#   set_option(max_depth=1000)
+
+    #
     # command line arguments
     #
 
@@ -279,6 +295,7 @@ def main() -> int:
         'div': not args.uninterpreted_div,
         'memory': args.print_memory,
         'srcmap': args.use_srcmap,
+        'timeout': args.solver_timeout_branching,
     }
 
     if args.width is not None:
