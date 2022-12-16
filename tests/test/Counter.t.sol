@@ -55,7 +55,7 @@ contract CounterTest is Counter {
         assert(cnt == oldCnt + bytes(s).length + bytes(r).length);
     }
 
-    function testFalse() public {
+    function testFail() public pure {
         require(false);
         // deadcode
     }

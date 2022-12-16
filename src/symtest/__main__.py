@@ -2,6 +2,7 @@
 
 import os
 import sys
+import subprocess
 import uuid
 import json
 import argparse
@@ -12,6 +13,7 @@ from timeit import default_timer as timer
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
 
+from .utils import color_good, color_warn
 from .sevm import *
 
 def parse_args() -> argparse.Namespace:
@@ -33,10 +35,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--uninterpreted-mul', '--uf-mul', action=argparse.BooleanOptionalAction, default=False, help='encode `*` as uninterpreted function')
     parser.add_argument('--uninterpreted-div', '--uf-div', action=argparse.BooleanOptionalAction, default=True,  help='encode `/` as uninterpreted function')
 
+    parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
+    parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
+    parser.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
+
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
     parser.add_argument('--debug', action='store_true', help='run in debug mode')
     parser.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
-    parser.add_argument('--print-memory', action=argparse.BooleanOptionalAction, default=True, help='print local memory states in verbose mode')
     parser.add_argument('--print-revert', action=argparse.BooleanOptionalAction, default=False, help='print reverting paths in verbose mode')
 
     cryticparser.init(parser)
@@ -67,12 +72,6 @@ def add_srcmap(ops: List[Opcode], srcmap: List[str], srcs: Dict):
 
         ops[idx].sm = SrcMap(srctext, jump, mdepth)
 
-def color_good(text: str) -> str:
-    return '\033[32m' + text + '\033[0m'
-
-def color_warn(text: str) -> str:
-    return '\033[31m' + text + '\033[0m'
-
 def run(
     hexcode: str,
     abi: Dict,
@@ -83,7 +82,7 @@ def run(
     funselector: str,
     arrlen: Dict,
     args: argparse.Namespace,
-    opts: Dict
+    options: Dict
 ) -> int:
     #
     # bytecode
@@ -96,7 +95,8 @@ def run(
     # solver
     #
 
-    sol = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
+    solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
+    solver.set(timeout=args.solver_timeout_branching)
 
     #
     # calldata
@@ -183,8 +183,16 @@ def run(
     #
 
     start = timer()
-    (exs, steps) = sevm(ops, code, sol, storage, balance = orig_balance, calldata = cd, opts = opts)
-    end = timer()
+
+    sevm = SEVM(options)
+    (exs, steps) = sevm.execute(
+        ops,
+        code,
+        calldata = cd,
+        storage = storage,
+        solver = solver,
+        balance = orig_balance,
+    )
 
     # check assertion violations
     normal = 0
@@ -198,19 +206,20 @@ def run(
         elif opcode == 'REVERT':
             # Panic(1) # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
             if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
-                res = ex.sol.check()
-                if res == sat: model = ex.sol.model()
-               #if res == unknown:
-               #    sol2 = SolverFor('QF_AUFBV', ctx=Context())
-               #    sol2.from_string(ex.sol.sexpr())
-               #    res = sol2.check()
-               #    if res == sat: model = sol2.model()
+                res = ex.solver.check()
+                if res == sat: model = ex.solver.model()
                 if res == unknown:
+                    sol2 = SolverFor('QF_AUFBV', ctx=Context())
+                    sol2.set(timeout=args.solver_timeout_assertion)
+                    sol2.from_string(ex.solver.sexpr())
+                    res = sol2.check()
+                    if res == sat: model = sol2.model()
+                if res == unknown and args.solver_subprocess:
                     fname = f'/tmp/{uuid.uuid4().hex}.smt2'
                     if args.verbose >= 4: print(f'z3 -smt2 {fname}')
                     with open(fname, 'w') as f:
                         f.write('(set-logic QF_AUFBV)\n')
-                        f.write(ex.sol.to_smt2())
+                        f.write(ex.solver.to_smt2())
                     res_str = subprocess.run(['z3', fname], capture_output=True, text=True).stdout.strip()
                     if args.verbose >= 4: print(res_str)
                     if res_str == 'unsat':
@@ -223,6 +232,8 @@ def run(
                     models.append((None, idx, ex))
         else:
             stuck.append((opcode, idx, ex))
+
+    end = timer()
 
     passed = (normal > 0 and len(models) == 0 and len(stuck) == 0)
     if passed:
@@ -263,12 +274,20 @@ def run(
 
 def main() -> int:
     #
+    # z3 global options
+    #
+
+    set_option(max_width=240)
+    set_option(max_lines=100000000)
+#   set_option(max_depth=1000)
+
+    #
     # command line arguments
     #
 
     args = parse_args()
 
-    opts = {
+    options = {
         'verbose': args.verbose,
         'debug': args.debug,
         'log': args.log,
@@ -276,18 +295,18 @@ def main() -> int:
         'sub': not args.uninterpreted_sub,
         'mul': not args.uninterpreted_mul,
         'div': not args.uninterpreted_div,
-        'memory': args.print_memory,
         'srcmap': args.use_srcmap,
+        'timeout': args.solver_timeout_branching,
     }
 
     if args.width is not None:
-        opts['max_width'] = args.width
+        options['max_width'] = args.width
 
     if args.depth is not None:
-        opts['max_depth'] = args.depth
+        options['max_depth'] = args.depth
 
     if args.loop is not None:
-        opts['max_loop'] = args.loop
+        options['max_loop'] = args.loop
 
     arrlen = {}
     if args.array_lengths:
@@ -312,31 +331,46 @@ def main() -> int:
     # run
     #
 
-    if args.contract:
-        if args.contract not in compilation_unit.contracts_names: raise ValueError('Contract not found', args.contract)
-        contracts = [args.contract]
-    else:
-        contracts = list(compilation_unit.contracts_names)
+    total_passed = 0
+    total_failed = 0
 
-    num_failed = 0
+    for filename, contracts_names in compilation_unit.filename_to_contracts.items():
+        if args.contract:
+            if args.contract not in contracts_names: continue
+            contracts = [args.contract]
+        else:
+            contracts = list(contracts_names)
 
-    for contract in contracts:
-        hexcode = compilation_unit.bytecodes_runtime[contract]
-        srcmap = compilation_unit.srcmaps_runtime[contract]
-        srcs = []
-        abi = compilation_unit.abis[contract]
-        methodIdentifiers = compilation_unit.hashes(contract)
+        for contract in contracts:
+            hexcode = compilation_unit.bytecodes_runtime[contract]
+            srcmap = compilation_unit.srcmaps_runtime[contract]
+            srcs = []
+            abi = compilation_unit.abis[contract]
+            methodIdentifiers = compilation_unit.hashes(contract)
 
-        funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
+            funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
-        for funsig in funsigs:
-            funselector = methodIdentifiers[funsig]
-            funname = funsig.split('(')[0]
-            exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, opts)
-            num_failed += exitcode
+            if funsigs:
+                num_passed = 0
+                num_failed = 0
+                print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
+                for funsig in funsigs:
+                    funselector = methodIdentifiers[funsig]
+                    funname = funsig.split('(')[0]
+                    exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, options)
+                    if exitcode == 0:
+                        num_passed += 1
+                    else:
+                        num_failed += 1
+                print(f'Symtest result: {num_passed} passed; {num_failed} failed')
+                total_passed += num_passed
+                total_failed += num_failed
+
+    if total_passed == 0:
+        raise ValueError('No matching tests found', args.contract, args.function)
 
     # exitcode
-    if num_failed == 0:
+    if total_failed == 0:
         return 0
     else:
         return 1
