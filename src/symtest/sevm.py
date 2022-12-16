@@ -132,40 +132,47 @@ def ops_to_pgm(ops: List[Opcode]) -> List[Opcode]:
     return pgm
 
 class Exec:
+    # program
     pgm: List[Opcode] # opcode map: pc -> opcode
     code: List[str] # opcode sequence
-    st: State # stack and memory
-    pc: int
-    sol: Solver
-    storage: Dict[int,Any] # storage slot -> value
-    output: Any # returndata
-    log: List[Tuple[List[Word], Any]] # event logs emitted
-    balance: Any
-    cnts: Dict[str,int] # opcode -> frequency
     calldata: List[Byte]
+    # state
+    pc: int
+    st: State # stack and memory
+    storage: Dict[int,Any] # storage slot -> value
+    balance: Any
+    output: Any # returndata
+    # path
+    sol: Solver
+    path: List[Any] # path conditions
+    # logs
+    log: List[Tuple[List[Word], Any]] # event logs emitted
+    cnts: Dict[str,int] # opcode -> frequency
     sha3s: List[Tuple[Word,Word]] # sha3 hashes generated
     storages: List[Tuple[Any,Any]] # storage updates
-    path: List[Any] # path conditions
     calls: List[Any] # external calls
     jumps: List[Dict[str,int]]
 
-    def __init__(self, pgm: List[Opcode], code: List[str], st: State, pc: int, sol: Solver, storage: Dict[Any,Any], output: Any, log: List[Tuple[List[Word], Any]], balance: Any, cnts: Dict[str,int], calldata: List[Byte], sha3s: List[Any], storages: List[Any], path: List[Any], calls: List[Any], jumps: List[Dict[str,int]]) -> None:
-        self.pgm = pgm
-        self.code = code
-        self.st = st
-        self.pc = pc
-        self.sol = sol
-        self.storage = storage
-        self.output = output
-        self.log = log
-        self.balance = balance
-        self.cnts = cnts
-        self.calldata = calldata
-        self.sha3s = sha3s
-        self.storages = storages
-        self.path = path
-        self.calls = calls
-        self.jumps = jumps
+    def __init__(self, **kwargs) -> None:
+        self.pgm      = kwargs['pgm']
+        self.code     = kwargs['code']
+        self.calldata = kwargs['calldata']
+        #
+        self.pc       = kwargs['pc']
+        self.st       = kwargs['st']
+        self.storage  = kwargs['storage']
+        self.balance  = kwargs['balance']
+        self.output   = kwargs['output']
+        #
+        self.sol      = kwargs['sol']
+        self.path     = kwargs['path']
+        #
+        self.log      = kwargs['log']
+        self.cnts     = kwargs['cnts']
+        self.sha3s    = kwargs['sha3s']
+        self.storages = kwargs['storages']
+        self.calls    = kwargs['calls']
+        self.jumps    = kwargs['jumps']
 
     def str_cnts(self) -> str:
         cnts = groupby_gas(self.cnts)
@@ -508,7 +515,27 @@ def jumpi(ex: Exec, stack: List[Exec], step_id: int) -> None:
         new_sol.add(ex.sol.assertions())
         new_path = deepcopy(ex.path)
         new_path.append(str(cond_true))
-        new_ex = Exec(ex.pgm, ex.code, deepcopy(ex.st), target, new_sol, deepcopy(ex.storage), deepcopy(ex.output), deepcopy(ex.log), deepcopy(ex.balance), deepcopy(ex.cnts), ex.calldata, deepcopy(ex.sha3s), deepcopy(ex.storages), new_path, deepcopy(ex.calls), deepcopy(ex.jumps))
+        new_ex = Exec(
+            pgm      = ex.pgm,
+            code     = ex.code,
+            calldata = ex.calldata,
+            #
+            pc       = target,
+            st       = deepcopy(ex.st),
+            storage  = deepcopy(ex.storage),
+            balance  = deepcopy(ex.balance),
+            output   = deepcopy(ex.output),
+            #
+            sol      = new_sol,
+            path     = new_path,
+            #
+            log      = deepcopy(ex.log),
+            cnts     = deepcopy(ex.cnts),
+            sha3s    = deepcopy(ex.sha3s),
+            storages = deepcopy(ex.storages),
+            calls    = deepcopy(ex.calls),
+            jumps    = deepcopy(ex.jumps),
+        )
         stack.append((new_ex, step_id))
     ex.sol.pop()
 
@@ -821,11 +848,47 @@ def run(ex0: Exec) -> Tuple[List[Exec], Steps]:
 
     return (out, steps)
 
-def sevm(ops: List[Opcode], code: List[str], sol: Solver = SolverFor('QF_AUFBV'), storage = {}, output: Any = None, log = [], balance: Any = BitVec('balance', 256), cnts: Dict[str,int] = defaultdict(int), calldata = None, opts = {}, sha3s = [], storages = [], path = [], calls = [], jumps = []) -> Tuple[List[Exec], Steps]:
+def sevm(
+    ops: List[Opcode],
+    code: List[str],
+    sol: Solver = SolverFor('QF_AUFBV'),
+    storage = {},
+    output: Any = None,
+    log = [],
+    balance: Any = BitVec('balance', 256),
+    cnts: Dict[str,int] = defaultdict(int),
+    calldata = None,
+    opts = {},
+    sha3s = [],
+    storages = [],
+    path = [],
+    calls = [],
+    jumps = []
+) -> Tuple[List[Exec], Steps]:
     global options
     options = opts
     st = State()
-    ex = Exec(ops_to_pgm(ops), code, st, 0, sol, storage, output, log, balance + f_callvalue(), cnts, calldata, sha3s, storages, path, calls, jumps)
+    ex = Exec(
+        pgm      = ops_to_pgm(ops),
+        code     = code,
+        calldata = calldata,
+        #
+        pc       = 0,
+        st       = st,
+        storage  = storage,
+        balance  = balance + f_callvalue(),
+        output   = output,
+        #
+        sol      = sol,
+        path     = path,
+        #
+        log      = log,
+        cnts     = cnts,
+        sha3s    = sha3s,
+        storages = storages,
+        calls    = calls,
+        jumps    = jumps,
+    )
     return run(ex)
 
 if __name__ == '__main__':
