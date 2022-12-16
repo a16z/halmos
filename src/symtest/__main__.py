@@ -331,31 +331,46 @@ def main() -> int:
     # run
     #
 
-    if args.contract:
-        if args.contract not in compilation_unit.contracts_names: raise ValueError('Contract not found', args.contract)
-        contracts = [args.contract]
-    else:
-        contracts = list(compilation_unit.contracts_names)
+    total_passed = 0
+    total_failed = 0
 
-    num_failed = 0
+    for filename, contracts_names in compilation_unit.filename_to_contracts.items():
+        if args.contract:
+            if args.contract not in contracts_names: continue
+            contracts = [args.contract]
+        else:
+            contracts = list(contracts_names)
 
-    for contract in contracts:
-        hexcode = compilation_unit.bytecodes_runtime[contract]
-        srcmap = compilation_unit.srcmaps_runtime[contract]
-        srcs = []
-        abi = compilation_unit.abis[contract]
-        methodIdentifiers = compilation_unit.hashes(contract)
+        for contract in contracts:
+            hexcode = compilation_unit.bytecodes_runtime[contract]
+            srcmap = compilation_unit.srcmaps_runtime[contract]
+            srcs = []
+            abi = compilation_unit.abis[contract]
+            methodIdentifiers = compilation_unit.hashes(contract)
 
-        funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
+            funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
-        for funsig in funsigs:
-            funselector = methodIdentifiers[funsig]
-            funname = funsig.split('(')[0]
-            exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, options)
-            num_failed += exitcode
+            if funsigs:
+                num_passed = 0
+                num_failed = 0
+                print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
+                for funsig in funsigs:
+                    funselector = methodIdentifiers[funsig]
+                    funname = funsig.split('(')[0]
+                    exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, options)
+                    if exitcode == 0:
+                        num_passed += 1
+                    else:
+                        num_failed += 1
+                print(f'Symtest result: {num_passed} passed; {num_failed} failed')
+                total_passed += num_passed
+                total_failed += num_failed
+
+    if total_passed == 0:
+        raise ValueError('No matching tests found', args.contract, args.function)
 
     # exitcode
-    if num_failed == 0:
+    if total_failed == 0:
         return 0
     else:
         return 1
