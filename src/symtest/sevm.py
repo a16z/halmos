@@ -20,6 +20,8 @@ options = {}
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
 
+Steps = Dict[int,Dict[str,Any]]
+
 def wload(mem: List[Byte], loc: int, size: int) -> Word:
     return simplify(Concat(mem[loc:loc+size])) # BitVecSort(size * 8)
 
@@ -587,8 +589,6 @@ def returndatasize(ex: Exec) -> int:
         size: int = ex.output.sort().size()
         if not size % 8 == 0: raise ValueError(size)
         return int(size / 8)
-
-Steps = Dict[int,Dict[str,Any]]
 
 def run(ex0: Exec) -> Tuple[List[Exec], Steps]:
     out: List[Exec] = []
