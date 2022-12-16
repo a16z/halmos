@@ -13,6 +13,7 @@ from timeit import default_timer as timer
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
 
+from .utils import color_good, color_warn
 from .sevm import *
 
 def parse_args() -> argparse.Namespace:
@@ -71,12 +72,6 @@ def add_srcmap(ops: List[Opcode], srcmap: List[str], srcs: Dict):
             srctext = '<generated>'
 
         ops[idx].sm = SrcMap(srctext, jump, mdepth)
-
-def color_good(text: str) -> str:
-    return '\033[32m' + text + '\033[0m'
-
-def color_warn(text: str) -> str:
-    return '\033[31m' + text + '\033[0m'
 
 def run(
     hexcode: str,

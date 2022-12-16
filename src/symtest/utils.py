@@ -3,6 +3,12 @@
 from typing import Dict
 from collections import defaultdict
 
+def color_good(text: str) -> str:
+    return '\033[32m' + text + '\033[0m'
+
+def color_warn(text: str) -> str:
+    return '\033[31m' + text + '\033[0m'
+
 opcodes : Dict[str, str] = {
     '00' : 'STOP',
     '01' : 'ADD',
