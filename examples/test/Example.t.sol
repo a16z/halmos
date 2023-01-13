@@ -21,4 +21,28 @@ contract ExampleTest is Example {
         assert(total1 == total2);
     }
 
+    function testIsPowerOfTwo(uint8 x) public pure {
+        bool result1 = isPowerOfTwo(x);
+        bool result2 = x == 1 || x == 2 || x == 4 || x == 8 || x == 16 || x == 32 || x == 64 || x == 128;
+        assert(result1 == result2);
+    }
+
+    function testIsPowerOfTwo(uint256 x) public pure {
+        bool result1 = isPowerOfTwo(x);
+        bool result2 = false;
+        for (uint i = 0; i < 256; i++) {
+            if (x == 2**i) {
+                result2 = true;
+                break;
+            }
+        }
+        assert(result1 == result2);
+    }
+
+    function testIsPowerOfTwoEq(uint x) public pure {
+        bool result1 = isPowerOfTwo(x);
+        bool result2 = isPowerOfTwoIter(x);
+        assert(result1 == result2);
+    }
+
 }
