@@ -21,4 +21,17 @@ contract Example {
         }
     }
 
+    function isPowerOfTwo(uint x) public pure returns (bool) {
+        unchecked {
+            return x != 0 && (x & (x - 1)) == 0;
+        }
+    }
+
+    function isPowerOfTwoIter(uint x) public pure returns (bool) {
+        unchecked {
+            while (x != 0 && (x & 1) == 0) x >>= 1;
+            return x == 1;
+        }
+    }
+
 }
