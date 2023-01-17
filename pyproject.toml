@@ -18,7 +18,7 @@ classifiers = [
 ]
 requires-python = ">=3.6"
 dependencies = [
-    "crytic-compile",
+    "crytic-compile >= 0.3.0",
     "z3-solver",
 ]
 dynamic = ["version"]

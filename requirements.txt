@@ -1,2 +1,2 @@
-crytic-compile
+crytic-compile >= 0.3.0
 z3-solver
