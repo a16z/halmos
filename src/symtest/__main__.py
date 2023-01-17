@@ -335,6 +335,8 @@ def main() -> int:
     total_failed = 0
 
     for filename, contracts_names in compilation_unit.filename_to_contracts.items():
+        source_unit = compilation_unit.source_units[filename]
+
         if args.contract:
             if args.contract not in contracts_names: continue
             contracts = [args.contract]
@@ -342,11 +344,11 @@ def main() -> int:
             contracts = list(contracts_names)
 
         for contract in contracts:
-            hexcode = compilation_unit.bytecodes_runtime[contract]
-            srcmap = compilation_unit.srcmaps_runtime[contract]
+            hexcode = source_unit.bytecodes_runtime[contract]
+            srcmap = source_unit.srcmaps_runtime[contract]
             srcs = []
-            abi = compilation_unit.abis[contract]
-            methodIdentifiers = compilation_unit.hashes(contract)
+            abi = source_unit.abis[contract]
+            methodIdentifiers = source_unit.hashes(contract)
 
             funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
