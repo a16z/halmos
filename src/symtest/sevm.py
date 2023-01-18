@@ -8,7 +8,7 @@ from typing import List, Dict, Tuple, Any
 
 from z3 import *
 from .byte2op import SrcMap, Opcode, decode
-from .utils import groupby_gas
+from .utils import groupby_gas, color_good, color_warn
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -515,8 +515,14 @@ class SEVM:
         ex.calls.append((exit_code_var, exit_code, ex.output))
 
     def jumpi(self, ex: Exec, stack: List[Exec], step_id: int) -> None:
+        source: int = ex.pc
         target: int = int(str(ex.st.pop())) # target must be concrete
         cond: Word = ex.st.pop()
+
+        visited = ex.jumps[-1]['cnt'].get(source, {True: 0, False: 0})
+
+        new_ex_true = None
+        new_ex_false = None
 
         ex.solver.push()
         cond_true = simplify(is_non_zero(cond))
@@ -527,7 +533,7 @@ class SEVM:
             new_solver.add(ex.solver.assertions())
             new_path = deepcopy(ex.path)
             new_path.append(str(cond_true))
-            new_ex = Exec(
+            new_ex_true = Exec(
                 pgm      = ex.pgm,
                 code     = ex.code,
                 calldata = ex.calldata,
@@ -548,7 +554,6 @@ class SEVM:
                 calls    = deepcopy(ex.calls),
                 jumps    = deepcopy(ex.jumps),
             )
-            stack.append((new_ex, step_id))
         ex.solver.pop()
 
         cond_false = simplify(is_zero(cond))
@@ -556,10 +561,24 @@ class SEVM:
         if ex.solver.check() != unsat:
             ex.path.append(str(cond_false))
             ex.next_pc()
-            stack.append((ex, step_id))
+            new_ex_false = ex
+
+        if new_ex_true and new_ex_false: # for loop unrolling
+            if visited[True] < self.options['max_loop']:
+                new_ex_true.jumps[-1]['cnt'][source] = {True: visited[True] + 1, False: visited[False]}
+                stack.append((new_ex_true, step_id))
+            if visited[False] < self.options['max_loop']:
+                new_ex_false.jumps[-1]['cnt'][source] = {True: visited[True], False: visited[False] + 1}
+                stack.append((new_ex_false, step_id))
+        elif new_ex_true: # for constant-bounded loops
+            stack.append((new_ex_true, step_id))
+        elif new_ex_false:
+            stack.append((new_ex_false, step_id))
+        else:
+            pass # this may happen if the previous path condition was considered unknown but turns out to be unsat later
 
     def jump(self, ex: Exec, sm: SrcMap, src: int, dst: int) -> bool:
-        jmp = {'src': src, 'dst': dst, 'jmp': sm.jump, 'cnt': 0}
+        jmp = {'src': src, 'dst': dst, 'jmp': sm.jump, 'cnt': {}}
 
         if sm.jump == 'i': # function call
             ex.jumps.append(jmp)
@@ -575,20 +594,6 @@ class SEVM:
                     return True
             raise ValueError(ex.jumps, sm, src, dst)
 
-        # loop back edge
-        if len(ex.jumps) > 0:
-            last = ex.jumps[-1]
-            if last['jmp'] == '-' and last['dst'] == dst:
-                if not last['src'] == src:
-                    if self.options.get('debug'):
-                        print('warn: unmatched src', last['src'], src)
-                ex.jumps[-1]['cnt'] += 1
-                if 'max_loop' in self.options:
-                    return ex.jumps[-1]['cnt'] < self.options['max_loop']
-                else:
-                    return True
-
-        ex.jumps.append(jmp)
         return True
 
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps]:
@@ -623,6 +628,7 @@ class SEVM:
             if o.op[0] == 'STOP':
                 ex.output = None
                 out.append(ex)
+                if self.options.get('debug') and len(ex.jumps) != 1: print(color_warn('Warning: loop unrolling might be incomplete'), ex.jumps)
                 continue
 
             elif o.op[0] == 'REVERT':
@@ -633,6 +639,7 @@ class SEVM:
             elif o.op[0] == 'RETURN':
                 ex.output = ex.st.ret()
                 out.append(ex)
+                if self.options.get('debug') and len(ex.jumps) != 1: print(color_warn('Warning: loop unrolling might be incomplete'), ex.jumps)
                 continue
 
             elif o.op[0] == 'JUMPI':
@@ -867,7 +874,7 @@ class SEVM:
         sha3s = [],
         storages = [],
         calls = [],
-        jumps = []
+        jumps = [{'cnt':{}}] # dummy entry
     ) -> Tuple[List[Exec], Steps]:
         st = State()
         ex = Exec(
