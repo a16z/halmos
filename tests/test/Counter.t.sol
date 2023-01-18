@@ -30,14 +30,49 @@ contract CounterTest is Counter {
         assert(cnt < oldCnt || cnt == oldCnt + n); // cnt >= oldCnt ==> cnt == oldCnt + n
     }
 
-    function specLoop(uint n) public {
+    function specLoopFor(uint n) public {
         uint oldCnt = cnt;
-        loop(n);
+        loopFor(n);
         assert(cnt >= oldCnt);
         assert(cnt == oldCnt + n);
     }
-    function testLoop(uint8 k) public {
-        specLoop(k);
+    function testLoopFor(uint8 k) public {
+        specLoopFor(k);
+    }
+
+    function specLoopWhile(uint n) public {
+        uint oldCnt = cnt;
+        loopWhile(n);
+        assert(cnt >= oldCnt);
+        assert(cnt == oldCnt + n);
+    }
+    function testLoopWhile(uint8 k) public {
+        specLoopWhile(k);
+    }
+
+    function specLoopDoWhile(uint n) public {
+        uint oldCnt = cnt;
+        loopDoWhile(n);
+        assert(cnt > oldCnt);
+        if (n == 0) assert(cnt == oldCnt + 1);
+        else assert(cnt == oldCnt + n);
+    }
+    function testLoopDoWhile(uint8 k) public {
+        specLoopDoWhile(k);
+    }
+
+    function testLoopConst() public {
+        uint oldCnt = cnt;
+        loopConst();
+        assert(cnt >= oldCnt);
+        assert(cnt == oldCnt + 4);
+    }
+
+    function testLoopConstIf() public {
+        uint oldCnt = cnt;
+        loopConstIf();
+        assert(cnt >= oldCnt);
+        assert(cnt <= oldCnt + 4);
     }
 
     function specSetSum(uint[2] memory arr) public {
