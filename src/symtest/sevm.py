@@ -8,7 +8,7 @@ from typing import List, Dict, Tuple, Any
 
 from z3 import *
 from .byte2op import SrcMap, Opcode, decode
-from .utils import groupby_gas, color_good, color_warn
+from .utils import groupby_gas, color_good, color_warn, hevm_cheat_code
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -152,6 +152,7 @@ class Exec: # an execution path
     storages: List[Tuple[Any,Any]] # storage updates
     calls: List[Any] # external calls
     jumps: List[Dict[str,int]]
+    failed: bool
 
     def __init__(self, **kwargs) -> None:
         self.pgm      = kwargs['pgm']
@@ -173,6 +174,7 @@ class Exec: # an execution path
         self.storages = kwargs['storages']
         self.calls    = kwargs['calls']
         self.jumps    = kwargs['jumps']
+        self.failed   = kwargs['failed']
 
     def str_cnts(self) -> str:
         cnts = groupby_gas(self.cnts)
@@ -486,8 +488,9 @@ class SEVM:
 
         # push exit code
         if arg_size > 0:
+            arg = wload(ex.st.memory, arg_loc, arg_size)
             f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(arg_size*8), BitVecSort(256))
-            exit_code = f_call(con(ex.cnt_call()), gas, to, fund, wload(ex.st.memory, arg_loc, arg_size))
+            exit_code = f_call(con(ex.cnt_call()), gas, to, fund, arg)
         else:
             f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256),                         BitVecSort(256))
             exit_code = f_call(con(ex.cnt_call()), gas, to, fund)
@@ -498,6 +501,12 @@ class SEVM:
         # TODO: cover other precompiled
         if to == con(1): # ecrecover exit code is always 1
             ex.solver.add(exit_code_var != con(0))
+
+        # vm cheat code
+        if to == con(hevm_cheat_code.address):
+            ex.solver.add(exit_code_var != con(0))
+            if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
+                ex.failed = True
 
         # TODO: The actual return data size may be different from the given ret_size.
         #       In that case, ex.output should be set to the actual return data.
@@ -553,6 +562,7 @@ class SEVM:
                 storages = deepcopy(ex.storages),
                 calls    = deepcopy(ex.calls),
                 jumps    = deepcopy(ex.jumps),
+                failed   = ex.failed,
             )
         ex.solver.pop()
 
@@ -585,14 +595,15 @@ class SEVM:
             return True
 
         if sm.jump == 'o': # function return
-            for i in reversed(range(len(ex.jumps))):
+            for i in reversed(range(1, len(ex.jumps))):
                 if ex.jumps[i]['jmp'] == 'i':
                     if not ex.jumps[i]['src'] + 1 == dst:
                         if self.options.get('debug'):
                             print('warn: unmatched jumps', ex.jumps[i]['src'], dst)
                     ex.jumps = ex.jumps[:i]
                     return True
-            raise ValueError(ex.jumps, sm, src, dst)
+            if self.options.get('debug'):
+                print('warn: unmatched jumps', jmp)
 
         return True
 
@@ -746,7 +757,11 @@ class SEVM:
                 ex.st.push(f_coinbase())
                 ex.solver.add(Extract(255, 160, f_coinbase()) == BitVecVal(0, 96))
             elif o.op[0] == 'EXTCODESIZE':
-                ex.st.push(f_extcodesize(ex.st.pop()))
+                address = ex.st.pop()
+                codesize = f_extcodesize(address)
+                ex.st.push(codesize)
+                if address == con(hevm_cheat_code.address):
+                    ex.solver.add(codesize > 0)
             elif o.op[0] == 'CODESIZE':
                 ex.st.push(con(len(ex.code)))
             elif o.op[0] == 'GAS':
@@ -874,7 +889,8 @@ class SEVM:
         sha3s = [],
         storages = [],
         calls = [],
-        jumps = [{'cnt':{}}] # dummy entry
+        jumps = [{'cnt':{}}], # dummy entry
+        failed = False
     ) -> Tuple[List[Exec], Steps]:
         st = State()
         ex = Exec(
@@ -897,5 +913,6 @@ class SEVM:
             storages = storages,
             calls    = calls,
             jumps    = jumps,
+            failed   = failed,
         )
         return self.run(ex)
