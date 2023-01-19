@@ -373,7 +373,7 @@ def main() -> int:
                 total_passed += num_passed
                 total_failed += num_failed
 
-    if total_passed == 0:
+    if (total_passed + total_failed) == 0:
         raise ValueError('No matching tests found', args.contract, args.function)
 
     # exitcode
