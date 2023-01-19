@@ -230,3 +230,21 @@ def groupby_gas(cnts: Dict[str,int]) -> Dict[str,int]:
             new_cnts[op] = cnt
 
     return new_cnts
+
+class hevm_cheat_code:
+    # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
+
+    # address constant HEVM_ADDRESS =
+    #     address(bytes20(uint160(uint256(keccak256('hevm cheat code')))));
+    address: int = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
+
+    # abi.encodePacked(
+    #     bytes4(keccak256("store(address,bytes32,bytes32)")),
+    #     abi.encode(HEVM_ADDRESS, bytes32("failed"), bytes32(uint256(0x01)))
+    # )
+    fail_payload: int = int(
+        '70ca10bb' +
+        '0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d' +
+        '6661696c65640000000000000000000000000000000000000000000000000000' +
+        '0000000000000000000000000000000000000000000000000000000000000001', 16
+    )

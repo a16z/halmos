@@ -201,35 +201,14 @@ def run(
     for idx, ex in enumerate(exs):
         opcode = ex.pgm[ex.pc].op[0]
         if opcode == 'STOP' or opcode == 'RETURN':
-            normal += 1
-            continue
+            if ex.failed:
+                gen_model(args, models, idx, ex)
+            else:
+                normal += 1
         elif opcode == 'REVERT':
             # Panic(1) # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
             if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
-                res = ex.solver.check()
-                if res == sat: model = ex.solver.model()
-                if res == unknown:
-                    sol2 = SolverFor('QF_AUFBV', ctx=Context())
-                    sol2.set(timeout=args.solver_timeout_assertion)
-                    sol2.from_string(ex.solver.sexpr())
-                    res = sol2.check()
-                    if res == sat: model = sol2.model()
-                if res == unknown and args.solver_subprocess:
-                    fname = f'/tmp/{uuid.uuid4().hex}.smt2'
-                    if args.verbose >= 4: print(f'z3 -smt2 {fname}')
-                    with open(fname, 'w') as f:
-                        f.write('(set-logic QF_AUFBV)\n')
-                        f.write(ex.solver.to_smt2())
-                    res_str = subprocess.run(['z3', fname], capture_output=True, text=True).stdout.strip()
-                    if args.verbose >= 4: print(res_str)
-                    if res_str == 'unsat':
-                        res = unsat
-                if res == unsat:
-                    continue
-                if res == sat:
-                    models.append((model, idx, ex))
-                else:
-                    models.append((None, idx, ex))
+                gen_model(args, models, idx, ex)
         else:
             stuck.append((opcode, idx, ex))
 
@@ -257,7 +236,7 @@ def run(
     # print post-states
     if args.verbose >= 2:
         for idx, ex in enumerate(exs):
-            if args.print_revert or ex.pgm[ex.pc].op[0] != 'REVERT':
+            if args.print_revert or (ex.pgm[ex.pc].op[0] != 'REVERT' and not ex.failed):
                 print(f'# {idx+1} / {len(exs)}')
                 print(ex)
 
@@ -271,6 +250,32 @@ def run(
         return 0
     else:
         return 1
+
+def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec):
+    res = ex.solver.check()
+    if res == sat: model = ex.solver.model()
+    if res == unknown:
+        sol2 = SolverFor('QF_AUFBV', ctx=Context())
+        sol2.set(timeout=args.solver_timeout_assertion)
+        sol2.from_string(ex.solver.sexpr())
+        res = sol2.check()
+        if res == sat: model = sol2.model()
+    if res == unknown and args.solver_subprocess:
+        fname = f'/tmp/{uuid.uuid4().hex}.smt2'
+        if args.verbose >= 4: print(f'z3 -smt2 {fname}')
+        with open(fname, 'w') as f:
+            f.write('(set-logic QF_AUFBV)\n')
+            f.write(ex.solver.to_smt2())
+        res_str = subprocess.run(['z3', fname], capture_output=True, text=True).stdout.strip()
+        if args.verbose >= 4: print(res_str)
+        if res_str == 'unsat':
+            res = unsat
+    if res == unsat:
+        return
+    if res == sat:
+        models.append((model, idx, ex))
+    else:
+        models.append((None, idx, ex))
 
 def main() -> int:
     #
@@ -368,7 +373,7 @@ def main() -> int:
                 total_passed += num_passed
                 total_failed += num_failed
 
-    if total_passed == 0:
+    if (total_passed + total_failed) == 0:
         raise ValueError('No matching tests found', args.contract, args.function)
 
     # exitcode
