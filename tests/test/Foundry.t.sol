@@ -7,4 +7,9 @@ contract FoundryTest is Test {
     function testFail() public {
         assertTrue(false);
     }
+
+    function testAssume(uint x) public {
+        vm.assume(x < 10);
+        assertLt(x, 100);
+    }
 }

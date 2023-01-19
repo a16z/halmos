@@ -505,8 +505,14 @@ class SEVM:
         # vm cheat code
         if to == con(hevm_cheat_code.address):
             ex.solver.add(exit_code_var != con(0))
+            # vm.fail()
             if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
                 ex.failed = True
+            # vm.assume()
+            elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.assume_sig:
+                assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
+                ex.solver.add(assume_cond)
+                ex.path.append(str(assume_cond))
 
         # TODO: The actual return data size may be different from the given ret_size.
         #       In that case, ex.output should be set to the actual return data.
