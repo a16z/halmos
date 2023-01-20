@@ -730,7 +730,7 @@ class SEVM:
                 ex.st.push(LShR(ex.st.pop(), w))
 
             elif o.op[0] == 'XOR':
-                ex.st.push(f_xor(ex.st.pop(), ex.st.pop()))
+                ex.st.push(ex.st.pop() ^ ex.st.pop())
 
             elif o.op[0] == 'CALLDATALOAD':
                 if ex.calldata is None:
