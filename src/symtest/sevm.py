@@ -30,7 +30,6 @@ f_chainid      = Function('chainid'     , BitVecSort(256))
 f_balance      = Function('balance'     , BitVecSort(256), BitVecSort(256), BitVecSort(256)) # target address, cnt
 
 # uninterpreted arithmetic
-f_xor  = Function('evm_xor' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_add  = Function('evm_add' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_sub  = Function('evm_sub' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_mul  = Function('evm_mul' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
@@ -431,7 +430,7 @@ class SEVM:
                 return f_mul(w1, w2)
         elif op == 'DIV':
             if self.options.get('div'):
-                return UDiv(w1, w2) # unsigned div (bvdiv)
+                return UDiv(w1, w2) # unsigned div (bvudiv)
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return UDiv(w1, w2)
             elif w2.decl().name() == 'bv':
@@ -446,12 +445,12 @@ class SEVM:
                 return f_div(w1, w2)
         elif op == 'MOD':
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
-                return URem(w1, w2)
+                return URem(w1, w2) # bvurem
             else:
                 return f_mod(w1, w2)
         elif op == 'SDIV':
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
-                return w1 / w2
+                return w1 / w2 # bvsdiv
             else:
                 return f_sdiv(w1, w2)
         elif op == 'SMOD':
@@ -683,19 +682,19 @@ class SEVM:
             elif o.op[0] == 'LT':
                 w1 = b2i(ex.st.pop())
                 w2 = b2i(ex.st.pop())
-                ex.st.push(ULT(w1, w2))
+                ex.st.push(ULT(w1, w2)) # bvult
             elif o.op[0] == 'GT':
                 w1 = b2i(ex.st.pop())
                 w2 = b2i(ex.st.pop())
-                ex.st.push(UGT(w1, w2))
+                ex.st.push(UGT(w1, w2)) # bvugt
             elif o.op[0] == 'SLT':
                 w1 = b2i(ex.st.pop())
                 w2 = b2i(ex.st.pop())
-                ex.st.push(w1 < w2)
+                ex.st.push(w1 < w2) # bvslt
             elif o.op[0] == 'SGT':
                 w1 = b2i(ex.st.pop())
                 w2 = b2i(ex.st.pop())
-                ex.st.push(w1 > w2)
+                ex.st.push(w1 > w2) # bvsgt
 
             elif o.op[0] == 'EQ':
                 w1 = ex.st.pop()
@@ -718,19 +717,19 @@ class SEVM:
             elif o.op[0] == 'OR':
                 ex.st.push(or_of(ex.st.pop(), ex.st.pop()))
             elif o.op[0] == 'NOT':
-                ex.st.push(~ ex.st.pop())
+                ex.st.push(~ ex.st.pop()) # bvnot
             elif o.op[0] == 'SHL':
                 w = ex.st.pop()
-                ex.st.push(b2i(ex.st.pop()) << b2i(w))
+                ex.st.push(b2i(ex.st.pop()) << b2i(w)) # bvshl
             elif o.op[0] == 'SAR':
                 w = ex.st.pop()
-                ex.st.push(ex.st.pop() >> w)
+                ex.st.push(ex.st.pop() >> w) # bvashr
             elif o.op[0] == 'SHR':
                 w = ex.st.pop()
-                ex.st.push(LShR(ex.st.pop(), w))
+                ex.st.push(LShR(ex.st.pop(), w)) # bvlshr
 
             elif o.op[0] == 'XOR':
-                ex.st.push(ex.st.pop() ^ ex.st.pop())
+                ex.st.push(ex.st.pop() ^ ex.st.pop()) # bvxor
 
             elif o.op[0] == 'CALLDATALOAD':
                 if ex.calldata is None:
