@@ -682,19 +682,19 @@ class SEVM:
             elif o.op[0] == 'LT':
                 w1 = b2i(ex.st.pop())
                 w2 = b2i(ex.st.pop())
-                ex.st.push(ULT(w1, w2))
+                ex.st.push(ULT(w1, w2)) # bvult
             elif o.op[0] == 'GT':
                 w1 = b2i(ex.st.pop())
                 w2 = b2i(ex.st.pop())
-                ex.st.push(UGT(w1, w2))
+                ex.st.push(UGT(w1, w2)) # bvugt
             elif o.op[0] == 'SLT':
                 w1 = b2i(ex.st.pop())
                 w2 = b2i(ex.st.pop())
-                ex.st.push(w1 < w2)
+                ex.st.push(w1 < w2) # bvslt
             elif o.op[0] == 'SGT':
                 w1 = b2i(ex.st.pop())
                 w2 = b2i(ex.st.pop())
-                ex.st.push(w1 > w2)
+                ex.st.push(w1 > w2) # bvsgt
 
             elif o.op[0] == 'EQ':
                 w1 = ex.st.pop()
@@ -717,19 +717,19 @@ class SEVM:
             elif o.op[0] == 'OR':
                 ex.st.push(or_of(ex.st.pop(), ex.st.pop()))
             elif o.op[0] == 'NOT':
-                ex.st.push(~ ex.st.pop())
+                ex.st.push(~ ex.st.pop()) # bvnot
             elif o.op[0] == 'SHL':
                 w = ex.st.pop()
-                ex.st.push(b2i(ex.st.pop()) << b2i(w))
+                ex.st.push(b2i(ex.st.pop()) << b2i(w)) # bvshl
             elif o.op[0] == 'SAR':
                 w = ex.st.pop()
-                ex.st.push(ex.st.pop() >> w)
+                ex.st.push(ex.st.pop() >> w) # bvashr
             elif o.op[0] == 'SHR':
                 w = ex.st.pop()
-                ex.st.push(LShR(ex.st.pop(), w))
+                ex.st.push(LShR(ex.st.pop(), w)) # bvlshr
 
             elif o.op[0] == 'XOR':
-                ex.st.push(ex.st.pop() ^ ex.st.pop())
+                ex.st.push(ex.st.pop() ^ ex.st.pop()) # bvxor
 
             elif o.op[0] == 'CALLDATALOAD':
                 if ex.calldata is None:
