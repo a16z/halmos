@@ -30,10 +30,11 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument('--use-srcmap', action=argparse.BooleanOptionalAction, default=True, help='use source mappings')
 
-    parser.add_argument('--uninterpreted-add', '--uf-add', action=argparse.BooleanOptionalAction, default=False, help='encode `+` as uninterpreted function')
-    parser.add_argument('--uninterpreted-sub', '--uf-sub', action=argparse.BooleanOptionalAction, default=False, help='encode `-` as uninterpreted function')
-    parser.add_argument('--uninterpreted-mul', '--uf-mul', action=argparse.BooleanOptionalAction, default=False, help='encode `*` as uninterpreted function')
-    parser.add_argument('--uninterpreted-div', '--uf-div', action=argparse.BooleanOptionalAction, default=True,  help='encode `/` as uninterpreted function')
+    parser.add_argument('--smt-add',          action=argparse.BooleanOptionalAction, default=True,  help='interpret `+`')
+    parser.add_argument('--smt-sub',          action=argparse.BooleanOptionalAction, default=True,  help='interpret `-`')
+    parser.add_argument('--smt-mul',          action=argparse.BooleanOptionalAction, default=True,  help='interpret `*`')
+    parser.add_argument('--smt-div',          action=argparse.BooleanOptionalAction, default=False, help='interpret `/`')
+    parser.add_argument('--smt-div-by-const', action=argparse.BooleanOptionalAction, default=False, help='interpret division by constant')
 
     parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
     parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
@@ -296,10 +297,11 @@ def main() -> int:
         'verbose': args.verbose,
         'debug': args.debug,
         'log': args.log,
-        'add': not args.uninterpreted_add,
-        'sub': not args.uninterpreted_sub,
-        'mul': not args.uninterpreted_mul,
-        'div': not args.uninterpreted_div,
+        'add': args.smt_add,
+        'sub': args.smt_sub,
+        'mul': args.smt_mul,
+        'div': args.smt_div,
+        'divByConst': args.smt_div_by_const,
         'srcmap': args.use_srcmap,
         'timeout': args.solver_timeout_branching,
     }
