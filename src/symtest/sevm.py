@@ -430,7 +430,7 @@ class SEVM:
                 return f_mul(w1, w2)
         elif op == 'DIV':
             if self.options.get('div'):
-                return UDiv(w1, w2) # unsigned div (bvdiv)
+                return UDiv(w1, w2) # unsigned div (bvudiv)
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return UDiv(w1, w2)
             elif w2.decl().name() == 'bv':
@@ -445,12 +445,12 @@ class SEVM:
                 return f_div(w1, w2)
         elif op == 'MOD':
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
-                return URem(w1, w2)
+                return URem(w1, w2) # bvurem
             else:
                 return f_mod(w1, w2)
         elif op == 'SDIV':
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
-                return w1 / w2
+                return w1 / w2 # bvsdiv
             else:
                 return f_sdiv(w1, w2)
         elif op == 'SMOD':
