@@ -455,7 +455,7 @@ class SEVM:
                 return f_sdiv(w1, w2)
         elif op == 'SMOD':
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
-                return w1 % w2
+                return SRem(w1, w2) # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
             else:
                 return f_smod(w1, w2)
         elif op == 'EXP':
