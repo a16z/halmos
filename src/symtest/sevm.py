@@ -24,8 +24,14 @@ f_origin       = Function('origin'      , BitVecSort(256))
 f_address      = Function('address'     , BitVecSort(256))
 f_coinbase     = Function('coinbase'    , BitVecSort(256))
 f_extcodesize  = Function('extcodesize' , BitVecSort(256), BitVecSort(256)) # target address
+f_extcodehash  = Function('extcodehash' , BitVecSort(256), BitVecSort(256)) # target address
+f_blockhash    = Function('blockhash'   , BitVecSort(256), BitVecSort(256)) # block number
 f_gas          = Function('gas'         , BitVecSort(256), BitVecSort(256)) # cnt
+f_gasprice     = Function('gasprice'    , BitVecSort(256))
 f_timestamp    = Function('timestamp'   , BitVecSort(256))
+f_blocknumber  = Function('blocknumber' , BitVecSort(256))
+f_difficulty   = Function('difficulty'  , BitVecSort(256))
+f_gaslimit     = Function('gaslimit'    , BitVecSort(256))
 f_chainid      = Function('chainid'     , BitVecSort(256))
 f_balance      = Function('balance'     , BitVecSort(256), BitVecSort(256), BitVecSort(256)) # target address, cnt
 
@@ -769,16 +775,29 @@ class SEVM:
                 ex.st.push(codesize)
                 if address == con(hevm_cheat_code.address):
                     ex.solver.add(codesize > 0)
+            elif o.op[0] == 'EXTCODEHASH':
+                ex.st.push(f_extcodehash(ex.st.pop()))
             elif o.op[0] == 'CODESIZE':
                 ex.st.push(con(len(ex.code)))
             elif o.op[0] == 'GAS':
                 ex.st.push(f_gas(con(ex.cnt_gas())))
+            elif o.op[0] == 'GASPRICE':
+                ex.st.push(f_gasprice())
             elif o.op[0] == 'TIMESTAMP':
                 ex.st.push(f_timestamp())
+            elif o.op[0] == 'NUMBER':
+                ex.st.push(f_blocknumber())
+            elif o.op[0] == 'DIFFICULTY':
+                ex.st.push(f_difficulty())
+            elif o.op[0] == 'GASLIMIT':
+                ex.st.push(f_gaslimit())
 
             elif o.op[0] == 'CHAINID':
             #   ex.st.push(f_chainid())
                 ex.st.push(con(1)) # for ethereum
+
+            elif o.op[0] == 'BLOCKHASH':
+                ex.st.push(f_blockhash(ex.st.pop()))
 
             elif o.op[0] == 'BALANCE':
                 ex.st.push(f_balance(ex.st.pop(), con(ex.cnt_balance())))
