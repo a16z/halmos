@@ -30,7 +30,6 @@ f_chainid      = Function('chainid'     , BitVecSort(256))
 f_balance      = Function('balance'     , BitVecSort(256), BitVecSort(256), BitVecSort(256)) # target address, cnt
 
 # uninterpreted arithmetic
-f_xor  = Function('evm_xor' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_add  = Function('evm_add' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_sub  = Function('evm_sub' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_mul  = Function('evm_mul' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
