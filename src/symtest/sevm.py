@@ -438,6 +438,8 @@ class SEVM:
                 if i2 == 0:
                     return con(0)
                 elif is_power_of_two(i2):
+                    return LShR(w1, int(math.log(i2,2)))
+                elif self.options.get('divByConst'):
                     return UDiv(w1, w2)
                 else:
                     return f_div(w1, w2)
