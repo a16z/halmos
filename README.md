@@ -1,5 +1,6 @@
 # Halmos
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+4UhzHduai3MzZmUx)
 
 _Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode_
