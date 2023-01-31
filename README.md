@@ -1,5 +1,7 @@
 # Halmos
 
+[![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+4UhzHduai3MzZmUx)
+
 _Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode_
 
 **_Symbolic_:** Halmos executes the given contract bytecode against symbolic function arguments and symbolic storage states. This makes Halmos to systematically explore all possible behaviors of the contract.
