@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 
 [project]
-name = "symtest"
-description = "SymTest: Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode"
+name = "halmos"
+description = "Halmos: Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode"
 readme = "README.md"
 authors = [
     { name="Daejun Park" },
@@ -24,7 +24,7 @@ dependencies = [
 dynamic = ["version"]
 
 [project.scripts]
-symtest = "symtest.__main__:main"
+halmos = "halmos.__main__:main"
 
 [project.urls]
-"Homepage" = "https://github.com/a16z/symtest"
+"Homepage" = "https://github.com/a16z/halmos"

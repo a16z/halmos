@@ -1,29 +1,29 @@
-# SymTest
+# Halmos
 
 _Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode_
 
-**_Symbolic_:** symtest executes the given contract bytecode against symbolic function arguments and symbolic storage states. This makes symtest to systematically explore all possible behaviors of the contract.
+**_Symbolic_:** Halmos executes the given contract bytecode against symbolic function arguments and symbolic storage states. This makes Halmos to systematically explore all possible behaviors of the contract.
 
-**_Bounded_:** symtest unrolls unbounded loops up to a specific bound, and set variable-length arrays to be of a specific size. This allows symtest to run automatically without requiring additional user annotations.
+**_Bounded_:** Halmos unrolls unbounded loops up to a specific bound, and set variable-length arrays to be of a specific size. This allows Halmos to run automatically without requiring additional user annotations.
 
-**_Model Checking_:** symtest proves that assertions are never violated by any inputs; otherwise, it provides a counter-example. This means that symtest can be used for finding bugs as well as formal verification of the given contract.
+**_Model Checking_:** Halmos proves that assertions are never violated by any inputs; otherwise, it provides a counter-example. This means that Halmos can be used for finding bugs as well as formal verification of the given contract.
 
 ## Installation
 
 ```
-$ pip install symtest
+$ pip install halmos
 ```
 
 ## Usage
 
 ```
 $ cd /path/to/src
-$ symtest
+$ halmos
 ```
 
 For more details:
 ```
-$ symtest --help
+$ halmos --help
 ```
 
 ## Examples
@@ -57,12 +57,12 @@ $ forge test
 
 Once it passes, you can also run **symbolic testing** to check the same properties for **all possible inputs** (up to a certain bound):
 ```
-$ symtest
+$ halmos
 [FAIL] testTotalPriceBuggy(uint96,uint32) (paths: 6, time: 0.10s, bounds: [])
 Counterexample: [p_price_uint96 = 39614081294025656978550816768, p_quantity_uint32 = 1073741824]
 ```
 
-_(In this particular example, symtest found an input that violates the assertion, which was missed by the fuzzer!)_
+_(In this particular example, Halmos found an input that violates the assertion, which was missed by the fuzzer!)_
 
 ## Disclaimer
 

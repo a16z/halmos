@@ -17,7 +17,7 @@ from .utils import color_good, color_warn
 from .sevm import *
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(prog='symtest', epilog='For more information, see https://github.com/a16z/symtest')
+    parser = argparse.ArgumentParser(prog='halmos', epilog='For more information, see https://github.com/a16z/halmos')
 
     parser.add_argument('target', metavar='TARGET_DIRECTORY', nargs='?', default=os.getcwd(), help='source root directory (default: current directory)')
     parser.add_argument('--contract', metavar='CONTRACT_NAME', help='run tests in the given contract only')
@@ -371,7 +371,7 @@ def main() -> int:
                         num_passed += 1
                     else:
                         num_failed += 1
-                print(f'Symtest result: {num_passed} passed; {num_failed} failed')
+                print(f'Symbolic test result: {num_passed} passed; {num_failed} failed')
                 total_passed += num_passed
                 total_failed += num_failed
 
