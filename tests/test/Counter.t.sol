@@ -90,6 +90,30 @@ contract CounterTest is Counter {
         assert(cnt == oldCnt + bytes(s).length + bytes(r).length);
     }
 
+    function testDiv1(uint x, uint y) public pure {
+        if (y > 0) {
+            assert(x / y <= x);
+        }
+    }
+
+    function testDiv2(uint x, uint y) public pure {
+        if (y > 0) {
+            assert(x / y == x / y);
+        }
+    }
+
+    function testMulDiv(uint x, uint y) public pure {
+        unchecked {
+            if (x > 0 && y > 0) {
+                uint z = x * y;
+                if (z / x == y) {
+                    assert(z / x == y);
+                  //assert(z / y == x); // smt failed to solve
+                }
+            }
+        }
+    }
+
     function testFail() public pure {
         require(false);
         // deadcode

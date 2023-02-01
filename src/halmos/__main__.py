@@ -224,7 +224,10 @@ def run(
     # print result
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {end - start:0.2f}s, bounds: [{', '.join(dyn_param_size)}])")
     for model, idx, ex in models:
-        print(color_warn('Counterexample: ' + str(model)))
+        if model:
+            print(color_warn('Counterexample: ' + str(model)))
+        else:
+            print(color_warn('Counterexample: unknown'))
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
@@ -261,6 +264,15 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec):
         sol2.from_string(ex.solver.sexpr())
         res = sol2.check()
         if res == sat: model = sol2.model()
+    if res == sat and not is_valid_model(model):
+        query = ex.solver.sexpr()
+        query += '(assert (forall ((x (_ BitVec 256)) (y (_ BitVec 256))) (bvule (evm_div x y) x)))'
+    #   query += '(assert (forall ((x (_ BitVec 256)) (y (_ BitVec 256))) (implies (and (not (= x (_ bv0 256))) (not (= y (_ bv0 256))) (= (evm_div (bvmul x y) x) y)) (= (evm_div (bvmul x y) y) x))))'
+        sol3 = Solver(ctx=Context())
+        sol3.set(timeout=args.solver_timeout_assertion)
+        sol3.from_string(query)
+        res = sol3.check()
+        if res == sat: model = sol3.model()
     if res == unknown and args.solver_subprocess:
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'
         if args.verbose >= 4: print(f'z3 -smt2 {fname}')
@@ -274,9 +286,19 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec):
     if res == unsat:
         return
     if res == sat:
-        models.append((model, idx, ex))
+        if is_valid_model(model):
+            models.append((model, idx, ex))
+        else:
+            models.append((None, idx, ex))
     else:
         models.append((None, idx, ex))
+
+def is_valid_model(model) -> bool:
+    for decl in model:
+        inter = model[decl]
+        if str(decl).startswith('evm_'):
+            return False
+    return True
 
 def main() -> int:
     #
