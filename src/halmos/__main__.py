@@ -264,6 +264,15 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec):
         sol2.from_string(ex.solver.sexpr())
         res = sol2.check()
         if res == sat: model = sol2.model()
+    if res == sat and not is_valid_model(model):
+        query = ex.solver.sexpr()
+        query += '(assert (forall ((x (_ BitVec 256)) (y (_ BitVec 256))) (bvule (evm_div x y) x)))'
+    #   query += '(assert (forall ((x (_ BitVec 256)) (y (_ BitVec 256))) (implies (and (not (= x (_ bv0 256))) (not (= y (_ bv0 256))) (= (evm_div (bvmul x y) x) y)) (= (evm_div (bvmul x y) y) x))))'
+        sol3 = Solver(ctx=Context())
+        sol3.set(timeout=args.solver_timeout_assertion)
+        sol3.from_string(query)
+        res = sol3.check()
+        if res == sat: model = sol3.model()
     if res == unknown and args.solver_subprocess:
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'
         if args.verbose >= 4: print(f'z3 -smt2 {fname}')
