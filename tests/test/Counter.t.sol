@@ -90,6 +90,14 @@ contract CounterTest is Counter {
         assert(cnt == oldCnt + bytes(s).length + bytes(r).length);
     }
 
+    function testDiv1(uint x, uint y) public {
+        assert(y == 0 || x / y <= x);
+    }
+
+    function testDiv2(uint x, uint y) public {
+        assert(x / y == x / y);
+    }
+
     function testFail() public pure {
         require(false);
         // deadcode

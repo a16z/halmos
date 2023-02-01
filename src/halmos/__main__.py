@@ -224,7 +224,10 @@ def run(
     # print result
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {end - start:0.2f}s, bounds: [{', '.join(dyn_param_size)}])")
     for model, idx, ex in models:
-        print(color_warn('Counterexample: ' + str(model)))
+        if model:
+            print(color_warn('Counterexample: ' + str(model)))
+        else:
+            print(color_warn('Counterexample: unknown'))
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
@@ -274,9 +277,19 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec):
     if res == unsat:
         return
     if res == sat:
-        models.append((model, idx, ex))
+        if is_valid_model(model):
+            models.append((model, idx, ex))
+        else:
+            models.append((None, idx, ex))
     else:
         models.append((None, idx, ex))
+
+def is_valid_model(model) -> bool:
+    for decl in model:
+        inter = model[decl]
+        if str(decl).startswith('evm_'):
+            return False
+    return True
 
 def main() -> int:
     #
