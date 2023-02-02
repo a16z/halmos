@@ -1,12 +1,19 @@
 # Halmos
 
+[![License](https://img.shields.io/github/license/a16z/halmos)](https://github.com/a16z/halmos/blob/main/LICENSE)
+[![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+4UhzHduai3MzZmUx)
+
 _Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode_
 
-**_Symbolic_:** Halmos executes the given contract bytecode against symbolic function arguments and symbolic storage states. This makes Halmos to systematically explore all possible behaviors of the contract.
+**_Symbolic_:** Halmos executes the given contract bytecode with symbolic function arguments and symbolic storage states, enabling it to systematically explore all possible behaviors of the contract.
 
-**_Bounded_:** Halmos unrolls unbounded loops up to a specific bound, and set variable-length arrays to be of a specific size. This allows Halmos to run automatically without requiring additional user annotations.
+**_Bounded_:** Halmos unrolls loops up to a specified bound and sets the size of variable-length arrays, allowing it to run automatically without the need for additional user annotations.
 
-**_Model Checking_:** Halmos proves that assertions are never violated by any inputs; otherwise, it provides a counter-example. This means that Halmos can be used for finding bugs as well as formal verification of the given contract.
+**_Model Checking_:** Halmos proves that assertions are never violated by any inputs or provides a counter-example. This allows Halmos to be used for bug detection as well as formal verification of the contract.
+
+For more information, refer to our post on "_[Symbolic testing with Halmos: Leveraging existing tests for formal verification][post]_."
+
+[post]: <https://a16zcrypto.com/symbolic-testing-with-halmos-leveraging-existing-tests-for-formal-verification/>
 
 ## Installation
 
@@ -39,7 +46,7 @@ contract Example {
 }
 ```
 
-You write some **property tests** (in Solidity), [Example.t.sol](examples/test/Example.t.sol):
+You write some **property-based tests** (in Solidity), [Example.t.sol](examples/test/Example.t.sol):
 ```solidity
 contract ExampleTest is Example {
     function testTotalPriceBuggy(uint96 price, uint32 quantity) public pure {
@@ -55,14 +62,14 @@ $ forge test
 [PASS] testTotalPriceBuggy(uint96,uint32) (runs: 256, μ: 462, ~: 466)
 ```
 
-Once it passes, you can also run **symbolic testing** to check the same properties for **all possible inputs** (up to a certain bound):
+Once it passes, you can also perform **symbolic testing** to verify the same properties for **all possible inputs** (up to a specified limit):
 ```
 $ halmos
 [FAIL] testTotalPriceBuggy(uint96,uint32) (paths: 6, time: 0.10s, bounds: [])
 Counterexample: [p_price_uint96 = 39614081294025656978550816768, p_quantity_uint32 = 1073741824]
 ```
 
-_(In this particular example, Halmos found an input that violates the assertion, which was missed by the fuzzer!)_
+_(In this specific example, Halmos discovered an input that violated the assertion, which was missed by the fuzzer!)_
 
 ## Disclaimer
 
