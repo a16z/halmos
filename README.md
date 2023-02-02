@@ -11,9 +11,9 @@ _Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode_
 
 **_Model Checking_:** Halmos proves that assertions are never violated by any inputs or provides a counter-example. This allows Halmos to be used for bug detection as well as formal verification of the contract.
 
-For more information, refer to our post on "_[Halmos: leveraging existing tests for formal verification][post]_."
+For more information, refer to our post on "_[Symbolic testing with Halmos: Leveraging existing tests for formal verification][post]_."
 
-[post]: <https://a16zcrypto.com/...>
+[post]: <https://a16zcrypto.com/symbolic-testing-with-halmos-leveraging-existing-tests-for-formal-verification/>
 
 ## Installation
 
