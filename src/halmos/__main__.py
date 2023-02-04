@@ -232,7 +232,7 @@ def run(
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
     for opcode, idx, ex in stuck:
-        print(color_warn('Not supported: ' + opcode))
+        print(color_warn('Not supported: ' + opcode + ' ' + ex.error))
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
