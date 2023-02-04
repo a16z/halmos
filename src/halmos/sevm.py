@@ -158,6 +158,7 @@ class Exec: # an execution path
     calls: List[Any] # external calls
     jumps: List[Dict[str,int]]
     failed: bool
+    error: str
 
     def __init__(self, **kwargs) -> None:
         self.pgm      = kwargs['pgm']
@@ -180,6 +181,7 @@ class Exec: # an execution path
         self.calls    = kwargs['calls']
         self.jumps    = kwargs['jumps']
         self.failed   = kwargs['failed']
+        self.error    = kwargs['error']
 
     def str_cnts(self) -> str:
         cnts = groupby_gas(self.cnts)
@@ -476,10 +478,10 @@ class SEVM:
         else:
             raise ValueError(op)
 
-    def call(self, ex: Exec, static: bool) -> None:
+    def call(self, ex: Exec, op: str) -> None:
         gas = ex.st.pop()
         to = ex.st.pop()
-        if static:
+        if op == 'STATICCALL':
             fund = con(0)
         else:
             fund = ex.st.pop()
@@ -520,6 +522,9 @@ class SEVM:
                 assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
                 ex.solver.add(assume_cond)
                 ex.path.append(str(assume_cond))
+            else:
+                # TODO: support other cheat codes
+                raise NotImplementedError('Unsupported cheat code: calldata: ' + str(arg))
 
         # TODO: The actual return data size may be different from the given ret_size.
         #       In that case, ex.output should be set to the actual return data.
@@ -576,6 +581,7 @@ class SEVM:
                 calls    = deepcopy(ex.calls),
                 jumps    = deepcopy(ex.jumps),
                 failed   = ex.failed,
+                error    = ex.error,
             )
         ex.solver.pop()
 
@@ -804,10 +810,13 @@ class SEVM:
             elif o.op[0] == 'SELFBALANCE':
                 ex.st.push(ex.balance)
 
-            elif o.op[0] == 'CALL':
-                self.call(ex, False)
-            elif o.op[0] == 'STATICCALL':
-                self.call(ex, True)
+            elif o.op[0] == 'CALL' or o.op[0] == 'STATICCALL':
+                try:
+                    self.call(ex, o.op[0])
+                except NotImplementedError as error:
+                    ex.error = str(error)
+                    out.append(ex)
+                    continue
 
             elif o.op[0] == 'SHA3':
                 ex.sha3()
@@ -916,7 +925,8 @@ class SEVM:
         storages = [],
         calls = [],
         jumps = [{'cnt':{}}], # dummy entry
-        failed = False
+        failed = False,
+        error = ''
     ) -> Tuple[List[Exec], Steps]:
         st = State()
         ex = Exec(
@@ -940,5 +950,6 @@ class SEVM:
             calls    = calls,
             jumps    = jumps,
             failed   = failed,
+            error    = error,
         )
         return self.run(ex)

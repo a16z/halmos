@@ -12,4 +12,8 @@ contract FoundryTest is Test {
         vm.assume(x < 10);
         assertLt(x, 100);
     }
+
+    function testPrank(address x) public {
+        vm.prank(x); // not supported
+    }
 }
