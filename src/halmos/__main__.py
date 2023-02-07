@@ -83,6 +83,7 @@ def run(
     funselector: str,
     arrlen: Dict,
     args: argparse.Namespace,
+    setup_sig: str,
     options: Dict
 ) -> int:
     #
@@ -90,6 +91,7 @@ def run(
     #
 
     (ops, code) = decode(hexcode)
+    pgm = ops_to_pgm(ops)
     add_srcmap(ops, srcmap, srcs)
 
     #
@@ -177,7 +179,47 @@ def run(
     # balance
     #
 
-    orig_balance = BitVec('orig_balance', 256)
+    balance = BitVec('this_balance', 256)
+
+    #
+    # callvalue / caller / this
+    #
+
+    callvalue = BitVec('msg_value', 256)
+
+    caller = BitVec('msg_sender', 256)
+    solver.add(Extract(255, 160, caller) == BitVecVal(0, 96))
+
+    this = BitVec('this_address', 256)
+    solver.add(Extract(255, 160, this) == BitVecVal(0, 96))
+
+    #
+    # setup
+    #
+
+    sevm = SEVM(options)
+
+    setup_ex = sevm.mk_exec(
+        pgm       = { this: pgm },
+        code      = { this: code },
+        storage   = { this: storage },
+        balance   = { this: balance },
+        calldata  = [None] * 4,
+        callvalue = con(0),
+        caller    = caller,
+        this      = this,
+        solver    = solver,
+    )
+
+    if setup_sig:
+        wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_sig, 32))
+
+        (setup_exs, setup_steps) = sevm.run(setup_ex)
+
+        if len(setup_exs) != 1: raise ValueError('multiple paths exist in setUp()')
+        setup_ex = setup_exs[0]
+        setup_opcode = setup_ex.pgm[setup_ex.this][setup_ex.pc].op[0]
+        if (setup_opcode != 'STOP' and setup_opcode != 'RETURN') or setup_ex.failed: raise ValueError('setUp() failed')
 
     #
     # run
@@ -185,22 +227,34 @@ def run(
 
     start = timer()
 
-    sevm = SEVM(options)
-    (exs, steps) = sevm.execute(
-        ops,
-        code,
-        calldata = cd,
-        storage = storage,
-        solver = solver,
-        balance = orig_balance,
-    )
+    setup_ex.balance[setup_ex.this] = sevm.arith('ADD', setup_ex.balance[setup_ex.this], callvalue)
+
+    (exs, steps) = sevm.run(sevm.mk_exec(
+        pgm       = setup_ex.pgm,
+        code      = setup_ex.code,
+        storage   = setup_ex.storage,
+        balance   = setup_ex.balance,
+        calldata  = cd,
+        callvalue = callvalue,
+        caller    = caller,
+        this      = this,
+        solver    = setup_ex.solver,
+        path      = setup_ex.path,
+        log       = setup_ex.log,
+        cnts      = setup_ex.cnts,
+        sha3s     = setup_ex.sha3s,
+        storages  = setup_ex.storages,
+        calls     = setup_ex.calls,
+        failed    = setup_ex.failed,
+        error     = setup_ex.error,
+    ))
 
     # check assertion violations
     normal = 0
     models = []
     stuck = []
     for idx, ex in enumerate(exs):
-        opcode = ex.pgm[ex.pc].op[0]
+        opcode = ex.pgm[ex.this][ex.pc].op[0]
         if opcode == 'STOP' or opcode == 'RETURN':
             if ex.failed:
                 gen_model(args, models, idx, ex)
@@ -240,7 +294,7 @@ def run(
     # print post-states
     if args.verbose >= 2:
         for idx, ex in enumerate(exs):
-            if args.print_revert or (ex.pgm[ex.pc].op[0] != 'REVERT' and not ex.failed):
+            if args.print_revert or (ex.pgm[ex.this][ex.pc].op[0] != 'REVERT' and not ex.failed):
                 print(f'# {idx+1} / {len(exs)}')
                 print(ex)
 
@@ -381,6 +435,8 @@ def main() -> int:
 
             funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
+            setup = methodIdentifiers.get('setUp()')
+
             if funsigs:
                 num_passed = 0
                 num_failed = 0
@@ -388,7 +444,7 @@ def main() -> int:
                 for funsig in funsigs:
                     funselector = methodIdentifiers[funsig]
                     funname = funsig.split('(')[0]
-                    exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, options)
+                    exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, setup, options)
                     if exitcode == 0:
                         num_passed += 1
                     else:

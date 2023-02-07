@@ -68,4 +68,16 @@ contract Counter {
     function setString(string memory s) public {
         cnt += bytes(s).length;
     }
+
+    function foo(uint a, uint b, uint c, uint d) public {
+        bar(a);
+        bar(b);
+        bar(c);
+        bar(d);
+    }
+
+    function bar(uint x) public {
+        if (x > 10) cnt++;
+        else cnt++;
+    }
 }
