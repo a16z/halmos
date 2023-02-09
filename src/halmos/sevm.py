@@ -912,10 +912,13 @@ class SEVM:
                 ex.solver.add(Extract(255, 160, f_coinbase()) == BitVecVal(0, 96))
             elif o.op[0] == 'EXTCODESIZE':
                 address = ex.st.pop()
-                codesize = f_extcodesize(address)
+                if address in ex.code:
+                    codesize = con(len(ex.code[address]))
+                else:
+                    codesize = f_extcodesize(address)
+                    if address == con(hevm_cheat_code.address):
+                        ex.solver.add(codesize > 0)
                 ex.st.push(codesize)
-                if address == con(hevm_cheat_code.address):
-                    ex.solver.add(codesize > 0)
             elif o.op[0] == 'EXTCODEHASH':
                 ex.st.push(f_extcodehash(ex.st.pop()))
             elif o.op[0] == 'CODESIZE':
