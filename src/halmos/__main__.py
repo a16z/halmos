@@ -407,9 +407,6 @@ def main() -> int:
     except InvalidCompilation as e:
         raise ValueError('Parse error', e)
 
-    if len(cryticCompile.compilation_units) > 1: raise ValueError('Multiple compilation units', cryticCompile.compilation_units)
-    compilation_unit = list(cryticCompile.compilation_units.values())[0]
-
     #
     # run
     #
@@ -417,41 +414,43 @@ def main() -> int:
     total_passed = 0
     total_failed = 0
 
-    for filename, contracts_names in compilation_unit.filename_to_contracts.items():
-        source_unit = compilation_unit.source_units[filename]
+    for compilation_id, compilation_unit in cryticCompile.compilation_units.items():
 
-        if args.contract:
-            if args.contract not in contracts_names: continue
-            contracts = [args.contract]
-        else:
-            contracts = list(contracts_names)
+        for filename, contracts_names in compilation_unit.filename_to_contracts.items():
+            source_unit = compilation_unit.source_units[filename]
 
-        for contract in contracts:
-            hexcode = source_unit.bytecodes_runtime[contract]
-            srcmap = source_unit.srcmaps_runtime[contract]
-            srcs = []
-            abi = source_unit.abis[contract]
-            methodIdentifiers = source_unit.hashes(contract)
+            if args.contract:
+                if args.contract not in contracts_names: continue
+                contracts = [args.contract]
+            else:
+                contracts = list(contracts_names)
 
-            funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
+            for contract in contracts:
+                hexcode = source_unit.bytecodes_runtime[contract]
+                srcmap = source_unit.srcmaps_runtime[contract]
+                srcs = []
+                abi = source_unit.abis[contract]
+                methodIdentifiers = source_unit.hashes(contract)
 
-            setup = methodIdentifiers.get('setUp()')
+                funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
-            if funsigs:
-                num_passed = 0
-                num_failed = 0
-                print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
-                for funsig in funsigs:
-                    funselector = methodIdentifiers[funsig]
-                    funname = funsig.split('(')[0]
-                    exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, setup, options)
-                    if exitcode == 0:
-                        num_passed += 1
-                    else:
-                        num_failed += 1
-                print(f'Symbolic test result: {num_passed} passed; {num_failed} failed')
-                total_passed += num_passed
-                total_failed += num_failed
+                setup = methodIdentifiers.get('setUp()')
+
+                if funsigs:
+                    num_passed = 0
+                    num_failed = 0
+                    print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
+                    for funsig in funsigs:
+                        funselector = methodIdentifiers[funsig]
+                        funname = funsig.split('(')[0]
+                        exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, setup, options)
+                        if exitcode == 0:
+                            num_passed += 1
+                        else:
+                            num_failed += 1
+                    print(f'Symbolic test result: {num_passed} passed; {num_failed} failed')
+                    total_passed += num_passed
+                    total_failed += num_failed
 
     if (total_passed + total_failed) == 0:
         raise ValueError('No matching tests found', args.contract, args.function)
