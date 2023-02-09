@@ -28,13 +28,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--depth', metavar='MAX_DEPTH', type=int, help='set the max path length')
     parser.add_argument('--array-lengths', metavar='NAME1=LENGTH1,NAME2=LENGTH2,...', help='set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)')
 
-    parser.add_argument('--use-srcmap', action=argparse.BooleanOptionalAction, default=True, help='use source mappings')
-
-    parser.add_argument('--smt-add',          action=argparse.BooleanOptionalAction, default=True,  help='interpret `+`')
-    parser.add_argument('--smt-sub',          action=argparse.BooleanOptionalAction, default=True,  help='interpret `-`')
-    parser.add_argument('--smt-mul',          action=argparse.BooleanOptionalAction, default=True,  help='interpret `*`')
-    parser.add_argument('--smt-div',          action=argparse.BooleanOptionalAction, default=False, help='interpret `/`')
-    parser.add_argument('--smt-div-by-const', action=argparse.BooleanOptionalAction, default=False, help='interpret division by constant')
+    parser.add_argument('--no-smt-add',          action='store_true', help='do not interpret `+`')
+    parser.add_argument('--no-smt-sub',          action='store_true', help='do not interpret `-`')
+    parser.add_argument('--no-smt-mul',          action='store_true', help='do not interpret `*`')
+    parser.add_argument(   '--smt-div',          action='store_true', help=       'interpret `/`')
+    parser.add_argument(   '--smt-div-by-const', action='store_true', help=       'interpret division by constant')
 
     parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
     parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
@@ -43,7 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
     parser.add_argument('--debug', action='store_true', help='run in debug mode')
     parser.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
-    parser.add_argument('--print-revert', action=argparse.BooleanOptionalAction, default=False, help='print reverting paths in verbose mode')
+    parser.add_argument('--print-revert', action='store_true', help='print reverting paths in verbose mode')
 
     cryticparser.init(parser)
 
@@ -373,12 +371,11 @@ def main() -> int:
         'verbose': args.verbose,
         'debug': args.debug,
         'log': args.log,
-        'add': args.smt_add,
-        'sub': args.smt_sub,
-        'mul': args.smt_mul,
+        'add': not args.no_smt_add,
+        'sub': not args.no_smt_sub,
+        'mul': not args.no_smt_mul,
         'div': args.smt_div,
         'divByConst': args.smt_div_by_const,
-        'srcmap': args.use_srcmap,
         'timeout': args.solver_timeout_branching,
     }
 
