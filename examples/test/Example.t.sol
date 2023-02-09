@@ -30,7 +30,7 @@ contract ExampleTest is Example {
     function testIsPowerOfTwo(uint256 x) public pure {
         bool result1 = isPowerOfTwo(x);
         bool result2 = false;
-        for (uint i = 0; i < 256; i++) {
+        for (uint i = 0; i < 256; i++) { // NOTE: `--loop 256` option needed for complete verification
             if (x == 2**i) {
                 result2 = true;
                 break;

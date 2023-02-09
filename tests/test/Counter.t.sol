@@ -90,6 +90,12 @@ contract CounterTest is Counter {
         assert(cnt == oldCnt + bytes(s).length + bytes(r).length);
     }
 
+    function testFoo(uint a, uint b, uint c, uint d) public {
+        uint oldCnt = cnt;
+        foo(a, b, c, d);
+        assert(cnt == oldCnt + 4);
+    }
+
     function testDiv1(uint x, uint y) public pure {
         if (y > 0) {
             assert(x / y <= x);

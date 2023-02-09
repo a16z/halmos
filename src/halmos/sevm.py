@@ -12,16 +12,14 @@ from .utils import groupby_gas, color_good, color_warn, hevm_cheat_code
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
+Bytes = Any # z3 expression (including constants)
 
 Steps = Dict[int,Dict[str,Any]] # execution tree
 
 # symbolic states
 f_calldataload = Function('calldataload', BitVecSort(256), BitVecSort(256)) # index
 f_calldatasize = Function('calldatasize', BitVecSort(256))
-f_callvalue    = Function('callvalue'   , BitVecSort(256))
-f_caller       = Function('caller'      , BitVecSort(256))
 f_origin       = Function('origin'      , BitVecSort(256))
-f_address      = Function('address'     , BitVecSort(256))
 f_coinbase     = Function('coinbase'    , BitVecSort(256))
 f_extcodesize  = Function('extcodesize' , BitVecSort(256), BitVecSort(256)) # target address
 f_extcodehash  = Function('extcodehash' , BitVecSort(256), BitVecSort(256)) # target address
@@ -33,7 +31,7 @@ f_blocknumber  = Function('blocknumber' , BitVecSort(256))
 f_difficulty   = Function('difficulty'  , BitVecSort(256))
 f_gaslimit     = Function('gaslimit'    , BitVecSort(256))
 f_chainid      = Function('chainid'     , BitVecSort(256))
-f_balance      = Function('balance'     , BitVecSort(256), BitVecSort(256), BitVecSort(256)) # target address, cnt
+f_orig_balance = Function('orig_balance', BitVecSort(256), BitVecSort(256)) # target address
 
 # uninterpreted arithmetic
 f_add  = Function('evm_add' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
@@ -48,19 +46,28 @@ f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 def con(n: int) -> Word:
     return BitVecVal(n, 256)
 
-def wload(mem: List[Byte], loc: int, size: int) -> Word:
+def wload(mem: List[Byte], loc: int, size: int) -> Bytes:
     return simplify(Concat(mem[loc:loc+size])) # BitVecSort(size * 8)
 
-def wstore(mem: List[Byte], loc: int, size: int, val: Word) -> None:
+def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
     if not eq(val.sort(), BitVecSort(size*8)): raise ValueError(val)
     for i in range(size):
         mem[loc + i] = simplify(Extract((size-1 - i)*8+7, (size-1 - i)*8, val))
+
+def wstore_partial(mem: List[Byte], loc: int, offset: int, size: int, data: Bytes, datasize: int) -> None:
+    if size > 0:
+        if not datasize >= offset + size: raise ValueError(datasize, offset, size)
+        sub_data = Extract((datasize-1 - offset)*8+7, (datasize - offset - size)*8, data)
+        wstore(mem, loc, size, sub_data)
 
 def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
     if not size == len(arr): raise ValueError(size, arr)
     for i in range(size):
         if not eq(arr[i].sort(), BitVecSort(8)): raise ValueError(arr)
         mem[loc + i] = arr[i]
+
+def create_address(cnt: int) -> Word:
+    return con(0x220E + cnt)
 
 class State:
     stack: List[Word]
@@ -128,7 +135,7 @@ class State:
         loc: int = self.mloc()
         self.push(wload(self.memory, loc, 32))
 
-    def ret(self) -> Word:
+    def ret(self) -> Bytes:
         loc: int = self.mloc()
         size: int = int(str(self.pop())) # size (in bytes) must be concrete
         if size > 0:
@@ -137,15 +144,20 @@ class State:
             return None
 
 class Exec: # an execution path
-    # program
-    pgm: List[Opcode] # opcode map: pc -> opcode
-    code: List[str] # opcode sequence
-    calldata: List[Byte]
-    # state
+    # network
+    pgm: Dict[Any,List[Opcode]] # address -> { opcode map: pc -> opcode }
+    code: Dict[Any,List[str]] # address -> opcode sequence
+    storage: Dict[Any,Dict[int,Any]] # address -> { storage slot -> value }
+    balance: Dict[Any,Any] # address -> balance
+    # tx
+    calldata: List[Byte] # msg.data
+    callvalue: Word # msg.value
+    caller: Word # msg.sender
+    this: Word # current account address
+    # vm state
     pc: int
     st: State # stack and memory
-    storage: Dict[int,Any] # storage slot -> value
-    balance: Any
+    jumpis: Dict[str,Dict[str,int]] # for loop detection
     output: Any # returndata
     # path
     solver: Solver
@@ -156,19 +168,23 @@ class Exec: # an execution path
     sha3s: List[Tuple[Word,Word]] # sha3 hashes generated
     storages: List[Tuple[Any,Any]] # storage updates
     calls: List[Any] # external calls
-    jumps: List[Dict[str,int]]
     failed: bool
     error: str
 
     def __init__(self, **kwargs) -> None:
         self.pgm      = kwargs['pgm']
         self.code     = kwargs['code']
+        self.storage  = kwargs['storage']
+        self.balance  = kwargs['balance']
+        #
         self.calldata = kwargs['calldata']
+        self.callvalue= kwargs['callvalue']
+        self.caller   = kwargs['caller']
+        self.this     = kwargs['this']
         #
         self.pc       = kwargs['pc']
         self.st       = kwargs['st']
-        self.storage  = kwargs['storage']
-        self.balance  = kwargs['balance']
+        self.jumpis   = kwargs['jumpis']
         self.output   = kwargs['output']
         #
         self.solver   = kwargs['solver']
@@ -179,7 +195,6 @@ class Exec: # an execution path
         self.sha3s    = kwargs['sha3s']
         self.storages = kwargs['storages']
         self.calls    = kwargs['calls']
-        self.jumps    = kwargs['jumps']
         self.failed   = kwargs['failed']
         self.error    = kwargs['error']
 
@@ -193,22 +208,12 @@ class Exec: # an execution path
     def str_path(self) -> str:
         return ''.join(map(lambda x: '- ' + str(x) + '\n', filter(lambda x: str(x) != 'True', self.path)))
 
-    def summary(self) -> str:
-        return ''.join([
-            str(self.pc), ' ', str(self.pgm[self.pc]), '\n',
-            'stack3:  ', str(self.st.stack[0:3]), '\n',
-            'storage: ', str(self.storage), '\n',
-            'balance: ', str(self.balance), '\n',
-            'output: ' , str(self.output) , '\n',
-            'log: '    , str(self.log)    , '\n',
-        ])
-
     def __str__(self) -> str:
         return ''.join([
-            'PC: '              , str(self.pc), ' ', str(self.pgm[self.pc]), '\n',
+            'PC: '              , str(self.this), ' ', str(self.pc), ' ', str(self.pgm[self.this][self.pc]), '\n',
             str(self.st),
-            'Storage: '         , str(self.storage), '\n',
-            'Balance: '         , str(self.balance), '\n',
+            'Storage:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.storage[x]) + '\n', self.storage)),
+            'Balance:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.balance[x]) + '\n', self.balance)),
         #   'Solver:\n'         , self.str_solver(), '\n',
             'Path:\n'           , self.str_path(),
             'Output: '          , str(self.output) , '\n',
@@ -223,15 +228,15 @@ class Exec: # an execution path
 
     def next_pc(self) -> int:
         self.pc += 1
-        while self.pgm[self.pc] is None:
+        while self.pgm[self.this][self.pc] is None:
             self.pc += 1
 
     def sinit(self, slot: int, keys):
-        if slot not in self.storage:
+        if slot not in self.storage[self.this]:
             if len(keys) == 0:
-                self.storage[slot] = BitVec(f'storage_slot_{str(slot)}', 256)
+                self.storage[self.this][slot] = BitVec(f'storage_slot_{str(slot)}', 256)
             else:
-                self.storage[slot] = Array(f'storage_slot_{str(slot)}', BitVecSort(len(keys)*256), BitVecSort(256))
+                self.storage[self.this][slot] = Array(f'storage_slot_{str(slot)}', BitVecSort(len(keys)*256), BitVecSort(256))
 
     def sload(self, loc: Word) -> Word:
         offsets = self.decode_storage_loc(loc)
@@ -239,11 +244,11 @@ class Exec: # an execution path
         slot, keys = int(str(offsets[0])), offsets[1:]
         self.sinit(slot, keys)
         if len(keys) == 0:
-            return self.storage[slot]
+            return self.storage[self.this][slot]
         elif len(keys) == 1:
-            return Select(self.storage[slot], keys[0])
+            return Select(self.storage[self.this][slot], keys[0])
         else:
-            return Select(self.storage[slot], Concat(keys))
+            return Select(self.storage[self.this][slot], Concat(keys))
 
     def sstore(self, loc: Any, val: Any):
         offsets = self.decode_storage_loc(loc)
@@ -251,15 +256,15 @@ class Exec: # an execution path
         slot, keys = int(str(offsets[0])), offsets[1:]
         self.sinit(slot, keys)
         if len(keys) == 0:
-            self.storage[slot] = val
+            self.storage[self.this][slot] = val
         else:
-            new_storage_var = Array(f'storage{self.cnt_sstore()}', BitVecSort(len(keys)*256), BitVecSort(256))
+            new_storage_var = Array(f'storage[self.this]{self.cnt_sstore()}', BitVecSort(len(keys)*256), BitVecSort(256))
             if len(keys) == 1:
-                new_storage = Store(self.storage[slot], keys[0], val)
+                new_storage = Store(self.storage[self.this][slot], keys[0], val)
             else:
-                new_storage = Store(self.storage[slot], Concat(keys), val)
+                new_storage = Store(self.storage[self.this][slot], Concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
-            self.storage[slot] = new_storage_var
+            self.storage[self.this][slot] = new_storage_var
             self.storages.append((new_storage_var,new_storage))
 
     def decode_storage_loc(self, loc: Any) -> Any:
@@ -305,6 +310,8 @@ class Exec: # an execution path
         return self.cnts['BALANCE']
     def cnt_sha3(self) -> int:
         return self.cnts['SHA3']
+    def cnt_create(self) -> int:
+        return self.cnts['CREATE']
 
     def returndatasize(self) -> int:
         if self.output is None:
@@ -315,10 +322,20 @@ class Exec: # an execution path
             return int(size / 8)
 
     def read_code(self, idx: int) -> str:
-        if idx < len(self.code):
-            return self.code[idx]
+        if idx < len(self.code[self.this]):
+            return self.code[self.this][idx]
         else:
             return '00'
+
+    def is_jumpdest(self, x: Word) -> bool:
+        if not is_bv_value(x): return False
+        pc: int = int(str(x))
+        if pc < 0 or pc >= len(self.pgm[self.this]): return False
+        if self.pgm[self.this][pc] is None: return False
+        return self.pgm[self.this][pc].op[0] == 'JUMPDEST'
+
+    def jumpi_id(self) -> str:
+        return f'{self.pc}:' + ','.join(map(lambda x: str(x) if self.is_jumpdest(x) else '', self.st.stack))
 
 # convert opcode list to opcode map
 def ops_to_pgm(ops: List[Opcode]) -> List[Opcode]:
@@ -478,7 +495,7 @@ class SEVM:
         else:
             raise ValueError(op)
 
-    def call(self, ex: Exec, op: str) -> None:
+    def call(self, ex: Exec, op: str, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
         gas = ex.st.pop()
         to = ex.st.pop()
         if op == 'STATICCALL':
@@ -493,60 +510,201 @@ class SEVM:
         if not arg_size >= 0: raise ValueError(arg_size)
         if not ret_size >= 0: raise ValueError(ret_size)
 
-        ex.balance = self.arith('SUB', ex.balance, fund)
+        ex.balance[ex.this] = self.arith('SUB', ex.balance[ex.this], fund)
 
-        # push exit code
-        if arg_size > 0:
-            arg = wload(ex.st.memory, arg_loc, arg_size)
-            f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(arg_size*8), BitVecSort(256))
-            exit_code = f_call(con(ex.cnt_call()), gas, to, fund, arg)
-        else:
-            f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256),                         BitVecSort(256))
-            exit_code = f_call(con(ex.cnt_call()), gas, to, fund)
-        exit_code_var = BitVec(f'call{ex.cnt_call()}', 256)
-        ex.solver.add(exit_code_var == exit_code)
-        ex.st.push(exit_code_var)
+        def call_known() -> None:
+            calldata = [None] * arg_size
+            wstore_bytes(calldata, 0, arg_size, ex.st.memory[arg_loc:arg_loc+arg_size])
 
-        # TODO: cover other precompiled
-        if to == con(1): # ecrecover exit code is always 1
-            ex.solver.add(exit_code_var != con(0))
+            # execute external calls
+            (new_exs, new_steps) = self.run(self.mk_exec(
+                pgm       = ex.pgm,
+                code      = ex.code,
+                storage   = ex.storage,
+                balance   = ex.balance,
+                calldata  = calldata,
+                callvalue = fund,
+                caller    = ex.this,
+                this      = to,
+                solver    = ex.solver,
+            ))
 
-        # vm cheat code
-        if to == con(hevm_cheat_code.address):
-            ex.solver.add(exit_code_var != con(0))
-            # vm.fail()
-            if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
-                ex.failed = True
-            # vm.assume()
-            elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.assume_sig:
-                assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
-                ex.solver.add(assume_cond)
-                ex.path.append(str(assume_cond))
+            # process result
+            for idx, new_ex in enumerate(new_exs):
+                opcode = new_ex.pgm[new_ex.this][new_ex.pc].op[0]
+
+                # restore tx msg
+                new_ex.calldata  = ex.calldata
+                new_ex.callvalue = ex.callvalue
+                new_ex.caller    = ex.caller
+                new_ex.this      = ex.this
+
+                # restore vm state
+                new_ex.pc = ex.pc
+                new_ex.st = deepcopy(ex.st)
+                new_ex.jumpis = deepcopy(ex.jumpis)
+                # new_ex.output is passed into the caller
+
+                # set return data (in memory)
+                wstore_partial(new_ex.st.memory, ret_loc, 0, min(ret_size, new_ex.returndatasize()), new_ex.output, new_ex.returndatasize())
+
+                # set status code (in stack)
+                if opcode == 'STOP' or opcode == 'RETURN' or opcode == 'REVERT' or opcode == 'INVALID':
+                    if opcode == 'STOP' or opcode == 'RETURN':
+                        new_ex.st.push(con(1))
+                    else:
+                        new_ex.st.push(con(0))
+
+                    # add to worklist even if it reverted during the external call
+                    new_ex.next_pc()
+                    stack.append((new_ex, step_id))
+                else:
+                    # got stuck during external call
+                    out.append(new_ex)
+
+        def call_unknown() -> None:
+            # push exit code
+            if arg_size > 0:
+                arg = wload(ex.st.memory, arg_loc, arg_size)
+                f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(arg_size*8), BitVecSort(256))
+                exit_code = f_call(con(ex.cnt_call()), gas, to, fund, arg)
             else:
-                # TODO: support other cheat codes
-                raise NotImplementedError('Unsupported cheat code: calldata: ' + str(arg))
+                f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256),                         BitVecSort(256))
+                exit_code = f_call(con(ex.cnt_call()), gas, to, fund)
+            exit_code_var = BitVec(f'call{ex.cnt_call()}', 256)
+            ex.solver.add(exit_code_var == exit_code)
+            ex.st.push(exit_code_var)
 
-        # TODO: The actual return data size may be different from the given ret_size.
-        #       In that case, ex.output should be set to the actual return data.
-        #       And, if the actual size is smaller than the given size, then the memory is updated only up to the actual size.
+            # TODO: cover other precompiled
+            if to == con(1): # ecrecover exit code is always 1
+                ex.solver.add(exit_code_var != con(0))
 
-        # store return value
-        if ret_size > 0:
-            f_ret = Function('ret_'+str(ret_size*8), BitVecSort(256), BitVecSort(ret_size*8))
-            ret = f_ret(exit_code_var)
-            wstore(ex.st.memory, ret_loc, ret_size, ret)
-            ex.output = ret
+            # vm cheat code
+            if to == con(hevm_cheat_code.address):
+                ex.solver.add(exit_code_var != con(0))
+                # vm.fail()
+                if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
+                    ex.failed = True
+                # vm.assume()
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.assume_sig:
+                    assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
+                    ex.solver.add(assume_cond)
+                    ex.path.append(str(assume_cond))
+                else:
+                    # TODO: support other cheat codes
+                    ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
+                    out.append(ex)
+                    return
+
+            # TODO: The actual return data size may be different from the given ret_size.
+            #       In that case, ex.output should be set to the actual return data.
+            #       And, if the actual size is smaller than the given size, then the memory is updated only up to the actual size.
+
+            # store return value
+            if ret_size > 0:
+                f_ret = Function('ret_'+str(ret_size*8), BitVecSort(256), BitVecSort(ret_size*8))
+                ret = f_ret(exit_code_var)
+                wstore(ex.st.memory, ret_loc, ret_size, ret)
+                ex.output = ret
+            else:
+                ex.output = None
+
+            ex.calls.append((exit_code_var, exit_code, ex.output))
+
+            ex.next_pc()
+            stack.append((ex, step_id))
+
+        # separately handle known / unknown external calls
+        if to in ex.pgm:
+            call_known()
         else:
-            ex.output = None
+            call_unknown()
 
-        ex.calls.append((exit_code_var, exit_code, ex.output))
+    def create(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
+        value: Word = ex.st.pop()
+        loc: int = int(str(ex.st.pop()))
+        size: int = int(str(ex.st.pop()))
+
+        # contract creation code
+        create_hexcode = wload(ex.st.memory, loc, size)
+        if not is_bv_value(create_hexcode): raise ValueError(create_hexcode)
+        (create_ops, create_code) = decode(f'{create_hexcode.as_long():#x}')
+        create_pgm = ops_to_pgm(create_ops)
+
+        # new account address
+        new_addr = create_address(ex.cnt_create())
+
+        # setup new account
+        ex.pgm[new_addr] = create_pgm   # existing pgm must be empty
+        ex.code[new_addr] = create_code # existing code must be empty
+        ex.storage[new_addr] = {}       # existing storage may not be empty and reset here
+        ex.balance[new_addr] = f_orig_balance(new_addr)
+
+        # transfer value
+        ex.solver.add(UGE(ex.balance[ex.this], value)) # assume balance is enough; otherwise ignore this path
+        ex.balance[ex.this] = self.arith('SUB', ex.balance[ex.this], value)
+        ex.balance[new_addr] = self.arith('ADD', ex.balance[new_addr], value)
+
+        # execute contract creation code
+        (new_exs, new_steps) = self.run(self.mk_exec(
+            pgm       = ex.pgm,
+            code      = ex.code,
+            storage   = ex.storage,
+            balance   = ex.balance,
+            calldata  = [],
+            callvalue = value,
+            caller    = ex.this,
+            this      = new_addr,
+            solver    = ex.solver,
+        ))
+
+        # process result
+        for idx, new_ex in enumerate(new_exs):
+            # sanity checks
+            if new_ex.failed: raise ValueError(new_ex)
+
+            opcode = new_ex.pgm[new_ex.this][new_ex.pc].op[0]
+            if opcode == 'STOP' or opcode == 'RETURN':
+                # new contract code
+                new_hexcode = new_ex.output
+                if not is_bv_value(new_hexcode): raise ValueError(new_hexcode)
+                (new_ops, new_code) = decode(f'{new_hexcode.as_long():#x}')
+                new_pgm = ops_to_pgm(new_ops)
+
+                # set new contract code
+                new_ex.pgm[new_addr] = new_pgm
+                new_ex.code[new_addr] = new_code
+
+                # restore tx msg
+                new_ex.calldata  = ex.calldata
+                new_ex.callvalue = ex.callvalue
+                new_ex.caller    = ex.caller
+                new_ex.this      = ex.this
+
+                # restore vm state
+                new_ex.pc = ex.pc
+                new_ex.st = deepcopy(ex.st)
+                new_ex.jumpis = deepcopy(ex.jumpis)
+                new_ex.output = None # output is reset, not restored
+
+                # push new address to stack
+                new_ex.st.push(new_addr)
+
+                # add to worklist
+                new_ex.next_pc()
+                stack.append((new_ex, step_id))
+            else:
+                # creation failed
+                out.append(new_ex)
 
     def jumpi(self, ex: Exec, stack: List[Exec], step_id: int) -> None:
+        jid = ex.jumpi_id()
+
         source: int = ex.pc
         target: int = int(str(ex.st.pop())) # target must be concrete
         cond: Word = ex.st.pop()
 
-        visited = ex.jumps[-1]['cnt'].get(source, {True: 0, False: 0})
+        visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
         new_ex_true = None
         new_ex_false = None
@@ -561,14 +719,19 @@ class SEVM:
             new_path = deepcopy(ex.path)
             new_path.append(str(cond_true))
             new_ex_true = Exec(
-                pgm      = ex.pgm,
-                code     = ex.code,
+                pgm      = ex.pgm.copy(), # shallow copy for potential new contract creation; existing code doesn't change
+                code     = ex.code.copy(), # shallow copy
+                storage  = deepcopy(ex.storage),
+                balance  = deepcopy(ex.balance),
+                #
                 calldata = ex.calldata,
+                callvalue= ex.callvalue,
+                caller   = ex.caller,
+                this     = ex.this,
                 #
                 pc       = target,
                 st       = deepcopy(ex.st),
-                storage  = deepcopy(ex.storage),
-                balance  = deepcopy(ex.balance),
+                jumpis   = deepcopy(ex.jumpis),
                 output   = deepcopy(ex.output),
                 #
                 solver   = new_solver,
@@ -579,7 +742,6 @@ class SEVM:
                 sha3s    = deepcopy(ex.sha3s),
                 storages = deepcopy(ex.storages),
                 calls    = deepcopy(ex.calls),
-                jumps    = deepcopy(ex.jumps),
                 failed   = ex.failed,
                 error    = ex.error,
             )
@@ -593,11 +755,11 @@ class SEVM:
             new_ex_false = ex
 
         if new_ex_true and new_ex_false: # for loop unrolling
-            if visited[True] < self.options['max_loop']:
-                new_ex_true.jumps[-1]['cnt'][source] = {True: visited[True] + 1, False: visited[False]}
+            if visited[True] < self.options['max_loop']: # or source < target:
+                new_ex_true.jumpis[jid] = {True: visited[True] + 1, False: visited[False]}
                 stack.append((new_ex_true, step_id))
-            if visited[False] < self.options['max_loop']:
-                new_ex_false.jumps[-1]['cnt'][source] = {True: visited[True], False: visited[False] + 1}
+            if visited[False] < self.options['max_loop']: # or source < target:
+                new_ex_false.jumpis[jid] = {True: visited[True], False: visited[False] + 1}
                 stack.append((new_ex_false, step_id))
         elif new_ex_true: # for constant-bounded loops
             stack.append((new_ex_true, step_id))
@@ -605,26 +767,6 @@ class SEVM:
             stack.append((new_ex_false, step_id))
         else:
             pass # this may happen if the previous path condition was considered unknown but turns out to be unsat later
-
-    def jump(self, ex: Exec, sm: SrcMap, src: int, dst: int) -> bool:
-        jmp = {'src': src, 'dst': dst, 'jmp': sm.jump, 'cnt': {}}
-
-        if sm.jump == 'i': # function call
-            ex.jumps.append(jmp)
-            return True
-
-        if sm.jump == 'o': # function return
-            for i in reversed(range(1, len(ex.jumps))):
-                if ex.jumps[i]['jmp'] == 'i':
-                    if not ex.jumps[i]['src'] + 1 == dst:
-                        if self.options.get('debug'):
-                            print('warn: unmatched jumps', ex.jumps[i]['src'], dst)
-                    ex.jumps = ex.jumps[:i]
-                    return True
-            if self.options.get('debug'):
-                print('warn: unmatched jumps', jmp)
-
-        return True
 
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps]:
         out: List[Exec] = []
@@ -638,7 +780,7 @@ class SEVM:
             (ex, prev_step_id) = stack.pop()
             step_id += 1
 
-            o = ex.pgm[ex.pc]
+            o = ex.pgm[ex.this][ex.pc]
             ex.cnts[o.op[0]] += 1
 
             if 'max_depth' in self.options and sum(ex.cnts.values()) > self.options['max_depth']:
@@ -650,15 +792,14 @@ class SEVM:
             #   elif o.op[0] == 'CALL':
             #       steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
                 else:
-                    steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
-                #   steps[step_id] = {'parent': prev_step_id, 'exec': str(ex)}
+                #   steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
+                    steps[step_id] = {'parent': prev_step_id, 'exec': str(ex)}
                 if self.options.get('verbose', 0) >= 3:
                     print(ex)
 
             if o.op[0] == 'STOP':
                 ex.output = None
                 out.append(ex)
-                if self.options.get('debug') and len(ex.jumps) != 1: print(color_warn('Warning: loop unrolling might be incomplete'), ex.jumps)
                 continue
 
             elif o.op[0] == 'REVERT':
@@ -669,7 +810,6 @@ class SEVM:
             elif o.op[0] == 'RETURN':
                 ex.output = ex.st.ret()
                 out.append(ex)
-                if self.options.get('debug') and len(ex.jumps) != 1: print(color_warn('Warning: loop unrolling might be incomplete'), ex.jumps)
                 continue
 
             elif o.op[0] == 'JUMPI':
@@ -680,9 +820,6 @@ class SEVM:
                 source: int = ex.pc
                 target: int = int(str(ex.st.pop())) # target must be concrete
                 ex.pc = target
-                if not self.options.get('srcmap') or self.jump(ex, o.sm, source, target):
-                    stack.append((ex, step_id))
-                continue
 
             elif o.op[0] == 'JUMPDEST':
                 pass
@@ -750,7 +887,7 @@ class SEVM:
                     ex.st.push(f_calldataload(ex.st.pop()))
                 else:
                     offset: int = int(str(ex.st.pop()))
-                    ex.st.push(Concat(ex.calldata[offset:offset+32]))
+                    ex.st.push(Concat((ex.calldata + [BitVecVal(0, 8)] * 32)[offset:offset+32]))
                 #   try:
                 #       offset: int = int(str(ex.st.pop()))
                 #       ex.st.push(Concat(ex.calldata[offset:offset+32]))
@@ -762,16 +899,14 @@ class SEVM:
                 else:
                     ex.st.push(con(len(ex.calldata)))
             elif o.op[0] == 'CALLVALUE':
-                ex.st.push(f_callvalue())
+                ex.st.push(ex.callvalue)
             elif o.op[0] == 'CALLER':
-                ex.st.push(f_caller())
-                ex.solver.add(Extract(255, 160, f_caller()) == BitVecVal(0, 96))
+                ex.st.push(ex.caller)
             elif o.op[0] == 'ORIGIN':
                 ex.st.push(f_origin())
                 ex.solver.add(Extract(255, 160, f_origin()) == BitVecVal(0, 96))
             elif o.op[0] == 'ADDRESS':
-                ex.st.push(f_address())
-                ex.solver.add(Extract(255, 160, f_address()) == BitVecVal(0, 96))
+                ex.st.push(ex.this)
             elif o.op[0] == 'COINBASE':
                 ex.st.push(f_coinbase())
                 ex.solver.add(Extract(255, 160, f_coinbase()) == BitVecVal(0, 96))
@@ -784,7 +919,7 @@ class SEVM:
             elif o.op[0] == 'EXTCODEHASH':
                 ex.st.push(f_extcodehash(ex.st.pop()))
             elif o.op[0] == 'CODESIZE':
-                ex.st.push(con(len(ex.code)))
+                ex.st.push(con(len(ex.code[ex.this])))
             elif o.op[0] == 'GAS':
                 ex.st.push(f_gas(con(ex.cnt_gas())))
             elif o.op[0] == 'GASPRICE':
@@ -806,20 +941,23 @@ class SEVM:
                 ex.st.push(f_blockhash(ex.st.pop()))
 
             elif o.op[0] == 'BALANCE':
-                ex.st.push(f_balance(ex.st.pop(), con(ex.cnt_balance())))
+                addr = ex.st.pop()
+                if addr not in ex.balance:
+                    ex.balance[addr] = f_orig_balance(addr)
+                ex.st.push(ex.balance[addr])
             elif o.op[0] == 'SELFBALANCE':
-                ex.st.push(ex.balance)
+                ex.st.push(ex.balance[ex.this])
 
             elif o.op[0] == 'CALL' or o.op[0] == 'STATICCALL':
-                try:
-                    self.call(ex, o.op[0])
-                except NotImplementedError as error:
-                    ex.error = str(error)
-                    out.append(ex)
-                    continue
+                self.call(ex, o.op[0], stack, step_id, out)
+                continue
 
             elif o.op[0] == 'SHA3':
                 ex.sha3()
+
+            elif o.op[0] == 'CREATE':
+                self.create(ex, stack, step_id, out)
+                continue
 
             elif o.op[0] == 'POP':
                 ex.st.pop()
@@ -841,11 +979,7 @@ class SEVM:
                 loc: int = ex.st.mloc()
                 offset: int = int(str(ex.st.pop())) # offset must be concrete
                 size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
-                if size > 0:
-                    datasize: int = ex.returndatasize()
-                    if not datasize >= offset + size: raise ValueError(datasize, offset, size)
-                    data = Extract((datasize-1 - offset)*8+7, (datasize - offset - size)*8, ex.output)
-                    wstore(ex.st.memory, loc, size, data)
+                wstore_partial(ex.st.memory, loc, offset, size, ex.output, ex.returndatasize())
 
             elif o.op[0] == 'CALLDATACOPY':
                 loc: int = ex.st.mloc()
@@ -906,17 +1040,25 @@ class SEVM:
 
         return (out, steps)
 
-    def execute(
+    def mk_exec(
         self,
-        ops: List[Opcode],
-        code: List[str],
-        calldata = None,
         #
-        storage = {},
-        balance: Any = BitVec('balance', 256),
+        pgm,
+        code,
+        storage,
+        balance,
+        #
+        calldata,
+        callvalue,
+        caller,
+        this,
+        #
+        pc: int = 0,
+        st: State = State(),
+        jumpis = {},
         output: Any = None,
         #
-        solver: Solver = SolverFor('QF_AUFBV'),
+        solver = None, # fail later if not provided
         path = [],
         #
         log = [],
@@ -924,20 +1066,23 @@ class SEVM:
         sha3s = [],
         storages = [],
         calls = [],
-        jumps = [{'cnt':{}}], # dummy entry
         failed = False,
         error = ''
-    ) -> Tuple[List[Exec], Steps]:
-        st = State()
-        ex = Exec(
-            pgm      = ops_to_pgm(ops),
+    ) -> Exec:
+        return Exec(
+            pgm      = pgm,
             code     = code,
-            calldata = calldata,
-            #
-            pc       = 0,
-            st       = st,
             storage  = storage,
-            balance  = balance + f_callvalue(),
+            balance  = balance,
+            #
+            calldata = calldata,
+            callvalue= callvalue,
+            caller   = caller,
+            this     = this,
+            #
+            pc       = pc,
+            st       = st,
+            jumpis   = jumpis,
             output   = output,
             #
             solver   = solver,
@@ -948,8 +1093,6 @@ class SEVM:
             sha3s    = sha3s,
             storages = storages,
             calls    = calls,
-            jumps    = jumps,
             failed   = failed,
             error    = error,
         )
-        return self.run(ex)
