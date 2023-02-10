@@ -14,9 +14,9 @@ A clear and concise description of what the bug is.
 Please provide a reproducible example.
 
 **Environment:**
- - OS: [e.g. Linux / Windows / macOS]
- - Python version: `python --version`
- - Halmos and other dependency versions: `pip list`
+ - OS: [e.g., Linux / Windows / macOS]
+ - Python version: [e.g., `python --version`]
+ - Halmos and other dependency versions: [e.g., `pip list`]
 
 **Additional context**
 Add any other context about the problem here.
