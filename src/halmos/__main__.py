@@ -317,12 +317,14 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec):
         res = sol2.check()
         if res == sat: model = sol2.model()
     if res == sat and not is_valid_model(model):
-        query = ex.solver.sexpr()
-        query += '(assert (forall ((x (_ BitVec 256)) (y (_ BitVec 256))) (bvule (evm_div x y) x)))'
-    #   query += '(assert (forall ((x (_ BitVec 256)) (y (_ BitVec 256))) (implies (and (not (= x (_ bv0 256))) (not (= y (_ bv0 256))) (= (evm_div (bvmul x y) x) y)) (= (evm_div (bvmul x y) y) x))))'
-        sol3 = Solver(ctx=Context())
+        ctx = Context()
+        sol3 = Solver(ctx=ctx)
         sol3.set(timeout=args.solver_timeout_assertion)
-        sol3.from_string(query)
+        sol3.from_string(ex.solver.sexpr())
+        x = BitVec('x', 256, ctx)
+        y = BitVec('y', 256, ctx)
+        evm_div = f_div.translate(ctx)
+        sol3.add(ForAll([x, y], ULE(evm_div(x, y), x)))
         res = sol3.check()
         if res == sat: model = sol3.model()
     if res == unknown and args.solver_subprocess:
