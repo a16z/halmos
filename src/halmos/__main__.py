@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-def add_srcmap(ops: List[Opcode], srcmap: List[str], srcs: Dict):
+def add_srcmap(ops: List[Opcode], srcmap: List[str], srcs: Dict) -> None:
     fpath = {} # file id -> file path
     for src in srcs:
         fpath[srcs[src]['id']] = src
@@ -307,7 +307,7 @@ def run(
     else:
         return 1
 
-def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec):
+def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> None:
     res = ex.solver.check()
     if res == sat: model = ex.solver.model()
     if res == unknown:
@@ -427,7 +427,7 @@ def main() -> int:
             for contract in contracts:
                 hexcode = source_unit.bytecodes_runtime[contract]
                 srcmap = source_unit.srcmaps_runtime[contract]
-                srcs = []
+                srcs = {}
                 abi = source_unit.abis[contract]
                 methodIdentifiers = source_unit.hashes(contract)
 

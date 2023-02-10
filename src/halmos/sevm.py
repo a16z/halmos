@@ -77,7 +77,7 @@ class State:
         self.stack: List[Word] = []
         self.memory: List[Byte] = []
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo): # -> State:
         st = State()
         st.stack = deepcopy(self.stack)
         st.memory = deepcopy(self.memory)
@@ -157,7 +157,7 @@ class Exec: # an execution path
     # vm state
     pc: int
     st: State # stack and memory
-    jumpis: Dict[str,Dict[str,int]] # for loop detection
+    jumpis: Dict[str,Dict[bool,int]] # for loop detection
     output: Any # returndata
     # path
     solver: Solver
@@ -226,12 +226,12 @@ class Exec: # an execution path
         #   'Calldata: '        , str(self.calldata), '\n',
         ])
 
-    def next_pc(self) -> int:
+    def next_pc(self) -> None:
         self.pc += 1
         while self.pgm[self.this][self.pc] is None:
             self.pc += 1
 
-    def sinit(self, slot: int, keys):
+    def sinit(self, slot: int, keys) -> None:
         if slot not in self.storage[self.this]:
             if len(keys) == 0:
                 self.storage[self.this][slot] = BitVec(f'storage_slot_{str(slot)}', 256)
@@ -250,7 +250,7 @@ class Exec: # an execution path
         else:
             return Select(self.storage[self.this][slot], Concat(keys))
 
-    def sstore(self, loc: Any, val: Any):
+    def sstore(self, loc: Any, val: Any) -> None:
         offsets = self.decode_storage_loc(loc)
         if not len(offsets) > 0: raise ValueError(offsets)
         slot, keys = int(str(offsets[0])), offsets[1:]
@@ -290,7 +290,7 @@ class Exec: # an execution path
         else:
             self.st.push(sha3_var)
 
-    def assume_sha3_distinct(self, sha3_var, sha3):
+    def assume_sha3_distinct(self, sha3_var, sha3) -> None:
         for (v,s) in self.sha3s:
             if s.decl().name() == sha3.decl().name(): # same size
             #   self.solver.add(Implies(sha3_var == v, sha3.arg(0) == s.arg(0)))
@@ -697,7 +697,7 @@ class SEVM:
                 # creation failed
                 out.append(new_ex)
 
-    def jumpi(self, ex: Exec, stack: List[Exec], step_id: int) -> None:
+    def jumpi(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int) -> None:
         jid = ex.jumpi_id()
 
         source: int = ex.pc
