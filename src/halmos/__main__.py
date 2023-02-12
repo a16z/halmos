@@ -71,34 +71,81 @@ def add_srcmap(ops: List[Opcode], srcmap: List[str], srcs: Dict) -> None:
 
         ops[idx].sm = SrcMap(srctext, jump, mdepth)
 
-def run(
+def setup(
     hexcode: str,
     abi: Dict,
     srcmap: List[str],
     srcs: Dict,
+    args: argparse.Namespace,
+    setup_sig: str,
+    options: Dict
+) -> Exec:
+    # bytecode
+    (ops, code) = decode(hexcode)
+    pgm = ops_to_pgm(ops)
+    add_srcmap(ops, srcmap, srcs)
+
+    # solver
+    solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
+    solver.set(timeout=args.solver_timeout_branching)
+
+    # storage
+    storage = {}
+
+    # caller
+    caller = BitVec('msg_sender', 256)
+    solver.add(Extract(255, 160, caller) == BitVecVal(0, 96))
+
+    # this
+    this = BitVec('this_address', 256)
+    solver.add(Extract(255, 160, this) == BitVecVal(0, 96))
+
+    # run setup if any
+
+    sevm = SEVM(options)
+
+    setup_ex = sevm.mk_exec(
+        pgm       = { this: pgm },
+        code      = { this: code },
+        storage   = { this: storage },
+        balance   = { this: con(0) },
+        calldata  = [None] * 4,
+        callvalue = con(0),
+        caller    = caller,
+        this      = this,
+        symbolic  = False,
+        solver    = solver,
+    )
+
+    if setup_sig:
+        wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_sig, 32))
+
+        (setup_exs, setup_steps) = sevm.run(setup_ex)
+
+        if len(setup_exs) != 1:
+            if args.debug: print('\n'.join(map(str, setup_exs)))
+            raise ValueError('multiple paths exist in setUp()')
+
+        setup_ex = setup_exs[0]
+
+        setup_opcode = setup_ex.pgm[setup_ex.this][setup_ex.pc].op[0]
+        if (setup_opcode != 'STOP' and setup_opcode != 'RETURN') or setup_ex.failed: raise ValueError('setUp() failed')
+
+        if args.verbose >= 2:
+            print(setup_ex)
+
+    return setup_ex
+
+def run(
+    setup_ex: Exec,
+    abi: Dict,
     funname: str,
     funsig: str,
     funselector: str,
     arrlen: Dict,
     args: argparse.Namespace,
-    setup_sig: str,
     options: Dict
 ) -> int:
-    #
-    # bytecode
-    #
-
-    (ops, code) = decode(hexcode)
-    pgm = ops_to_pgm(ops)
-    add_srcmap(ops, srcmap, srcs)
-
-    #
-    # solver
-    #
-
-    solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
-    solver.set(timeout=args.solver_timeout_branching)
-
     #
     # calldata
     #
@@ -168,10 +215,10 @@ def run(
                     raise ValueError('not feasible')
 
     #
-    # storage
+    # callvalue
     #
 
-    storage = {}
+    callvalue = BitVec('msg_value', 256)
 
     #
     # balance
@@ -180,69 +227,42 @@ def run(
     balance = BitVec('this_balance', 256)
 
     #
-    # callvalue / caller / this
-    #
-
-    callvalue = BitVec('msg_value', 256)
-
-    caller = BitVec('msg_sender', 256)
-    solver.add(Extract(255, 160, caller) == BitVecVal(0, 96))
-
-    this = BitVec('this_address', 256)
-    solver.add(Extract(255, 160, this) == BitVecVal(0, 96))
-
-    #
-    # setup
-    #
-
-    sevm = SEVM(options)
-
-    setup_ex = sevm.mk_exec(
-        pgm       = { this: pgm },
-        code      = { this: code },
-        storage   = { this: storage },
-        balance   = { this: balance },
-        calldata  = [None] * 4,
-        callvalue = con(0),
-        caller    = caller,
-        this      = this,
-        solver    = solver,
-    )
-
-    if setup_sig:
-        wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_sig, 32))
-
-        (setup_exs, setup_steps) = sevm.run(setup_ex)
-
-        if len(setup_exs) != 1: raise ValueError('multiple paths exist in setUp()')
-        setup_ex = setup_exs[0]
-        setup_opcode = setup_ex.pgm[setup_ex.this][setup_ex.pc].op[0]
-        if (setup_opcode != 'STOP' and setup_opcode != 'RETURN') or setup_ex.failed: raise ValueError('setUp() failed')
-
-    #
     # run
     #
 
     start = timer()
 
-    setup_ex.balance[setup_ex.this] = sevm.arith('ADD', setup_ex.balance[setup_ex.this], callvalue)
+    sevm = SEVM(options)
 
-    (exs, steps) = sevm.run(sevm.mk_exec(
-        pgm       = setup_ex.pgm,
-        code      = setup_ex.code,
-        storage   = setup_ex.storage,
-        balance   = setup_ex.balance,
+    solver = SolverFor('QF_AUFBV')
+    solver.set(timeout=args.solver_timeout_branching)
+    solver.add(setup_ex.solver.assertions())
+
+    (exs, steps) = sevm.run(Exec(
+        pgm       = setup_ex.pgm.copy(), # shallow copy
+        code      = setup_ex.code.copy(), # shallow copy
+        storage   = deepcopy(setup_ex.storage),
+        balance   = { setup_ex.this: sevm.arith('ADD', balance, callvalue) },
+        #
         calldata  = cd,
         callvalue = callvalue,
-        caller    = caller,
-        this      = this,
-        solver    = setup_ex.solver,
-        path      = setup_ex.path,
-        log       = setup_ex.log,
-        cnts      = setup_ex.cnts,
-        sha3s     = setup_ex.sha3s,
-        storages  = setup_ex.storages,
-        calls     = setup_ex.calls,
+        caller    = setup_ex.caller,
+        this      = setup_ex.this,
+        #
+        pc        = 0,
+        st        = State(),
+        jumpis    = {},
+        output    = None,
+        symbolic  = True,
+        #
+        solver    = solver,
+        path      = deepcopy(setup_ex.path),
+        #
+        log       = deepcopy(setup_ex.log),
+        cnts      = deepcopy(setup_ex.cnts),
+        sha3s     = deepcopy(setup_ex.sha3s),
+        storages  = deepcopy(setup_ex.storages),
+        calls     = deepcopy(setup_ex.calls),
         failed    = setup_ex.failed,
         error     = setup_ex.error,
     ))
@@ -433,16 +453,17 @@ def main() -> int:
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
-                setup = methodIdentifiers.get('setUp()')
+                setup_sig = methodIdentifiers.get('setUp()')
 
                 if funsigs:
                     num_passed = 0
                     num_failed = 0
                     print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
+                    setup_ex = setup(hexcode, abi, srcmap, srcs, args, setup_sig, options)
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]
                         funname = funsig.split('(')[0]
-                        exitcode = run(hexcode, abi, srcmap, srcs, funname, funsig, funselector, arrlen, args, setup, options)
+                        exitcode = run(setup_ex, abi, funname, funsig, funselector, arrlen, args, options)
                         if exitcode == 0:
                             num_passed += 1
                         else:

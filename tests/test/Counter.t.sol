@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import "src/Counter.sol";
+import "../src/Counter.sol";
 
 contract CounterTest is Counter {
     function testSet(uint n) public {
