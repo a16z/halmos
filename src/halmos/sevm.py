@@ -317,8 +317,7 @@ class Exec: # an execution path
             # when len(args) >= 2
             args = loc.children()
             if len(args) < 2: raise ValueError(loc)
-            args = list(map(self.decode_storage_loc, args))
-            args.sort(key=lambda x: len(x), reverse=True)
+            args = sorted(map(self.decode_storage_loc, args), key=lambda x: len(x), reverse=True)
             if len(args[1]) > 1: raise ValueError(loc) # only args[0]'s length >= 1, the others must be 1
             return args[0][0:-1] + (reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),)
         elif is_bv_value(loc) and int(str(loc)) in sha3_inv:
