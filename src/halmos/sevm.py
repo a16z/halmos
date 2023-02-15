@@ -5,10 +5,11 @@ import math
 from copy import deepcopy
 from collections import defaultdict
 from typing import List, Dict, Tuple, Any
+from functools import reduce
 
 from z3 import *
 from .byte2op import SrcMap, Opcode, decode
-from .utils import groupby_gas, color_good, color_warn, hevm_cheat_code
+from .utils import groupby_gas, color_good, color_warn, hevm_cheat_code, sha3_inv
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -159,6 +160,7 @@ class Exec: # an execution path
     st: State # stack and memory
     jumpis: Dict[str,Dict[bool,int]] # for loop detection
     output: Any # returndata
+    symbolic: bool # symbolic or concrete storage
     # path
     solver: Solver
     path: List[Any] # path conditions
@@ -186,6 +188,7 @@ class Exec: # an execution path
         self.st       = kwargs['st']
         self.jumpis   = kwargs['jumpis']
         self.output   = kwargs['output']
+        self.symbolic = kwargs['symbolic']
         #
         self.solver   = kwargs['solver']
         self.path     = kwargs['path']
@@ -233,10 +236,18 @@ class Exec: # an execution path
 
     def sinit(self, slot: int, keys) -> None:
         if slot not in self.storage[self.this]:
+            self.storage[self.this][slot] = {}
+        if len(keys) not in self.storage[self.this][slot]:
             if len(keys) == 0:
-                self.storage[self.this][slot] = BitVec(f'storage_slot_{str(slot)}', 256)
+                if self.symbolic:
+                    self.storage[self.this][slot][len(keys)] = BitVec(f'storage_slot_{str(slot)}_{str(len(keys))}', 256)
+                else:
+                    self.storage[self.this][slot][len(keys)] = con(0)
             else:
-                self.storage[self.this][slot] = Array(f'storage_slot_{str(slot)}', BitVecSort(len(keys)*256), BitVecSort(256))
+                if self.symbolic:
+                    self.storage[self.this][slot][len(keys)] = Array(f'storage_slot_{str(slot)}_{str(len(keys))}', BitVecSort(len(keys)*256), BitVecSort(256))
+                else:
+                    self.storage[self.this][slot][len(keys)] = K(BitVecSort(len(keys)*256), con(0))
 
     def sload(self, loc: Word) -> Word:
         offsets = self.decode_storage_loc(loc)
@@ -244,11 +255,11 @@ class Exec: # an execution path
         slot, keys = int(str(offsets[0])), offsets[1:]
         self.sinit(slot, keys)
         if len(keys) == 0:
-            return self.storage[self.this][slot]
+            return self.storage[self.this][slot][0]
         elif len(keys) == 1:
-            return Select(self.storage[self.this][slot], keys[0])
+            return Select(self.storage[self.this][slot][1], keys[0])
         else:
-            return Select(self.storage[self.this][slot], Concat(keys))
+            return Select(self.storage[self.this][slot][len(keys)], Concat(keys))
 
     def sstore(self, loc: Any, val: Any) -> None:
         offsets = self.decode_storage_loc(loc)
@@ -256,22 +267,62 @@ class Exec: # an execution path
         slot, keys = int(str(offsets[0])), offsets[1:]
         self.sinit(slot, keys)
         if len(keys) == 0:
-            self.storage[self.this][slot] = val
+            self.storage[self.this][slot][0] = val
         else:
-            new_storage_var = Array(f'storage[self.this]{self.cnt_sstore()}', BitVecSort(len(keys)*256), BitVecSort(256))
+            new_storage_var = Array(f'storage{self.cnt_sstore()}', BitVecSort(len(keys)*256), BitVecSort(256))
             if len(keys) == 1:
-                new_storage = Store(self.storage[self.this][slot], keys[0], val)
+                new_storage = Store(self.storage[self.this][slot][1], keys[0], val)
             else:
-                new_storage = Store(self.storage[self.this][slot], Concat(keys), val)
+                new_storage = Store(self.storage[self.this][slot][len(keys)], Concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
-            self.storage[self.this][slot] = new_storage_var
+            self.storage[self.this][slot][len(keys)] = new_storage_var
             self.storages.append((new_storage_var,new_storage))
 
     def decode_storage_loc(self, loc: Any) -> Any:
-        if loc.decl().name() == 'sha3_512':
+        def normalize(expr: Any) -> Any:
+            # Concat(Extract(255, 8, bvadd(x, y)), bvadd(Extract(7, 0, x), Extract(7, 0, y))) => x + y
+            if expr.decl().name() == 'concat' and expr.num_args() == 2:
+                arg0 = expr.arg(0) # Extract(255, 8, bvadd(x, y))
+                arg1 = expr.arg(1) # bvadd(Extract(7, 0, x), Extract(7, 0, y))
+                if arg0.decl().name() == 'extract' and arg0.num_args() == 1 and arg0.params() == [255, 8]:
+                    arg00 = arg0.arg(0) # bvadd(x, y)
+                    if arg00.decl().name() == 'bvadd':
+                        x = arg00.arg(0)
+                        y = arg00.arg(1)
+                        if arg1.decl().name() == 'bvadd' and arg1.num_args() == 2:
+                            if arg1.arg(0) == Extract(7, 0, x) and arg1.arg(1) == Extract(7, 0, y):
+                                return x + y
+            return expr
+        loc = normalize(loc)
+
+        if loc.decl().name() == 'sha3_512': # m[k] : hash(k.m)
             args = loc.arg(0)
             offset, base = simplify(Extract(511, 256, args)), simplify(Extract(255, 0, args))
-            return self.decode_storage_loc(base) + (offset,)
+            return self.decode_storage_loc(base) + (offset,con(0))
+        elif loc.decl().name() == 'sha3_256': # a[i] : hash(a)+i
+            base = loc.arg(0)
+            return self.decode_storage_loc(base) + (con(0),)
+        elif loc.decl().name() == 'bvadd':
+        #   # when len(args) == 2
+        #   arg0 = self.decode_storage_loc(loc.arg(0))
+        #   arg1 = self.decode_storage_loc(loc.arg(1))
+        #   if len(arg0) == 1 and len(arg1) > 1: # i + hash(x)
+        #       return arg1[0:-1] + (arg1[-1] + arg0[0],)
+        #   elif len(arg0) > 1 and len(arg1) == 1: # hash(x) + i
+        #       return arg0[0:-1] + (arg0[-1] + arg1[0],)
+        #   elif len(arg0) == 1 and len(arg1) == 1: # i + j
+        #       return (arg0[0] + arg1[0],)
+        #   else: # hash(x) + hash(y) # ambiguous
+        #       raise ValueError(loc)
+            # when len(args) >= 2
+            args = loc.children()
+            if len(args) < 2: raise ValueError(loc)
+            args = list(map(self.decode_storage_loc, args))
+            args.sort(key=lambda x: len(x), reverse=True)
+            if len(args[1]) > 1: raise ValueError(loc) # only args[0]'s length >= 1, the others must be 1
+            return args[0][0:-1] + (reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),)
+        elif is_bv_value(loc) and int(str(loc)) in sha3_inv:
+            return (con(sha3_inv[int(str(loc))]), con(0))
         elif loc.sort().name() == 'bv':
             return (loc,)
         else:
@@ -280,12 +331,16 @@ class Exec: # an execution path
     def sha3(self) -> None:
         loc: int = self.st.mloc()
         size: int = int(str(self.st.pop())) # size (in bytes) must be concrete
+        self.sha3_data(wload(self.st.memory, loc, size), size)
+
+    def sha3_data(self, data: Bytes, size: int) -> None:
         f_sha3 = Function('sha3_'+str(size*8), BitVecSort(size*8), BitVecSort(256))
-        sha3 = f_sha3(wload(self.st.memory, loc, size))
+        sha3 = f_sha3(data)
         sha3_var = BitVec(f'sha3_var{self.cnt_sha3()}', 256)
         self.solver.add(sha3_var == sha3)
+        self.solver.add(ULE(sha3_var, con(2**256 - 2**64))) # assume hash values are sufficiently smaller than the uint max
         self.assume_sha3_distinct(sha3_var, sha3)
-        if size == 64: # for storage hashed location
+        if size == 64 or size == 32: # for storage hashed location
             self.st.push(sha3)
         else:
             self.st.push(sha3_var)
@@ -517,16 +572,33 @@ class SEVM:
             wstore_bytes(calldata, 0, arg_size, ex.st.memory[arg_loc:arg_loc+arg_size])
 
             # execute external calls
-            (new_exs, new_steps) = self.run(self.mk_exec(
+            (new_exs, new_steps) = self.run(Exec(
                 pgm       = ex.pgm,
                 code      = ex.code,
                 storage   = ex.storage,
                 balance   = ex.balance,
+                #
                 calldata  = calldata,
                 callvalue = fund,
                 caller    = ex.this,
                 this      = to,
+                #
+                pc        = 0,
+                st        = State(),
+                jumpis    = {},
+                output    = None,
+                symbolic  = ex.symbolic,
+                #
                 solver    = ex.solver,
+                path      = ex.path,
+                #
+                log       = ex.log,
+                cnts      = ex.cnts,
+                sha3s     = ex.sha3s,
+                storages  = ex.storages,
+                calls     = ex.calls,
+                failed    = ex.failed,
+                error     = ex.error,
             ))
 
             # process result
@@ -544,6 +616,7 @@ class SEVM:
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
                 # new_ex.output is passed into the caller
+                new_ex.symbolic = ex.symbolic
 
                 # set return data (in memory)
                 wstore_partial(new_ex.st.memory, ret_loc, 0, min(ret_size, new_ex.returndatasize()), new_ex.output, new_ex.returndatasize())
@@ -646,16 +719,33 @@ class SEVM:
         ex.balance[new_addr] = self.arith('ADD', ex.balance[new_addr], value)
 
         # execute contract creation code
-        (new_exs, new_steps) = self.run(self.mk_exec(
+        (new_exs, new_steps) = self.run(Exec(
             pgm       = ex.pgm,
             code      = ex.code,
             storage   = ex.storage,
             balance   = ex.balance,
+            #
             calldata  = [],
             callvalue = value,
             caller    = ex.this,
             this      = new_addr,
+            #
+            pc        = 0,
+            st        = State(),
+            jumpis    = {},
+            output    = None,
+            symbolic  = False,
+            #
             solver    = ex.solver,
+            path      = ex.path,
+            #
+            log       = ex.log,
+            cnts      = ex.cnts,
+            sha3s     = ex.sha3s,
+            storages  = ex.storages,
+            calls     = ex.calls,
+            failed    = ex.failed,
+            error     = ex.error,
         ))
 
         # process result
@@ -686,6 +776,7 @@ class SEVM:
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
                 new_ex.output = None # output is reset, not restored
+                new_ex.symbolic = ex.symbolic
 
                 # push new address to stack
                 new_ex.st.push(new_addr)
@@ -733,6 +824,7 @@ class SEVM:
                 st       = deepcopy(ex.st),
                 jumpis   = deepcopy(ex.jumpis),
                 output   = deepcopy(ex.output),
+                symbolic = ex.symbolic,
                 #
                 solver   = new_solver,
                 path     = new_path,
@@ -1029,7 +1121,11 @@ class SEVM:
                     ex.log.append((keys, wload(ex.st.memory, loc, size) if size > 0 else None))
 
                 elif int('60', 16) <= int(o.hx, 16) <= int('7f', 16): # PUSH1 -- PUSH32
-                    ex.st.push(con(int(o.op[1], 16)))
+                    val = int(o.op[1], 16)
+                    if o.hx == '7f' and val in sha3_inv: # restore precomputed hashes
+                        ex.sha3_data(con(sha3_inv[val]), 32)
+                    else:
+                        ex.st.push(con(val))
                 elif int('80', 16) <= int(o.hx, 16) <= int('8f', 16): # DUP1  -- DUP16
                     ex.st.dup(int(o.hx, 16) - int('80', 16) + 1)
                 elif int('90', 16) <= int(o.hx, 16) <= int('9f', 16): # SWAP1 -- SWAP16
@@ -1066,6 +1162,7 @@ class SEVM:
         st: State = State(),
         jumpis = {},
         output: Any = None,
+        symbolic = True,
         #
         solver = None, # fail later if not provided
         path = [],
@@ -1076,7 +1173,7 @@ class SEVM:
         storages = [],
         calls = [],
         failed = False,
-        error = ''
+        error = '',
     ) -> Exec:
         return Exec(
             pgm      = pgm,
@@ -1093,6 +1190,7 @@ class SEVM:
             st       = st,
             jumpis   = jumpis,
             output   = output,
+            symbolic = symbolic,
             #
             solver   = solver,
             path     = path,
