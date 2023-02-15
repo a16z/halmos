@@ -297,7 +297,7 @@ def run(
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {end - start:0.2f}s, bounds: [{', '.join(dyn_param_size)}])")
     for model, idx, ex in models:
         if model:
-            print(color_warn('Counterexample: ' + str(model)))
+            print(color_warn('Counterexample: ' + str_model(model, args)))
         else:
             print(color_warn('Counterexample: unknown'))
         if args.verbose >= 1:
@@ -373,6 +373,18 @@ def is_valid_model(model) -> bool:
         if str(decl).startswith('evm_'):
             return False
     return True
+
+def str_model(model, args: argparse.Namespace) -> str:
+    def select(var):
+        name = str(var)
+        if name.startswith('p_'): return True
+        elif args.verbose >= 1:
+            if name.startswith('storage') or name.startswith('msg_') or name.startswith('this_'): return True
+        return False
+    if args.debug:
+        return str(model)
+    else:
+        return '[' + ', '.join(sorted(map(lambda decl: f'{decl} = {model[decl]}', filter(select, model)))) + ']'
 
 def main() -> int:
     #
