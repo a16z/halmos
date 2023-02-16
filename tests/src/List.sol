@@ -6,7 +6,7 @@ contract List {
 
     constructor() { }
 
-    function size() public returns (uint) {
+    function size() public view returns (uint) {
         return arr.length;
     }
 
