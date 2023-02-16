@@ -234,6 +234,11 @@ class Exec: # an execution path
         while self.pgm[self.this][self.pc] is None:
             self.pc += 1
 
+    def balance_of(self, addr: Word) -> Word:
+        if addr not in self.balance:
+            self.balance[addr] = f_orig_balance(addr)
+        return self.balance[addr]
+
     def sinit(self, slot: int, keys) -> None:
         if slot not in self.storage[self.this]:
             self.storage[self.this][slot] = {}
@@ -564,7 +569,7 @@ class SEVM:
         if not arg_size >= 0: raise ValueError(arg_size)
         if not ret_size >= 0: raise ValueError(ret_size)
 
-        ex.balance[ex.this] = self.arith('SUB', ex.balance[ex.this], fund)
+        ex.balance[ex.this] = self.arith('SUB', ex.balance_of(ex.this), fund)
 
         def call_known() -> None:
             calldata = [None] * arg_size
@@ -713,9 +718,9 @@ class SEVM:
         ex.balance[new_addr] = f_orig_balance(new_addr)
 
         # transfer value
-        ex.solver.add(UGE(ex.balance[ex.this], value)) # assume balance is enough; otherwise ignore this path
-        ex.balance[ex.this] = self.arith('SUB', ex.balance[ex.this], value)
-        ex.balance[new_addr] = self.arith('ADD', ex.balance[new_addr], value)
+        ex.solver.add(UGE(ex.balance_of(ex.this), value)) # assume balance is enough; otherwise ignore this path
+        ex.balance[ex.this] = self.arith('SUB', ex.balance_of(ex.this), value)
+        ex.balance[new_addr] = self.arith('ADD', ex.balance_of(new_addr), value)
 
         # execute contract creation code
         (new_exs, new_steps) = self.run(Exec(
@@ -1036,12 +1041,9 @@ class SEVM:
                     ex.st.push(f_blockhash(ex.st.pop()))
 
                 elif o.op[0] == 'BALANCE':
-                    addr = ex.st.pop()
-                    if addr not in ex.balance:
-                        ex.balance[addr] = f_orig_balance(addr)
-                    ex.st.push(ex.balance[addr])
+                    ex.st.push(ex.balance_of(ex.st.pop()))
                 elif o.op[0] == 'SELFBALANCE':
-                    ex.st.push(ex.balance[ex.this])
+                    ex.st.push(ex.balance_of(ex.this))
 
                 elif o.op[0] == 'CALL' or o.op[0] == 'STATICCALL':
                     self.call(ex, o.op[0], stack, step_id, out)
