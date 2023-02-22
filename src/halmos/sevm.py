@@ -4,7 +4,7 @@ import math
 
 from copy import deepcopy
 from collections import defaultdict
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Optional, Tuple, Any
 from functools import reduce
 
 from z3 import *
@@ -69,6 +69,19 @@ def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
 
 def create_address(cnt: int) -> Word:
     return con(0x220E + cnt)
+
+def valid_jump_destinations(pgm: List[Opcode]):
+    jumpdests = set()
+    i = 0
+    while i < len(pgm):
+        current_op = pgm[i]
+        if current_op.op[0] == 'JUMPDEST':
+            jumpdests.add(i)
+        elif current_op.op[0].startswith('PUSH'):
+            i += int(current_op.hx, 16) - 0x60 + 1
+
+        i += 1
+    return jumpdests
 
 class State:
     stack: List[Word]
@@ -213,7 +226,7 @@ class Exec: # an execution path
 
     def __str__(self) -> str:
         return ''.join([
-            'PC: '              , str(self.this), ' ', str(self.pc), ' ', str(self.pgm[self.this][self.pc]), '\n',
+            'PC: '              , str(self.this), ' ', str(self.pc), ' ', # str(self.pgm[self.this][self.pc]), '\n',
             str(self.st),
             'Storage:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.storage[x]) + '\n', self.storage)),
             'Balance:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.balance[x]) + '\n', self.balance)),
@@ -864,6 +877,60 @@ class SEVM:
         else:
             pass # this may happen if the previous path condition was considered unknown but turns out to be unsat later
 
+    def jump(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int) -> None:
+        dst: int = ex.st.pop()
+
+        # if dst is concrete, just jump
+        if is_bv_value(dst):
+            ex.pc = int(str(dst))
+            stack.append((ex, step_id))
+
+        # otherwise, create a new execution for feasible targets
+        else:
+            for target in valid_jump_destinations(ex.pgm[ex.this]):
+                ex.solver.push()
+                target_reachable = simplify(dst == target)
+                ex.solver.add(target_reachable)
+                if ex.solver.check() != unsat: # jump
+                    if self.options.get('debug'):
+                        print(f"we can jump to {target} with model {ex.solver.model()}")
+
+                    new_solver = SolverFor('QF_AUFBV')
+                    new_solver.set(timeout=self.options['timeout'])
+                    new_solver.add(ex.solver.assertions())
+                    new_path = deepcopy(ex.path)
+                    new_path.append(f'jump({target})')
+                    new_ex = Exec(
+                        pgm      = ex.pgm.copy(), # shallow copy for potential new contract creation; existing code doesn't change
+                        code     = ex.code.copy(), # shallow copy
+                        storage  = deepcopy(ex.storage),
+                        balance  = deepcopy(ex.balance),
+                        #
+                        calldata = ex.calldata,
+                        callvalue= ex.callvalue,
+                        caller   = ex.caller,
+                        this     = ex.this,
+                        #
+                        pc       = target,
+                        st       = deepcopy(ex.st),
+                        jumpis   = deepcopy(ex.jumpis),
+                        output   = deepcopy(ex.output),
+                        symbolic = ex.symbolic,
+                        #
+                        solver   = new_solver,
+                        path     = new_path,
+                        #
+                        log      = deepcopy(ex.log),
+                        cnts     = deepcopy(ex.cnts),
+                        sha3s    = deepcopy(ex.sha3s),
+                        storages = deepcopy(ex.storages),
+                        calls    = deepcopy(ex.calls),
+                        failed   = ex.failed,
+                        error    = ex.error,
+                    )
+                ex.solver.pop()
+                stack.append((new_ex, step_id))
+
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps]:
         out: List[Exec] = []
         steps: Steps = {}
@@ -914,9 +981,8 @@ class SEVM:
                     continue
 
                 elif o.op[0] == 'JUMP':
-                    source: int = ex.pc
-                    target: int = int(str(ex.st.pop())) # target must be concrete
-                    ex.pc = target
+                    self.jump(ex, stack, step_id)
+                    continue
 
                 elif o.op[0] == 'JUMPDEST':
                     pass
