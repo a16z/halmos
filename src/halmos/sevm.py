@@ -47,11 +47,17 @@ f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 def con(n: int) -> Word:
     return BitVecVal(n, 256)
 
+def wextend(mem: List[Byte], loc: int, size: int) -> None:
+    if len(mem) < loc + size:
+        mem.extend([BitVecVal(0, 8) for _ in range(loc + size - len(mem))])
+
 def wload(mem: List[Byte], loc: int, size: int) -> Bytes:
+    wextend(mem, loc, size)
     return simplify(Concat(mem[loc:loc+size])) # BitVecSort(size * 8)
 
 def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
     if not eq(val.sort(), BitVecSort(size*8)): raise ValueError(val)
+    wextend(mem, loc, size)
     for i in range(size):
         mem[loc + i] = simplify(Extract((size-1 - i)*8+7, (size-1 - i)*8, val))
 
@@ -63,6 +69,7 @@ def wstore_partial(mem: List[Byte], loc: int, offset: int, size: int, data: Byte
 
 def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
     if not size == len(arr): raise ValueError(size, arr)
+    wextend(mem, loc, size)
     for i in range(size):
         if not eq(arr[i].sort(), BitVecSort(8)): raise ValueError(arr)
         mem[loc + i] = arr[i]
@@ -118,8 +125,6 @@ class State:
 
     def mloc(self) -> int:
         loc: int = int(str(self.pop())) # loc must be concrete
-        while len(self.memory) < loc + 32:
-            self.memory.extend([BitVecVal(0, 8) for _ in range(32)])
         return loc
 
     def mstore(self, full: bool) -> None:
@@ -472,6 +477,25 @@ class SEVM:
     def __init__(self, options: Dict) -> None:
         self.options = options
 
+    def div_xy_y(self, w1: Word, w2: Word) -> Word:
+        # return the number of bits required to represent the given value. default = 256
+        def bitsize(w: Word) -> int:
+            if w.decl().name() == 'concat' and is_bv_value(w.arg(0)) and int(str(w.arg(0))) == 0:
+                return 256 - w.arg(0).size()
+            return 256
+        if w1.decl().name() == 'bvmul' and w1.num_args() == 2:
+            x = w1.arg(0)
+            y = w1.arg(1)
+            if w2 == x or w2 == y: # xy/x or xy/y
+                size_x = bitsize(x)
+                size_y = bitsize(y)
+                if size_x + size_y <= 256:
+                    if w2 == x: # xy/x == y
+                        return y
+                    else: # xy/y == x
+                        return x
+        return None
+
     def arith(self, op: str, w1: Word, w2: Word) -> Word:
         w1 = b2i(w1)
         w2 = b2i(w2)
@@ -513,6 +537,9 @@ class SEVM:
             else:
                 return f_mul(w1, w2)
         elif op == 'DIV':
+            div_for_overflow_check = self.div_xy_y(w1, w2)
+            if div_for_overflow_check is not None: # xy/x or xy/y
+                return div_for_overflow_check
             if self.options.get('div'):
                 return UDiv(w1, w2) # unsigned div (bvudiv)
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
@@ -521,6 +548,8 @@ class SEVM:
                 i2: int = int(str(w2)) # must be concrete
                 if i2 == 0:
                     return con(0)
+                elif i2 == 1:
+                    return w1
                 elif is_power_of_two(i2):
                     return LShR(w1, int(math.log(i2,2)))
                 elif self.options.get('divByConst'):
@@ -532,6 +561,17 @@ class SEVM:
         elif op == 'MOD':
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return URem(w1, w2) # bvurem
+            elif is_bv_value(w2):
+                i2: int = int(str(w2))
+                if i2 == 0 or i2 == 1:
+                    return con(0)
+                elif is_power_of_two(i2):
+                    bitsize = int(math.log(i2,2))
+                    return Concat(BitVecVal(0, 256-bitsize), Extract(bitsize-1, 0, w1))
+                elif self.options.get('modByConst'):
+                    return URem(w1, w2)
+                else:
+                    return f_mod(w1, w2)
             else:
                 return f_mod(w1, w2)
         elif op == 'SDIV':
@@ -549,6 +589,19 @@ class SEVM:
                 i1: int = int(str(w1)) # must be concrete
                 i2: int = int(str(w2)) # must be concrete
                 return con(i1 ** i2)
+            elif is_bv_value(w2):
+                i2: int = int(str(w2))
+                if i2 == 0:
+                    return con(1)
+                elif i2 == 1:
+                    return w1
+                elif i2 <= self.options.get('expByConst'):
+                    exp = w1
+                    for _ in range(i2 - 1):
+                        exp = exp * w1
+                    return exp
+                else:
+                    return f_exp(w1, w2)
             else:
                 return f_exp(w1, w2)
         else:
@@ -573,6 +626,7 @@ class SEVM:
 
         def call_known() -> None:
             calldata = [None] * arg_size
+            wextend(ex.st.memory, arg_loc, arg_size)
             wstore_bytes(calldata, 0, arg_size, ex.st.memory[arg_loc:arg_loc+arg_size])
 
             # execute external calls
@@ -637,6 +691,7 @@ class SEVM:
                     stack.append((new_ex, step_id))
                 else:
                     # got stuck during external call
+                    new_ex.error = str('external call stuck: ' + opcode)
                     out.append(new_ex)
 
         def call_unknown() -> None:
@@ -1065,6 +1120,11 @@ class SEVM:
                 elif o.op[0] == 'MSTORE8':
                     ex.st.mstore(False)
 
+                elif o.op[0] == 'MSIZE':
+                    size: int = len(ex.st.memory)
+                    size = ((size + 31) // 32) * 32 # round up to the next multiple of 32
+                    ex.st.push(con(size))
+
                 elif o.op[0] == 'SLOAD':
                     ex.st.push(ex.sload(ex.st.pop()))
                 elif o.op[0] == 'SSTORE':
@@ -1083,8 +1143,6 @@ class SEVM:
                     offset: int = int(str(ex.st.pop())) # offset must be concrete
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
                     if size > 0:
-                        while len(ex.st.memory) < loc + size:
-                            ex.st.memory.extend([BitVecVal(0, 8) for _ in range(32)])
                         if ex.calldata is None:
                             f_calldatacopy = Function('calldatacopy_'+str(size*8), BitVecSort(256), BitVecSort(size*8))
                             data = f_calldatacopy(offset)
@@ -1101,8 +1159,7 @@ class SEVM:
                     loc: int = ex.st.mloc()
                     pc: int = int(str(ex.st.pop())) # pc must be concrete
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
-                    while len(ex.st.memory) < loc + size:
-                        ex.st.memory.extend([BitVecVal(0, 8) for _ in range(32)])
+                    wextend(ex.st.memory, loc, size)
                     for i in range(size):
                         ex.st.memory[loc + i] = BitVecVal(int(ex.read_code(pc + i), 16), 8)
 
