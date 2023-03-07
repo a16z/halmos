@@ -449,14 +449,15 @@ def main() -> int:
 
     for compilation_id, compilation_unit in cryticCompile.compilation_units.items():
 
-        for filename, contracts_names in compilation_unit.filename_to_contracts.items():
+        for filename in sorted(compilation_unit.filenames):
+            contracts_names = compilation_unit.filename_to_contracts[filename]
             source_unit = compilation_unit.source_units[filename]
 
             if args.contract:
                 if args.contract not in contracts_names: continue
                 contracts = [args.contract]
             else:
-                contracts = list(contracts_names)
+                contracts = sorted(contracts_names)
 
             for contract in contracts:
                 hexcode = source_unit.bytecodes_runtime[contract]
