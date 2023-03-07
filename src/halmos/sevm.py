@@ -472,6 +472,25 @@ class SEVM:
     def __init__(self, options: Dict) -> None:
         self.options = options
 
+    def div_xy_y(self, w1: Word, w2: Word) -> Word:
+        # return the number of bits required to represent the given value. default = 256
+        def bitsize(w: Word) -> int:
+            if w.decl().name() == 'concat' and is_bv_value(w.arg(0)) and int(str(w.arg(0))) == 0:
+                return 256 - w.arg(0).size()
+            return 256
+        if w1.decl().name() == 'bvmul' and w1.num_args() == 2:
+            x = w1.arg(0)
+            y = w1.arg(1)
+            if w2 == x or w2 == y: # xy/x or xy/y
+                size_x = bitsize(x)
+                size_y = bitsize(y)
+                if size_x + size_y <= 256:
+                    if w2 == x: # xy/x == y
+                        return y
+                    else: # xy/y == x
+                        return x
+        return None
+
     def arith(self, op: str, w1: Word, w2: Word) -> Word:
         w1 = b2i(w1)
         w2 = b2i(w2)
@@ -513,6 +532,9 @@ class SEVM:
             else:
                 return f_mul(w1, w2)
         elif op == 'DIV':
+            div_for_overflow_check = self.div_xy_y(w1, w2)
+            if div_for_overflow_check is not None: # xy/x or xy/y
+                return div_for_overflow_check
             if self.options.get('div'):
                 return UDiv(w1, w2) # unsigned div (bvudiv)
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
