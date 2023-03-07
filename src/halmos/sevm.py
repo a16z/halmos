@@ -47,11 +47,17 @@ f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 def con(n: int) -> Word:
     return BitVecVal(n, 256)
 
+def wextend(mem: List[Byte], loc: int, size: int) -> None:
+    if len(mem) < loc + size:
+        mem.extend([BitVecVal(0, 8) for _ in range(loc + size - len(mem))])
+
 def wload(mem: List[Byte], loc: int, size: int) -> Bytes:
+    wextend(mem, loc, size)
     return simplify(Concat(mem[loc:loc+size])) # BitVecSort(size * 8)
 
 def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
     if not eq(val.sort(), BitVecSort(size*8)): raise ValueError(val)
+    wextend(mem, loc, size)
     for i in range(size):
         mem[loc + i] = simplify(Extract((size-1 - i)*8+7, (size-1 - i)*8, val))
 
@@ -63,6 +69,7 @@ def wstore_partial(mem: List[Byte], loc: int, offset: int, size: int, data: Byte
 
 def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
     if not size == len(arr): raise ValueError(size, arr)
+    wextend(mem, loc, size)
     for i in range(size):
         if not eq(arr[i].sort(), BitVecSort(8)): raise ValueError(arr)
         mem[loc + i] = arr[i]
@@ -118,8 +125,6 @@ class State:
 
     def mloc(self) -> int:
         loc: int = int(str(self.pop())) # loc must be concrete
-        while len(self.memory) < loc + 32:
-            self.memory.extend([BitVecVal(0, 8) for _ in range(32)])
         return loc
 
     def mstore(self, full: bool) -> None:
@@ -595,6 +600,7 @@ class SEVM:
 
         def call_known() -> None:
             calldata = [None] * arg_size
+            wextend(ex.st.memory, arg_loc, arg_size)
             wstore_bytes(calldata, 0, arg_size, ex.st.memory[arg_loc:arg_loc+arg_size])
 
             # execute external calls
@@ -1106,8 +1112,6 @@ class SEVM:
                     offset: int = int(str(ex.st.pop())) # offset must be concrete
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
                     if size > 0:
-                        while len(ex.st.memory) < loc + size:
-                            ex.st.memory.extend([BitVecVal(0, 8) for _ in range(32)])
                         if ex.calldata is None:
                             f_calldatacopy = Function('calldatacopy_'+str(size*8), BitVecSort(256), BitVecSort(size*8))
                             data = f_calldatacopy(offset)
@@ -1124,8 +1128,7 @@ class SEVM:
                     loc: int = ex.st.mloc()
                     pc: int = int(str(ex.st.pop())) # pc must be concrete
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
-                    while len(ex.st.memory) < loc + size:
-                        ex.st.memory.extend([BitVecVal(0, 8) for _ in range(32)])
+                    wextend(ex.st.memory, loc, size)
                     for i in range(size):
                         ex.st.memory[loc + i] = BitVecVal(int(ex.read_code(pc + i), 16), 8)
 
