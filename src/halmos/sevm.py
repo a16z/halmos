@@ -1094,6 +1094,11 @@ class SEVM:
                 elif o.op[0] == 'MSTORE8':
                     ex.st.mstore(False)
 
+                elif o.op[0] == 'MSIZE':
+                    size: int = len(ex.st.memory)
+                    size = ((size + 31) // 32) * 32 # round up to the next multiple of 32
+                    ex.st.push(con(size))
+
                 elif o.op[0] == 'SLOAD':
                     ex.st.push(ex.sload(ex.st.pop()))
                 elif o.op[0] == 'SSTORE':
