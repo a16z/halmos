@@ -35,6 +35,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--no-smt-mul',          action='store_true', help='do not interpret `*`')
     parser.add_argument(   '--smt-div',          action='store_true', help=       'interpret `/`')
     parser.add_argument(   '--smt-div-by-const', action='store_true', help=       'interpret division by constant')
+    parser.add_argument(   '--smt-mod-by-const', action='store_true', help=       'interpret constant modulo')
+    parser.add_argument(   '--smt-exp-by-const', metavar='N', type=int, default=2, help='interpret constant power up to N (default: %(default)s)')
 
     parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
     parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
@@ -412,6 +414,8 @@ def main() -> int:
         'mul': not args.no_smt_mul,
         'div': args.smt_div,
         'divByConst': args.smt_div_by_const,
+        'modByConst': args.smt_mod_by_const,
+        'expByConst': args.smt_exp_by_const,
         'timeout': args.solver_timeout_branching,
     }
 

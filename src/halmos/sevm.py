@@ -561,6 +561,17 @@ class SEVM:
         elif op == 'MOD':
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return URem(w1, w2) # bvurem
+            elif is_bv_value(w2):
+                i2: int = int(str(w2))
+                if i2 == 0 or i2 == 1:
+                    return con(0)
+                elif is_power_of_two(i2):
+                    bitsize = int(math.log(i2,2))
+                    return Concat(BitVecVal(0, 256-bitsize), Extract(bitsize-1, 0, w1))
+                elif self.options.get('modByConst'):
+                    return URem(w1, w2)
+                else:
+                    return f_mod(w1, w2)
             else:
                 return f_mod(w1, w2)
         elif op == 'SDIV':
@@ -578,6 +589,19 @@ class SEVM:
                 i1: int = int(str(w1)) # must be concrete
                 i2: int = int(str(w2)) # must be concrete
                 return con(i1 ** i2)
+            elif is_bv_value(w2):
+                i2: int = int(str(w2))
+                if i2 == 0:
+                    return con(1)
+                elif i2 == 1:
+                    return w1
+                elif i2 <= self.options.get('expByConst'):
+                    exp = w1
+                    for _ in range(i2 - 1):
+                        exp = exp * w1
+                    return exp
+                else:
+                    return f_exp(w1, w2)
             else:
                 return f_exp(w1, w2)
         else:
