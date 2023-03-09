@@ -1,4 +1,5 @@
 tests/out
 tests/cache
 venv/
-src/halmos.egg-info/
+src/halmos/halmos.egg-info/
+src/halmos/__pycache__/
