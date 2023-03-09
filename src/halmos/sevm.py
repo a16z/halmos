@@ -1031,6 +1031,9 @@ class SEVM:
                     w = ex.st.pop()
                     ex.st.push(LShR(ex.st.pop(), w)) # bvlshr
 
+                elif o.op[0] == 'SIGNEXTEND':
+                    ex.st.push(con(int(str(ex.st.pop()))))
+
                 elif o.op[0] == 'XOR':
                     ex.st.push(ex.st.pop() ^ ex.st.pop()) # bvxor
 

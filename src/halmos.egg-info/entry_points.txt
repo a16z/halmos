@@ -1,0 +1,2 @@
+[console_scripts]
+halmos = halmos.__main__:main
