@@ -1,3 +1,4 @@
 tests/out
 tests/cache
 venv/
+src/halmos.egg-info/
