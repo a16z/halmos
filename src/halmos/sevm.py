@@ -1033,7 +1033,7 @@ class SEVM:
 
                 elif o.op[0] == 'SIGNEXTEND':
                     w = ex.st.pop()
-                    if w > con(31): continue
+                    if b2i(w) > con(31): continue
                     bl = (w + 1) * 8
                     ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
 
