@@ -1,5 +1,22 @@
-tests/out
-tests/cache
+# Byte-compiled / optimized
+__pycache__/
+
+# Distribution / packaging
+*.egg-info/
+
+# Pyre type checker
+.pyre/
+
+# Vim tmp files:
+*~
+*.swp
+*.swo
+
+# Environments
+.env
+.venv
 venv/
-src/halmos/halmos.egg-info/
-src/halmos/__pycache__/
+
+# Foundry build files
+*/cache/
+*/out/
