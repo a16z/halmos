@@ -1036,9 +1036,9 @@ class SEVM:
                     if not is_bv_value(w): raise ValueError(w)
 
                     w = int(str(w))
-                    if w > 31: continue
-                    bl = (w + 1) * 8
-                    ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
+                    if w < 32:
+                        bl = (w + 1) * 8
+                        ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
 
                 elif o.op[0] == 'XOR':
                     ex.st.push(ex.st.pop() ^ ex.st.pop()) # bvxor
