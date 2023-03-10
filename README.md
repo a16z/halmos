@@ -13,7 +13,10 @@ _Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode_
 
 For more information, refer to our post on "_[Symbolic testing with Halmos: Leveraging existing tests for formal verification][post]_."
 
+Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
+
 [post]: <https://a16zcrypto.com/symbolic-testing-with-halmos-leveraging-existing-tests-for-formal-verification/>
+[chat]: <https://t.me/+4UhzHduai3MzZmUx>
 
 ## Installation
 
