@@ -1036,7 +1036,7 @@ class SEVM:
                     if not is_bv_value(w): raise ValueError(w)
 
                     w = int(str(w))
-                    if w < 32:
+                    if w <= 30: # if w == 31, result is SignExt(0, value) == value
                         bl = (w + 1) * 8
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
 
