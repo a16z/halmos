@@ -25,4 +25,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
       - name: Test
-        run: python -m halmos tests
+        run: |
+          pip install -e .
+          halmos tests
