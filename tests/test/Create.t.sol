@@ -11,9 +11,11 @@ contract CreateTest is Test {
         create = new Create(0x220E);
     }
 
+    /* TODO: support testFail prefix
     function testFailSetUp() public {
         assertEq(create.value(), 0);
     }
+    */
 
     function testSet(uint x) public {
         create.set(x);

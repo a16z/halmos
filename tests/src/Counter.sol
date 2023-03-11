@@ -48,7 +48,7 @@ contract Counter {
     }
 
     function loopConst() public {
-        for (uint i; i < 4; i++) {
+        for (uint i; i < 2; i++) { // default: `--loop 2`
             cnt++;
         }
     }
