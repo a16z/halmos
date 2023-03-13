@@ -732,12 +732,21 @@ class SEVM:
                     calldata = bytes.fromhex(hex(simplify(Extract(arg_size*8-1, 0, arg)).as_long())[2:])
                     path_len = int.from_bytes(calldata[36:68], "big")
                     path = calldata[68:68+path_len].decode("utf-8")
+
+                    if ":" in path:
+                        [filename, contract_name] = path.split(":")
+                        path = "./out/" + filename + "/" + contract_name + ".json"
                     
                     f = open(path)
                     artifact_str = f.read();
                     artifact = json.loads(artifact_str)
 
-                    bytecode = str(artifact["bytecode"]["object"]).replace("0x", "")
+                    
+                    if artifact["bytecode"]["object"]:
+                        bytecode = str(artifact["bytecode"]["object"]).replace("0x", "")
+                    else:
+                        bytecode = str(artifact["bytecode"]).replace("0x", "")
+
                     bytecode_len = math.ceil(len(bytecode) / 2)
                     bytecode_len_enc = str(hex(bytecode_len)).replace("0x", "").rjust(64, "0")
 
@@ -747,7 +756,6 @@ class SEVM:
                     ret_len = math.ceil(len(ret_bytes) / 2)
                     ret_bytes = bytes.fromhex(ret_bytes)
 
-                    print(ret_size)
                     ret = BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
                 else:
                     # TODO: support other cheat codes
@@ -755,6 +763,7 @@ class SEVM:
                     out.append(ex)
                     return
 
+            # TODO: handle inconsistent return sizes for unknown functions
             # store return value
             if ret_size > 0 and ret != None:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)

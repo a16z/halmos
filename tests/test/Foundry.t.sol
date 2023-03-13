@@ -18,8 +18,12 @@ contract FoundryTest is Test {
 
     function testGetCode(uint x) public {
         Counter counter = Counter(deployCode("./out/Counter.sol/Counter.json"));
+        counter.set(x);
+        assertEq(counter.cnt(), x);
 
-        assertEq(x, x);
+        Counter counter2 = Counter(deployCode("Counter.sol:Counter"));
+        counter2.set(x);
+        assertEq(counter2.cnt(), x);
     }
 
     function testPrank(address x) public {
