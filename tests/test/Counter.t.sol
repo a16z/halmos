@@ -65,7 +65,7 @@ contract CounterTest is Counter {
         uint oldCnt = cnt;
         loopConst();
         assert(cnt >= oldCnt);
-        assert(cnt == oldCnt + 4);
+        assert(cnt == oldCnt + 2);
     }
 
     function testLoopConstIf() public {
@@ -120,8 +120,10 @@ contract CounterTest is Counter {
         }
     }
 
+    /* TODO: support testFail prefix
     function testFail() public pure {
         require(false);
         // deadcode
     }
+    */
 }

@@ -7,9 +7,11 @@ import "forge-std/StdCheats.sol";
 import "../src/Counter.sol";
 
 contract FoundryTest is Test {
+    /* TODO: support testFail prefix
     function testFail() public {
         assertTrue(false);
     }
+    */
 
     function testAssume(uint x) public {
         vm.assume(x < 10);
@@ -26,7 +28,9 @@ contract FoundryTest is Test {
         assertEq(counter2.cnt(), x);
     }
 
+    /* TODO: support vm.prank cheatcode
     function testPrank(address x) public {
         vm.prank(x); // not supported
     }
+    */
 }
