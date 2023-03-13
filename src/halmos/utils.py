@@ -252,6 +252,9 @@ class hevm_cheat_code:
     # bytes4(keccak256("assume(bool)"))
     assume_sig: int = 0x4C63E562
 
+    # bytes4(keccak256("getCode(string)))
+    get_code_sig: int = 0x8d1cc925
+
 sha3_inv: Dict[int, int] = { # sha3(x) -> x
     0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563 : 0,
     0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6 : 1,

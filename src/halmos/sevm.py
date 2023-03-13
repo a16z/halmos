@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import json
 import math
 
 from copy import deepcopy
@@ -707,6 +708,11 @@ class SEVM:
             ex.solver.add(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
+            ret = None
+            if ret_size > 0:
+                f_ret = Function('ret_'+str(ret_size*8), BitVecSort(256), BitVecSort(ret_size*8))
+                ret = f_ret(exit_code_var)
+
             # TODO: cover other precompiled
             if to == con(1): # ecrecover exit code is always 1
                 ex.solver.add(exit_code_var != con(0))
@@ -722,9 +728,29 @@ class SEVM:
                     assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
                     ex.solver.add(assume_cond)
                     ex.path.append(str(assume_cond))
+                elif simplify(Extract(arg_size*8-1, arg_size*8-32, arg)) == hevm_cheat_code.get_code_sig:
+                    calldata = bytes.fromhex(hex(simplify(Extract(arg_size*8-1, 0, arg)).as_long())[2:])
+                    path_len = int.from_bytes(calldata[36:68], "big")
+                    path = calldata[68:68+path_len].decode("utf-8")
+                    
+                    f = open(path)
+                    artifact_str = f.read();
+                    artifact = json.loads(artifact_str)
+
+                    bytecode = str(artifact["bytecode"]["object"]).replace("0x", "")
+                    bytecode_len = math.ceil(len(bytecode) / 2)
+                    bytecode_len_enc = str(hex(bytecode_len)).replace("0x", "").rjust(64, "0")
+
+                    bytecode_len_ceil = math.ceil(bytecode_len / 32) * 32
+
+                    ret_bytes = "00" * 31 + "20" + bytecode_len_enc + bytecode.ljust(bytecode_len_ceil*2, "0")
+                    ret_len = math.ceil(len(ret_bytes) / 2)
+                    ret_bytes = bytes.fromhex(ret_bytes)
+
+                    ret = BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
                 else:
                     # TODO: support other cheat codes
-                    ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
+                    # ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
                     out.append(ex)
                     return
 
@@ -733,9 +759,7 @@ class SEVM:
             #       And, if the actual size is smaller than the given size, then the memory is updated only up to the actual size.
 
             # store return value
-            if ret_size > 0:
-                f_ret = Function('ret_'+str(ret_size*8), BitVecSort(256), BitVecSort(ret_size*8))
-                ret = f_ret(exit_code_var)
+            if ret_size > 0 and ret != None:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)
                 ex.output = ret
             else:
