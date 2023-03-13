@@ -737,7 +737,7 @@ class SEVM:
                         [filename, contract_name] = path.split(':')
                         path = './out/' + filename + '/' + contract_name + '.json'
 
-                    target = str(self.options['target']).removesuffix('/')
+                    target = str(self.options['target']).lstrip('/')
                     path = target + '/' + path
                     
                     f = open(path)
