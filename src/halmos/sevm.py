@@ -747,6 +747,7 @@ class SEVM:
                     ret_len = math.ceil(len(ret_bytes) / 2)
                     ret_bytes = bytes.fromhex(ret_bytes)
 
+                    print(ret_size)
                     ret = BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
                 else:
                     # TODO: support other cheat codes
@@ -754,13 +755,11 @@ class SEVM:
                     out.append(ex)
                     return
 
-            # TODO: The actual return data size may be different from the given ret_size.
-            #       In that case, ex.output should be set to the actual return data.
-            #       And, if the actual size is smaller than the given size, then the memory is updated only up to the actual size.
-
             # store return value
             if ret_size > 0 and ret != None:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)
+                ex.output = ret
+            elif ret != None:
                 ex.output = ret
             else:
                 ex.output = None
