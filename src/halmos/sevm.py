@@ -730,33 +730,36 @@ class SEVM:
                     ex.path.append(str(assume_cond))
                 elif simplify(Extract(arg_size*8-1, arg_size*8-32, arg)) == hevm_cheat_code.get_code_sig:
                     calldata = bytes.fromhex(hex(simplify(Extract(arg_size*8-1, 0, arg)).as_long())[2:])
-                    path_len = int.from_bytes(calldata[36:68], "big")
-                    path = calldata[68:68+path_len].decode("utf-8")
+                    path_len = int.from_bytes(calldata[36:68], 'big')
+                    path = calldata[68:68+path_len].decode('utf-8')
 
-                    if ":" in path:
-                        [filename, contract_name] = path.split(":")
-                        path = "./out/" + filename + "/" + contract_name + ".json"
+                    if ':' in path:
+                        [filename, contract_name] = path.split(':')
+                        path = './out/' + filename + '/' + contract_name + '.json'
+
+                    target = str(self.options['target']).removesuffix('/')
+                    path = target + '/' + path
                     
                     f = open(path)
                     artifact_str = f.read();
                     artifact = json.loads(artifact_str)
 
                     
-                    if artifact["bytecode"]["object"]:
-                        bytecode = str(artifact["bytecode"]["object"]).replace("0x", "")
+                    if artifact['bytecode']['object']:
+                        bytecode = str(artifact['bytecode']['object']).replace('0x', '')
                     else:
-                        bytecode = str(artifact["bytecode"]).replace("0x", "")
+                        bytecode = str(artifact['bytecode']).replace('0x', '')
 
                     bytecode_len = math.ceil(len(bytecode) / 2)
-                    bytecode_len_enc = str(hex(bytecode_len)).replace("0x", "").rjust(64, "0")
+                    bytecode_len_enc = str(hex(bytecode_len)).replace('0x', '').rjust(64, '0')
 
                     bytecode_len_ceil = math.ceil(bytecode_len / 32) * 32
 
-                    ret_bytes = "00" * 31 + "20" + bytecode_len_enc + bytecode.ljust(bytecode_len_ceil*2, "0")
+                    ret_bytes = '00' * 31 + '20' + bytecode_len_enc + bytecode.ljust(bytecode_len_ceil*2, '0')
                     ret_len = math.ceil(len(ret_bytes) / 2)
                     ret_bytes = bytes.fromhex(ret_bytes)
 
-                    ret = BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
+                    ret = BitVecVal(int.from_bytes(ret_bytes, 'big'), ret_len * 8)
                 else:
                     # TODO: support other cheat codes
                     ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
