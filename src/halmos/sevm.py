@@ -750,7 +750,7 @@ class SEVM:
                     ret = BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
                 else:
                     # TODO: support other cheat codes
-                    # ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
+                    ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
                     out.append(ex)
                     return
 
