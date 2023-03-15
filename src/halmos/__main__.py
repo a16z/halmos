@@ -51,43 +51,101 @@ def parse_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
-def add_srcmap(ops: List[Opcode], srcmap: List[str], srcs: Dict) -> None:
-    fpath = {} # file id -> file path
-    for src in srcs:
-        fpath[srcs[src]['id']] = src
-    #   print(src, srcs[src]['id'])
+def str_abi(item: Dict) -> str:
+    def str_tuple(args: List) -> str:
+        ret = []
+        for arg in args:
+            typ = arg['type']
+            if typ == 'tuple':
+            #   ret.append(str_tuple(arg['components']))
+                ret.append(typ) # crytic-compile bug
+            else:
+                ret.append(typ)
+        return '(' + ','.join(ret) + ')'
+    if item['type'] != 'function': raise ValueError(item)
+    return item['name'] + str_tuple(item['inputs'])
 
-    start, length, fileid, jump, mdepth = 0, 0, 0, '-', 0
-    for idx, sm in enumerate(srcmap):
-        arr = sm.split(':') + ['']*5
-        start  = int(arr[0]) if arr[0] != '' else start
-        length = int(arr[1]) if arr[1] != '' else length
-        srcidx = int(arr[2]) if arr[2] != '' else srcidx
-        jump   =     arr[3]  if arr[3] != '' else jump
-        mdepth = int(arr[4]) if arr[4] != '' else mdepth
+def find_abi(abi: List, funname: str, funsig: str) -> Dict:
+    for item in abi:
+        if item['type'] == 'function' and item['name'] == funname and str_abi(item) == funsig:
+            return item
+    raise ValueError('Not found', abi, funsig)
 
-        if srcidx in fpath:
-            with open(f'{args.target}/{fpath[srcidx]}') as f:
-                f.seek(start)
-                srctext = repr(f.read(length))
+def mk_calldata(abi: Dict, funname: str, funsig: str, arrlen: Dict, args: argparse.Namespace, cd: List, dyn_param_size: List[str]) -> None:
+    item = find_abi(abi, funname, funsig)
+    tba = []
+    offset = 0
+    for param in item['inputs']:
+        param_name = param['name']
+        param_type = param['type']
+        if param_type == 'tuple':
+            raise ValueError('Not supported', param_type) # TODO: support struct types
+        elif param_type == 'bytes' or param_type == 'string':
+            tba.append((4+offset, param)) # wstore(cd, 4+offset, 32, BitVecVal(<?offset?>, 256))
+            offset += 32
+        elif param_type.endswith('[]'):
+            raise ValueError('Not supported variable sized arrays', param_type)
         else:
-            srctext = '<generated>'
+            match = re.search(r'(u?int[0-9]*|address|bool|bytes[0-9]+)(\[([0-9]+)\])?', param_type)
+            if not match: raise ValueError('Unknown type', param_type)
+            typ = match.group(1)
+            dim = match.group(3)
+            if dim: # array
+                for idx in range(int(dim)):
+                    wstore(cd, 4+offset, 32, BitVec(f'p_{param_name}[{idx}]_{typ}', 256))
+                    offset += 32
+            else: # primitive
+                wstore(cd, 4+offset, 32, BitVec(f'p_{param_name}_{typ}', 256))
+                offset += 32
 
-        ops[idx].sm = SrcMap(srctext, jump, mdepth)
+    for loc_param in tba:
+        loc   = loc_param[0]
+        param = loc_param[1]
+        param_name = param['name']
+        param_type = param['type']
+
+        if param_name not in arrlen:
+            size = args.loop
+            if args.debug: print(f'warn: size of {param_name} not given, using default value {size}')
+        else:
+            size = arrlen[param_name]
+
+        dyn_param_size.append(f'|{param_name}|={size}')
+
+        if param_type == 'bytes' or param_type == 'string':
+            # head
+            wstore(cd, loc, 32, BitVecVal(offset, 256))
+            # tail
+            size_pad_right = int((size + 31) / 32) * 32
+            wstore(cd, 4+offset, 32, BitVecVal(size, 256))
+            offset += 32
+            if size_pad_right > 0:
+                wstore(cd, 4+offset, size_pad_right, BitVec(f'p_{param_name}_{param_type}', 8*size_pad_right))
+                offset += size_pad_right
+        else:
+            raise ValueError('not feasible')
+
+def stop_or_return(opcode) -> bool:
+    return opcode == 'STOP' or opcode == 'RETURN'
 
 def setup(
     hexcode: str,
     abi: Dict,
     srcmap: List[str],
     srcs: Dict,
-    args: argparse.Namespace,
+    setup_name: str,
     setup_sig: str,
+    setup_selector: str,
+    arrlen: Dict,
+    args: argparse.Namespace,
     options: Dict
 ) -> Exec:
     # bytecode
-    (ops, code) = decode(hexcode)
+    if hexcode.startswith('0x'):
+        hexcode = hexcode[2:]
+    if len(hexcode) % 2 != 0: raise ValueError(hexcode)
+    (ops, code) = decode(BitVecVal(int(hexcode, 16), (len(hexcode) // 2) * 8))
     pgm = ops_to_pgm(ops)
-    add_srcmap(ops, srcmap, srcs)
 
     # solver
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
@@ -113,7 +171,7 @@ def setup(
         code      = { this: code },
         storage   = { this: storage },
         balance   = { this: con(0) },
-        calldata  = [None] * 4,
+        calldata  = [],
         callvalue = con(0),
         caller    = caller,
         this      = this,
@@ -122,9 +180,13 @@ def setup(
     )
 
     if setup_sig:
-        wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_sig, 32))
+        wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_selector, 32))
+        dyn_param_size = [] # TODO: propagate to run
+        mk_calldata(abi, setup_name, setup_sig, arrlen, args, setup_ex.calldata, dyn_param_size)
 
         (setup_exs, setup_steps) = sevm.run(setup_ex)
+
+        setup_exs = list(filter(lambda ex: stop_or_return(ex.pgm[ex.this][ex.pc].op[0]) and not ex.failed, setup_exs))
 
         if len(setup_exs) != 1:
             if args.debug: print('\n'.join(map(str, setup_exs)))
@@ -154,69 +216,12 @@ def run(
     # calldata
     #
 
-    f_cd = Function('cd', BitVecSort(256), BitVecSort(8))
-    cdsize = 10000
     cd = []
-    for i in range(cdsize):
-        cd.append(f_cd(con(i)))
 
     wstore(cd, 0, 4, BitVecVal(funselector, 32))
 
     dyn_param_size = []
-
-    for item in abi:
-        if item['type'] == 'function' and item['name'] == funname:
-            tba = []
-            offset = 0
-            for param in item['inputs']:
-                param_name = param['name']
-                param_type = param['type']
-                if param_type == 'tuple':
-                    raise ValueError('Not supported', param_type) # TODO: support struct types
-                elif param_type == 'bytes' or param_type == 'string':
-                    tba.append((4+offset, param)) # wstore(cd, 4+offset, 32, BitVecVal(<?offset?>, 256))
-                    offset += 32
-                elif param_type.endswith('[]'):
-                    raise ValueError('Not supported variable sized arrays', param_type)
-                else:
-                    match = re.search(r'(u?int[0-9]*|address|bool|bytes[0-9]+)(\[([0-9]+)\])?', param_type)
-                    if not match: raise ValueError('Unknown type', param_type)
-                    typ = match.group(1)
-                    dim = match.group(3)
-                    if dim: # array
-                        for idx in range(int(dim)):
-                            wstore(cd, 4+offset, 32, BitVec(f'p_{param_name}[{idx}]_{typ}', 256))
-                            offset += 32
-                    else: # primitive
-                        wstore(cd, 4+offset, 32, BitVec(f'p_{param_name}_{typ}', 256))
-                        offset += 32
-
-            for loc_param in tba:
-                loc   = loc_param[0]
-                param = loc_param[1]
-                param_name = param['name']
-                param_type = param['type']
-
-                if param_name not in arrlen:
-                    size = args.loop
-                    if args.debug: print(f'warn: size of {param_name} not given, using default value {size}')
-                else:
-                    size = arrlen[param_name]
-
-                dyn_param_size.append(f'|{param_name}|={size}')
-
-                if param_type == 'bytes' or param_type == 'string':
-                    # head
-                    wstore(cd, loc, 32, BitVecVal(offset, 256))
-                    # tail
-                    size_pad_right = int((size + 31) / 32) * 32
-                    wstore(cd, 4+offset, 32, BitVecVal(size, 256))
-                    offset += 32
-                    if size_pad_right > 0:
-                        wstore(cd, 4+offset, size_pad_right, BitVec(f'p_{param_name}_{param_type}', 8*size_pad_right))
-                        offset += size_pad_right
-                else:
-                    raise ValueError('not feasible')
+    mk_calldata(abi, funname, funsig, arrlen, args, cd, dyn_param_size)
 
     #
     # callvalue
@@ -494,13 +499,21 @@ def main() -> int:
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
-                setup_sig = methodIdentifiers.get('setUp()')
-
                 if funsigs:
                     num_passed = 0
                     num_failed = 0
                     print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
-                    setup_ex = setup(hexcode, abi, srcmap, srcs, args, setup_sig, options)
+
+                    setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpPlus(') ])
+                    setup_name = None
+                    setup_sig = None
+                    setup_selector = None
+                    if len(setup_sigs) > 0:
+                        (setup_sig, setup_selector) = setup_sigs[-1]
+                        setup_name = setup_sig.split('(')[0]
+                        if args.verbose >= 2 or args.debug: print(f'Running {setup_sig}')
+                    setup_ex = setup(hexcode, abi, srcmap, srcs, setup_name, setup_sig, setup_selector, arrlen, args, options)
+
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]
                         funname = funsig.split('(')[0]
@@ -509,6 +522,7 @@ def main() -> int:
                             num_passed += 1
                         else:
                             num_failed += 1
+
                     print(f'Symbolic test result: {num_passed} passed; {num_failed} failed')
                     total_passed += num_passed
                     total_failed += num_failed

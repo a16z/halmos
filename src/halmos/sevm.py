@@ -9,7 +9,7 @@ from typing import List, Dict, Tuple, Any
 from functools import reduce
 
 from z3 import *
-from .byte2op import SrcMap, Opcode, decode
+from .byte2op import Opcode, decode
 from .utils import groupby_gas, color_good, color_warn, hevm_cheat_code, sha3_inv
 
 Word = Any # z3 expression (including constants)
@@ -386,11 +386,11 @@ class Exec: # an execution path
             if not size % 8 == 0: raise ValueError(size)
             return int(size / 8)
 
-    def read_code(self, idx: int) -> str:
+    def read_code(self, idx: int) -> Byte:
         if idx < len(self.code[self.this]):
             return self.code[self.this][idx]
         else:
-            return '00'
+            return BitVecVal(0, 8)
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_bv_value(x): return False
@@ -793,8 +793,7 @@ class SEVM:
 
         # contract creation code
         create_hexcode = wload(ex.st.memory, loc, size)
-        if not is_bv_value(create_hexcode): raise ValueError(create_hexcode)
-        (create_ops, create_code) = decode(f'{create_hexcode.as_long():#x}')
+        (create_ops, create_code) = decode(create_hexcode)
         create_pgm = ops_to_pgm(create_ops)
 
         # new account address
@@ -850,8 +849,7 @@ class SEVM:
             if opcode == 'STOP' or opcode == 'RETURN':
                 # new contract code
                 new_hexcode = new_ex.output
-                if not is_bv_value(new_hexcode): raise ValueError(new_hexcode)
-                (new_ops, new_code) = decode(f'{new_hexcode.as_long():#x}')
+                (new_ops, new_code) = decode(new_hexcode)
                 new_pgm = ops_to_pgm(new_ops)
 
                 # set new contract code
@@ -1010,7 +1008,7 @@ class SEVM:
                 elif o.op[0] == 'JUMPDEST':
                     pass
 
-                elif int('01', 16) <= int(o.hx, 16) <= int('07', 16): # ADD MUL SUB DIV SDIV MOD SMOD
+                elif is_bv_value(o.hx) and 0x01 <= int(str(o.hx)) <= 0x07: # ADD MUL SUB DIV SDIV MOD SMOD
                     ex.st.push(self.arith(o.op[0], ex.st.pop(), ex.st.pop()))
 
                 elif o.op[0] == 'EXP':
@@ -1204,7 +1202,7 @@ class SEVM:
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
                     wextend(ex.st.memory, loc, size)
                     for i in range(size):
-                        ex.st.memory[loc + i] = BitVecVal(int(ex.read_code(pc + i), 16), 8)
+                        ex.st.memory[loc + i] = ex.read_code(pc + i)
 
                 elif o.op[0] == 'BYTE':
                     idx: int = int(str(ex.st.pop())) # index must be concrete
@@ -1212,7 +1210,7 @@ class SEVM:
                     w = ex.st.pop()
                     ex.st.push(ZeroExt(248, Extract((31-idx)*8+7, (31-idx)*8, w)))
 
-                elif int('a0', 16) <= int(o.hx, 16) <= int('a4', 16): # LOG0 -- LOG4
+                elif is_bv_value(o.hx) and 0xa0 <= int(str(o.hx)) <= 0xa4: # LOG0 -- LOG4
                     num_keys: int = int(o.hx, 16) - int('a0', 16)
                     loc: int = ex.st.mloc()
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
@@ -1221,16 +1219,19 @@ class SEVM:
                         keys.append(ex.st.pop())
                     ex.log.append((keys, wload(ex.st.memory, loc, size) if size > 0 else None))
 
-                elif int('60', 16) <= int(o.hx, 16) <= int('7f', 16): # PUSH1 -- PUSH32
-                    val = int(o.op[1], 16)
-                    if o.hx == '7f' and val in sha3_inv: # restore precomputed hashes
-                        ex.sha3_data(con(sha3_inv[val]), 32)
+                elif is_bv_value(o.hx) and 0x60 <= int(str(o.hx)) <= 0x7f: # PUSH1 -- PUSH32
+                    if is_bv_value(o.op[1]):
+                        val = int(str(o.op[1]))
+                        if o.op[0] == 'PUSH32' and val in sha3_inv: # restore precomputed hashes
+                            ex.sha3_data(con(sha3_inv[val]), 32)
+                        else:
+                            ex.st.push(con(val))
                     else:
-                        ex.st.push(con(val))
-                elif int('80', 16) <= int(o.hx, 16) <= int('8f', 16): # DUP1  -- DUP16
-                    ex.st.dup(int(o.hx, 16) - int('80', 16) + 1)
-                elif int('90', 16) <= int(o.hx, 16) <= int('9f', 16): # SWAP1 -- SWAP16
-                    ex.st.swap(int(o.hx, 16) - int('90', 16) + 1)
+                        ex.st.push(o.op[1])
+                elif is_bv_value(o.hx) and 0x80 <= int(str(o.hx)) <= 0x8f: # DUP1  -- DUP16
+                    ex.st.dup(int(str(o.hx)) - 0x80 + 1)
+                elif is_bv_value(o.hx) and 0x90 <= int(str(o.hx)) <= 0x9f: # SWAP1 -- SWAP16
+                    ex.st.swap(int(str(o.hx)) - 0x90 + 1)
 
                 else:
                     out.append(ex)
