@@ -125,8 +125,8 @@ def mk_calldata(abi: Dict, funname: str, funsig: str, arrlen: Dict, args: argpar
         else:
             raise ValueError('not feasible')
 
-def stop_or_return(opcode) -> bool:
-    return opcode == 'STOP' or opcode == 'RETURN'
+def is_stop_or_return(opcode: Byte) -> bool:
+    return is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]
 
 def setup(
     hexcode: str,
@@ -186,16 +186,14 @@ def setup(
 
         (setup_exs, setup_steps) = sevm.run(setup_ex)
 
-        setup_exs = list(filter(lambda ex: stop_or_return(ex.pgm[ex.this][ex.pc].op[0]) and not ex.failed, setup_exs))
+        setup_exs = list(filter(lambda ex: is_stop_or_return(ex.pgm[ex.this][ex.pc].op[0]) and not ex.failed, setup_exs))
 
-        if len(setup_exs) != 1:
+        if len(setup_exs) == 0: raise ValueError('setUp() failed')
+        if len(setup_exs) > 1:
             if args.debug: print('\n'.join(map(str, setup_exs)))
             raise ValueError('multiple paths exist in setUp()')
 
         setup_ex = setup_exs[0]
-
-        setup_opcode = setup_ex.pgm[setup_ex.this][setup_ex.pc].op[0]
-        if (setup_opcode != 'STOP' and setup_opcode != 'RETURN') or setup_ex.failed: raise ValueError('setUp() failed')
 
         if args.verbose >= 2:
             print(setup_ex)
@@ -251,7 +249,7 @@ def run(
         pgm       = setup_ex.pgm.copy(), # shallow copy
         code      = setup_ex.code.copy(), # shallow copy
         storage   = deepcopy(setup_ex.storage),
-        balance   = { setup_ex.this: sevm.arith('ADD', balance, callvalue) },
+        balance   = { setup_ex.this: sevm.arith(EVM.ADD, balance, callvalue) },
         #
         calldata  = cd,
         callvalue = callvalue,
@@ -282,12 +280,12 @@ def run(
     stuck = []
     for idx, ex in enumerate(exs):
         opcode = ex.pgm[ex.this][ex.pc].op[0]
-        if opcode == 'STOP' or opcode == 'RETURN':
+        if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]:
             if ex.failed:
                 gen_model(args, models, idx, ex)
             else:
                 normal += 1
-        elif opcode == 'REVERT':
+        elif is_bv_value(opcode) and opcode.as_long() == EVM.REVERT:
             # Panic(1) # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
             if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
                 gen_model(args, models, idx, ex)
@@ -321,7 +319,7 @@ def run(
     # print post-states
     if args.verbose >= 2:
         for idx, ex in enumerate(exs):
-            if args.print_revert or (ex.pgm[ex.this][ex.pc].op[0] != 'REVERT' and not ex.failed):
+            if args.print_revert or (is_stop_or_return(ex.pgm[ex.this][ex.pc].op[0]) and not ex.failed):
                 print(f'# {idx+1} / {len(exs)}')
                 print(ex)
 
