@@ -10,7 +10,7 @@ from functools import reduce
 
 from z3 import *
 from .byte2op import Opcode, decode
-from .utils import EVM, groupby_gas, color_good, color_warn, hevm_cheat_code, sha3_inv
+from .utils import EVM, color_good, color_warn, hevm_cheat_code, sha3_inv
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -208,8 +208,7 @@ class Exec: # an execution path
         self.error    = kwargs['error']
 
     def str_cnts(self) -> str:
-        cnts = groupby_gas(self.cnts)
-        return ''.join([f'{x[0]}: {x[1]}\n' for x in sorted(cnts.items(), key=lambda x: x[0])])
+        return ''.join([f'{x[0]}: {x[1]}\n' for x in sorted(self.cnts.items(), key=lambda x: x[0])])
 
     def str_solver(self) -> str:
         return '\n'.join([str(cond) for cond in self.solver.assertions()])

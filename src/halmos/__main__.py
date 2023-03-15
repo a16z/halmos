@@ -131,7 +131,6 @@ def is_stop_or_return(opcode: Byte) -> bool:
 def setup(
     hexcode: str,
     abi: Dict,
-    srcmap: List[str],
     srcs: Dict,
     setup_name: str,
     setup_sig: str,
@@ -490,7 +489,6 @@ def main() -> int:
 
             for contract in contracts:
                 hexcode = source_unit.bytecodes_runtime[contract]
-                srcmap = source_unit.srcmaps_runtime[contract]
                 srcs = {}
                 abi = source_unit.abis[contract]
                 methodIdentifiers = source_unit.hashes(contract)
@@ -510,7 +508,7 @@ def main() -> int:
                         (setup_sig, setup_selector) = setup_sigs[-1]
                         setup_name = setup_sig.split('(')[0]
                         if args.verbose >= 2 or args.debug: print(f'Running {setup_sig}')
-                    setup_ex = setup(hexcode, abi, srcmap, srcs, setup_name, setup_sig, setup_selector, arrlen, args, options)
+                    setup_ex = setup(hexcode, abi, srcs, setup_name, setup_sig, setup_selector, arrlen, args, options)
 
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]
