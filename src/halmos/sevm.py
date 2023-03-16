@@ -709,7 +709,7 @@ class SEVM:
             ex.st.push(exit_code_var)
 
             ret = None
-            if ret_size > 0:
+            if ret_size > 0: # TODO: handle inconsistent return sizes for unknown functions
                 f_ret = Function('ret_'+str(ret_size*8), BitVecSort(256), BitVecSort(ret_size*8))
                 ret = f_ret(exit_code_var)
 
@@ -742,7 +742,6 @@ class SEVM:
                     
                     with open(path) as f:
                         artifact = json.loads(f.read())
-
                     
                     if artifact['bytecode']['object']:
                         bytecode = artifact['bytecode']['object'].replace('0x', '')
@@ -765,15 +764,12 @@ class SEVM:
                     out.append(ex)
                     return
 
-            # TODO: handle inconsistent return sizes for unknown functions
             # store return value
-            if ret_size > 0 and ret != None:
+            if ret_size > 0:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)
-                ex.output = ret
-            elif ret != None:
-                ex.output = ret
-            else:
-                ex.output = None
+
+            # propagate callee's output to caller, which could be None
+            ex.output = ret
 
             ex.calls.append((exit_code_var, exit_code, ex.output))
 
