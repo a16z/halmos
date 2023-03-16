@@ -39,3 +39,58 @@ contract SetupPlusTest {
         assert(a.y() > 100);
     }
 }
+
+contract B {
+    uint public x1;
+    uint public y1;
+    uint public x2;
+    uint public y2;
+
+    struct S {
+        uint a;
+        uint b;
+    }
+
+    constructor(S[] memory lst) {
+        require(lst.length >= 2);
+        x1 = lst[0].a;
+        y1 = lst[0].b;
+        x2 = lst[1].a;
+        y2 = lst[1].b;
+    }
+}
+
+contract SetupPlusTestB {
+    B b;
+    uint[4] init;
+
+    function mk() public {
+        B.S[] memory lst = new B.S[](2);
+        lst[0] = B.S(init[0], init[1]);
+        lst[1] = B.S(init[2], init[3]);
+        b = new B(lst);
+    }
+
+    function setUp() public {
+        init[0] = 10;
+        init[1] = 20;
+        init[2] = 30;
+        init[3] = 40;
+        mk();
+    }
+
+    function setUpPlus(uint[4] memory _init) public {
+        init[0] = _init[0];
+        init[1] = _init[1];
+        init[2] = _init[2];
+        init[3] = _init[3];
+        mk();
+    }
+
+    function testSetup() public {
+        assert(b.x1() == init[0]);
+        assert(b.y1() == init[1]);
+        assert(b.x2() == init[2]);
+        assert(b.y2() == init[3]);
+    }
+}
