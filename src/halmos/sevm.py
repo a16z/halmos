@@ -1216,7 +1216,7 @@ class SEVM:
                     w = ex.st.pop()
                     ex.st.push(ZeroExt(248, Extract((31-idx)*8+7, (31-idx)*8, w)))
 
-                elif EVM.LOG0 <= opcode <= LOG4:
+                elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     num_keys: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
