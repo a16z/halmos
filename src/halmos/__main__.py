@@ -18,7 +18,7 @@ from .sevm import *
 
 sys.set_int_max_str_digits(0)
 
-def parse_args() -> argparse.Namespace:
+def parse_args(args) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='halmos', epilog='For more information, see https://github.com/a16z/halmos')
 
     parser.add_argument('target', metavar='TARGET_DIRECTORY', nargs='?', default=os.getcwd(), help='source root directory (default: current directory)')
@@ -49,7 +49,7 @@ def parse_args() -> argparse.Namespace:
 
     cryticparser.init(parser)
 
-    return parser.parse_args()
+    return parser.parse_args(args)
 
 def str_abi(item: Dict) -> str:
     def str_tuple(args: List) -> str:
@@ -71,7 +71,7 @@ def find_abi(abi: List, funname: str, funsig: str) -> Dict:
             return item
     raise ValueError('Not found', abi, funsig)
 
-def mk_calldata(abi: Dict, funname: str, funsig: str, arrlen: Dict, args: argparse.Namespace, cd: List, dyn_param_size: List[str]) -> None:
+def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argparse.Namespace, cd: List, dyn_param_size: List[str]) -> None:
     item = find_abi(abi, funname, funsig)
     tba = []
     offset = 0
@@ -128,10 +128,17 @@ def mk_calldata(abi: Dict, funname: str, funsig: str, arrlen: Dict, args: argpar
 def is_stop_or_return(opcode: Byte) -> bool:
     return is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]
 
+def decode_hex(hexcode: str) -> Tuple[List[Opcode], List[Any]]:
+    if hexcode.startswith('0x'):
+        hexcode = hexcode[2:]
+    if len(hexcode) % 2 != 0: raise ValueError(hexcode)
+    (ops, code) = decode(BitVecVal(int(hexcode, 16), (len(hexcode) // 2) * 8))
+    pgm = ops_to_pgm(ops)
+    return (pgm, code)
+
 def setup(
     hexcode: str,
-    abi: Dict,
-    srcs: Dict,
+    abi: List,
     setup_name: str,
     setup_sig: str,
     setup_selector: str,
@@ -140,11 +147,7 @@ def setup(
     options: Dict
 ) -> Exec:
     # bytecode
-    if hexcode.startswith('0x'):
-        hexcode = hexcode[2:]
-    if len(hexcode) % 2 != 0: raise ValueError(hexcode)
-    (ops, code) = decode(BitVecVal(int(hexcode, 16), (len(hexcode) // 2) * 8))
-    pgm = ops_to_pgm(ops)
+    (pgm, code) = decode_hex(hexcode)
 
     # solver
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
@@ -201,7 +204,7 @@ def setup(
 
 def run(
     setup_ex: Exec,
-    abi: Dict,
+    abi: List,
     funname: str,
     funsig: str,
     funselector: str,
@@ -426,7 +429,7 @@ def main() -> int:
     # command line arguments
     #
 
-    args = parse_args()
+    args = parse_args(sys.argv[1:])
 
     options = {
         'verbose': args.verbose,
@@ -489,7 +492,6 @@ def main() -> int:
 
             for contract in contracts:
                 hexcode = source_unit.bytecodes_runtime[contract]
-                srcs = {}
                 abi = source_unit.abis[contract]
                 methodIdentifiers = source_unit.hashes(contract)
 
@@ -506,7 +508,7 @@ def main() -> int:
                         (setup_sig, setup_selector) = setup_sigs[-1]
                         setup_name = setup_sig.split('(')[0]
                         if args.verbose >= 2 or args.debug: print(f'Running {setup_sig}')
-                    setup_ex = setup(hexcode, abi, srcs, setup_name, setup_sig, setup_selector, arrlen, args, options)
+                    setup_ex = setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
 
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]
