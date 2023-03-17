@@ -9,7 +9,7 @@ from typing import List, Dict, Tuple, Any
 from functools import reduce
 
 from z3 import *
-from .byte2op import Opcode, decode
+from .byte2op import Opcode, decode, concat
 from .utils import EVM, color_good, color_warn, hevm_cheat_code, sha3_inv
 
 Word = Any # z3 expression (including constants)
@@ -266,10 +266,8 @@ class Exec: # an execution path
         self.sinit(slot, keys)
         if len(keys) == 0:
             return self.storage[self.this][slot][0]
-        elif len(keys) == 1:
-            return Select(self.storage[self.this][slot][1], keys[0])
         else:
-            return Select(self.storage[self.this][slot][len(keys)], Concat(keys))
+            return Select(self.storage[self.this][slot][len(keys)], concat(keys))
 
     def sstore(self, loc: Any, val: Any) -> None:
         offsets = self.decode_storage_loc(loc)
@@ -280,10 +278,7 @@ class Exec: # an execution path
             self.storage[self.this][slot][0] = val
         else:
             new_storage_var = Array(f'storage{self.cnt_sstore()}', BitVecSort(len(keys)*256), BitVecSort(256))
-            if len(keys) == 1:
-                new_storage = Store(self.storage[self.this][slot][1], keys[0], val)
-            else:
-                new_storage = Store(self.storage[self.this][slot][len(keys)], Concat(keys), val)
+            new_storage = Store(self.storage[self.this][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
             self.storage[self.this][slot][len(keys)] = new_storage_var
             self.storages.append((new_storage_var,new_storage))
