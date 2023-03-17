@@ -1262,9 +1262,22 @@ class SEVM:
         caller,
         this,
         #
+    #   pc,
+    #   st,
+    #   jumpis,
+    #   output,
         symbolic,
         #
         solver,
+    #   path,
+        #
+    #   log,
+    #   cnts,
+    #   sha3s,
+    #   storages,
+    #   calls,
+    #   failed,
+    #   error,
     ) -> Exec:
         return Exec(
             pgm      = pgm,

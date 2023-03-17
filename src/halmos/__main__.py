@@ -432,6 +432,7 @@ def main() -> int:
     args = parse_args(sys.argv[1:])
 
     options = {
+        'target': args.target,
         'verbose': args.verbose,
         'debug': args.debug,
         'log': args.log,
@@ -443,7 +444,6 @@ def main() -> int:
         'modByConst': args.smt_mod_by_const,
         'expByConst': args.smt_exp_by_const,
         'timeout': args.solver_timeout_branching,
-        'target': args.target,
     }
 
     if args.width is not None:
