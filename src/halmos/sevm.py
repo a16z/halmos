@@ -108,7 +108,7 @@ class State:
         return ret + '\n'
 
     def push(self, v: Word) -> None:
-        if not (eq(v.sort(), BitVecSort(256)) or eq(v.sort(), BoolSort())): raise ValueError(v)
+        if not (eq(v.sort(), BitVecSort(256)) or is_bool(v)): raise ValueError(v)
         self.stack.insert(0, simplify(v))
 
     def pop(self) -> Word:
@@ -1034,11 +1034,11 @@ class SEVM:
                         ex.st.push(w1 == w2)
                     else:
                         if is_bool(w1):
-                            if not eq(w2.sort(), BitVecSort(256)): raise ValueError(w2)
+                            if not is_bv(w2): raise ValueError(w2)
                             ex.st.push(If(w1, con(1), con(0)) == w2)
                         else:
-                            if not eq(w1.sort(), BitVecSort(256)): raise ValueError(w1)
-                            if not eq(w2.sort(), BoolSort()):      raise ValueError(w2)
+                            if not is_bv(w1): raise ValueError(w1)
+                            if not is_bool(w2): raise ValueError(w2)
                             ex.st.push(w1 == If(w2, con(1), con(0)))
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
