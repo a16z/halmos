@@ -502,23 +502,23 @@ class SEVM:
         if op == EVM.ADD:
             if self.options.get('add'):
                 return w1 + w2
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 + w2
             else:
                 return f_add(w1, w2)
         elif op == EVM.SUB:
             if self.options.get('sub'):
                 return w1 - w2
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 - w2
             else:
                 return f_sub(w1, w2)
         elif op == EVM.MUL:
             if self.options.get('mul'):
                 return w1 * w2
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 * w2
-            elif w1.decl().name() == 'bv':
+            elif is_bv_value(w1):
                 i1: int = int(str(w1)) # must be concrete
                 if i1 == 0:
                     return con(0)
@@ -526,7 +526,7 @@ class SEVM:
                     return w2 << int(math.log(i1,2))
                 else:
                     return f_mul(w1, w2)
-            elif w2.decl().name() == 'bv':
+            elif is_bv_value(w2):
                 i2: int = int(str(w2)) # must be concrete
                 if i2 == 0:
                     return con(0)
@@ -542,9 +542,9 @@ class SEVM:
                 return div_for_overflow_check
             if self.options.get('div'):
                 return UDiv(w1, w2) # unsigned div (bvudiv)
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return UDiv(w1, w2)
-            elif w2.decl().name() == 'bv':
+            elif is_bv_value(w2):
                 i2: int = int(str(w2)) # must be concrete
                 if i2 == 0:
                     return con(0)
@@ -559,7 +559,7 @@ class SEVM:
             else:
                 return f_div(w1, w2)
         elif op == EVM.MOD:
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return URem(w1, w2) # bvurem
             elif is_bv_value(w2):
                 i2: int = int(str(w2))
@@ -575,17 +575,17 @@ class SEVM:
             else:
                 return f_mod(w1, w2)
         elif op == EVM.SDIV:
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 / w2 # bvsdiv
             else:
                 return f_sdiv(w1, w2)
         elif op == EVM.SMOD:
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return SRem(w1, w2) # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
             else:
                 return f_smod(w1, w2)
         elif op == EVM.EXP:
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 i1: int = int(str(w1)) # must be concrete
                 i2: int = int(str(w2)) # must be concrete
                 return con(i1 ** i2)
