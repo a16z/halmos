@@ -924,7 +924,7 @@ class SEVM:
             pass # this may happen if the previous path condition was considered unknown but turns out to be unsat later
 
     def jump(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int) -> None:
-        dst: int = ex.st.pop()
+        dst = ex.st.pop()
 
         # if dst is concrete, just jump
         if is_bv_value(dst):
@@ -932,7 +932,7 @@ class SEVM:
             stack.append((ex, step_id))
 
         # otherwise, create a new execution for feasible targets
-        else:
+        elif self.options['sym_jump']:
             for target in valid_jump_destinations(ex.pgm[ex.this]):
                 ex.solver.push()
                 target_reachable = simplify(dst == target)
@@ -943,6 +943,9 @@ class SEVM:
                     new_ex = self.create_branch(ex, str(target_reachable), target)
                     stack.append((new_ex, step_id))
                 ex.solver.pop()
+
+        else:
+            raise ValueError(dst)
 
     def create_branch(self, ex: Exec, cond: str, target: int) -> Exec:
         new_solver = SolverFor('QF_AUFBV')

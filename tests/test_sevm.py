@@ -9,7 +9,7 @@ from halmos.byte2op import decode
 
 from halmos.sevm import SEVM, con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_exp, f_orig_balance, f_origin
 
-from halmos.__main__ import parse_args
+from halmos.__main__ import parse_args, mk_options
 
 @pytest.fixture
 def args():
@@ -17,19 +17,7 @@ def args():
 
 @pytest.fixture
 def options(args):
-    return {
-        'verbose': args.verbose,
-        'debug': args.debug,
-        'log': args.log,
-        'add': not args.no_smt_add,
-        'sub': not args.no_smt_sub,
-        'mul': not args.no_smt_mul,
-        'div': args.smt_div,
-        'divByConst': args.smt_div_by_const,
-        'modByConst': args.smt_mod_by_const,
-        'expByConst': args.smt_exp_by_const,
-        'timeout': args.solver_timeout_branching,
-    }
+    return mk_options(args)
 
 @pytest.fixture
 def sevm(options):

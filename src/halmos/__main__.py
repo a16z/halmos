@@ -32,6 +32,8 @@ def parse_args(args) -> argparse.Namespace:
     parser.add_argument('--depth', metavar='MAX_DEPTH', type=int, help='set the max path length')
     parser.add_argument('--array-lengths', metavar='NAME1=LENGTH1,NAME2=LENGTH2,...', help='set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)')
 
+    parser.add_argument('--symbolic-jump', action='store_true', help='support symbolic jump destination (experimental)')
+
     parser.add_argument('--no-smt-add',          action='store_true', help='do not interpret `+`')
     parser.add_argument('--no-smt-sub',          action='store_true', help='do not interpret `-`')
     parser.add_argument('--no-smt-mul',          action='store_true', help='do not interpret `*`')
@@ -466,6 +468,23 @@ def str_model(model, args: argparse.Namespace) -> str:
     else:
         return '[' + ', '.join(sorted(map(lambda decl: f'{decl} = {model[decl]}', filter(select, model)))) + ']'
 
+def mk_options(args: argparse.Namespace) -> Dict:
+    return {
+        'target': args.target,
+        'verbose': args.verbose,
+        'debug': args.debug,
+        'log': args.log,
+        'add': not args.no_smt_add,
+        'sub': not args.no_smt_sub,
+        'mul': not args.no_smt_mul,
+        'div': args.smt_div,
+        'divByConst': args.smt_div_by_const,
+        'modByConst': args.smt_mod_by_const,
+        'expByConst': args.smt_exp_by_const,
+        'timeout': args.solver_timeout_branching,
+        'sym_jump': args.symbolic_jump,
+    }
+
 def main() -> int:
     #
     # z3 global options
@@ -481,20 +500,7 @@ def main() -> int:
 
     args = parse_args(sys.argv[1:])
 
-    options = {
-        'target': args.target,
-        'verbose': args.verbose,
-        'debug': args.debug,
-        'log': args.log,
-        'add': not args.no_smt_add,
-        'sub': not args.no_smt_sub,
-        'mul': not args.no_smt_mul,
-        'div': args.smt_div,
-        'divByConst': args.smt_div_by_const,
-        'modByConst': args.smt_mod_by_const,
-        'expByConst': args.smt_exp_by_const,
-        'timeout': args.solver_timeout_branching,
-    }
+    options = mk_options(args)
 
     if args.width is not None:
         options['max_width'] = args.width
