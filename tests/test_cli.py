@@ -7,7 +7,7 @@ from halmos.utils import EVM
 
 from halmos.byte2op import decode
 
-from halmos.__main__ import str_abi, parse_args, decode_hex
+from halmos.__main__ import str_abi, parse_args, decode_hex, run_bytecode
 import halmos.__main__
 
 @pytest.fixture
@@ -55,6 +55,13 @@ def options(args):
         'expByConst': args.smt_exp_by_const,
         'timeout': args.solver_timeout_branching,
     }
+
+def test_run_bytecode(args, options):
+    hexcode = '34381856FDFDFDFDFDFD5B00'
+    exs = run_bytecode(hexcode, args, options)
+    assert len(exs) == 1
+    ex = exs[0]
+    assert str(ex.pgm[ex.this][ex.pc].op[0]) == str(EVM.STOP)
 
 def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args, options):
     hexcode = '600100'

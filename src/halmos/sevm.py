@@ -940,7 +940,7 @@ class SEVM:
                 if ex.solver.check() != unsat: # jump
                     if self.options.get('debug'):
                         print(f"we can jump to {target} with model {ex.solver.model()}")
-                    new_ex = self.create_branch(ex, f'jump({target})', target)
+                    new_ex = self.create_branch(ex, str(target_reachable), target)
                     stack.append((new_ex, step_id))
                 ex.solver.pop()
 

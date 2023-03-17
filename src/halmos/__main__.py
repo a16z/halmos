@@ -25,6 +25,8 @@ def parse_args(args) -> argparse.Namespace:
     parser.add_argument('--contract', metavar='CONTRACT_NAME', help='run tests in the given contract only')
     parser.add_argument('--function', metavar='FUNCTION_NAME_PREFIX', default='test', help='run tests matching the given prefix only (default: %(default)s)')
 
+    parser.add_argument('--bytecode', metavar='HEX_STRING', help='execute the given bytecode')
+
     parser.add_argument('--loop', metavar='MAX_BOUND', type=int, default=2, help='set loop unrolling bounds (default: %(default)s)')
     parser.add_argument('--width', metavar='MAX_WIDTH', type=int, help='set the max number of paths')
     parser.add_argument('--depth', metavar='MAX_DEPTH', type=int, help='set the max path length')
@@ -136,6 +138,68 @@ def decode_hex(hexcode: str) -> Tuple[List[Opcode], List[Any]]:
     pgm = ops_to_pgm(ops)
     return (pgm, code)
 
+def mk_callvalue() -> Word:
+    return BitVec('msg_value', 256)
+
+def mk_balance() -> Word:
+    return BitVec('this_balance', 256)
+
+def mk_caller(solver) -> Word:
+    caller = BitVec('msg_sender', 256)
+    solver.add(Extract(255, 160, caller) == BitVecVal(0, 96))
+    return caller
+
+def mk_this(solver) -> Word:
+    this = BitVec('this_address', 256)
+    solver.add(Extract(255, 160, this) == BitVecVal(0, 96))
+    return this
+
+def mk_solver(args: argparse.Namespace):
+    solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
+    solver.set(timeout=args.solver_timeout_branching)
+    return solver
+
+def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[Exec]:
+    (pgm, code) = decode_hex(hexcode)
+
+    storage = {}
+
+    solver = mk_solver(args)
+
+    balance = mk_balance()
+    callvalue = mk_callvalue()
+    caller = mk_caller(solver)
+    this = mk_this(solver)
+
+    sevm = SEVM(options)
+    ex = sevm.mk_exec(
+        pgm       = { this: pgm },
+        code      = { this: code },
+        storage   = { this: storage },
+        balance   = { this: balance },
+        calldata  = [],
+        callvalue = callvalue,
+        caller    = caller,
+        this      = this,
+        symbolic  = True,
+        solver    = solver,
+    )
+    (exs, _) = sevm.run(ex)
+
+    models = []
+    for idx, ex in enumerate(exs):
+        opcode = ex.pgm[ex.this][ex.pc].op[0]
+        if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN, EVM.REVERT]:
+            gen_model(args, models, idx, ex)
+            print(f'Final opcode: {opcode.as_long()} | Return data: {ex.output} | Input example: {models[-1][0]}')
+        else:
+            print(color_warn('Not supported: ' + opcode + ' ' + ex.error))
+        if args.verbose >= 1:
+            print(f'# {idx+1} / {len(exs)}')
+            print(ex)
+
+    return exs
+
 def setup(
     hexcode: str,
     abi: List,
@@ -146,36 +210,22 @@ def setup(
     args: argparse.Namespace,
     options: Dict
 ) -> Exec:
-    # bytecode
     (pgm, code) = decode_hex(hexcode)
 
-    # solver
-    solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
-    solver.set(timeout=args.solver_timeout_branching)
+    solver = mk_solver(args)
 
-    # storage
-    storage = {}
-
-    # caller
-    caller = BitVec('msg_sender', 256)
-    solver.add(Extract(255, 160, caller) == BitVecVal(0, 96))
-
-    # this
-    this = BitVec('this_address', 256)
-    solver.add(Extract(255, 160, this) == BitVecVal(0, 96))
-
-    # run setup if any
+    this = mk_this(solver)
 
     sevm = SEVM(options)
 
     setup_ex = sevm.mk_exec(
         pgm       = { this: pgm },
         code      = { this: code },
-        storage   = { this: storage },
+        storage   = { this: {} },
         balance   = { this: con(0) },
         calldata  = [],
         callvalue = con(0),
-        caller    = caller,
+        caller    = mk_caller(solver),
         this      = this,
         symbolic  = False,
         solver    = solver,
@@ -227,13 +277,13 @@ def run(
     # callvalue
     #
 
-    callvalue = BitVec('msg_value', 256)
+    callvalue = mk_callvalue()
 
     #
     # balance
     #
 
-    balance = BitVec('this_balance', 256)
+    balance = mk_balance()
 
     #
     # run
@@ -461,6 +511,11 @@ def main() -> int:
             name = assign[0].strip()
             size = assign[1].strip()
             arrlen[name] = int(size)
+
+    # quick bytecode execution mode
+    if args.bytecode is not None:
+        run_bytecode(args.bytecode, args, options)
+        return 0
 
     #
     # compile
