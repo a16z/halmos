@@ -1208,9 +1208,12 @@ class SEVM:
 
                 elif opcode == EVM.BYTE:
                     idx: int = int(str(ex.st.pop())) # index must be concrete
-                    if not (idx >= 0 and idx < 32): raise ValueError(idx)
+                    if idx < 0: raise ValueError(idx)
                     w = ex.st.pop()
-                    ex.st.push(ZeroExt(248, Extract((31-idx)*8+7, (31-idx)*8, w)))
+                    if idx >= 32:
+                        ex.st.push(con(0))
+                    else:
+                        ex.st.push(ZeroExt(248, Extract((31-idx)*8+7, (31-idx)*8, w)))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     num_keys: int = opcode - EVM.LOG0
