@@ -1265,22 +1265,9 @@ class SEVM:
         caller,
         this,
         #
-        pc: int = 0,
-        st: State = State(),
-        jumpis = {},
-        output: Any = None,
-        symbolic = True,
+        symbolic,
         #
-        solver = None, # fail later if not provided
-        path = [],
-        #
-        log = [],
-        cnts: Dict[str,int] = defaultdict(int),
-        sha3s = [],
-        storages = [],
-        calls = [],
-        failed = False,
-        error = '',
+        solver,
     ) -> Exec:
         return Exec(
             pgm      = pgm,
@@ -1293,20 +1280,20 @@ class SEVM:
             caller   = caller,
             this     = this,
             #
-            pc       = pc,
-            st       = st,
-            jumpis   = jumpis,
-            output   = output,
+            pc       = 0,
+            st       = State(),
+            jumpis   = {},
+            output   = None,
             symbolic = symbolic,
             #
             solver   = solver,
-            path     = path,
+            path     = [],
             #
-            log      = log,
-            cnts     = cnts,
-            sha3s    = sha3s,
-            storages = storages,
-            calls    = calls,
-            failed   = failed,
-            error    = error,
+            log      = [],
+            cnts     = defaultdict(int),
+            sha3s    = [],
+            storages = [],
+            calls    = [],
+            failed   = False,
+            error    = '',
         )
