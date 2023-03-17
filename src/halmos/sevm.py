@@ -131,7 +131,7 @@ class State:
     def mstore(self, full: bool) -> None:
         loc: int = self.mloc()
         val: Word = self.pop()
-        if eq(val.sort(), BoolSort()):
+        if is_bool(val):
             val = If(val, con(1), con(0))
         if full:
             wstore(self.memory, loc, 32, val)
@@ -332,7 +332,7 @@ class Exec: # an execution path
             return args[0][0:-1] + (reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),)
         elif is_bv_value(loc) and int(str(loc)) in sha3_inv:
             return (con(sha3_inv[int(str(loc))]), con(0))
-        elif loc.sort().name() == 'bv':
+        elif is_bv(loc):
             return (loc,)
         else:
             raise ValueError(loc)
@@ -381,7 +381,7 @@ class Exec: # an execution path
         if self.output is None:
             return 0
         else:
-            size: int = self.output.sort().size()
+            size: int = self.output.size()
             if not size % 8 == 0: raise ValueError(size)
             return int(size / 8)
 
@@ -412,12 +412,12 @@ def ops_to_pgm(ops: List[Opcode]) -> List[Opcode]:
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
 def test(x: Word, b: bool) -> Word:
-    if eq(x.sort(), BoolSort()):
+    if is_bool(x):
         if b:
             return x
         else:
             return Not(x)
-    elif x.sort().name() == 'bv':
+    elif is_bv(x):
         if b:
             return (x != con(0))
         else:
@@ -432,20 +432,19 @@ def is_zero(x: Word) -> Word:
     return test(x, False)
 
 def and_or(x: Word, y: Word, is_and: bool) -> Word:
-    if eq(x.sort(), BoolSort()) and eq(y.sort(), BoolSort()):
+    if is_bool(x) and is_bool(y):
         if is_and:
             return And(x, y)
         else:
             return Or(x, y)
-    #elif x.sort().name() == 'bv' and y.sort().name() == 'bv':
-    elif eq(x.sort(), BitVecSort(256)) and eq(y.sort(), BitVecSort(256)):
+    elif is_bv(x) and is_bv(y):
         if is_and:
             return (x & y)
         else:
             return (x | y)
-    elif eq(x.sort(), BoolSort()) and eq(y.sort(), BitVecSort(256)):
+    elif is_bool(x) and is_bv(y):
         return and_or(If(x, con(1), con(0)), y, is_and)
-    elif eq(x.sort(), BitVecSort(256)) and eq(y.sort(), BoolSort()):
+    elif is_bv(x) and is_bool(y):
         return and_or(x, If(y, con(1), con(0)), is_and)
     else:
         raise ValueError(x, y, is_and)
@@ -457,11 +456,11 @@ def or_of(x: Word, y: Word) -> Word:
     return and_or(x, y, False)
 
 def b2i(w: Word) -> Word:
-    if w.decl().name() == 'true':
+    if is_true(w):
         return con(1)
-    if w.decl().name() == 'false':
+    if is_false(w):
         return con(0)
-    if eq(w.sort(), BoolSort()):
+    if is_bool(w):
         return If(w, con(1), con(0))
     else:
         return w
@@ -1039,7 +1038,7 @@ class SEVM:
                     if eq(w1.sort(), w2.sort()):
                         ex.st.push(w1 == w2)
                     else:
-                        if eq(w1.sort(), BoolSort()):
+                        if is_bool(w1):
                             if not eq(w2.sort(), BitVecSort(256)): raise ValueError(w2)
                             ex.st.push(If(w1, con(1), con(0)) == w2)
                         else:
