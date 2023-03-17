@@ -562,7 +562,7 @@ class SEVM:
                     return con(0)
                 elif is_power_of_two(i2):
                     bitsize = int(math.log(i2,2))
-                    return Concat(BitVecVal(0, 256-bitsize), Extract(bitsize-1, 0, w1))
+                    return ZeroExt(256-bitsize, Extract(bitsize-1, 0, w1))
                 elif self.options.get('modByConst'):
                     return URem(w1, w2)
                 else:
@@ -1229,7 +1229,7 @@ class SEVM:
                         if opcode == EVM.PUSH32:
                             ex.st.push(o.op[1])
                         else:
-                            ex.st.push(Concat(BitVecVal(0, (EVM.PUSH32 - opcode)*8), o.op[1]))
+                            ex.st.push(ZeroExt((EVM.PUSH32 - opcode)*8, o.op[1]))
                 elif EVM.DUP1 <= opcode <= EVM.DUP16:
                     ex.st.dup(opcode - EVM.DUP1 + 1)
                 elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
