@@ -11,8 +11,6 @@ from halmos.sevm import SEVM, con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_e
 
 from halmos.__main__ import parse_args
 
-# TODO: test every opcode semantics
-
 @pytest.fixture
 def args():
     return parse_args([])
