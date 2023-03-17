@@ -9,7 +9,7 @@ from typing import List, Dict, Tuple, Any
 from functools import reduce
 
 from z3 import *
-from .byte2op import Opcode, decode
+from .byte2op import Opcode, decode, concat
 from .utils import EVM, color_good, color_warn, hevm_cheat_code, sha3_inv
 
 Word = Any # z3 expression (including constants)
@@ -108,7 +108,7 @@ class State:
         return ret + '\n'
 
     def push(self, v: Word) -> None:
-        if not (eq(v.sort(), BitVecSort(256)) or eq(v.sort(), BoolSort())): raise ValueError(v)
+        if not (eq(v.sort(), BitVecSort(256)) or is_bool(v)): raise ValueError(v)
         self.stack.insert(0, simplify(v))
 
     def pop(self) -> Word:
@@ -131,7 +131,7 @@ class State:
     def mstore(self, full: bool) -> None:
         loc: int = self.mloc()
         val: Word = self.pop()
-        if eq(val.sort(), BoolSort()):
+        if is_bool(val):
             val = If(val, con(1), con(0))
         if full:
             wstore(self.memory, loc, 32, val)
@@ -266,10 +266,8 @@ class Exec: # an execution path
         self.sinit(slot, keys)
         if len(keys) == 0:
             return self.storage[self.this][slot][0]
-        elif len(keys) == 1:
-            return Select(self.storage[self.this][slot][1], keys[0])
         else:
-            return Select(self.storage[self.this][slot][len(keys)], Concat(keys))
+            return Select(self.storage[self.this][slot][len(keys)], concat(keys))
 
     def sstore(self, loc: Any, val: Any) -> None:
         offsets = self.decode_storage_loc(loc)
@@ -280,10 +278,7 @@ class Exec: # an execution path
             self.storage[self.this][slot][0] = val
         else:
             new_storage_var = Array(f'storage{self.cnt_sstore()}', BitVecSort(len(keys)*256), BitVecSort(256))
-            if len(keys) == 1:
-                new_storage = Store(self.storage[self.this][slot][1], keys[0], val)
-            else:
-                new_storage = Store(self.storage[self.this][slot][len(keys)], Concat(keys), val)
+            new_storage = Store(self.storage[self.this][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
             self.storage[self.this][slot][len(keys)] = new_storage_var
             self.storages.append((new_storage_var,new_storage))
@@ -332,7 +327,7 @@ class Exec: # an execution path
             return args[0][0:-1] + (reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),)
         elif is_bv_value(loc) and int(str(loc)) in sha3_inv:
             return (con(sha3_inv[int(str(loc))]), con(0))
-        elif loc.sort().name() == 'bv':
+        elif is_bv(loc):
             return (loc,)
         else:
             raise ValueError(loc)
@@ -381,7 +376,7 @@ class Exec: # an execution path
         if self.output is None:
             return 0
         else:
-            size: int = self.output.sort().size()
+            size: int = self.output.size()
             if not size % 8 == 0: raise ValueError(size)
             return int(size / 8)
 
@@ -412,12 +407,12 @@ def ops_to_pgm(ops: List[Opcode]) -> List[Opcode]:
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
 def test(x: Word, b: bool) -> Word:
-    if eq(x.sort(), BoolSort()):
+    if is_bool(x):
         if b:
             return x
         else:
             return Not(x)
-    elif x.sort().name() == 'bv':
+    elif is_bv(x):
         if b:
             return (x != con(0))
         else:
@@ -432,20 +427,19 @@ def is_zero(x: Word) -> Word:
     return test(x, False)
 
 def and_or(x: Word, y: Word, is_and: bool) -> Word:
-    if eq(x.sort(), BoolSort()) and eq(y.sort(), BoolSort()):
+    if is_bool(x) and is_bool(y):
         if is_and:
             return And(x, y)
         else:
             return Or(x, y)
-    #elif x.sort().name() == 'bv' and y.sort().name() == 'bv':
-    elif eq(x.sort(), BitVecSort(256)) and eq(y.sort(), BitVecSort(256)):
+    elif is_bv(x) and is_bv(y):
         if is_and:
             return (x & y)
         else:
             return (x | y)
-    elif eq(x.sort(), BoolSort()) and eq(y.sort(), BitVecSort(256)):
+    elif is_bool(x) and is_bv(y):
         return and_or(If(x, con(1), con(0)), y, is_and)
-    elif eq(x.sort(), BitVecSort(256)) and eq(y.sort(), BoolSort()):
+    elif is_bv(x) and is_bool(y):
         return and_or(x, If(y, con(1), con(0)), is_and)
     else:
         raise ValueError(x, y, is_and)
@@ -457,11 +451,11 @@ def or_of(x: Word, y: Word) -> Word:
     return and_or(x, y, False)
 
 def b2i(w: Word) -> Word:
-    if w.decl().name() == 'true':
+    if is_true(w):
         return con(1)
-    if w.decl().name() == 'false':
+    if is_false(w):
         return con(0)
-    if eq(w.sort(), BoolSort()):
+    if is_bool(w):
         return If(w, con(1), con(0))
     else:
         return w
@@ -503,23 +497,23 @@ class SEVM:
         if op == EVM.ADD:
             if self.options.get('add'):
                 return w1 + w2
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 + w2
             else:
                 return f_add(w1, w2)
         elif op == EVM.SUB:
             if self.options.get('sub'):
                 return w1 - w2
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 - w2
             else:
                 return f_sub(w1, w2)
         elif op == EVM.MUL:
             if self.options.get('mul'):
                 return w1 * w2
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 * w2
-            elif w1.decl().name() == 'bv':
+            elif is_bv_value(w1):
                 i1: int = int(str(w1)) # must be concrete
                 if i1 == 0:
                     return con(0)
@@ -527,7 +521,7 @@ class SEVM:
                     return w2 << int(math.log(i1,2))
                 else:
                     return f_mul(w1, w2)
-            elif w2.decl().name() == 'bv':
+            elif is_bv_value(w2):
                 i2: int = int(str(w2)) # must be concrete
                 if i2 == 0:
                     return con(0)
@@ -543,9 +537,9 @@ class SEVM:
                 return div_for_overflow_check
             if self.options.get('div'):
                 return UDiv(w1, w2) # unsigned div (bvudiv)
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return UDiv(w1, w2)
-            elif w2.decl().name() == 'bv':
+            elif is_bv_value(w2):
                 i2: int = int(str(w2)) # must be concrete
                 if i2 == 0:
                     return con(0)
@@ -560,7 +554,7 @@ class SEVM:
             else:
                 return f_div(w1, w2)
         elif op == EVM.MOD:
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return URem(w1, w2) # bvurem
             elif is_bv_value(w2):
                 i2: int = int(str(w2))
@@ -568,7 +562,7 @@ class SEVM:
                     return con(0)
                 elif is_power_of_two(i2):
                     bitsize = int(math.log(i2,2))
-                    return Concat(BitVecVal(0, 256-bitsize), Extract(bitsize-1, 0, w1))
+                    return ZeroExt(256-bitsize, Extract(bitsize-1, 0, w1))
                 elif self.options.get('modByConst'):
                     return URem(w1, w2)
                 else:
@@ -576,17 +570,17 @@ class SEVM:
             else:
                 return f_mod(w1, w2)
         elif op == EVM.SDIV:
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 / w2 # bvsdiv
             else:
                 return f_sdiv(w1, w2)
         elif op == EVM.SMOD:
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 return SRem(w1, w2) # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
             else:
                 return f_smod(w1, w2)
         elif op == EVM.EXP:
-            if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
+            if is_bv_value(w1) and is_bv_value(w2):
                 i1: int = int(str(w1)) # must be concrete
                 i2: int = int(str(w2)) # must be concrete
                 return con(i1 ** i2)
@@ -1039,12 +1033,12 @@ class SEVM:
                     if eq(w1.sort(), w2.sort()):
                         ex.st.push(w1 == w2)
                     else:
-                        if eq(w1.sort(), BoolSort()):
-                            if not eq(w2.sort(), BitVecSort(256)): raise ValueError(w2)
+                        if is_bool(w1):
+                            if not is_bv(w2): raise ValueError(w2)
                             ex.st.push(If(w1, con(1), con(0)) == w2)
                         else:
-                            if not eq(w1.sort(), BitVecSort(256)): raise ValueError(w1)
-                            if not eq(w2.sort(), BoolSort()):      raise ValueError(w2)
+                            if not is_bv(w1): raise ValueError(w1)
+                            if not is_bool(w2): raise ValueError(w2)
                             ex.st.push(w1 == If(w2, con(1), con(0)))
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
@@ -1235,7 +1229,7 @@ class SEVM:
                         if opcode == EVM.PUSH32:
                             ex.st.push(o.op[1])
                         else:
-                            ex.st.push(Concat(BitVecVal(0, (EVM.PUSH32 - opcode)*8), o.op[1]))
+                            ex.st.push(ZeroExt((EVM.PUSH32 - opcode)*8, o.op[1]))
                 elif EVM.DUP1 <= opcode <= EVM.DUP16:
                     ex.st.dup(opcode - EVM.DUP1 + 1)
                 elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
@@ -1268,9 +1262,22 @@ class SEVM:
         caller,
         this,
         #
+    #   pc,
+    #   st,
+    #   jumpis,
+    #   output,
         symbolic,
         #
         solver,
+    #   path,
+        #
+    #   log,
+    #   cnts,
+    #   sha3s,
+    #   storages,
+    #   calls,
+    #   failed,
+    #   error,
     ) -> Exec:
         return Exec(
             pgm      = pgm,
