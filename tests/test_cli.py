@@ -7,7 +7,7 @@ from halmos.utils import EVM
 
 from halmos.byte2op import decode
 
-from halmos.__main__ import str_abi, parse_args, decode_hex
+from halmos.__main__ import str_abi, parse_args, decode_hex, mk_options, run_bytecode
 import halmos.__main__
 
 @pytest.fixture
@@ -42,19 +42,15 @@ def args():
 
 @pytest.fixture
 def options(args):
-    return {
-        'verbose': args.verbose,
-        'debug': args.debug,
-        'log': args.log,
-        'add': not args.no_smt_add,
-        'sub': not args.no_smt_sub,
-        'mul': not args.no_smt_mul,
-        'div': args.smt_div,
-        'divByConst': args.smt_div_by_const,
-        'modByConst': args.smt_mod_by_const,
-        'expByConst': args.smt_exp_by_const,
-        'timeout': args.solver_timeout_branching,
-    }
+    return mk_options(args)
+
+def test_run_bytecode(args, options):
+    hexcode = '34381856FDFDFDFDFDFD5B00'
+    options['sym_jump'] = True
+    exs = run_bytecode(hexcode, args, options)
+    assert len(exs) == 1
+    ex = exs[0]
+    assert str(ex.pgm[ex.this][ex.pc].op[0]) == str(EVM.STOP)
 
 def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args, options):
     hexcode = '600100'

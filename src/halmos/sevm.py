@@ -5,7 +5,7 @@ import math
 
 from copy import deepcopy
 from collections import defaultdict
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Set, Tuple, Any
 from functools import reduce
 
 from z3 import *
@@ -77,6 +77,20 @@ def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
 
 def create_address(cnt: int) -> Word:
     return con(0x220E + cnt)
+
+def valid_jump_destinations(pgm: List[Opcode]) -> Set[int]:
+    jumpdests = set()
+    i = 0
+    while i < len(pgm):
+        opcode = pgm[i].op[0]
+        if is_bv_value(opcode):
+            opcode = opcode.as_long()
+            if opcode == EVM.JUMPDEST:
+                jumpdests.add(i)
+            elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
+                i += opcode - EVM.PUSH1 + 1
+        i += 1
+    return jumpdests
 
 class State:
     stack: List[Word]
@@ -885,39 +899,7 @@ class SEVM:
         cond_true = simplify(is_non_zero(cond))
         ex.solver.add(cond_true)
         if ex.solver.check() != unsat: # jump
-            new_solver = SolverFor('QF_AUFBV')
-            new_solver.set(timeout=self.options['timeout'])
-            new_solver.add(ex.solver.assertions())
-            new_path = deepcopy(ex.path)
-            new_path.append(str(cond_true))
-            new_ex_true = Exec(
-                pgm      = ex.pgm.copy(), # shallow copy for potential new contract creation; existing code doesn't change
-                code     = ex.code.copy(), # shallow copy
-                storage  = deepcopy(ex.storage),
-                balance  = deepcopy(ex.balance),
-                #
-                calldata = ex.calldata,
-                callvalue= ex.callvalue,
-                caller   = ex.caller,
-                this     = ex.this,
-                #
-                pc       = target,
-                st       = deepcopy(ex.st),
-                jumpis   = deepcopy(ex.jumpis),
-                output   = deepcopy(ex.output),
-                symbolic = ex.symbolic,
-                #
-                solver   = new_solver,
-                path     = new_path,
-                #
-                log      = deepcopy(ex.log),
-                cnts     = deepcopy(ex.cnts),
-                sha3s    = deepcopy(ex.sha3s),
-                storages = deepcopy(ex.storages),
-                calls    = deepcopy(ex.calls),
-                failed   = ex.failed,
-                error    = ex.error,
-            )
+            new_ex_true = self.create_branch(ex, str(cond_true), target)
         ex.solver.pop()
 
         cond_false = simplify(is_zero(cond))
@@ -940,6 +922,66 @@ class SEVM:
             stack.append((new_ex_false, step_id))
         else:
             pass # this may happen if the previous path condition was considered unknown but turns out to be unsat later
+
+    def jump(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int) -> None:
+        dst = ex.st.pop()
+
+        # if dst is concrete, just jump
+        if is_bv_value(dst):
+            ex.pc = int(str(dst))
+            stack.append((ex, step_id))
+
+        # otherwise, create a new execution for feasible targets
+        elif self.options['sym_jump']:
+            for target in valid_jump_destinations(ex.pgm[ex.this]):
+                ex.solver.push()
+                target_reachable = simplify(dst == target)
+                ex.solver.add(target_reachable)
+                if ex.solver.check() != unsat: # jump
+                    if self.options.get('debug'):
+                        print(f"we can jump to {target} with model {ex.solver.model()}")
+                    new_ex = self.create_branch(ex, str(target_reachable), target)
+                    stack.append((new_ex, step_id))
+                ex.solver.pop()
+
+        else:
+            raise ValueError(dst)
+
+    def create_branch(self, ex: Exec, cond: str, target: int) -> Exec:
+        new_solver = SolverFor('QF_AUFBV')
+        new_solver.set(timeout=self.options['timeout'])
+        new_solver.add(ex.solver.assertions())
+        new_path = deepcopy(ex.path)
+        new_path.append(cond)
+        new_ex = Exec(
+            pgm      = ex.pgm.copy(), # shallow copy for potential new contract creation; existing code doesn't change
+            code     = ex.code.copy(), # shallow copy
+            storage  = deepcopy(ex.storage),
+            balance  = deepcopy(ex.balance),
+            #
+            calldata = ex.calldata,
+            callvalue= ex.callvalue,
+            caller   = ex.caller,
+            this     = ex.this,
+            #
+            pc       = target,
+            st       = deepcopy(ex.st),
+            jumpis   = deepcopy(ex.jumpis),
+            output   = deepcopy(ex.output),
+            symbolic = ex.symbolic,
+            #
+            solver   = new_solver,
+            path     = new_path,
+            #
+            log      = deepcopy(ex.log),
+            cnts     = deepcopy(ex.cnts),
+            sha3s    = deepcopy(ex.sha3s),
+            storages = deepcopy(ex.storages),
+            calls    = deepcopy(ex.calls),
+            failed   = ex.failed,
+            error    = ex.error,
+        )
+        return new_ex
 
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps]:
         out: List[Exec] = []
@@ -997,9 +1039,8 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.JUMP:
-                    source: int = ex.pc
-                    target: int = int(str(ex.st.pop())) # target must be concrete
-                    ex.pc = target
+                    self.jump(ex, stack, step_id)
+                    continue
 
                 elif opcode == EVM.JUMPDEST:
                     pass
