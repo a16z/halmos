@@ -27,12 +27,15 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Halmos
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          pip install pytest
 
-      - name: Pytest Halmos
+      - name: Install Halmos
+        run: pip install -e .
+
+      - name: Run pytest
         run: pytest
 
       - name: Test Halmos
