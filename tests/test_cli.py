@@ -37,10 +37,11 @@ def setup_selector():
     return int('0a9254e4', 16)
 
 @pytest.fixture
-def empty_args():
+def args():
     return parse_args([])
 
-def mk_options(args):
+@pytest.fixture
+def options(args):
     return {
         'verbose': args.verbose,
         'debug': args.debug,
@@ -55,12 +56,10 @@ def mk_options(args):
         'timeout': args.solver_timeout_branching,
     }
 
-def test_setup(setup_abi, setup_name, setup_sig, setup_selector, empty_args):
+def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args, options):
     hexcode = '600100'
     abi = setup_abi
     arrlen = {}
-    args = empty_args
-    options = mk_options(args)
     setup_ex = halmos.__main__.setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
     assert str(setup_ex.st.stack) == '[1]'
 
@@ -88,8 +87,8 @@ def test_decode():
     assert len(ops) == 1
     assert str(ops[0]) == '98 ERROR x (1 bytes missed)'
 
-def test_str_abi():
-    assert 'fooInt(uint256)' == str_abi(json.loads("""
+@pytest.mark.parametrize('sig,abi', [
+    ('fooInt(uint256)', """
     {
       "inputs": [
         {
@@ -103,9 +102,8 @@ def test_str_abi():
       "stateMutability": "nonpayable",
       "type": "function"
     }
-    """))
-
-    assert 'fooInt8(uint8)' == str_abi(json.loads("""
+    """),
+    ('fooInt8(uint8)', """
     {
       "inputs": [
         {
@@ -119,9 +117,8 @@ def test_str_abi():
       "stateMutability": "nonpayable",
       "type": "function"
     }
-    """))
-
-    assert 'fooIntAddress(uint256,address)' == str_abi(json.loads("""
+    """),
+    ('fooIntAddress(uint256,address)', """
     {
       "inputs": [
         {
@@ -140,9 +137,8 @@ def test_str_abi():
       "stateMutability": "nonpayable",
       "type": "function"
     }
-    """))
-
-    assert 'fooIntInt(uint256,uint256)' == str_abi(json.loads("""
+    """),
+    ('fooIntInt(uint256,uint256)', """
     {
       "inputs": [
         {
@@ -161,11 +157,10 @@ def test_str_abi():
       "stateMutability": "nonpayable",
       "type": "function"
     }
-    """))
-
+    """),
     # TODO: fix crytic-compile bug
-#   assert 'fooStruct(((uint256,uint256),uint256),uint256)' == str_abi(json.loads("""
-    assert 'fooStruct(tuple,uint256)' == str_abi(json.loads("""
+    # 'fooStruct(((uint256,uint256),uint256),uint256)'
+    ('fooStruct(tuple,uint256)', """
     {
       "inputs": [
         {
@@ -208,9 +203,8 @@ def test_str_abi():
       "stateMutability": "nonpayable",
       "type": "function"
     }
-    """))
-
-    assert 'fooDynArr(uint256[])' == str_abi(json.loads("""
+    """),
+    ('fooDynArr(uint256[])', """
     {
       "inputs": [
         {
@@ -224,9 +218,8 @@ def test_str_abi():
       "stateMutability": "nonpayable",
       "type": "function"
     }
-    """))
-
-    assert 'fooFixArr(uint256[3])' == str_abi(json.loads("""
+    """),
+    ('fooFixArr(uint256[3])', """
     {
       "inputs": [
         {
@@ -240,9 +233,8 @@ def test_str_abi():
       "stateMutability": "nonpayable",
       "type": "function"
     }
-    """))
-
-    assert 'fooBytes(bytes)' == str_abi(json.loads("""
+    """),
+    ('fooBytes(bytes)', """
     {
       "inputs": [
         {
@@ -256,4 +248,7 @@ def test_str_abi():
       "stateMutability": "nonpayable",
       "type": "function"
     }
-    """))
+    """),
+])
+def test_str_abi(sig, abi):
+    assert sig == str_abi(json.loads(abi))
