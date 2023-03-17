@@ -2,96 +2,51 @@
 
 import sys
 
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
-from .utils import opcodes
-
-class SrcMap:
-    text  : str
-    jump  : str
-    mdepth: int
-
-    def __init__(self, t='', j='', m=0) -> None:
-        self.text   = t
-        self.jump   = j
-        self.mdepth = m
-
-    def __str__(self) -> str:
-        return ' '.join([
-            self.jump,
-            str(self.mdepth),
-            self.text,
-        ])
+from z3 import *
+from .utils import EVM
 
 class Opcode:
     pc: int
-    hx: str         # hex string of byte
-    op: List[str]   # opcode + argument (optional)
-    sm: SrcMap
+    op: List[Any] # opcode + argument (optional)
 
-    def __init__(self, pc, hx, op) -> None:
+    def __init__(self, pc, op) -> None:
         self.pc = pc
-        self.hx = hx
         self.op = op
-        self.sm = None
 
     def __str__(self) -> str:
-        if self.sm:
-            return ' '.join(self.op) + ' ' + str(self.sm)
-        else:
-            return ' '.join(self.op)
+        return ' '.join(map(str, self.op))
 
+def concat(args):
+    if len(args) > 1:
+        return Concat(args)
+    else:
+        return args[0]
 
 # Decode ByteCodes to Opcodes
-def decode(hexcode: str) -> Tuple[List[Opcode], List[str]]:
-    if hexcode.startswith('0x'):
-        hexcode = hexcode[2:]
-    code: List[str] = [hexcode[i:i+2] for i in range(0, len(hexcode), 2)]
-    hx: str = ''
+def decode(hexcode: Any) -> Tuple[List[Opcode], List[Any]]:
+    bitsize: int = hexcode.size()
+    if bitsize % 8 != 0: raise ValueError(hexcode)
+    code: List[Any] = [ simplify(Extract(bitsize-1 - i*8, bitsize - (i+1)*8, hexcode)) for i in range(bitsize // 8) ]
+    args: List[Any] = []
     ops: List[Opcode] = []
     pushcnt: int = 0
     cnt: int = -1
     for item in code:
         cnt += 1
         if pushcnt > 0:
-            hx += item.lower()
+            args.append(item)
             pushcnt -= 1
             if pushcnt == 0:
-                ops[-1].op.append(hx)
-                hx = ''
-        elif isinstance(item, str) and item.lower() in opcodes:
-            ops.append(Opcode(cnt, item.lower(), [opcodes[item.lower()]]))
-            if int('60', 16) <= int(item, 16) <= int('7f', 16):
-                pushcnt = int(item, 16) - int('60', 16) + 1
+                ops[-1].op.append(simplify(concat(args)))
+                args = []
         else:
-            ops.append(Opcode(cnt, item.lower(), ['ERROR']))
-        #   raise ValueError('Invalid opcode', str(item))
-    if hx: # hx is not empty
-        ops[-1].op.append('ERROR ' + hx + ' (' + str(pushcnt) + ' bytes missed)')
-    #   raise ValueError('Not enough push bytes', hx)
+            ops.append(Opcode(cnt, [item]))
+            if is_bv_value(item):
+                hx = int(str(item))
+                if EVM.PUSH1 <= hx <= EVM.PUSH32:
+                    pushcnt = hx - EVM.PUSH1 + 1
+    if args: # args is not empty
+        ops[-1].op.append(f'ERROR {str(simplify(concat(args)))} ({pushcnt} bytes missed)')
     return (ops, code)
-
-def print_opcodes(ops: List[Opcode], mode: str) -> None:
-    width: int = len(str(ops[-1].pc)) # the number of digits of the max pc
-    for o in ops:
-        s: str = '[' + align(o.pc, width) + '] ' + o.hx + ' ' + o.op[0]
-        if len(o.op) > 1: # when o.op[0] is PUSH*
-            s += ' ' + push_bytes(o.op[1], mode)
-        print(s)
-
-def align(cnt: int, width: int) -> str:
-    return str(cnt).zfill(width)
-
-def push_bytes(h: str, mode: str) -> str:
-    i: str = str(int(h, 16))
-    return {
-        'hex'     :           '0x' + h  ,
-        'int'     : i                   ,
-        'int:hex' : i + ':' + '0x' + h  ,
-    }[mode]
-
-# usage: <cmd> [int|hex|int:hex]
-if __name__ == '__main__':
-    mode: str = 'int:hex' if len(sys.argv) < 2 else sys.argv[1]
-    hexcode: str = input()
-    print_opcodes(decode(hexcode)[0], mode)

@@ -14,8 +14,8 @@ __pycache__/
 
 # Environments
 .env
-env/
 .venv
+env/
 venv/
 
 # Foundry build files

@@ -9,227 +9,149 @@ def color_good(text: str) -> str:
 def color_warn(text: str) -> str:
     return '\033[31m' + text + '\033[0m'
 
-opcodes : Dict[str, str] = {
-    '00' : 'STOP',
-    '01' : 'ADD',
-    '02' : 'MUL',
-    '03' : 'SUB',
-    '04' : 'DIV',
-    '05' : 'SDIV',
-    '06' : 'MOD',
-    '07' : 'SMOD',
-    '08' : 'ADDMOD',
-    '09' : 'MULMOD',
-    '0a' : 'EXP',
-    '0b' : 'SIGNEXTEND',
-    '10' : 'LT',
-    '11' : 'GT',
-    '12' : 'SLT',
-    '13' : 'SGT',
-    '14' : 'EQ',
-    '15' : 'ISZERO',
-    '16' : 'AND',
-    '17' : 'OR',
-    '18' : 'XOR',
-    '19' : 'NOT',
-    '1a' : 'BYTE',
-    '1b' : 'SHL',
-    '1c' : 'SHR',
-    '1d' : 'SAR',
-    '20' : 'SHA3',
-    '30' : 'ADDRESS',
-    '31' : 'BALANCE',
-    '32' : 'ORIGIN',
-    '33' : 'CALLER',
-    '34' : 'CALLVALUE',
-    '35' : 'CALLDATALOAD',
-    '36' : 'CALLDATASIZE',
-    '37' : 'CALLDATACOPY',
-    '38' : 'CODESIZE',
-    '39' : 'CODECOPY',
-    '3a' : 'GASPRICE',
-    '3b' : 'EXTCODESIZE',
-    '3c' : 'EXTCODECOPY',
-    '3d' : 'RETURNDATASIZE',
-    '3e' : 'RETURNDATACOPY',
-    '3f' : 'EXTCODEHASH',
-    '40' : 'BLOCKHASH',
-    '41' : 'COINBASE',
-    '42' : 'TIMESTAMP',
-    '43' : 'NUMBER',
-    '44' : 'DIFFICULTY',
-    '45' : 'GASLIMIT',
-    '46' : 'CHAINID',
-    '47' : 'SELFBALANCE',
-    '50' : 'POP',
-    '51' : 'MLOAD',
-    '52' : 'MSTORE',
-    '53' : 'MSTORE8',
-    '54' : 'SLOAD',
-    '55' : 'SSTORE',
-    '56' : 'JUMP',
-    '57' : 'JUMPI',
-    '58' : 'PC',
-    '59' : 'MSIZE',
-    '5a' : 'GAS',
-    '5b' : 'JUMPDEST',
-    '60' : 'PUSH1',
-    '61' : 'PUSH2',
-    '62' : 'PUSH3',
-    '63' : 'PUSH4',
-    '64' : 'PUSH5',
-    '65' : 'PUSH6',
-    '66' : 'PUSH7',
-    '67' : 'PUSH8',
-    '68' : 'PUSH9',
-    '69' : 'PUSH10',
-    '6a' : 'PUSH11',
-    '6b' : 'PUSH12',
-    '6c' : 'PUSH13',
-    '6d' : 'PUSH14',
-    '6e' : 'PUSH15',
-    '6f' : 'PUSH16',
-    '70' : 'PUSH17',
-    '71' : 'PUSH18',
-    '72' : 'PUSH19',
-    '73' : 'PUSH20',
-    '74' : 'PUSH21',
-    '75' : 'PUSH22',
-    '76' : 'PUSH23',
-    '77' : 'PUSH24',
-    '78' : 'PUSH25',
-    '79' : 'PUSH26',
-    '7a' : 'PUSH27',
-    '7b' : 'PUSH28',
-    '7c' : 'PUSH29',
-    '7d' : 'PUSH30',
-    '7e' : 'PUSH31',
-    '7f' : 'PUSH32',
-    '80' : 'DUP1',
-    '81' : 'DUP2',
-    '82' : 'DUP3',
-    '83' : 'DUP4',
-    '84' : 'DUP5',
-    '85' : 'DUP6',
-    '86' : 'DUP7',
-    '87' : 'DUP8',
-    '88' : 'DUP9',
-    '89' : 'DUP10',
-    '8a' : 'DUP11',
-    '8b' : 'DUP12',
-    '8c' : 'DUP13',
-    '8d' : 'DUP14',
-    '8e' : 'DUP15',
-    '8f' : 'DUP16',
-    '90' : 'SWAP1',
-    '91' : 'SWAP2',
-    '92' : 'SWAP3',
-    '93' : 'SWAP4',
-    '94' : 'SWAP5',
-    '95' : 'SWAP6',
-    '96' : 'SWAP7',
-    '97' : 'SWAP8',
-    '98' : 'SWAP9',
-    '99' : 'SWAP10',
-    '9a' : 'SWAP11',
-    '9b' : 'SWAP12',
-    '9c' : 'SWAP13',
-    '9d' : 'SWAP14',
-    '9e' : 'SWAP15',
-    '9f' : 'SWAP16',
-    'a0' : 'LOG0',
-    'a1' : 'LOG1',
-    'a2' : 'LOG2',
-    'a3' : 'LOG3',
-    'a4' : 'LOG4',
-    'f0' : 'CREATE',
-    'f1' : 'CALL',
-    'f2' : 'CALLCODE',
-    'f3' : 'RETURN',
-    'f4' : 'DELEGATECALL',
-    'f5' : 'CREATE2',
-    'fa' : 'STATICCALL',
-    'fd' : 'REVERT',
-    'fe' : 'INVALID',
-    'ff' : 'SELFDESTRUCT',
-#   'ff' : 'SUICIDE',
-}
-
-def groupby_gas(cnts: Dict[str,int]) -> Dict[str,int]:
-    new_cnts = defaultdict(int)
-
-    for (op, cnt) in cnts.items():
-        if (
-               op == 'STOP'
-            or op == 'RETURN'
-            or op == 'REVERT'
-        ):
-            new_cnts['_0_zero'] += cnt
-        elif (
-               op == 'JUMPDEST'
-        ):
-            new_cnts['_1_jumpdest'] += cnt
-        elif (
-               op == 'ADDRESS'
-            or op == 'ORIGIN'
-            or op == 'CALLER'
-            or op == 'CALLVALUE'
-            or op == 'CALLDATASIZE'
-            or op == 'RETURNDATASIZE'
-            or op == 'CODESIZE'
-            or op == 'GASPRICE'
-            or op == 'COINBASE'
-            or op == 'TIMESTAMP'
-            or op == 'NUMBER'
-            or op == 'DIFFICULTY'
-            or op == 'GASLIMIT'
-            or op == 'POP'
-            or op == 'PC'
-            or op == 'MSIZE'
-            or op == 'GAS'
-            or op == 'CHAINID'
-        ):
-            new_cnts['_2_base'] += cnt
-        elif (
-               op == 'ADD'
-            or op == 'SUB'
-            or op == 'NOT'
-            or op == 'LT'
-            or op == 'GT'
-            or op == 'SLT'
-            or op == 'SGT'
-            or op == 'EQ'
-            or op == 'ISZERO'
-            or op == 'AND'
-            or op == 'OR'
-            or op == 'XOR'
-            or op == 'BYTE'
-            or op == 'SHL'
-            or op == 'SHR'
-            or op == 'SAR'
-            or op == 'CALLDATALOAD'
-            or op == 'MLOAD'
-            or op == 'MSTORE'
-            or op == 'MSTORE8'
-            or op == 'PUSH1' or op == 'PUSH2' or op == 'PUSH3' or op == 'PUSH4' or op == 'PUSH5' or op == 'PUSH6' or op == 'PUSH7' or op == 'PUSH8' or op == 'PUSH9' or op == 'PUSH10' or op == 'PUSH11' or op == 'PUSH12' or op == 'PUSH13' or op == 'PUSH14' or op == 'PUSH15' or op == 'PUSH16' or op == 'PUSH17' or op == 'PUSH18' or op == 'PUSH19' or op == 'PUSH20' or op == 'PUSH21' or op == 'PUSH22' or op == 'PUSH23' or op == 'PUSH24' or op == 'PUSH25' or op == 'PUSH26' or op == 'PUSH27' or op == 'PUSH28' or op == 'PUSH29' or op == 'PUSH30' or op == 'PUSH31' or op == 'PUSH32'
-            or op == 'DUP1' or op == 'DUP2' or op == 'DUP3' or op == 'DUP4' or op == 'DUP5' or op == 'DUP6' or op == 'DUP7' or op == 'DUP8' or op == 'DUP9' or op == 'DUP10' or op == 'DUP11' or op == 'DUP12' or op == 'DUP13' or op == 'DUP14' or op == 'DUP15' or op == 'DUP16'
-            or op == 'SWAP1' or op == 'SWAP2' or op == 'SWAP3' or op == 'SWAP4' or op == 'SWAP5' or op == 'SWAP6' or op == 'SWAP7' or op == 'SWAP8' or op == 'SWAP9' or op == 'SWAP10' or op == 'SWAP11' or op == 'SWAP12' or op == 'SWAP13' or op == 'SWAP14' or op == 'SWAP15' or op == 'SWAP16'
-        ):
-            new_cnts['_3_verylow'] += cnt
-        elif (
-               op == 'MUL'
-            or op == 'DIV'
-            or op == 'SDIV'
-            or op == 'MOD'
-            or op == 'SMOD'
-            or op == 'SIGNEXTEND'
-            or op == 'SELFBALANCE'
-        ):
-            new_cnts['_5_low'] += cnt
-        else:
-            new_cnts[op] = cnt
-
-    return new_cnts
+class EVM:
+    STOP           = 0x00
+    ADD            = 0x01
+    MUL            = 0x02
+    SUB            = 0x03
+    DIV            = 0x04
+    SDIV           = 0x05
+    MOD            = 0x06
+    SMOD           = 0x07
+    ADDMOD         = 0x08
+    MULMOD         = 0x09
+    EXP            = 0x0a
+    SIGNEXTEND     = 0x0b
+    LT             = 0x10
+    GT             = 0x11
+    SLT            = 0x12
+    SGT            = 0x13
+    EQ             = 0x14
+    ISZERO         = 0x15
+    AND            = 0x16
+    OR             = 0x17
+    XOR            = 0x18
+    NOT            = 0x19
+    BYTE           = 0x1a
+    SHL            = 0x1b
+    SHR            = 0x1c
+    SAR            = 0x1d
+    SHA3           = 0x20
+    ADDRESS        = 0x30
+    BALANCE        = 0x31
+    ORIGIN         = 0x32
+    CALLER         = 0x33
+    CALLVALUE      = 0x34
+    CALLDATALOAD   = 0x35
+    CALLDATASIZE   = 0x36
+    CALLDATACOPY   = 0x37
+    CODESIZE       = 0x38
+    CODECOPY       = 0x39
+    GASPRICE       = 0x3a
+    EXTCODESIZE    = 0x3b
+    EXTCODECOPY    = 0x3c
+    RETURNDATASIZE = 0x3d
+    RETURNDATACOPY = 0x3e
+    EXTCODEHASH    = 0x3f
+    BLOCKHASH      = 0x40
+    COINBASE       = 0x41
+    TIMESTAMP      = 0x42
+    NUMBER         = 0x43
+    DIFFICULTY     = 0x44
+    GASLIMIT       = 0x45
+    CHAINID        = 0x46
+    SELFBALANCE    = 0x47
+    POP            = 0x50
+    MLOAD          = 0x51
+    MSTORE         = 0x52
+    MSTORE8        = 0x53
+    SLOAD          = 0x54
+    SSTORE         = 0x55
+    JUMP           = 0x56
+    JUMPI          = 0x57
+    PC             = 0x58
+    MSIZE          = 0x59
+    GAS            = 0x5a
+    JUMPDEST       = 0x5b
+    PUSH1          = 0x60
+    PUSH2          = 0x61
+    PUSH3          = 0x62
+    PUSH4          = 0x63
+    PUSH5          = 0x64
+    PUSH6          = 0x65
+    PUSH7          = 0x66
+    PUSH8          = 0x67
+    PUSH9          = 0x68
+    PUSH10         = 0x69
+    PUSH11         = 0x6a
+    PUSH12         = 0x6b
+    PUSH13         = 0x6c
+    PUSH14         = 0x6d
+    PUSH15         = 0x6e
+    PUSH16         = 0x6f
+    PUSH17         = 0x70
+    PUSH18         = 0x71
+    PUSH19         = 0x72
+    PUSH20         = 0x73
+    PUSH21         = 0x74
+    PUSH22         = 0x75
+    PUSH23         = 0x76
+    PUSH24         = 0x77
+    PUSH25         = 0x78
+    PUSH26         = 0x79
+    PUSH27         = 0x7a
+    PUSH28         = 0x7b
+    PUSH29         = 0x7c
+    PUSH30         = 0x7d
+    PUSH31         = 0x7e
+    PUSH32         = 0x7f
+    DUP1           = 0x80
+    DUP2           = 0x81
+    DUP3           = 0x82
+    DUP4           = 0x83
+    DUP5           = 0x84
+    DUP6           = 0x85
+    DUP7           = 0x86
+    DUP8           = 0x87
+    DUP9           = 0x88
+    DUP10          = 0x89
+    DUP11          = 0x8a
+    DUP12          = 0x8b
+    DUP13          = 0x8c
+    DUP14          = 0x8d
+    DUP15          = 0x8e
+    DUP16          = 0x8f
+    SWAP1          = 0x90
+    SWAP2          = 0x91
+    SWAP3          = 0x92
+    SWAP4          = 0x93
+    SWAP5          = 0x94
+    SWAP6          = 0x95
+    SWAP7          = 0x96
+    SWAP8          = 0x97
+    SWAP9          = 0x98
+    SWAP10         = 0x99
+    SWAP11         = 0x9a
+    SWAP12         = 0x9b
+    SWAP13         = 0x9c
+    SWAP14         = 0x9d
+    SWAP15         = 0x9e
+    SWAP16         = 0x9f
+    LOG0           = 0xa0
+    LOG1           = 0xa1
+    LOG2           = 0xa2
+    LOG3           = 0xa3
+    LOG4           = 0xa4
+    CREATE         = 0xf0
+    CALL           = 0xf1
+    CALLCODE       = 0xf2
+    RETURN         = 0xf3
+    DELEGATECALL   = 0xf4
+    CREATE2        = 0xf5
+    STATICCALL     = 0xfa
+    REVERT         = 0xfd
+    INVALID        = 0xfe
+    SELFDESTRUCT   = 0xff
 
 class hevm_cheat_code:
     # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol

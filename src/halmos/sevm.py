@@ -9,8 +9,8 @@ from typing import List, Dict, Tuple, Any
 from functools import reduce
 
 from z3 import *
-from .byte2op import SrcMap, Opcode, decode
-from .utils import groupby_gas, color_good, color_warn, hevm_cheat_code, sha3_inv
+from .byte2op import Opcode, decode
+from .utils import EVM, color_good, color_warn, hevm_cheat_code, sha3_inv
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -153,7 +153,7 @@ class State:
 class Exec: # an execution path
     # network
     pgm: Dict[Any,List[Opcode]] # address -> { opcode map: pc -> opcode }
-    code: Dict[Any,List[str]] # address -> opcode sequence
+    code: Dict[Any,List[Any]] # address -> opcode sequence
     storage: Dict[Any,Dict[int,Any]] # address -> { storage slot -> value }
     balance: Dict[Any,Any] # address -> balance
     # tx
@@ -172,7 +172,7 @@ class Exec: # an execution path
     path: List[Any] # path conditions
     # logs
     log: List[Tuple[List[Word], Any]] # event logs emitted
-    cnts: Dict[str,int] # opcode -> frequency
+    cnts: Dict[int,int] # opcode -> frequency
     sha3s: List[Tuple[Word,Word]] # sha3 hashes generated
     storages: List[Tuple[Any,Any]] # storage updates
     calls: List[Any] # external calls
@@ -208,8 +208,7 @@ class Exec: # an execution path
         self.error    = kwargs['error']
 
     def str_cnts(self) -> str:
-        cnts = groupby_gas(self.cnts)
-        return ''.join([f'{x[0]}: {x[1]}\n' for x in sorted(cnts.items(), key=lambda x: x[0])])
+        return ''.join([f'{x[0]}: {x[1]}\n' for x in sorted(self.cnts.items(), key=lambda x: x[0])])
 
     def str_solver(self) -> str:
         return '\n'.join([str(cond) for cond in self.solver.assertions()])
@@ -366,17 +365,17 @@ class Exec: # an execution path
         self.sha3s.append((sha3_var, sha3))
 
     def cnt_call(self) -> int:
-        return self.cnts['CALL'] + self.cnts['STATICCALL']
+        return self.cnts[EVM.CALL] + self.cnts[EVM.STATICCALL]
     def cnt_sstore(self) -> int:
-        return self.cnts['SSTORE']
+        return self.cnts[EVM.SSTORE]
     def cnt_gas(self) -> int:
-        return self.cnts['GAS']
+        return self.cnts[EVM.GAS]
     def cnt_balance(self) -> int:
-        return self.cnts['BALANCE']
+        return self.cnts[EVM.BALANCE]
     def cnt_sha3(self) -> int:
-        return self.cnts['SHA3']
+        return self.cnts[EVM.SHA3]
     def cnt_create(self) -> int:
-        return self.cnts['CREATE']
+        return self.cnts[EVM.CREATE]
 
     def returndatasize(self) -> int:
         if self.output is None:
@@ -386,18 +385,19 @@ class Exec: # an execution path
             if not size % 8 == 0: raise ValueError(size)
             return int(size / 8)
 
-    def read_code(self, idx: int) -> str:
+    def read_code(self, idx: int) -> Byte:
         if idx < len(self.code[self.this]):
             return self.code[self.this][idx]
         else:
-            return '00'
+            return BitVecVal(0, 8)
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_bv_value(x): return False
         pc: int = int(str(x))
         if pc < 0 or pc >= len(self.pgm[self.this]): return False
         if self.pgm[self.this][pc] is None: return False
-        return self.pgm[self.this][pc].op[0] == 'JUMPDEST'
+        opcode = self.pgm[self.this][pc].op[0]
+        return is_bv_value(opcode) and opcode.as_long() == EVM.JUMPDEST
 
     def jumpi_id(self) -> str:
         return f'{self.pc}:' + ','.join(map(lambda x: str(x) if self.is_jumpdest(x) else '', self.st.stack))
@@ -497,24 +497,24 @@ class SEVM:
                         return x
         return None
 
-    def arith(self, op: str, w1: Word, w2: Word) -> Word:
+    def arith(self, op: int, w1: Word, w2: Word) -> Word:
         w1 = b2i(w1)
         w2 = b2i(w2)
-        if op == 'ADD':
+        if op == EVM.ADD:
             if self.options.get('add'):
                 return w1 + w2
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return w1 + w2
             else:
                 return f_add(w1, w2)
-        elif op == 'SUB':
+        elif op == EVM.SUB:
             if self.options.get('sub'):
                 return w1 - w2
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return w1 - w2
             else:
                 return f_sub(w1, w2)
-        elif op == 'MUL':
+        elif op == EVM.MUL:
             if self.options.get('mul'):
                 return w1 * w2
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
@@ -537,7 +537,7 @@ class SEVM:
                     return f_mul(w1, w2)
             else:
                 return f_mul(w1, w2)
-        elif op == 'DIV':
+        elif op == EVM.DIV:
             div_for_overflow_check = self.div_xy_y(w1, w2)
             if div_for_overflow_check is not None: # xy/x or xy/y
                 return div_for_overflow_check
@@ -559,7 +559,7 @@ class SEVM:
                     return f_div(w1, w2)
             else:
                 return f_div(w1, w2)
-        elif op == 'MOD':
+        elif op == EVM.MOD:
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return URem(w1, w2) # bvurem
             elif is_bv_value(w2):
@@ -575,17 +575,17 @@ class SEVM:
                     return f_mod(w1, w2)
             else:
                 return f_mod(w1, w2)
-        elif op == 'SDIV':
+        elif op == EVM.SDIV:
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return w1 / w2 # bvsdiv
             else:
                 return f_sdiv(w1, w2)
-        elif op == 'SMOD':
+        elif op == EVM.SMOD:
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 return SRem(w1, w2) # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
             else:
                 return f_smod(w1, w2)
-        elif op == 'EXP':
+        elif op == EVM.EXP:
             if w1.decl().name() == 'bv' and w2.decl().name() == 'bv':
                 i1: int = int(str(w1)) # must be concrete
                 i2: int = int(str(w2)) # must be concrete
@@ -608,10 +608,10 @@ class SEVM:
         else:
             raise ValueError(op)
 
-    def call(self, ex: Exec, op: str, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
+    def call(self, ex: Exec, op: int, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
         gas = ex.st.pop()
         to = ex.st.pop()
-        if op == 'STATICCALL':
+        if op == EVM.STATICCALL:
             fund = con(0)
         else:
             fund = ex.st.pop()
@@ -623,7 +623,7 @@ class SEVM:
         if not arg_size >= 0: raise ValueError(arg_size)
         if not ret_size >= 0: raise ValueError(ret_size)
 
-        ex.balance[ex.this] = self.arith('SUB', ex.balance_of(ex.this), fund)
+        ex.balance[ex.this] = self.arith(EVM.SUB, ex.balance_of(ex.this), fund)
 
         def call_known() -> None:
             calldata = [None] * arg_size
@@ -681,8 +681,8 @@ class SEVM:
                 wstore_partial(new_ex.st.memory, ret_loc, 0, min(ret_size, new_ex.returndatasize()), new_ex.output, new_ex.returndatasize())
 
                 # set status code (in stack)
-                if opcode == 'STOP' or opcode == 'RETURN' or opcode == 'REVERT' or opcode == 'INVALID':
-                    if opcode == 'STOP' or opcode == 'RETURN':
+                if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
+                    if opcode.as_long() in [EVM.STOP, EVM.RETURN]:
                         new_ex.st.push(con(1))
                     else:
                         new_ex.st.push(con(0))
@@ -709,7 +709,7 @@ class SEVM:
             ex.st.push(exit_code_var)
 
             ret = None
-            if ret_size > 0:
+            if ret_size > 0: # TODO: handle inconsistent return sizes for unknown functions
                 f_ret = Function('ret_'+str(ret_size*8), BitVecSort(256), BitVecSort(ret_size*8))
                 ret = f_ret(exit_code_var)
 
@@ -742,7 +742,6 @@ class SEVM:
                     
                     with open(path) as f:
                         artifact = json.loads(f.read())
-
                     
                     if artifact['bytecode']['object']:
                         bytecode = artifact['bytecode']['object'].replace('0x', '')
@@ -765,15 +764,12 @@ class SEVM:
                     out.append(ex)
                     return
 
-            # TODO: handle inconsistent return sizes for unknown functions
             # store return value
-            if ret_size > 0 and ret != None:
+            if ret_size > 0:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)
-                ex.output = ret
-            elif ret != None:
-                ex.output = ret
-            else:
-                ex.output = None
+
+            # propagate callee's output to caller, which could be None
+            ex.output = ret
 
             ex.calls.append((exit_code_var, exit_code, ex.output))
 
@@ -793,8 +789,7 @@ class SEVM:
 
         # contract creation code
         create_hexcode = wload(ex.st.memory, loc, size)
-        if not is_bv_value(create_hexcode): raise ValueError(create_hexcode)
-        (create_ops, create_code) = decode(f'{create_hexcode.as_long():#x}')
+        (create_ops, create_code) = decode(create_hexcode)
         create_pgm = ops_to_pgm(create_ops)
 
         # new account address
@@ -808,8 +803,8 @@ class SEVM:
 
         # transfer value
         ex.solver.add(UGE(ex.balance_of(ex.this), value)) # assume balance is enough; otherwise ignore this path
-        ex.balance[ex.this] = self.arith('SUB', ex.balance_of(ex.this), value)
-        ex.balance[new_addr] = self.arith('ADD', ex.balance_of(new_addr), value)
+        ex.balance[ex.this] = self.arith(EVM.SUB, ex.balance_of(ex.this), value)
+        ex.balance[new_addr] = self.arith(EVM.ADD, ex.balance_of(new_addr), value)
 
         # execute contract creation code
         (new_exs, new_steps) = self.run(Exec(
@@ -847,11 +842,10 @@ class SEVM:
             if new_ex.failed: raise ValueError(new_ex)
 
             opcode = new_ex.pgm[new_ex.this][new_ex.pc].op[0]
-            if opcode == 'STOP' or opcode == 'RETURN':
+            if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]:
                 # new contract code
                 new_hexcode = new_ex.output
-                if not is_bv_value(new_hexcode): raise ValueError(new_hexcode)
-                (new_ops, new_code) = decode(f'{new_hexcode.as_long():#x}')
+                (new_ops, new_code) = decode(new_hexcode)
                 new_pgm = ops_to_pgm(new_ops)
 
                 # set new contract code
@@ -967,15 +961,21 @@ class SEVM:
                 step_id += 1
 
                 o = ex.pgm[ex.this][ex.pc]
-                ex.cnts[o.op[0]] += 1
+                opcode = o.op[0]
+                if is_bv_value(opcode):
+                    opcode = int(str(opcode))
+                else:
+                    out.append(ex)
+                    continue
+                ex.cnts[opcode] += 1
 
                 if 'max_depth' in self.options and sum(ex.cnts.values()) > self.options['max_depth']:
                     continue
 
                 if self.options.get('log'):
-                    if o.op[0] == 'JUMPI':
+                    if opcode == EVM.JUMPI:
                         steps[step_id] = {'parent': prev_step_id, 'exec': str(ex)}
-                #   elif o.op[0] == 'CALL':
+                #   elif opcode == EVM.CALL:
                 #       steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
                     else:
                     #   steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
@@ -983,57 +983,57 @@ class SEVM:
                     if self.options.get('verbose', 0) >= 3:
                         print(ex)
 
-                if o.op[0] == 'STOP':
+                if opcode == EVM.STOP:
                     ex.output = None
                     out.append(ex)
                     continue
 
-                elif o.op[0] == 'REVERT':
+                elif opcode == EVM.REVERT:
                     ex.output = ex.st.ret()
                     out.append(ex)
                     continue
 
-                elif o.op[0] == 'RETURN':
+                elif opcode == EVM.RETURN:
                     ex.output = ex.st.ret()
                     out.append(ex)
                     continue
 
-                elif o.op[0] == 'JUMPI':
+                elif opcode == EVM.JUMPI:
                     self.jumpi(ex, stack, step_id)
                     continue
 
-                elif o.op[0] == 'JUMP':
+                elif opcode == EVM.JUMP:
                     source: int = ex.pc
                     target: int = int(str(ex.st.pop())) # target must be concrete
                     ex.pc = target
 
-                elif o.op[0] == 'JUMPDEST':
+                elif opcode == EVM.JUMPDEST:
                     pass
 
-                elif int('01', 16) <= int(o.hx, 16) <= int('07', 16): # ADD MUL SUB DIV SDIV MOD SMOD
-                    ex.st.push(self.arith(o.op[0], ex.st.pop(), ex.st.pop()))
+                elif EVM.ADD <= opcode <= EVM.SMOD: # ADD MUL SUB DIV SDIV MOD SMOD
+                    ex.st.push(self.arith(opcode, ex.st.pop(), ex.st.pop()))
 
-                elif o.op[0] == 'EXP':
-                    ex.st.push(self.arith(o.op[0], ex.st.pop(), ex.st.pop()))
+                elif opcode == EVM.EXP:
+                    ex.st.push(self.arith(opcode, ex.st.pop(), ex.st.pop()))
 
-                elif o.op[0] == 'LT':
+                elif opcode == EVM.LT:
                     w1 = b2i(ex.st.pop())
                     w2 = b2i(ex.st.pop())
                     ex.st.push(ULT(w1, w2)) # bvult
-                elif o.op[0] == 'GT':
+                elif opcode == EVM.GT:
                     w1 = b2i(ex.st.pop())
                     w2 = b2i(ex.st.pop())
                     ex.st.push(UGT(w1, w2)) # bvugt
-                elif o.op[0] == 'SLT':
+                elif opcode == EVM.SLT:
                     w1 = b2i(ex.st.pop())
                     w2 = b2i(ex.st.pop())
                     ex.st.push(w1 < w2) # bvslt
-                elif o.op[0] == 'SGT':
+                elif opcode == EVM.SGT:
                     w1 = b2i(ex.st.pop())
                     w2 = b2i(ex.st.pop())
                     ex.st.push(w1 > w2) # bvsgt
 
-                elif o.op[0] == 'EQ':
+                elif opcode == EVM.EQ:
                     w1 = ex.st.pop()
                     w2 = ex.st.pop()
                     if eq(w1.sort(), w2.sort()):
@@ -1046,26 +1046,26 @@ class SEVM:
                             if not eq(w1.sort(), BitVecSort(256)): raise ValueError(w1)
                             if not eq(w2.sort(), BoolSort()):      raise ValueError(w2)
                             ex.st.push(w1 == If(w2, con(1), con(0)))
-                elif o.op[0] == 'ISZERO':
+                elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
 
-                elif o.op[0] == 'AND':
+                elif opcode == EVM.AND:
                     ex.st.push(and_of(ex.st.pop(), ex.st.pop()))
-                elif o.op[0] == 'OR':
+                elif opcode == EVM.OR:
                     ex.st.push(or_of(ex.st.pop(), ex.st.pop()))
-                elif o.op[0] == 'NOT':
+                elif opcode == EVM.NOT:
                     ex.st.push(~ ex.st.pop()) # bvnot
-                elif o.op[0] == 'SHL':
+                elif opcode == EVM.SHL:
                     w = ex.st.pop()
                     ex.st.push(b2i(ex.st.pop()) << b2i(w)) # bvshl
-                elif o.op[0] == 'SAR':
+                elif opcode == EVM.SAR:
                     w = ex.st.pop()
                     ex.st.push(ex.st.pop() >> w) # bvashr
-                elif o.op[0] == 'SHR':
+                elif opcode == EVM.SHR:
                     w = ex.st.pop()
                     ex.st.push(LShR(ex.st.pop(), w)) # bvlshr
 
-                elif o.op[0] == 'SIGNEXTEND':
+                elif opcode == EVM.SIGNEXTEND:
                     w = ex.st.pop()
                     if not is_bv_value(w): raise ValueError(w)
 
@@ -1074,10 +1074,10 @@ class SEVM:
                         bl = (w + 1) * 8
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
 
-                elif o.op[0] == 'XOR':
+                elif opcode == EVM.XOR:
                     ex.st.push(ex.st.pop() ^ ex.st.pop()) # bvxor
 
-                elif o.op[0] == 'CALLDATALOAD':
+                elif opcode == EVM.CALLDATALOAD:
                     if ex.calldata is None:
                         ex.st.push(f_calldataload(ex.st.pop()))
                     else:
@@ -1088,24 +1088,24 @@ class SEVM:
                     #       ex.st.push(Concat(ex.calldata[offset:offset+32]))
                     #   except:
                     #       ex.st.push(f_calldataload(ex.st.pop()))
-                elif o.op[0] == 'CALLDATASIZE':
+                elif opcode == EVM.CALLDATASIZE:
                     if ex.calldata is None:
                         ex.st.push(f_calldatasize())
                     else:
                         ex.st.push(con(len(ex.calldata)))
-                elif o.op[0] == 'CALLVALUE':
+                elif opcode == EVM.CALLVALUE:
                     ex.st.push(ex.callvalue)
-                elif o.op[0] == 'CALLER':
+                elif opcode == EVM.CALLER:
                     ex.st.push(ex.caller)
-                elif o.op[0] == 'ORIGIN':
+                elif opcode == EVM.ORIGIN:
                     ex.st.push(f_origin())
                     ex.solver.add(Extract(255, 160, f_origin()) == BitVecVal(0, 96))
-                elif o.op[0] == 'ADDRESS':
+                elif opcode == EVM.ADDRESS:
                     ex.st.push(ex.this)
-                elif o.op[0] == 'COINBASE':
+                elif opcode == EVM.COINBASE:
                     ex.st.push(f_coinbase())
                     ex.solver.add(Extract(255, 160, f_coinbase()) == BitVecVal(0, 96))
-                elif o.op[0] == 'EXTCODESIZE':
+                elif opcode == EVM.EXTCODESIZE:
                     address = ex.st.pop()
                     if address in ex.code:
                         codesize = con(len(ex.code[address]))
@@ -1114,74 +1114,74 @@ class SEVM:
                         if address == con(hevm_cheat_code.address):
                             ex.solver.add(codesize > 0)
                     ex.st.push(codesize)
-                elif o.op[0] == 'EXTCODEHASH':
+                elif opcode == EVM.EXTCODEHASH:
                     ex.st.push(f_extcodehash(ex.st.pop()))
-                elif o.op[0] == 'CODESIZE':
+                elif opcode == EVM.CODESIZE:
                     ex.st.push(con(len(ex.code[ex.this])))
-                elif o.op[0] == 'GAS':
+                elif opcode == EVM.GAS:
                     ex.st.push(f_gas(con(ex.cnt_gas())))
-                elif o.op[0] == 'GASPRICE':
+                elif opcode == EVM.GASPRICE:
                     ex.st.push(f_gasprice())
-                elif o.op[0] == 'TIMESTAMP':
+                elif opcode == EVM.TIMESTAMP:
                     ex.st.push(f_timestamp())
-                elif o.op[0] == 'NUMBER':
+                elif opcode == EVM.NUMBER:
                     ex.st.push(f_blocknumber())
-                elif o.op[0] == 'DIFFICULTY':
+                elif opcode == EVM.DIFFICULTY:
                     ex.st.push(f_difficulty())
-                elif o.op[0] == 'GASLIMIT':
+                elif opcode == EVM.GASLIMIT:
                     ex.st.push(f_gaslimit())
 
-                elif o.op[0] == 'CHAINID':
+                elif opcode == EVM.CHAINID:
                 #   ex.st.push(f_chainid())
                     ex.st.push(con(1)) # for ethereum
 
-                elif o.op[0] == 'BLOCKHASH':
+                elif opcode == EVM.BLOCKHASH:
                     ex.st.push(f_blockhash(ex.st.pop()))
 
-                elif o.op[0] == 'BALANCE':
+                elif opcode == EVM.BALANCE:
                     ex.st.push(ex.balance_of(ex.st.pop()))
-                elif o.op[0] == 'SELFBALANCE':
+                elif opcode == EVM.SELFBALANCE:
                     ex.st.push(ex.balance_of(ex.this))
 
-                elif o.op[0] == 'CALL' or o.op[0] == 'STATICCALL':
-                    self.call(ex, o.op[0], stack, step_id, out)
+                elif opcode == EVM.CALL or opcode == EVM.STATICCALL:
+                    self.call(ex, opcode, stack, step_id, out)
                     continue
 
-                elif o.op[0] == 'SHA3':
+                elif opcode == EVM.SHA3:
                     ex.sha3()
 
-                elif o.op[0] == 'CREATE':
+                elif opcode == EVM.CREATE:
                     self.create(ex, stack, step_id, out)
                     continue
 
-                elif o.op[0] == 'POP':
+                elif opcode == EVM.POP:
                     ex.st.pop()
-                elif o.op[0] == 'MLOAD':
+                elif opcode == EVM.MLOAD:
                     ex.st.mload()
-                elif o.op[0] == 'MSTORE':
+                elif opcode == EVM.MSTORE:
                     ex.st.mstore(True)
-                elif o.op[0] == 'MSTORE8':
+                elif opcode == EVM.MSTORE8:
                     ex.st.mstore(False)
 
-                elif o.op[0] == 'MSIZE':
+                elif opcode == EVM.MSIZE:
                     size: int = len(ex.st.memory)
                     size = ((size + 31) // 32) * 32 # round up to the next multiple of 32
                     ex.st.push(con(size))
 
-                elif o.op[0] == 'SLOAD':
+                elif opcode == EVM.SLOAD:
                     ex.st.push(ex.sload(ex.st.pop()))
-                elif o.op[0] == 'SSTORE':
+                elif opcode == EVM.SSTORE:
                     ex.sstore(ex.st.pop(), ex.st.pop())
 
-                elif o.op[0] == 'RETURNDATASIZE':
+                elif opcode == EVM.RETURNDATASIZE:
                     ex.st.push(con(ex.returndatasize()))
-                elif o.op[0] == 'RETURNDATACOPY':
+                elif opcode == EVM.RETURNDATACOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int(str(ex.st.pop())) # offset must be concrete
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
                     wstore_partial(ex.st.memory, loc, offset, size, ex.output, ex.returndatasize())
 
-                elif o.op[0] == 'CALLDATACOPY':
+                elif opcode == EVM.CALLDATACOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int(str(ex.st.pop())) # offset must be concrete
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
@@ -1198,22 +1198,25 @@ class SEVM:
                             else:
                                 raise ValueError(offset, size, len(ex.calldata))
 
-                elif o.op[0] == 'CODECOPY':
+                elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()
                     pc: int = int(str(ex.st.pop())) # pc must be concrete
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
                     wextend(ex.st.memory, loc, size)
                     for i in range(size):
-                        ex.st.memory[loc + i] = BitVecVal(int(ex.read_code(pc + i), 16), 8)
+                        ex.st.memory[loc + i] = ex.read_code(pc + i)
 
-                elif o.op[0] == 'BYTE':
+                elif opcode == EVM.BYTE:
                     idx: int = int(str(ex.st.pop())) # index must be concrete
-                    if not (idx >= 0 and idx < 32): raise ValueError(idx)
+                    if idx < 0: raise ValueError(idx)
                     w = ex.st.pop()
-                    ex.st.push(ZeroExt(248, Extract((31-idx)*8+7, (31-idx)*8, w)))
+                    if idx >= 32:
+                        ex.st.push(con(0))
+                    else:
+                        ex.st.push(ZeroExt(248, Extract((31-idx)*8+7, (31-idx)*8, w)))
 
-                elif int('a0', 16) <= int(o.hx, 16) <= int('a4', 16): # LOG0 -- LOG4
-                    num_keys: int = int(o.hx, 16) - int('a0', 16)
+                elif EVM.LOG0 <= opcode <= EVM.LOG4:
+                    num_keys: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
                     size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
                     keys = []
@@ -1221,16 +1224,22 @@ class SEVM:
                         keys.append(ex.st.pop())
                     ex.log.append((keys, wload(ex.st.memory, loc, size) if size > 0 else None))
 
-                elif int('60', 16) <= int(o.hx, 16) <= int('7f', 16): # PUSH1 -- PUSH32
-                    val = int(o.op[1], 16)
-                    if o.hx == '7f' and val in sha3_inv: # restore precomputed hashes
-                        ex.sha3_data(con(sha3_inv[val]), 32)
+                elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
+                    if is_bv_value(o.op[1]):
+                        val = int(str(o.op[1]))
+                        if opcode == EVM.PUSH32 and val in sha3_inv: # restore precomputed hashes
+                            ex.sha3_data(con(sha3_inv[val]), 32)
+                        else:
+                            ex.st.push(con(val))
                     else:
-                        ex.st.push(con(val))
-                elif int('80', 16) <= int(o.hx, 16) <= int('8f', 16): # DUP1  -- DUP16
-                    ex.st.dup(int(o.hx, 16) - int('80', 16) + 1)
-                elif int('90', 16) <= int(o.hx, 16) <= int('9f', 16): # SWAP1 -- SWAP16
-                    ex.st.swap(int(o.hx, 16) - int('90', 16) + 1)
+                        if opcode == EVM.PUSH32:
+                            ex.st.push(o.op[1])
+                        else:
+                            ex.st.push(Concat(BitVecVal(0, (EVM.PUSH32 - opcode)*8), o.op[1]))
+                elif EVM.DUP1 <= opcode <= EVM.DUP16:
+                    ex.st.dup(opcode - EVM.DUP1 + 1)
+                elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
+                    ex.st.swap(opcode - EVM.SWAP1 + 1)
 
                 else:
                     out.append(ex)
@@ -1259,22 +1268,9 @@ class SEVM:
         caller,
         this,
         #
-        pc: int = 0,
-        st: State = State(),
-        jumpis = {},
-        output: Any = None,
-        symbolic = True,
+        symbolic,
         #
-        solver = None, # fail later if not provided
-        path = [],
-        #
-        log = [],
-        cnts: Dict[str,int] = defaultdict(int),
-        sha3s = [],
-        storages = [],
-        calls = [],
-        failed = False,
-        error = '',
+        solver,
     ) -> Exec:
         return Exec(
             pgm      = pgm,
@@ -1287,20 +1283,20 @@ class SEVM:
             caller   = caller,
             this     = this,
             #
-            pc       = pc,
-            st       = st,
-            jumpis   = jumpis,
-            output   = output,
+            pc       = 0,
+            st       = State(),
+            jumpis   = {},
+            output   = None,
             symbolic = symbolic,
             #
             solver   = solver,
-            path     = path,
+            path     = [],
             #
-            log      = log,
-            cnts     = cnts,
-            sha3s    = sha3s,
-            storages = storages,
-            calls    = calls,
-            failed   = failed,
-            error    = error,
+            log      = [],
+            cnts     = defaultdict(int),
+            sha3s    = [],
+            storages = [],
+            calls    = [],
+            failed   = False,
+            error    = '',
         )
