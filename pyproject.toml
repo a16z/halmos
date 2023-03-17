@@ -25,7 +25,6 @@ dynamic = ["version"]
 
 [project.scripts]
 halmos = "halmos.__main__:main"
-ctf = "halmos.ctf:main"
 
 [project.urls]
 "Homepage" = "https://github.com/a16z/halmos"
