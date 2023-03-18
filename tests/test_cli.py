@@ -5,7 +5,9 @@ from z3 import *
 
 from halmos.utils import EVM
 
-from halmos.byte2op import decode
+from halmos.byte2op import decode, Opcode
+
+from halmos.sevm import con
 
 from halmos.__main__ import str_abi, parse_args, decode_hex, mk_options, run_bytecode
 import halmos.__main__
@@ -59,13 +61,22 @@ def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args, options):
     setup_ex = halmos.__main__.setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
     assert str(setup_ex.st.stack) == '[1]'
 
+def test_opcode():
+    assert str(Opcode(0, [con(0)])) == 'STOP'
+    assert str(Opcode(0, [con(1)])) == 'ADD'
+    assert str(Opcode(0, [con(EVM.PUSH32), con(1)])) == 'PUSH32 1'
+    assert str(Opcode(0, [con(0x48)])) == '0x48' # TODO: BASEFEE
+    assert str(Opcode(0, [BitVec('x',8)])) == 'x'
+    assert str(Opcode(0, [BitVec('x',8), BitVec('y',8)])) == 'x y'
+    assert str(Opcode(0, [BitVec('x',8), BitVec('y',8), BitVec('z',8)])) == 'x y'
+
 def test_decode_hex():
     (pgm, code) = decode_hex('600100')
-    assert str(pgm[0]) == '96 1'
+    assert str(pgm[0]) == 'PUSH1 1'
     assert str(code) == '[96, 1, 0]'
 
     (pgm, code) = decode_hex('01')
-    assert str(pgm[0]) == '1'
+    assert str(pgm[0]) == 'ADD'
     assert str(code) == '[1]'
 
     with pytest.raises(ValueError, match='1'):
@@ -73,7 +84,7 @@ def test_decode_hex():
 
 def test_decode():
     (ops, code) = decode(Concat(BitVecVal(EVM.PUSH32, 8), BitVec('x', 256)))
-    assert ','.join(map(str,ops)) == '127 x'
+    assert ','.join(map(str,ops)) == 'PUSH32 x'
 
     (ops, code) = decode(BitVec('x', 256))
     assert len(ops) == 32
@@ -81,7 +92,7 @@ def test_decode():
 
     (ops, code) = decode(Concat(BitVecVal(EVM.PUSH3, 8), BitVec('x', 16)))
     assert len(ops) == 1
-    assert str(ops[0]) == '98 ERROR x (1 bytes missed)'
+    assert str(ops[0]) == 'PUSH3 ERROR x (1 bytes missed)'
 
 @pytest.mark.parametrize('sig,abi', [
     ('fooInt(uint256)', """

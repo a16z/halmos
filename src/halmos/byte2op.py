@@ -5,7 +5,7 @@ import sys
 from typing import List, Tuple, Any
 
 from z3 import *
-from .utils import EVM
+from .utils import EVM, str_opcode
 
 class Opcode:
     pc: int
@@ -16,7 +16,15 @@ class Opcode:
         self.op = op
 
     def __str__(self) -> str:
-        return ' '.join(map(str, self.op))
+        opcode = self.op[0]
+        if is_bv_value(opcode):
+            opcode = opcode.as_long()
+            ret = str_opcode.get(opcode, hex(opcode))
+        else:
+            ret = str(opcode)
+        if len(self.op) > 1:
+            ret += ' ' + str(self.op[1])
+        return ret
 
 def concat(args):
     if len(args) > 1:
