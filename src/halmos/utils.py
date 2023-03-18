@@ -9,6 +9,30 @@ def color_good(text: str) -> str:
 def color_warn(text: str) -> str:
     return '\033[31m' + text + '\033[0m'
 
+class hevm_cheat_code:
+    # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
+
+    # address constant HEVM_ADDRESS =
+    #     address(bytes20(uint160(uint256(keccak256('hevm cheat code')))));
+    address: int = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
+
+    # abi.encodePacked(
+    #     bytes4(keccak256("store(address,bytes32,bytes32)")),
+    #     abi.encode(HEVM_ADDRESS, bytes32("failed"), bytes32(uint256(0x01)))
+    # )
+    fail_payload: int = int(
+        '70ca10bb' +
+        '0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d' +
+        '6661696c65640000000000000000000000000000000000000000000000000000' +
+        '0000000000000000000000000000000000000000000000000000000000000001', 16
+    )
+
+    # bytes4(keccak256("assume(bool)"))
+    assume_sig: int = 0x4C63E562
+
+    # bytes4(keccak256("getCode(string)))
+    get_code_sig: int = 0x8d1cc925
+
 class EVM:
     STOP           = 0x00
     ADD            = 0x01
@@ -153,29 +177,150 @@ class EVM:
     INVALID        = 0xfe
     SELFDESTRUCT   = 0xff
 
-class hevm_cheat_code:
-    # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
-
-    # address constant HEVM_ADDRESS =
-    #     address(bytes20(uint160(uint256(keccak256('hevm cheat code')))));
-    address: int = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
-
-    # abi.encodePacked(
-    #     bytes4(keccak256("store(address,bytes32,bytes32)")),
-    #     abi.encode(HEVM_ADDRESS, bytes32("failed"), bytes32(uint256(0x01)))
-    # )
-    fail_payload: int = int(
-        '70ca10bb' +
-        '0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d' +
-        '6661696c65640000000000000000000000000000000000000000000000000000' +
-        '0000000000000000000000000000000000000000000000000000000000000001', 16
-    )
-
-    # bytes4(keccak256("assume(bool)"))
-    assume_sig: int = 0x4C63E562
-
-    # bytes4(keccak256("getCode(string)))
-    get_code_sig: int = 0x8d1cc925
+str_opcode: Dict[int, str] = {
+    EVM.STOP           : 'STOP',
+    EVM.ADD            : 'ADD',
+    EVM.MUL            : 'MUL',
+    EVM.SUB            : 'SUB',
+    EVM.DIV            : 'DIV',
+    EVM.SDIV           : 'SDIV',
+    EVM.MOD            : 'MOD',
+    EVM.SMOD           : 'SMOD',
+    EVM.ADDMOD         : 'ADDMOD',
+    EVM.MULMOD         : 'MULMOD',
+    EVM.EXP            : 'EXP',
+    EVM.SIGNEXTEND     : 'SIGNEXTEND',
+    EVM.LT             : 'LT',
+    EVM.GT             : 'GT',
+    EVM.SLT            : 'SLT',
+    EVM.SGT            : 'SGT',
+    EVM.EQ             : 'EQ',
+    EVM.ISZERO         : 'ISZERO',
+    EVM.AND            : 'AND',
+    EVM.OR             : 'OR',
+    EVM.XOR            : 'XOR',
+    EVM.NOT            : 'NOT',
+    EVM.BYTE           : 'BYTE',
+    EVM.SHL            : 'SHL',
+    EVM.SHR            : 'SHR',
+    EVM.SAR            : 'SAR',
+    EVM.SHA3           : 'SHA3',
+    EVM.ADDRESS        : 'ADDRESS',
+    EVM.BALANCE        : 'BALANCE',
+    EVM.ORIGIN         : 'ORIGIN',
+    EVM.CALLER         : 'CALLER',
+    EVM.CALLVALUE      : 'CALLVALUE',
+    EVM.CALLDATALOAD   : 'CALLDATALOAD',
+    EVM.CALLDATASIZE   : 'CALLDATASIZE',
+    EVM.CALLDATACOPY   : 'CALLDATACOPY',
+    EVM.CODESIZE       : 'CODESIZE',
+    EVM.CODECOPY       : 'CODECOPY',
+    EVM.GASPRICE       : 'GASPRICE',
+    EVM.EXTCODESIZE    : 'EXTCODESIZE',
+    EVM.EXTCODECOPY    : 'EXTCODECOPY',
+    EVM.RETURNDATASIZE : 'RETURNDATASIZE',
+    EVM.RETURNDATACOPY : 'RETURNDATACOPY',
+    EVM.EXTCODEHASH    : 'EXTCODEHASH',
+    EVM.BLOCKHASH      : 'BLOCKHASH',
+    EVM.COINBASE       : 'COINBASE',
+    EVM.TIMESTAMP      : 'TIMESTAMP',
+    EVM.NUMBER         : 'NUMBER',
+    EVM.DIFFICULTY     : 'DIFFICULTY',
+    EVM.GASLIMIT       : 'GASLIMIT',
+    EVM.CHAINID        : 'CHAINID',
+    EVM.SELFBALANCE    : 'SELFBALANCE',
+    EVM.POP            : 'POP',
+    EVM.MLOAD          : 'MLOAD',
+    EVM.MSTORE         : 'MSTORE',
+    EVM.MSTORE8        : 'MSTORE8',
+    EVM.SLOAD          : 'SLOAD',
+    EVM.SSTORE         : 'SSTORE',
+    EVM.JUMP           : 'JUMP',
+    EVM.JUMPI          : 'JUMPI',
+    EVM.PC             : 'PC',
+    EVM.MSIZE          : 'MSIZE',
+    EVM.GAS            : 'GAS',
+    EVM.JUMPDEST       : 'JUMPDEST',
+    EVM.PUSH1          : 'PUSH1',
+    EVM.PUSH2          : 'PUSH2',
+    EVM.PUSH3          : 'PUSH3',
+    EVM.PUSH4          : 'PUSH4',
+    EVM.PUSH5          : 'PUSH5',
+    EVM.PUSH6          : 'PUSH6',
+    EVM.PUSH7          : 'PUSH7',
+    EVM.PUSH8          : 'PUSH8',
+    EVM.PUSH9          : 'PUSH9',
+    EVM.PUSH10         : 'PUSH10',
+    EVM.PUSH11         : 'PUSH11',
+    EVM.PUSH12         : 'PUSH12',
+    EVM.PUSH13         : 'PUSH13',
+    EVM.PUSH14         : 'PUSH14',
+    EVM.PUSH15         : 'PUSH15',
+    EVM.PUSH16         : 'PUSH16',
+    EVM.PUSH17         : 'PUSH17',
+    EVM.PUSH18         : 'PUSH18',
+    EVM.PUSH19         : 'PUSH19',
+    EVM.PUSH20         : 'PUSH20',
+    EVM.PUSH21         : 'PUSH21',
+    EVM.PUSH22         : 'PUSH22',
+    EVM.PUSH23         : 'PUSH23',
+    EVM.PUSH24         : 'PUSH24',
+    EVM.PUSH25         : 'PUSH25',
+    EVM.PUSH26         : 'PUSH26',
+    EVM.PUSH27         : 'PUSH27',
+    EVM.PUSH28         : 'PUSH28',
+    EVM.PUSH29         : 'PUSH29',
+    EVM.PUSH30         : 'PUSH30',
+    EVM.PUSH31         : 'PUSH31',
+    EVM.PUSH32         : 'PUSH32',
+    EVM.DUP1           : 'DUP1',
+    EVM.DUP2           : 'DUP2',
+    EVM.DUP3           : 'DUP3',
+    EVM.DUP4           : 'DUP4',
+    EVM.DUP5           : 'DUP5',
+    EVM.DUP6           : 'DUP6',
+    EVM.DUP7           : 'DUP7',
+    EVM.DUP8           : 'DUP8',
+    EVM.DUP9           : 'DUP9',
+    EVM.DUP10          : 'DUP10',
+    EVM.DUP11          : 'DUP11',
+    EVM.DUP12          : 'DUP12',
+    EVM.DUP13          : 'DUP13',
+    EVM.DUP14          : 'DUP14',
+    EVM.DUP15          : 'DUP15',
+    EVM.DUP16          : 'DUP16',
+    EVM.SWAP1          : 'SWAP1',
+    EVM.SWAP2          : 'SWAP2',
+    EVM.SWAP3          : 'SWAP3',
+    EVM.SWAP4          : 'SWAP4',
+    EVM.SWAP5          : 'SWAP5',
+    EVM.SWAP6          : 'SWAP6',
+    EVM.SWAP7          : 'SWAP7',
+    EVM.SWAP8          : 'SWAP8',
+    EVM.SWAP9          : 'SWAP9',
+    EVM.SWAP10         : 'SWAP10',
+    EVM.SWAP11         : 'SWAP11',
+    EVM.SWAP12         : 'SWAP12',
+    EVM.SWAP13         : 'SWAP13',
+    EVM.SWAP14         : 'SWAP14',
+    EVM.SWAP15         : 'SWAP15',
+    EVM.SWAP16         : 'SWAP16',
+    EVM.LOG0           : 'LOG0',
+    EVM.LOG1           : 'LOG1',
+    EVM.LOG2           : 'LOG2',
+    EVM.LOG3           : 'LOG3',
+    EVM.LOG4           : 'LOG4',
+    EVM.CREATE         : 'CREATE',
+    EVM.CALL           : 'CALL',
+    EVM.CALLCODE       : 'CALLCODE',
+    EVM.RETURN         : 'RETURN',
+    EVM.DELEGATECALL   : 'DELEGATECALL',
+    EVM.CREATE2        : 'CREATE2',
+    EVM.STATICCALL     : 'STATICCALL',
+    EVM.REVERT         : 'REVERT',
+    EVM.INVALID        : 'INVALID',
+    EVM.SELFDESTRUCT   : 'SELFDESTRUCT',
+}
 
 sha3_inv: Dict[int, int] = { # sha3(x) -> x
     0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563 : 0,
