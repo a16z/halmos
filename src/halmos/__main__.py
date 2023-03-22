@@ -16,7 +16,8 @@ from crytic_compile import CryticCompile, InvalidCompilation
 from .utils import color_good, color_warn
 from .sevm import *
 
-sys.set_int_max_str_digits(0)
+if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
+    sys.set_int_max_str_digits(0)
 
 def parse_args(args) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='halmos', epilog='For more information, see https://github.com/a16z/halmos')
