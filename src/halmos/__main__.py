@@ -16,7 +16,14 @@ from crytic_compile import CryticCompile, InvalidCompilation
 from .utils import color_good, color_warn
 from .sevm import *
 
-sys.set_int_max_str_digits(0)
+version = sys.version_info
+if version.major < 3 or version.minor < 8:
+    raise ValueError('Python version >=3.8 required', version)
+if ((version.minor ==  8 and version.micro >= 14) # >= 3.8.14
+ or (version.minor ==  9 and version.micro >= 14) # >= 3.9.14
+ or (version.minor == 10 and version.micro >=  7) # >= 3.10.7
+ or  version.minor >= 11): # >= 3.11
+    sys.set_int_max_str_digits(0)
 
 def parse_args(args) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='halmos', epilog='For more information, see https://github.com/a16z/halmos')
