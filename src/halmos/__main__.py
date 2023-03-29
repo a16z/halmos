@@ -145,7 +145,7 @@ def mk_callvalue() -> Word:
     return BitVec('msg_value', 256)
 
 def mk_balance() -> Word:
-    return BitVec('this_balance', 256)
+    return Array('balance0', BitVecSort(256), BitVecSort(256))
 
 def mk_caller(solver) -> Word:
     caller = BitVec('msg_sender', 256)
@@ -179,7 +179,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
         pgm       = { this: pgm },
         code      = { this: code },
         storage   = { this: storage },
-        balance   = { this: balance },
+        balance   = balance,
         calldata  = [],
         callvalue = callvalue,
         caller    = caller,
@@ -225,7 +225,7 @@ def setup(
         pgm       = { this: pgm },
         code      = { this: code },
         storage   = { this: {} },
-        balance   = { this: con(0) },
+        balance   = mk_balance(),
         calldata  = [],
         callvalue = con(0),
         caller    = mk_caller(solver),
@@ -283,12 +283,6 @@ def run(
     callvalue = mk_callvalue()
 
     #
-    # balance
-    #
-
-    balance = mk_balance()
-
-    #
     # run
     #
 
@@ -304,7 +298,7 @@ def run(
         pgm       = setup_ex.pgm.copy(), # shallow copy
         code      = setup_ex.code.copy(), # shallow copy
         storage   = deepcopy(setup_ex.storage),
-        balance   = { setup_ex.this: sevm.arith(EVM.ADD, balance, callvalue) },
+        balance   = setup_ex.balance, # TODO: add callvalue
         #
         calldata  = cd,
         callvalue = callvalue,
@@ -324,6 +318,7 @@ def run(
         cnts      = deepcopy(setup_ex.cnts),
         sha3s     = deepcopy(setup_ex.sha3s),
         storages  = deepcopy(setup_ex.storages),
+        balances  = deepcopy(setup_ex.balances),
         calls     = deepcopy(setup_ex.calls),
         failed    = setup_ex.failed,
         error     = setup_ex.error,

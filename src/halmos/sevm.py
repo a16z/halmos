@@ -34,7 +34,6 @@ f_difficulty   = Function('difficulty'  , BitVecSort(256))
 f_gaslimit     = Function('gaslimit'    , BitVecSort(256))
 f_chainid      = Function('chainid'     , BitVecSort(256))
 f_basefee      = Function('basefee'     , BitVecSort(256))
-f_orig_balance = Function('orig_balance', BitVecSort(256), BitVecSort(256)) # target address
 
 # uninterpreted arithmetic
 f_add  = Function('evm_add' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
@@ -170,7 +169,7 @@ class Exec: # an execution path
     pgm: Dict[Any,List[Opcode]] # address -> { opcode map: pc -> opcode }
     code: Dict[Any,List[Any]] # address -> opcode sequence
     storage: Dict[Any,Dict[int,Any]] # address -> { storage slot -> value }
-    balance: Dict[Any,Any] # address -> balance
+    balance: Any # address -> balance
     # tx
     calldata: List[Byte] # msg.data
     callvalue: Word # msg.value
@@ -190,6 +189,7 @@ class Exec: # an execution path
     cnts: Dict[int,int] # opcode -> frequency
     sha3s: List[Tuple[Word,Word]] # sha3 hashes generated
     storages: List[Tuple[Any,Any]] # storage updates
+    balances: List[Tuple[Any,Any]] # balance updates
     calls: List[Any] # external calls
     failed: bool
     error: str
@@ -218,6 +218,7 @@ class Exec: # an execution path
         self.cnts     = kwargs['cnts']
         self.sha3s    = kwargs['sha3s']
         self.storages = kwargs['storages']
+        self.balances = kwargs['balances']
         self.calls    = kwargs['calls']
         self.failed   = kwargs['failed']
         self.error    = kwargs['error']
@@ -235,14 +236,15 @@ class Exec: # an execution path
         return ''.join([
             'PC: '              , str(self.this), ' ', str(self.pc), ' ', str(self.pgm[self.this][self.pc]), '\n',
             str(self.st),
+            'Balance: '         , str(self.balance), '\n',
             'Storage:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.storage[x]) + '\n', self.storage)),
-            'Balance:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.balance[x]) + '\n', self.balance)),
         #   'Solver:\n'         , self.str_solver(), '\n',
             'Path:\n'           , self.str_path(),
             'Output: '          , str(self.output) , '\n',
             'Log: '             , str(self.log)    , '\n',
         #   'Opcodes:\n'        , self.str_cnts(),
         #   'Memsize: '         , str(len(self.st.memory)), '\n',
+            'Balance updates:\n', ''.join(map(lambda x: '- ' + str(x) + '\n', self.balances)),
             'Storage updates:\n', ''.join(map(lambda x: '- ' + str(x) + '\n', self.storages)),
             'SHA3 hashes:\n'    , ''.join(map(lambda x: '- ' + str(x) + '\n', self.sha3s)),
             'External calls:\n' , ''.join(map(lambda x: '- ' + str(x) + '\n', self.calls)),
@@ -255,9 +257,16 @@ class Exec: # an execution path
             self.pc += 1
 
     def balance_of(self, addr: Word) -> Word:
-        if addr not in self.balance:
-            self.balance[addr] = f_orig_balance(addr)
-        return self.balance[addr]
+        value = Select(self.balance, addr)
+        self.solver.add(ULT(value, con(2**96))) # practical assumption on the max balance per account
+        return value
+
+    def balance_update(self, addr: Word, value: Word):
+        new_balance_var = Array(f'balance{1+len(self.balances)}', BitVecSort(256), BitVecSort(256))
+        new_balance = Store(self.balance, addr, value)
+        self.solver.add(new_balance_var == new_balance)
+        self.balance = new_balance_var
+        self.balances.append((new_balance_var, new_balance))
 
     def sinit(self, slot: int, keys) -> None:
         if slot not in self.storage[self.this]:
@@ -632,7 +641,8 @@ class SEVM:
         if not arg_size >= 0: raise ValueError(arg_size)
         if not ret_size >= 0: raise ValueError(ret_size)
 
-        ex.balance[ex.this] = self.arith(EVM.SUB, ex.balance_of(ex.this), fund)
+        ex.balance_update(ex.this, self.arith(EVM.SUB, ex.balance_of(ex.this), fund))
+        ex.balance_update(to,      self.arith(EVM.ADD, ex.balance_of(to),      fund))
 
         def call_known() -> None:
             calldata = [None] * arg_size
@@ -664,6 +674,7 @@ class SEVM:
                 cnts      = ex.cnts,
                 sha3s     = ex.sha3s,
                 storages  = ex.storages,
+                balances  = ex.balances,
                 calls     = ex.calls,
                 failed    = ex.failed,
                 error     = ex.error,
@@ -808,12 +819,11 @@ class SEVM:
         ex.pgm[new_addr] = create_pgm   # existing pgm must be empty
         ex.code[new_addr] = create_code # existing code must be empty
         ex.storage[new_addr] = {}       # existing storage may not be empty and reset here
-        ex.balance[new_addr] = f_orig_balance(new_addr)
 
         # transfer value
         ex.solver.add(UGE(ex.balance_of(ex.this), value)) # assume balance is enough; otherwise ignore this path
-        ex.balance[ex.this] = self.arith(EVM.SUB, ex.balance_of(ex.this), value)
-        ex.balance[new_addr] = self.arith(EVM.ADD, ex.balance_of(new_addr), value)
+        ex.balance_update(ex.this,  self.arith(EVM.SUB, ex.balance_of(ex.this),  value))
+        ex.balance_update(new_addr, self.arith(EVM.ADD, ex.balance_of(new_addr), value))
 
         # execute contract creation code
         (new_exs, new_steps) = self.run(Exec(
@@ -840,6 +850,7 @@ class SEVM:
             cnts      = ex.cnts,
             sha3s     = ex.sha3s,
             storages  = ex.storages,
+            balances  = ex.balances,
             calls     = ex.calls,
             failed    = ex.failed,
             error     = ex.error,
@@ -978,6 +989,7 @@ class SEVM:
             cnts     = deepcopy(ex.cnts),
             sha3s    = deepcopy(ex.sha3s),
             storages = deepcopy(ex.storages),
+            balances = deepcopy(ex.balances),
             calls    = deepcopy(ex.calls),
             failed   = ex.failed,
             error    = ex.error,
@@ -1319,6 +1331,7 @@ class SEVM:
     #   cnts,
     #   sha3s,
     #   storages,
+    #   balances,
     #   calls,
     #   failed,
     #   error,
@@ -1347,6 +1360,7 @@ class SEVM:
             cnts     = defaultdict(int),
             sha3s    = [],
             storages = [],
+            balances = [],
             calls    = [],
             failed   = False,
             error    = '',
