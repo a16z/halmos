@@ -85,6 +85,7 @@ class EVM:
     GASLIMIT       = 0x45
     CHAINID        = 0x46
     SELFBALANCE    = 0x47
+    BASEFEE        = 0x48
     POP            = 0x50
     MLOAD          = 0x51
     MSTORE         = 0x52
@@ -229,6 +230,7 @@ str_opcode: Dict[int, str] = {
     EVM.GASLIMIT       : 'GASLIMIT',
     EVM.CHAINID        : 'CHAINID',
     EVM.SELFBALANCE    : 'SELFBALANCE',
+    EVM.BASEFEE        : 'BASEFEE',
     EVM.POP            : 'POP',
     EVM.MLOAD          : 'MLOAD',
     EVM.MSTORE         : 'MSTORE',

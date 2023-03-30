@@ -65,7 +65,7 @@ def test_opcode():
     assert str(Opcode(0, [con(0)])) == 'STOP'
     assert str(Opcode(0, [con(1)])) == 'ADD'
     assert str(Opcode(0, [con(EVM.PUSH32), con(1)])) == 'PUSH32 1'
-    assert str(Opcode(0, [con(0x48)])) == '0x48' # TODO: BASEFEE
+    assert str(Opcode(0, [con(EVM.BASEFEE)])) == 'BASEFEE'
     assert str(Opcode(0, [BitVec('x',8)])) == 'x'
     assert str(Opcode(0, [BitVec('x',8), BitVec('y',8)])) == 'x y'
     assert str(Opcode(0, [BitVec('x',8), BitVec('y',8), BitVec('z',8)])) == 'x y'
