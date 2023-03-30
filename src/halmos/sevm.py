@@ -701,7 +701,7 @@ class SEVM:
                     stack.append((new_ex, step_id))
                 else:
                     # got stuck during external call
-                    new_ex.error = str('external call stuck: ' + opcode)
+                    new_ex.error = f'external call stuck: {str(opcode)}'
                     out.append(new_ex)
 
         def call_unknown() -> None:
