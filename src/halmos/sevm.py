@@ -1214,6 +1214,9 @@ class SEVM:
                 #   ex.st.push(f_chainid())
                     ex.st.push(con(1)) # for ethereum
 
+                elif opcode == EVM.PC:
+                    ex.st.push(con(ex.pc))
+
                 elif opcode == EVM.BLOCKHASH:
                     ex.st.push(f_blockhash(ex.st.pop()))
 
