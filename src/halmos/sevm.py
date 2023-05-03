@@ -33,6 +33,7 @@ f_blocknumber  = Function('blocknumber' , BitVecSort(256))
 f_difficulty   = Function('difficulty'  , BitVecSort(256))
 f_gaslimit     = Function('gaslimit'    , BitVecSort(256))
 f_chainid      = Function('chainid'     , BitVecSort(256))
+f_basefee      = Function('basefee'     , BitVecSort(256))
 f_orig_balance = Function('orig_balance', BitVecSort(256), BitVecSort(256)) # target address
 
 # uninterpreted arithmetic
@@ -1165,6 +1166,8 @@ class SEVM:
                     ex.st.push(f_difficulty())
                 elif opcode == EVM.GASLIMIT:
                     ex.st.push(f_gaslimit())
+                elif opcode == EVM.BASEFEE:
+                    ex.st.push(f_basefee())
 
                 elif opcode == EVM.CHAINID:
                 #   ex.st.push(f_chainid())
