@@ -188,7 +188,7 @@ class Exec: # an execution path
     log: List[Tuple[List[Word], Any]] # event logs emitted
     cnts: Dict[int,int] # opcode -> frequency
     sha3s: List[Tuple[Word,Word]] # sha3 hashes generated
-    storages: List[Tuple[Any,Any]] # storage updates
+    storages: Dict[Any,Any] # storage updates
     balances: Dict[Any,Any] # balance updates
     calls: List[Any] # external calls
     failed: bool
@@ -245,7 +245,7 @@ class Exec: # an execution path
         #   'Opcodes:\n'        , self.str_cnts(),
         #   'Memsize: '         , str(len(self.st.memory)), '\n',
             'Balance updates:\n', ''.join(map(lambda x: '- ' + str(x) + '\n', sorted(self.balances.items(), key=lambda x: str(x[0])))),
-            'Storage updates:\n', ''.join(map(lambda x: '- ' + str(x) + '\n', self.storages)),
+            'Storage updates:\n', ''.join(map(lambda x: '- ' + str(x) + '\n', sorted(self.storages.items(), key=lambda x: str(x[0])))),
             'SHA3 hashes:\n'    , ''.join(map(lambda x: '- ' + str(x) + '\n', self.sha3s)),
             'External calls:\n' , ''.join(map(lambda x: '- ' + str(x) + '\n', self.calls)),
         #   'Calldata: '        , str(self.calldata), '\n',
@@ -263,9 +263,9 @@ class Exec: # an execution path
         self.solver.pop()
         return result
 
-    def select(self, array: Any, key: Word) -> Word:
-        if array in self.balances:
-            store = self.balances[array]
+    def select(self, array: Any, key: Word, arrays: Dict) -> Word:
+        if array in arrays:
+            store = arrays[array]
             if store.decl().name() == 'store' and store.num_args() == 3:
                 base = store.arg(0)
                 key0 = store.arg(1)
@@ -273,13 +273,13 @@ class Exec: # an execution path
                 if eq(key, key0): # structural equality
                     return val0
                 if self.check(key == key0) == unsat: # key != key0
-                    return self.select(base, key)
+                    return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat: # key == key0
                     return val0
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
-        value = self.select(self.balance, addr)
+        value = self.select(self.balance, addr, self.balances)
         self.solver.add(ULT(value, con(2**96))) # practical assumption on the max balance per account
         return value
 
@@ -313,7 +313,7 @@ class Exec: # an execution path
         if len(keys) == 0:
             return self.storage[self.this][slot][0]
         else:
-            return Select(self.storage[self.this][slot][len(keys)], concat(keys))
+            return self.select(self.storage[self.this][slot][len(keys)], concat(keys), self.storages)
 
     def sstore(self, loc: Any, val: Any) -> None:
         offsets = self.decode_storage_loc(loc)
@@ -327,7 +327,7 @@ class Exec: # an execution path
             new_storage = Store(self.storage[self.this][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
             self.storage[self.this][slot][len(keys)] = new_storage_var
-            self.storages.append((new_storage_var,new_storage))
+            self.storages[new_storage_var] = new_storage
 
     def decode_storage_loc(self, loc: Any) -> Any:
         def normalize(expr: Any) -> Any:
@@ -1383,7 +1383,7 @@ class SEVM:
             log      = [],
             cnts     = defaultdict(int),
             sha3s    = [],
-            storages = [],
+            storages = {},
             balances = {},
             calls    = [],
             failed   = False,
