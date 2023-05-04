@@ -39,4 +39,4 @@ jobs:
         run: pytest
 
       - name: Test Halmos
-        run: halmos tests
+        run: halmos tests --solver-axioms
