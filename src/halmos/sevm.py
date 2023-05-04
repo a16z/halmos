@@ -641,8 +641,9 @@ class SEVM:
         if not arg_size >= 0: raise ValueError(arg_size)
         if not ret_size >= 0: raise ValueError(ret_size)
 
-        ex.balance_update(ex.this, self.arith(EVM.SUB, ex.balance_of(ex.this), fund))
-        ex.balance_update(to,      self.arith(EVM.ADD, ex.balance_of(to),      fund))
+        if not (is_bv_value(fund) and fund.as_long() == 0):
+            ex.balance_update(ex.this, self.arith(EVM.SUB, ex.balance_of(ex.this), fund))
+            ex.balance_update(to,      self.arith(EVM.ADD, ex.balance_of(to),      fund))
 
         def call_known() -> None:
             calldata = [None] * arg_size
@@ -822,8 +823,9 @@ class SEVM:
 
         # transfer value
         ex.solver.add(UGE(ex.balance_of(ex.this), value)) # assume balance is enough; otherwise ignore this path
-        ex.balance_update(ex.this,  self.arith(EVM.SUB, ex.balance_of(ex.this),  value))
-        ex.balance_update(new_addr, self.arith(EVM.ADD, ex.balance_of(new_addr), value))
+        if not (is_bv_value(value) and value.as_long() == 0):
+            ex.balance_update(ex.this,  self.arith(EVM.SUB, ex.balance_of(ex.this),  value))
+            ex.balance_update(new_addr, self.arith(EVM.ADD, ex.balance_of(new_addr), value))
 
         # execute contract creation code
         (new_exs, new_steps) = self.run(Exec(
