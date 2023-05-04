@@ -267,7 +267,7 @@ def run(
     args: argparse.Namespace,
     options: Dict
 ) -> int:
-    if args.debug: print(f'Running {funname}')
+    if args.debug: print(f'Executing {funname}')
 
     #
     # calldata
@@ -333,7 +333,7 @@ def run(
     models = []
     stuck = []
     for idx, ex in enumerate(exs):
-        if args.debug: print(f'Checking symbolic execution output: {idx} / {len(exs)}')
+        if args.debug: print(f'Checking output: {idx+1} / {len(exs)}')
 
         opcode = ex.pgm[ex.this][ex.pc].op[0]
         if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]:
@@ -453,13 +453,13 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         return
     if res == sat:
         if is_valid_model(model):
-            if args.debug: print(f'{" "*4}Valid counterexample')
+            if args.debug: print(f'{" "*4}Done')
             models.append((model, idx, ex))
         else:
             if args.debug: print(f'{" "*4}Invalid counterexample')
             models.append((None, idx, ex))
     else:
-        if args.debug: print(f'{" "*4}Unknown')
+        if args.debug: print(f'{" "*4}Timeout')
         models.append((None, idx, ex))
 
 def is_valid_model(model) -> bool:
