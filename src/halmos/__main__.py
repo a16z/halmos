@@ -45,9 +45,9 @@ def parse_args(args) -> argparse.Namespace:
 
     parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
     parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
-    parser.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
-    parser.add_argument('--solver-axioms', action='store_true', help='run the solver using axioms for unknown')
     parser.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
+    parser.add_argument('--solver-axioms', action='store_true', help='run an extra solver with axioms for unknown')
+    parser.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
 
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
     parser.add_argument('--debug', action='store_true', help='run in debug mode')
@@ -333,7 +333,7 @@ def run(
     models = []
     stuck = []
     for idx, ex in enumerate(exs):
-        if args.debug: print(f'Checking symbolic execution results: {idx} / {len(exs)}')
+        if args.debug: print(f'Checking symbolic execution output: {idx} / {len(exs)}')
 
         opcode = ex.pgm[ex.this][ex.pc].op[0]
         if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]:
@@ -452,11 +452,11 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         if args.debug: print(f'{" "*4}Passed')
         return
     if res == sat:
-        if is_valid_model(model) or args.debug:
-            if args.debug: print(f'{" "*4}Generating a counterexample')
+        if is_valid_model(model):
+            if args.debug: print(f'{" "*4}Valid counterexample')
             models.append((model, idx, ex))
         else:
-            if args.debug: print(f'{" "*4}Unknown')
+            if args.debug: print(f'{" "*4}Invalid counterexample')
             models.append((None, idx, ex))
     else:
         if args.debug: print(f'{" "*4}Unknown')
