@@ -46,6 +46,8 @@ def parse_args(args) -> argparse.Namespace:
     parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
     parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
     parser.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
+    parser.add_argument('--solver-axioms', action='store_true', help='run the solver using axioms for unknown')
+    parser.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
 
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
     parser.add_argument('--debug', action='store_true', help='run in debug mode')
@@ -395,14 +397,14 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
     if res == sat:
         if args.debug: print(f'{" "*4}Generating a counterexample')
         model = ex.solver.model()
-    if res == unknown:
+    if res == unknown and args.solver_fresh:
         if args.debug: print(f'{" "*4}Checking again with a fresh solver')
         sol2 = SolverFor('QF_AUFBV', ctx=Context())
         sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.sexpr())
         res = sol2.check()
         if res == sat: model = sol2.model()
-    if res == sat and not is_valid_model(model):
+    if res == sat and not is_valid_model(model) and args.solver_axioms:
         if args.debug: print(f'{" "*4}Checking again with axioms')
         ctx = Context()
         sol3 = Solver(ctx=ctx)
