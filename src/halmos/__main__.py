@@ -265,6 +265,8 @@ def run(
     args: argparse.Namespace,
     options: Dict
 ) -> int:
+    if args.debug: print(f'Running {funname}')
+
     #
     # calldata
     #
@@ -329,6 +331,8 @@ def run(
     models = []
     stuck = []
     for idx, ex in enumerate(exs):
+        if args.debug: print(f'Checking symbolic execution results: {idx} / {len(exs)}')
+
         opcode = ex.pgm[ex.this][ex.pc].op[0]
         if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]:
             if ex.failed:
@@ -385,15 +389,21 @@ def run(
         return 1
 
 def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> None:
+    if args.debug: print(f'{" "*2}Checking assertion violation')
+
     res = ex.solver.check()
-    if res == sat: model = ex.solver.model()
+    if res == sat:
+        if args.debug: print(f'{" "*4}Generating a counterexample')
+        model = ex.solver.model()
     if res == unknown:
+        if args.debug: print(f'{" "*4}Checking again with a fresh solver')
         sol2 = SolverFor('QF_AUFBV', ctx=Context())
         sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.sexpr())
         res = sol2.check()
         if res == sat: model = sol2.model()
     if res == sat and not is_valid_model(model):
+        if args.debug: print(f'{" "*4}Checking again with axioms')
         ctx = Context()
         sol3 = Solver(ctx=ctx)
         sol3.set(timeout=args.solver_timeout_assertion)
@@ -426,6 +436,7 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         res = sol3.check()
         if res == sat: model = sol3.model()
     if res == unknown and args.solver_subprocess:
+        if args.debug: print(f'{" "*4}Checking again in an external process')
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'
         if args.verbose >= 4: print(f'z3 -smt2 {fname}')
         with open(fname, 'w') as f:
@@ -436,13 +447,17 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         if res_str == 'unsat':
             res = unsat
     if res == unsat:
+        if args.debug: print(f'{" "*4}Passed')
         return
     if res == sat:
-        if is_valid_model(model):
+        if is_valid_model(model) or args.debug:
+            if args.debug: print(f'{" "*4}Generating a counterexample')
             models.append((model, idx, ex))
         else:
+            if args.debug: print(f'{" "*4}Unknown')
             models.append((None, idx, ex))
     else:
+        if args.debug: print(f'{" "*4}Unknown')
         models.append((None, idx, ex))
 
 def is_valid_model(model) -> bool:
