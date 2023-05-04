@@ -189,7 +189,7 @@ class Exec: # an execution path
     cnts: Dict[int,int] # opcode -> frequency
     sha3s: List[Tuple[Word,Word]] # sha3 hashes generated
     storages: List[Tuple[Any,Any]] # storage updates
-    balances: List[Tuple[Any,Any]] # balance updates
+    balances: Dict[Any,Any] # balance updates
     calls: List[Any] # external calls
     failed: bool
     error: str
@@ -244,7 +244,7 @@ class Exec: # an execution path
             'Log: '             , str(self.log)    , '\n',
         #   'Opcodes:\n'        , self.str_cnts(),
         #   'Memsize: '         , str(len(self.st.memory)), '\n',
-            'Balance updates:\n', ''.join(map(lambda x: '- ' + str(x) + '\n', self.balances)),
+            'Balance updates:\n', ''.join(map(lambda x: '- ' + str(x) + '\n', sorted(self.balances.items(), key=lambda x: str(x[0])))),
             'Storage updates:\n', ''.join(map(lambda x: '- ' + str(x) + '\n', self.storages)),
             'SHA3 hashes:\n'    , ''.join(map(lambda x: '- ' + str(x) + '\n', self.sha3s)),
             'External calls:\n' , ''.join(map(lambda x: '- ' + str(x) + '\n', self.calls)),
@@ -256,8 +256,30 @@ class Exec: # an execution path
         while self.pgm[self.this][self.pc] is None:
             self.pc += 1
 
+    def check(self, cond: Any) -> Any:
+        self.solver.push()
+        self.solver.add(simplify(cond))
+        result = self.solver.check()
+        self.solver.pop()
+        return result
+
+    def select(self, array: Any, key: Word) -> Word:
+        if array in self.balances:
+            store = self.balances[array]
+            if store.decl().name() == 'store' and store.num_args() == 3:
+                base = store.arg(0)
+                key0 = store.arg(1)
+                val0 = store.arg(2)
+                if eq(key, key0): # structural equality
+                    return val0
+                if self.check(key == key0) == unsat: # key != key0
+                    return self.select(base, key)
+                if self.check(key != key0) == unsat: # key == key0
+                    return val0
+        return Select(array, key)
+
     def balance_of(self, addr: Word) -> Word:
-        value = Select(self.balance, addr)
+        value = self.select(self.balance, addr)
         self.solver.add(ULT(value, con(2**96))) # practical assumption on the max balance per account
         return value
 
@@ -266,7 +288,7 @@ class Exec: # an execution path
         new_balance = Store(self.balance, addr, value)
         self.solver.add(new_balance_var == new_balance)
         self.balance = new_balance_var
-        self.balances.append((new_balance_var, new_balance))
+        self.balances[new_balance_var] = new_balance
 
     def sinit(self, slot: int, keys) -> None:
         if slot not in self.storage[self.this]:
@@ -1362,7 +1384,7 @@ class SEVM:
             cnts     = defaultdict(int),
             sha3s    = [],
             storages = [],
-            balances = [],
+            balances = {},
             calls    = [],
             failed   = False,
             error    = '',
