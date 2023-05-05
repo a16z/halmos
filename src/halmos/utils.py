@@ -9,30 +9,6 @@ def color_good(text: str) -> str:
 def color_warn(text: str) -> str:
     return '\033[31m' + text + '\033[0m'
 
-class hevm_cheat_code:
-    # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
-
-    # address constant HEVM_ADDRESS =
-    #     address(bytes20(uint160(uint256(keccak256('hevm cheat code')))));
-    address: int = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
-
-    # abi.encodePacked(
-    #     bytes4(keccak256("store(address,bytes32,bytes32)")),
-    #     abi.encode(HEVM_ADDRESS, bytes32("failed"), bytes32(uint256(0x01)))
-    # )
-    fail_payload: int = int(
-        '70ca10bb' +
-        '0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d' +
-        '6661696c65640000000000000000000000000000000000000000000000000000' +
-        '0000000000000000000000000000000000000000000000000000000000000001', 16
-    )
-
-    # bytes4(keccak256("assume(bool)"))
-    assume_sig: int = 0x4C63E562
-
-    # bytes4(keccak256("getCode(string)))
-    get_code_sig: int = 0x8d1cc925
-
 class EVM:
     STOP           = 0x00
     ADD            = 0x01

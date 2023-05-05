@@ -14,6 +14,7 @@ from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
 
 from .utils import color_good, color_warn
+from .byte2op import mnemonic
 from .sevm import *
 
 if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
@@ -196,9 +197,9 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
         opcode = ex.pgm[ex.this][ex.pc].op[0]
         if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
             gen_model(args, models, idx, ex)
-            print(f'Final opcode: {opcode.as_long()} | Return data: {ex.output} | Input example: {models[-1][0]}')
+            print(f'Final opcode: {mnemonic(opcode)} | Return data: {ex.output} | Input example: {models[-1][0]}')
         else:
-            print(color_warn('Not supported: ' + opcode + ' ' + ex.error))
+            print(color_warn(f'Not supported: {mnemonic(opcode)} {ex.error}'))
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
@@ -314,6 +315,7 @@ def run(
         jumpis    = {},
         output    = None,
         symbolic  = True,
+        prank     = Prank(), # prank is reset after setUp()
         #
         solver    = solver,
         path      = deepcopy(setup_ex.path),
@@ -360,14 +362,14 @@ def run(
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {end - start:0.2f}s, bounds: [{', '.join(dyn_param_size)}])")
     for model, idx, ex in models:
         if model:
-            print(color_warn('Counterexample: ' + str_model(model, args)))
+            print(color_warn(f'Counterexample: {str_model(model, args)}'))
         else:
-            print(color_warn('Counterexample: unknown'))
+            print(color_warn(f'Counterexample: unknown'))
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
     for opcode, idx, ex in stuck:
-        print(color_warn('Not supported: ' + str(opcode) + ' ' + ex.error))
+        print(color_warn(f'Not supported: {mnemonic(opcode)} {ex.error}'))
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)

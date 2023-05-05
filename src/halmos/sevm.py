@@ -9,8 +9,9 @@ from typing import List, Dict, Set, Tuple, Any
 from functools import reduce
 
 from z3 import *
-from .byte2op import Opcode, decode, concat
-from .utils import EVM, color_good, color_warn, hevm_cheat_code, sha3_inv
+from .byte2op import Opcode, decode, concat, mnemonic
+from .utils import EVM, color_good, color_warn, sha3_inv
+from .cheatcodes import hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -181,6 +182,7 @@ class Exec: # an execution path
     jumpis: Dict[str,Dict[bool,int]] # for loop detection
     output: Any # returndata
     symbolic: bool # symbolic or concrete storage
+    prank: Prank
     # path
     solver: Solver
     path: List[Any] # path conditions
@@ -210,6 +212,7 @@ class Exec: # an execution path
         self.jumpis   = kwargs['jumpis']
         self.output   = kwargs['output']
         self.symbolic = kwargs['symbolic']
+        self.prank    = kwargs['prank']
         #
         self.solver   = kwargs['solver']
         self.path     = kwargs['path']
@@ -663,9 +666,11 @@ class SEVM:
         if not arg_size >= 0: raise ValueError(arg_size)
         if not ret_size >= 0: raise ValueError(ret_size)
 
+        caller = ex.prank.lookup(ex.this, to)
+
         if not (is_bv_value(fund) and fund.as_long() == 0):
-            ex.balance_update(ex.this, self.arith(EVM.SUB, ex.balance_of(ex.this), fund))
-            ex.balance_update(to,      self.arith(EVM.ADD, ex.balance_of(to),      fund))
+            ex.balance_update(caller, self.arith(EVM.SUB, ex.balance_of(caller), fund))
+            ex.balance_update(to,     self.arith(EVM.ADD, ex.balance_of(to),     fund))
 
         def call_known() -> None:
             calldata = [None] * arg_size
@@ -681,7 +686,7 @@ class SEVM:
                 #
                 calldata  = calldata,
                 callvalue = fund,
-                caller    = ex.this,
+                caller    = caller,
                 this      = to,
                 #
                 pc        = 0,
@@ -689,6 +694,7 @@ class SEVM:
                 jumpis    = {},
                 output    = None,
                 symbolic  = ex.symbolic,
+                prank     = Prank(),
                 #
                 solver    = ex.solver,
                 path      = ex.path,
@@ -719,6 +725,7 @@ class SEVM:
                 new_ex.jumpis = deepcopy(ex.jumpis)
                 # new_ex.output is passed into the caller
                 new_ex.symbolic = ex.symbolic
+                new_ex.prank = ex.prank
 
                 # set return data (in memory)
                 wstore_partial(new_ex.st.memory, ret_loc, 0, min(ret_size, new_ex.returndatasize()), new_ex.output, new_ex.returndatasize())
@@ -735,7 +742,7 @@ class SEVM:
                     stack.append((new_ex, step_id))
                 else:
                     # got stuck during external call
-                    new_ex.error = f'external call stuck: {str(opcode)}'
+                    new_ex.error = f'external call stuck: {mnemonic(opcode)}'
                     out.append(new_ex)
 
         def call_unknown() -> None:
@@ -766,11 +773,12 @@ class SEVM:
                 # vm.fail()
                 if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
                     ex.failed = True
-                # vm.assume()
+                # vm.assume(bool)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.assume_sig:
                     assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
                     ex.solver.add(assume_cond)
                     ex.path.append(str(assume_cond))
+                # vm.getCode(string)
                 elif simplify(Extract(arg_size*8-1, arg_size*8-32, arg)) == hevm_cheat_code.get_code_sig:
                     calldata = bytes.fromhex(hex(arg.as_long())[2:])
                     path_len = int.from_bytes(calldata[36:68], 'big')
@@ -801,6 +809,23 @@ class SEVM:
                     ret_bytes = bytes.fromhex(ret_bytes)
 
                     ret = BitVecVal(int.from_bytes(ret_bytes, 'big'), ret_len * 8)
+                # vm.prank(address)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.prank_sig:
+                    result = ex.prank.prank(simplify(Extract(255, 0, arg)))
+                    if not result:
+                        ex.error = 'You have an active prank already.'
+                        out.append(ex)
+                        return
+                # vm.startPrank(address)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.start_prank_sig:
+                    result = ex.prank.startPrank(simplify(Extract(255, 0, arg)))
+                    if not result:
+                        ex.error = 'You have an active prank already.'
+                        out.append(ex)
+                        return
+                # vm.stopPrank()
+                elif eq(arg.sort(), BitVecSort((4)*8)) and simplify(Extract(31, 0, arg)) == hevm_cheat_code.stop_prank_sig:
+                    ex.prank.stopPrank()
                 else:
                     # TODO: support other cheat codes
                     ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
@@ -843,10 +868,13 @@ class SEVM:
         ex.code[new_addr] = create_code # existing code must be empty
         ex.storage[new_addr] = {}       # existing storage may not be empty and reset here
 
+        # lookup prank
+        caller = ex.prank.lookup(ex.this, new_addr)
+
         # transfer value
-        ex.solver.add(UGE(ex.balance_of(ex.this), value)) # assume balance is enough; otherwise ignore this path
+        ex.solver.add(UGE(ex.balance_of(caller), value)) # assume balance is enough; otherwise ignore this path
         if not (is_bv_value(value) and value.as_long() == 0):
-            ex.balance_update(ex.this,  self.arith(EVM.SUB, ex.balance_of(ex.this),  value))
+            ex.balance_update(caller,   self.arith(EVM.SUB, ex.balance_of(caller),   value))
             ex.balance_update(new_addr, self.arith(EVM.ADD, ex.balance_of(new_addr), value))
 
         # execute contract creation code
@@ -866,6 +894,7 @@ class SEVM:
             jumpis    = {},
             output    = None,
             symbolic  = False,
+            prank     = Prank(),
             #
             solver    = ex.solver,
             path      = ex.path,
@@ -908,6 +937,7 @@ class SEVM:
                 new_ex.jumpis = deepcopy(ex.jumpis)
                 new_ex.output = None # output is reset, not restored
                 new_ex.symbolic = ex.symbolic
+                new_ex.prank = ex.prank
 
                 # push new address to stack
                 new_ex.st.push(new_addr)
@@ -975,7 +1005,7 @@ class SEVM:
                 ex.solver.add(target_reachable)
                 if ex.solver.check() != unsat: # jump
                     if self.options.get('debug'):
-                        print(f"we can jump to {target} with model {ex.solver.model()}")
+                        print(f'we can jump to {target} with model {ex.solver.model()}')
                     new_ex = self.create_branch(ex, str(target_reachable), target)
                     stack.append((new_ex, step_id))
                 ex.solver.pop()
@@ -1005,6 +1035,7 @@ class SEVM:
             jumpis   = deepcopy(ex.jumpis),
             output   = deepcopy(ex.output),
             symbolic = ex.symbolic,
+            prank    = deepcopy(ex.prank),
             #
             solver   = new_solver,
             path     = new_path,
@@ -1355,6 +1386,7 @@ class SEVM:
     #   jumpis,
     #   output,
         symbolic,
+    #   prank,
         #
         solver,
     #   path,
@@ -1384,6 +1416,7 @@ class SEVM:
             jumpis   = {},
             output   = None,
             symbolic = symbolic,
+            prank    = Prank(),
             #
             solver   = solver,
             path     = [],
