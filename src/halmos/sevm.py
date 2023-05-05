@@ -867,6 +867,8 @@ class SEVM:
 
         # new account address
         new_addr = create_address(ex.cnt_create())
+        for addr in ex.pgm:
+            ex.solver.add(new_addr != addr) # ensure new address is fresh
 
         # setup new account
         ex.pgm[new_addr] = create_pgm   # existing pgm must be empty
