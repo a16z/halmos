@@ -45,6 +45,8 @@ def parse_args(args) -> argparse.Namespace:
 
     parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
     parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
+    parser.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
+    parser.add_argument('--solver-axioms', action='store_true', help='run an extra solver with axioms for unknown')
     parser.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
 
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
@@ -145,7 +147,7 @@ def mk_callvalue() -> Word:
     return BitVec('msg_value', 256)
 
 def mk_balance() -> Word:
-    return BitVec('this_balance', 256)
+    return Array('balance0', BitVecSort(256), BitVecSort(256))
 
 def mk_caller(solver) -> Word:
     caller = BitVec('msg_sender', 256)
@@ -179,7 +181,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
         pgm       = { this: pgm },
         code      = { this: code },
         storage   = { this: storage },
-        balance   = { this: balance },
+        balance   = balance,
         calldata  = [],
         callvalue = callvalue,
         caller    = caller,
@@ -225,7 +227,7 @@ def setup(
         pgm       = { this: pgm },
         code      = { this: code },
         storage   = { this: {} },
-        balance   = { this: con(0) },
+        balance   = mk_balance(),
         calldata  = [],
         callvalue = con(0),
         caller    = mk_caller(solver),
@@ -265,6 +267,8 @@ def run(
     args: argparse.Namespace,
     options: Dict
 ) -> int:
+    if args.debug: print(f'Executing {funname}')
+
     #
     # calldata
     #
@@ -283,12 +287,6 @@ def run(
     callvalue = mk_callvalue()
 
     #
-    # balance
-    #
-
-    balance = mk_balance()
-
-    #
     # run
     #
 
@@ -304,7 +302,7 @@ def run(
         pgm       = setup_ex.pgm.copy(), # shallow copy
         code      = setup_ex.code.copy(), # shallow copy
         storage   = deepcopy(setup_ex.storage),
-        balance   = { setup_ex.this: sevm.arith(EVM.ADD, balance, callvalue) },
+        balance   = setup_ex.balance, # TODO: add callvalue
         #
         calldata  = cd,
         callvalue = callvalue,
@@ -324,6 +322,7 @@ def run(
         cnts      = deepcopy(setup_ex.cnts),
         sha3s     = deepcopy(setup_ex.sha3s),
         storages  = deepcopy(setup_ex.storages),
+        balances  = deepcopy(setup_ex.balances),
         calls     = deepcopy(setup_ex.calls),
         failed    = setup_ex.failed,
         error     = setup_ex.error,
@@ -334,6 +333,8 @@ def run(
     models = []
     stuck = []
     for idx, ex in enumerate(exs):
+        if args.debug: print(f'Checking output: {idx+1} / {len(exs)}')
+
         opcode = ex.pgm[ex.this][ex.pc].op[0]
         if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]:
             if ex.failed:
@@ -390,15 +391,21 @@ def run(
         return 1
 
 def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> None:
+    if args.debug: print(f'{" "*2}Checking assertion violation')
+
     res = ex.solver.check()
-    if res == sat: model = ex.solver.model()
-    if res == unknown:
+    if res == sat:
+        if args.debug: print(f'{" "*4}Generating a counterexample')
+        model = ex.solver.model()
+    if res == unknown and args.solver_fresh:
+        if args.debug: print(f'{" "*4}Checking again with a fresh solver')
         sol2 = SolverFor('QF_AUFBV', ctx=Context())
         sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.sexpr())
         res = sol2.check()
         if res == sat: model = sol2.model()
-    if res == sat and not is_valid_model(model):
+    if res == sat and not is_valid_model(model) and args.solver_axioms:
+        if args.debug: print(f'{" "*4}Checking again with axioms')
         ctx = Context()
         sol3 = Solver(ctx=ctx)
         sol3.set(timeout=args.solver_timeout_assertion)
@@ -431,6 +438,7 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         res = sol3.check()
         if res == sat: model = sol3.model()
     if res == unknown and args.solver_subprocess:
+        if args.debug: print(f'{" "*4}Checking again in an external process')
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'
         if args.verbose >= 4: print(f'z3 -smt2 {fname}')
         with open(fname, 'w') as f:
@@ -441,13 +449,17 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         if res_str == 'unsat':
             res = unsat
     if res == unsat:
+        if args.debug: print(f'{" "*4}Passed')
         return
     if res == sat:
         if is_valid_model(model):
+            if args.debug: print(f'{" "*4}Done')
             models.append((model, idx, ex))
         else:
+            if args.debug: print(f'{" "*4}Invalid counterexample')
             models.append((None, idx, ex))
     else:
+        if args.debug: print(f'{" "*4}Timeout')
         models.append((None, idx, ex))
 
 def is_valid_model(model) -> bool:

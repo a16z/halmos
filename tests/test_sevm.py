@@ -7,7 +7,7 @@ from halmos.utils import EVM
 
 from halmos.byte2op import decode
 
-from halmos.sevm import SEVM, con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_exp, f_orig_balance, f_origin
+from halmos.sevm import SEVM, con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin
 
 from halmos.__main__ import parse_args, mk_options
 
@@ -27,7 +27,7 @@ caller = BitVec('msg_sender', 256)
 
 this = BitVec('this_address', 256)
 
-balance = BitVec('this_balance', 256)
+balance = Array('balance0', BitVecSort(256), BitVecSort(256))
 
 callvalue = BitVec('msg_value', 256)
 
@@ -50,7 +50,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         pgm       = { this: pgm },
         code      = { this: code },
         storage   = { this: storage },
-        balance   = { this: balance },
+        balance   = balance,
         calldata  = [],
         callvalue = callvalue,
         caller    = caller,
@@ -152,12 +152,12 @@ def test_run(hexcode, stack, pc, opcode, sevm, solver, storage):
     (o(EVM.SAR), [con(2**256-1), y], y >> con(2**256-1)), # not necessarily 0; TODO: prove it is equal to y >> 255
     # TODO: SHA3
     (o(EVM.ADDRESS), [], this),
-    (o(EVM.BALANCE), [x], f_orig_balance(x)),
+    (o(EVM.BALANCE), [x], Select(balance, x)),
     (o(EVM.ORIGIN), [], f_origin()),
     (o(EVM.CALLER), [], caller),
     (o(EVM.CALLVALUE), [], callvalue),
     # TODO: CALLDATA*, CODE*, EXTCODE*, RETURNDATA*
-    (o(EVM.SELFBALANCE), [], balance),
+    (o(EVM.SELFBALANCE), [], Select(balance, this)),
 ])
 def test_opcode_simple(hexcode, params, output, sevm, solver, storage):
     ex = mk_ex(Concat(hexcode, o(EVM.STOP)), sevm, solver, storage, caller, this)
