@@ -778,7 +778,7 @@ class SEVM:
                     assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
                     ex.solver.add(assume_cond)
                     ex.path.append(str(assume_cond))
-                # vm.getCode()
+                # vm.getCode(string)
                 elif simplify(Extract(arg_size*8-1, arg_size*8-32, arg)) == hevm_cheat_code.get_code_sig:
                     calldata = bytes.fromhex(hex(arg.as_long())[2:])
                     path_len = int.from_bytes(calldata[36:68], 'big')
