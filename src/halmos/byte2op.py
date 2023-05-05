@@ -16,15 +16,17 @@ class Opcode:
         self.op = op
 
     def __str__(self) -> str:
-        opcode = self.op[0]
-        if is_bv_value(opcode):
-            opcode = opcode.as_long()
-            ret = str_opcode.get(opcode, hex(opcode))
-        else:
-            ret = str(opcode)
+        ret = mnemonic(self.op[0])
         if len(self.op) > 1:
             ret += ' ' + str(self.op[1])
         return ret
+
+def mnemonic(opcode) -> str:
+    if is_bv_value(opcode):
+        opcode = opcode.as_long()
+        return str_opcode.get(opcode, hex(opcode))
+    else:
+        return str(opcode)
 
 def concat(args):
     if len(args) > 1:

@@ -9,7 +9,7 @@ from typing import List, Dict, Set, Tuple, Any
 from functools import reduce
 
 from z3 import *
-from .byte2op import Opcode, decode, concat
+from .byte2op import Opcode, decode, concat, mnemonic
 from .utils import EVM, color_good, color_warn, sha3_inv
 from .cheatcodes import hevm_cheat_code, Prank
 
@@ -742,7 +742,7 @@ class SEVM:
                     stack.append((new_ex, step_id))
                 else:
                     # got stuck during external call
-                    new_ex.error = f'external call stuck: {str(opcode)}'
+                    new_ex.error = f'external call stuck: {mnemonic(opcode)}'
                     out.append(new_ex)
 
         def call_unknown() -> None:
@@ -1005,7 +1005,7 @@ class SEVM:
                 ex.solver.add(target_reachable)
                 if ex.solver.check() != unsat: # jump
                     if self.options.get('debug'):
-                        print(f"we can jump to {target} with model {ex.solver.model()}")
+                        print(f'we can jump to {target} with model {ex.solver.model()}')
                     new_ex = self.create_branch(ex, str(target_reachable), target)
                     stack.append((new_ex, step_id))
                 ex.solver.pop()
