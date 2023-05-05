@@ -314,7 +314,7 @@ def run(
         jumpis    = {},
         output    = None,
         symbolic  = True,
-        prank     = None, # prank is reset after setUp()
+        prank     = Prank(), # prank is reset after setUp()
         #
         solver    = solver,
         path      = deepcopy(setup_ex.path),
