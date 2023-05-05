@@ -79,3 +79,6 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("stopPrank()"))
     stop_prank_sig: int = 0x90c5013b
+
+    # bytes4(keccak256("deal(address,uint256)"))
+    deal_sig: int = 0xc88a5e6d

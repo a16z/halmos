@@ -826,6 +826,11 @@ class SEVM:
                 # vm.stopPrank()
                 elif eq(arg.sort(), BitVecSort((4)*8)) and simplify(Extract(31, 0, arg)) == hevm_cheat_code.stop_prank_sig:
                     ex.prank.stopPrank()
+                # vm.deal(address,uint256)
+                elif eq(arg.sort(), BitVecSort((4+32*2)*8)) and simplify(Extract(543, 512, arg)) == hevm_cheat_code.deal_sig:
+                    who = simplify(Extract(511, 256, arg))
+                    amount = simplify(Extract(255, 0, arg))
+                    ex.balance_update(who, amount)
                 else:
                     # TODO: support other cheat codes
                     ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
@@ -862,6 +867,8 @@ class SEVM:
 
         # new account address
         new_addr = create_address(ex.cnt_create())
+        for addr in ex.pgm:
+            ex.solver.add(new_addr != addr) # ensure new address is fresh
 
         # setup new account
         ex.pgm[new_addr] = create_pgm   # existing pgm must be empty
