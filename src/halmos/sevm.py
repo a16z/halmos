@@ -1061,6 +1061,11 @@ class SEVM:
                     out.append(ex)
                     continue
 
+                elif opcode == EVM.INVALID:
+                    ex.output = None
+                    out.append(ex)
+                    continue
+
                 elif opcode == EVM.REVERT:
                     ex.output = ex.st.ret()
                     out.append(ex)

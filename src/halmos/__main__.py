@@ -194,7 +194,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
     models = []
     for idx, ex in enumerate(exs):
         opcode = ex.pgm[ex.this][ex.pc].op[0]
-        if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN, EVM.REVERT]:
+        if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
             gen_model(args, models, idx, ex)
             print(f'Final opcode: {opcode.as_long()} | Return data: {ex.output} | Input example: {models[-1][0]}')
         else:
@@ -341,7 +341,7 @@ def run(
                 gen_model(args, models, idx, ex)
             else:
                 normal += 1
-        elif is_bv_value(opcode) and opcode.as_long() == EVM.REVERT:
+        elif is_bv_value(opcode) and opcode.as_long() in [EVM.REVERT, EVM.INVALID]:
             # Panic(1) # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
             if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
                 gen_model(args, models, idx, ex)
