@@ -171,6 +171,8 @@ class Exec: # an execution path
     code: Dict[Any,List[Any]] # address -> opcode sequence
     storage: Dict[Any,Dict[int,Any]] # address -> { storage slot -> value }
     balance: Any # address -> balance
+    # block
+    timestamp: Any
     # tx
     calldata: List[Byte] # msg.data
     callvalue: Word # msg.value
@@ -201,6 +203,8 @@ class Exec: # an execution path
         self.code     = kwargs['code']
         self.storage  = kwargs['storage']
         self.balance  = kwargs['balance']
+        #
+        self.timestamp= kwargs['timestamp']
         #
         self.calldata = kwargs['calldata']
         self.callvalue= kwargs['callvalue']
@@ -684,6 +688,8 @@ class SEVM:
                 storage   = ex.storage,
                 balance   = ex.balance,
                 #
+                timestamp = ex.timestamp,
+                #
                 calldata  = calldata,
                 callvalue = fund,
                 caller    = caller,
@@ -831,6 +837,9 @@ class SEVM:
                     who = simplify(Extract(511, 256, arg))
                     amount = simplify(Extract(255, 0, arg))
                     ex.balance_update(who, amount)
+                # vm.warp(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.warp_sig:
+                    ex.timestamp = simplify(Extract(255, 0, arg))
                 else:
                     # TODO: support other cheat codes
                     ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
@@ -890,6 +899,8 @@ class SEVM:
             code      = ex.code,
             storage   = ex.storage,
             balance   = ex.balance,
+            #
+            timestamp = ex.timestamp,
             #
             calldata  = [],
             callvalue = value,
@@ -1031,6 +1042,8 @@ class SEVM:
             code     = ex.code.copy(), # shallow copy
             storage  = deepcopy(ex.storage),
             balance  = deepcopy(ex.balance),
+            #
+            timestamp= ex.timestamp,
             #
             calldata = ex.calldata,
             callvalue= ex.callvalue,
@@ -1238,7 +1251,7 @@ class SEVM:
                 elif opcode == EVM.GASPRICE:
                     ex.st.push(f_gasprice())
                 elif opcode == EVM.TIMESTAMP:
-                    ex.st.push(f_timestamp())
+                    ex.st.push(ex.timestamp)
                 elif opcode == EVM.NUMBER:
                     ex.st.push(f_blocknumber())
                 elif opcode == EVM.DIFFICULTY:
@@ -1383,6 +1396,8 @@ class SEVM:
         storage,
         balance,
         #
+        timestamp,
+        #
         calldata,
         callvalue,
         caller,
@@ -1412,6 +1427,8 @@ class SEVM:
             code     = code,
             storage  = storage,
             balance  = balance,
+            #
+            timestamp= timestamp,
             #
             calldata = calldata,
             callvalue= callvalue,

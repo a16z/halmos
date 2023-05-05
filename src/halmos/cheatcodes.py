@@ -82,3 +82,6 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("deal(address,uint256)"))
     deal_sig: int = 0xc88a5e6d
+
+    # bytes4(keccak256("warp(uint256)"))
+    warp_sig: int = 0xe5d6bf02

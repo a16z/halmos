@@ -29,6 +29,8 @@ this = BitVec('this_address', 256)
 
 balance = Array('balance0', BitVecSort(256), BitVecSort(256))
 
+timestamp = BitVec('block_timestamp', 256)
+
 callvalue = BitVec('msg_value', 256)
 
 @pytest.fixture
@@ -51,6 +53,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         code      = { this: code },
         storage   = { this: storage },
         balance   = balance,
+        timestamp = timestamp,
         calldata  = [],
         callvalue = callvalue,
         caller    = caller,
