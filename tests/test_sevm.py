@@ -70,6 +70,7 @@ def o(opcode):
     (BitVec('x', 256), '[]', 0, 'Extract(255, 248, x)'),
     (Concat(BitVecVal(int('6001', 16), 16), BitVec('x', 8), BitVecVal(0, 8)), '[1]', 2, 'x'),
     (Concat(BitVecVal(int('6101', 16), 16), BitVec('x', 8), BitVecVal(0, 8)), '[Concat(1, x)]', 3, '0'),
+    (BitVecVal(int('58585B5860015800', 16), 64), '[6, 1, 3, 1, 0]', 7, '0'),
 ])
 def test_run(hexcode, stack, pc, opcode, sevm, solver, storage):
     ex = mk_ex(hexcode, sevm, solver, storage, caller, this)
