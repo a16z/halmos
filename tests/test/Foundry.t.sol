@@ -27,10 +27,4 @@ contract FoundryTest is Test {
         counter2.set(x);
         assertEq(counter2.cnt(), x);
     }
-
-    /* TODO: support vm.prank cheatcode
-    function testPrank(address x) public {
-        vm.prank(x); // not supported
-    }
-    */
 }

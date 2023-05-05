@@ -30,8 +30,11 @@ class hevm_cheat_code:
     # bytes4(keccak256("assume(bool)"))
     assume_sig: int = 0x4C63E562
 
-    # bytes4(keccak256("getCode(string)))
+    # bytes4(keccak256("getCode(string)"))
     get_code_sig: int = 0x8d1cc925
+
+    # bytes4(keccak256("prank(address)"))
+    prank_sig: int = 0xca669fa7
 
 class EVM:
     STOP           = 0x00
