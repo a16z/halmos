@@ -150,10 +150,18 @@ def mk_callvalue() -> Word:
 def mk_balance() -> Word:
     return Array('balance0', BitVecSort(256), BitVecSort(256))
 
-def mk_timestamp(solver) -> Word:
-    timestamp = BitVec('block_timestamp', 256)
-    solver.add(Extract(255, 64, timestamp) == BitVecVal(0, 192))
-    return timestamp
+def mk_block() -> Block:
+    block = Block(
+        basefee    = ZeroExt(160, BitVec('block_basefee', 96)),     # practical limit 96 bit
+        chainid    = BitVec('block_chainid', 256),
+        coinbase   = ZeroExt(96, BitVec('block_coinbase', 160)),    # address 160 bit
+        difficulty = BitVec('block_difficulty', 256),
+        gaslimit   = ZeroExt(160, BitVec('block_gaslimit', 96)),    # practical limit 96 bit
+        number     = ZeroExt(192, BitVec('block_number', 64)),      # practical limit 64 bit
+        timestamp  = ZeroExt(192, BitVec('block_timestamp', 64)),   # practical limit 64 bit
+    )
+    block.chainid = con(1) # for ethereum
+    return block
 
 def mk_caller(solver) -> Word:
     caller = BitVec('msg_sender', 256)
@@ -178,10 +186,10 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
     solver = mk_solver(args)
 
     balance = mk_balance()
+    block = mk_block()
     callvalue = mk_callvalue()
     caller = mk_caller(solver)
     this = mk_this(solver)
-    timestamp = mk_timestamp(solver)
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
@@ -189,7 +197,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
         code      = { this: code },
         storage   = { this: storage },
         balance   = balance,
-        timestamp = timestamp,
+        block     = block,
         calldata  = [],
         callvalue = callvalue,
         caller    = caller,
@@ -229,8 +237,6 @@ def setup(
 
     this = mk_this(solver)
 
-    timestamp = mk_timestamp(solver)
-
     sevm = SEVM(options)
 
     setup_ex = sevm.mk_exec(
@@ -238,7 +244,7 @@ def setup(
         code      = { this: code },
         storage   = { this: {} },
         balance   = mk_balance(),
-        timestamp = timestamp,
+        block     = mk_block(),
         calldata  = [],
         callvalue = con(0),
         caller    = mk_caller(solver),
@@ -315,7 +321,7 @@ def run(
         storage   = deepcopy(setup_ex.storage),
         balance   = setup_ex.balance, # TODO: add callvalue
         #
-        timestamp = setup_ex.timestamp,
+        block     = deepcopy(setup_ex.block),
         #
         calldata  = cd,
         callvalue = callvalue,

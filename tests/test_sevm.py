@@ -9,7 +9,7 @@ from halmos.byte2op import decode
 
 from halmos.sevm import SEVM, con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin
 
-from halmos.__main__ import parse_args, mk_options
+from halmos.__main__ import parse_args, mk_options, mk_block
 
 @pytest.fixture
 def args():
@@ -28,8 +28,6 @@ caller = BitVec('msg_sender', 256)
 this = BitVec('this_address', 256)
 
 balance = Array('balance0', BitVecSort(256), BitVecSort(256))
-
-timestamp = BitVec('block_timestamp', 256)
 
 callvalue = BitVec('msg_value', 256)
 
@@ -53,7 +51,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         code      = { this: code },
         storage   = { this: storage },
         balance   = balance,
-        timestamp = timestamp,
+        block     = mk_block(),
         calldata  = [],
         callvalue = callvalue,
         caller    = caller,
