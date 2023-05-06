@@ -153,7 +153,7 @@ def mk_balance() -> Word:
 def mk_block() -> Block:
     block = Block(
         basefee    = ZeroExt(160, BitVec('block_basefee', 96)),     # practical limit 96 bit
-        chainid    = BitVec('block_chainid', 256),
+        chainid    = ZeroExt(192, BitVec('block_chainid', 64)),     # chainid 64 bit
         coinbase   = ZeroExt(96, BitVec('block_coinbase', 160)),    # address 160 bit
         difficulty = BitVec('block_difficulty', 256),
         gaslimit   = ZeroExt(160, BitVec('block_gaslimit', 96)),    # practical limit 96 bit

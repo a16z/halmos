@@ -848,6 +848,21 @@ class SEVM:
                     who = simplify(Extract(511, 256, arg))
                     amount = simplify(Extract(255, 0, arg))
                     ex.balance_update(who, amount)
+                # vm.fee(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.fee_sig:
+                    ex.block.basefee = simplify(Extract(255, 0, arg))
+                # vm.chainId(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.chainid_sig:
+                    ex.block.chainid = simplify(Extract(255, 0, arg))
+                # vm.coinbase(address)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.coinbase_sig:
+                    ex.block.coinbase = simplify(Extract(255, 0, arg))
+                # vm.difficulty(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.difficulty_sig:
+                    ex.block.difficulty = simplify(Extract(255, 0, arg))
+                # vm.roll(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.roll_sig:
+                    ex.block.number = simplify(Extract(255, 0, arg))
                 # vm.warp(uint256)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.warp_sig:
                     ex.block.timestamp = simplify(Extract(255, 0, arg))
@@ -1270,7 +1285,7 @@ class SEVM:
                 elif opcode == EVM.GASLIMIT:
                     ex.st.push(ex.block.gaslimit)
                 elif opcode == EVM.NUMBER:
-                    ex.st.push(ex.block.number())
+                    ex.st.push(ex.block.number)
                 elif opcode == EVM.TIMESTAMP:
                     ex.st.push(ex.block.timestamp)
 
