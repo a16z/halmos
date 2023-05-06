@@ -22,19 +22,12 @@ Steps = Dict[int,Dict[str,Any]] # execution tree
 # symbolic states
 f_calldataload = Function('calldataload', BitVecSort(256), BitVecSort(256)) # index
 f_calldatasize = Function('calldatasize', BitVecSort(256))
-f_origin       = Function('origin'      , BitVecSort(256))
-f_coinbase     = Function('coinbase'    , BitVecSort(256))
 f_extcodesize  = Function('extcodesize' , BitVecSort(256), BitVecSort(256)) # target address
 f_extcodehash  = Function('extcodehash' , BitVecSort(256), BitVecSort(256)) # target address
 f_blockhash    = Function('blockhash'   , BitVecSort(256), BitVecSort(256)) # block number
 f_gas          = Function('gas'         , BitVecSort(256), BitVecSort(256)) # cnt
 f_gasprice     = Function('gasprice'    , BitVecSort(256))
-f_timestamp    = Function('timestamp'   , BitVecSort(256))
-f_blocknumber  = Function('blocknumber' , BitVecSort(256))
-f_difficulty   = Function('difficulty'  , BitVecSort(256))
-f_gaslimit     = Function('gaslimit'    , BitVecSort(256))
-f_chainid      = Function('chainid'     , BitVecSort(256))
-f_basefee      = Function('basefee'     , BitVecSort(256))
+f_origin       = Function('origin'      , BitVecSort(256))
 
 # uninterpreted arithmetic
 f_add  = Function('evm_add' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
@@ -165,12 +158,32 @@ class State:
         else:
             return None
 
+class Block:
+    basefee: Any
+    chainid: Any
+    coinbase: Any
+    difficulty: Any # prevrandao
+    gaslimit: Any
+    number: Any
+    timestamp: Any
+
+    def __init__(self, **kwargs) -> None:
+        self.basefee    = kwargs['basefee']
+        self.chainid    = kwargs['chainid']
+        self.coinbase   = kwargs['coinbase']
+        self.difficulty = kwargs['difficulty']
+        self.gaslimit   = kwargs['gaslimit']
+        self.number     = kwargs['number']
+        self.timestamp  = kwargs['timestamp']
+
 class Exec: # an execution path
     # network
     pgm: Dict[Any,List[Opcode]] # address -> { opcode map: pc -> opcode }
     code: Dict[Any,List[Any]] # address -> opcode sequence
     storage: Dict[Any,Dict[int,Any]] # address -> { storage slot -> value }
     balance: Any # address -> balance
+    # block
+    block: Block
     # tx
     calldata: List[Byte] # msg.data
     callvalue: Word # msg.value
@@ -201,6 +214,8 @@ class Exec: # an execution path
         self.code     = kwargs['code']
         self.storage  = kwargs['storage']
         self.balance  = kwargs['balance']
+        #
+        self.block    = kwargs['block']
         #
         self.calldata = kwargs['calldata']
         self.callvalue= kwargs['callvalue']
@@ -684,6 +699,8 @@ class SEVM:
                 storage   = ex.storage,
                 balance   = ex.balance,
                 #
+                block     = ex.block,
+                #
                 calldata  = calldata,
                 callvalue = fund,
                 caller    = caller,
@@ -831,6 +848,24 @@ class SEVM:
                     who = simplify(Extract(511, 256, arg))
                     amount = simplify(Extract(255, 0, arg))
                     ex.balance_update(who, amount)
+                # vm.fee(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.fee_sig:
+                    ex.block.basefee = simplify(Extract(255, 0, arg))
+                # vm.chainId(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.chainid_sig:
+                    ex.block.chainid = simplify(Extract(255, 0, arg))
+                # vm.coinbase(address)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.coinbase_sig:
+                    ex.block.coinbase = simplify(Extract(255, 0, arg))
+                # vm.difficulty(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.difficulty_sig:
+                    ex.block.difficulty = simplify(Extract(255, 0, arg))
+                # vm.roll(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.roll_sig:
+                    ex.block.number = simplify(Extract(255, 0, arg))
+                # vm.warp(uint256)
+                elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.warp_sig:
+                    ex.block.timestamp = simplify(Extract(255, 0, arg))
                 else:
                     # TODO: support other cheat codes
                     ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
@@ -890,6 +925,8 @@ class SEVM:
             code      = ex.code,
             storage   = ex.storage,
             balance   = ex.balance,
+            #
+            block     = ex.block,
             #
             calldata  = [],
             callvalue = value,
@@ -1031,6 +1068,8 @@ class SEVM:
             code     = ex.code.copy(), # shallow copy
             storage  = deepcopy(ex.storage),
             balance  = deepcopy(ex.balance),
+            #
+            block    = deepcopy(ex.block),
             #
             calldata = ex.calldata,
             callvalue= ex.callvalue,
@@ -1217,9 +1256,6 @@ class SEVM:
                     ex.solver.add(Extract(255, 160, f_origin()) == BitVecVal(0, 96))
                 elif opcode == EVM.ADDRESS:
                     ex.st.push(ex.this)
-                elif opcode == EVM.COINBASE:
-                    ex.st.push(f_coinbase())
-                    ex.solver.add(Extract(255, 160, f_coinbase()) == BitVecVal(0, 96))
                 elif opcode == EVM.EXTCODESIZE:
                     address = ex.st.pop()
                     if address in ex.code:
@@ -1237,20 +1273,21 @@ class SEVM:
                     ex.st.push(f_gas(con(ex.cnt_gas())))
                 elif opcode == EVM.GASPRICE:
                     ex.st.push(f_gasprice())
-                elif opcode == EVM.TIMESTAMP:
-                    ex.st.push(f_timestamp())
-                elif opcode == EVM.NUMBER:
-                    ex.st.push(f_blocknumber())
-                elif opcode == EVM.DIFFICULTY:
-                    ex.st.push(f_difficulty())
-                elif opcode == EVM.GASLIMIT:
-                    ex.st.push(f_gaslimit())
-                elif opcode == EVM.BASEFEE:
-                    ex.st.push(f_basefee())
 
+                elif opcode == EVM.BASEFEE:
+                    ex.st.push(ex.block.basefee)
                 elif opcode == EVM.CHAINID:
-                #   ex.st.push(f_chainid())
-                    ex.st.push(con(1)) # for ethereum
+                    ex.st.push(ex.block.chainid)
+                elif opcode == EVM.COINBASE:
+                    ex.st.push(ex.block.coinbase)
+                elif opcode == EVM.DIFFICULTY:
+                    ex.st.push(ex.block.difficulty)
+                elif opcode == EVM.GASLIMIT:
+                    ex.st.push(ex.block.gaslimit)
+                elif opcode == EVM.NUMBER:
+                    ex.st.push(ex.block.number)
+                elif opcode == EVM.TIMESTAMP:
+                    ex.st.push(ex.block.timestamp)
 
                 elif opcode == EVM.PC:
                     ex.st.push(con(ex.pc))
@@ -1383,6 +1420,8 @@ class SEVM:
         storage,
         balance,
         #
+        block,
+        #
         calldata,
         callvalue,
         caller,
@@ -1412,6 +1451,8 @@ class SEVM:
             code     = code,
             storage  = storage,
             balance  = balance,
+            #
+            block    = block,
             #
             calldata = calldata,
             callvalue= callvalue,

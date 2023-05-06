@@ -82,3 +82,21 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("deal(address,uint256)"))
     deal_sig: int = 0xc88a5e6d
+
+    # bytes4(keccak256("fee(uint256)"))
+    fee_sig: int = 0x39b37ab0
+
+    # bytes4(keccak256("chainId(uint256)"))
+    chainid_sig: int = 0x4049ddd2
+
+    # bytes4(keccak256("coinbase(address)"))
+    coinbase_sig: int = 0xff483c54
+
+    # bytes4(keccak256("difficulty(uint256)"))
+    difficulty_sig: int = 0x46cc92d9
+
+    # bytes4(keccak256("roll(uint256)"))
+    roll_sig: int = 0x1f7b4f30
+
+    # bytes4(keccak256("warp(uint256)"))
+    warp_sig: int = 0xe5d6bf02
