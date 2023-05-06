@@ -28,4 +28,9 @@ contract BlockCheatCodeTest is Test {
         vm.roll(x);
         assert(block.number == x);
     }
+
+    function testWarp(uint x) public {
+        vm.warp(x);
+        assert(block.timestamp == x);
+    }
 }
