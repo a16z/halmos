@@ -47,7 +47,6 @@ def parse_args(args) -> argparse.Namespace:
     parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
     parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
     parser.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
-    parser.add_argument('--solver-axioms', action='store_true', help='run an extra solver with axioms for unknown')
     parser.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
 
     parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
@@ -430,39 +429,6 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         sol2.from_string(ex.solver.sexpr())
         res = sol2.check()
         if res == sat: model = sol2.model()
-    if res == sat and not is_valid_model(model) and args.solver_axioms:
-        if args.debug: print(f'{" "*4}Checking again with axioms')
-        ctx = Context()
-        sol3 = Solver(ctx=ctx)
-        sol3.set(timeout=args.solver_timeout_assertion)
-        sol3.from_string(ex.solver.sexpr())
-        x = BitVec('x', 256, ctx)
-        y = BitVec('y', 256, ctx)
-    #   zero = BitVecVal(0, 256, ctx)
-    #   one  = BitVecVal(1, 256, ctx)
-    #   two  = BitVecVal(2, 256, ctx)
-        evm_div = f_div.translate(ctx)
-        evm_mod = f_mod.translate(ctx)
-    #   evm_exp = f_exp.translate(ctx)
-        # axiomatization
-        sol3.add(ForAll([x, y], ULE(evm_div(x, y), x)))                 # (x / y) <= x
-        sol3.add(ForAll([x, y], ULE(evm_mod(x, y), y)))                 # (x % y) <= y
-    #   sol3.add(ForAll([x, y], Or(y == zero, ULT(evm_mod(x, y), y))))  # (x % y) < y if y != 0
-    #   #
-    #   sol3.add(ForAll([x], evm_div(x, zero) == zero))         # x / 0 == 0    # evm-specific
-    #   sol3.add(ForAll([x], evm_div(x, one) == x))             # x / 1 == x
-    #   sol3.add(ForAll([x], evm_div(x, two) == LShR(x, 1)))    # x / 2 == x >> 1
-    #   #
-    #   sol3.add(ForAll([x], evm_mod(x, zero) == zero))         # x % 0 == 0    # evm-specific
-    #   sol3.add(ForAll([x], evm_mod(x, one) == zero))          # x % 1 == 0
-    #   sol3.add(ForAll([x], evm_mod(x, two) == x & one))       # x % 2 == x & 1
-    #   #
-    #   sol3.add(ForAll([x], evm_exp(x, zero) == one))          # x ** 0 == 1   # 0 ** 0 == 1
-    #   sol3.add(ForAll([x], evm_exp(x, one) == x))             # x ** 1 == x
-    #   sol3.add(ForAll([x], evm_exp(x, two) == x * x))         # x ** 2 == x * x
-    #   #
-        res = sol3.check()
-        if res == sat: model = sol3.model()
     if res == unknown and args.solver_subprocess:
         if args.debug: print(f'{" "*4}Checking again in an external process')
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'

@@ -555,7 +555,18 @@ class SEVM:
                         return x
         return None
 
-    def arith(self, op: int, w1: Word, w2: Word) -> Word:
+    def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
+        term = f_div(x, y)
+        ex.solver.add(ULE(term, x)) # (x / y) <= x
+        return term
+
+    def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
+        term = f_mod(x, y)
+        ex.solver.add(                ULE(term, y) ) # (x % y) <= y
+    #   ex.solver.add(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
+        return term
+
+    def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
         w1 = b2i(w1)
         w2 = b2i(w2)
         if op == EVM.ADD:
@@ -614,9 +625,9 @@ class SEVM:
                 elif self.options.get('divByConst'):
                     return UDiv(w1, w2)
                 else:
-                    return f_div(w1, w2)
+                    return self.mk_div(ex, w1, w2)
             else:
-                return f_div(w1, w2)
+                return self.mk_div(ex, w1, w2)
         elif op == EVM.MOD:
             if is_bv_value(w1) and is_bv_value(w2):
                 return URem(w1, w2) # bvurem
@@ -630,9 +641,9 @@ class SEVM:
                 elif self.options.get('modByConst'):
                     return URem(w1, w2)
                 else:
-                    return f_mod(w1, w2)
+                    return self.mk_mod(ex, w1, w2)
             else:
-                return f_mod(w1, w2)
+                return self.mk_mod(ex, w1, w2)
         elif op == EVM.SDIV:
             if is_bv_value(w1) and is_bv_value(w2):
                 return w1 / w2 # bvsdiv
@@ -684,8 +695,8 @@ class SEVM:
         caller = ex.prank.lookup(ex.this, to)
 
         if not (is_bv_value(fund) and fund.as_long() == 0):
-            ex.balance_update(caller, self.arith(EVM.SUB, ex.balance_of(caller), fund))
-            ex.balance_update(to,     self.arith(EVM.ADD, ex.balance_of(to),     fund))
+            ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), fund))
+            ex.balance_update(to,     self.arith(ex, EVM.ADD, ex.balance_of(to),     fund))
 
         def call_known() -> None:
             calldata = [None] * arg_size
@@ -916,8 +927,8 @@ class SEVM:
         # transfer value
         ex.solver.add(UGE(ex.balance_of(caller), value)) # assume balance is enough; otherwise ignore this path
         if not (is_bv_value(value) and value.as_long() == 0):
-            ex.balance_update(caller,   self.arith(EVM.SUB, ex.balance_of(caller),   value))
-            ex.balance_update(new_addr, self.arith(EVM.ADD, ex.balance_of(new_addr), value))
+            ex.balance_update(caller,   self.arith(ex, EVM.SUB, ex.balance_of(caller),   value))
+            ex.balance_update(new_addr, self.arith(ex, EVM.ADD, ex.balance_of(new_addr), value))
 
         # execute contract creation code
         (new_exs, new_steps) = self.run(Exec(
@@ -1165,10 +1176,10 @@ class SEVM:
                     pass
 
                 elif EVM.ADD <= opcode <= EVM.SMOD: # ADD MUL SUB DIV SDIV MOD SMOD
-                    ex.st.push(self.arith(opcode, ex.st.pop(), ex.st.pop()))
+                    ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
 
                 elif opcode == EVM.EXP:
-                    ex.st.push(self.arith(opcode, ex.st.pop(), ex.st.pop()))
+                    ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
 
                 elif opcode == EVM.LT:
                     w1 = b2i(ex.st.pop())
