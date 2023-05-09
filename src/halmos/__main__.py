@@ -54,6 +54,7 @@ def parse_args(args) -> argparse.Namespace:
     parser.add_argument('--debug', action='store_true', help='run in debug mode')
     parser.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
     parser.add_argument('--print-revert', action='store_true', help='print reverting paths in verbose mode')
+    parser.add_argument('--print-potential-counterexample', action='store_true', help='print potentially invalid counterexamples')
 
     cryticparser.init(parser)
 
@@ -380,7 +381,12 @@ def run(
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {end - start:0.2f}s, bounds: [{', '.join(dyn_param_size)}])")
     for model, idx, ex in models:
         if model:
-            print(color_warn(f'Counterexample: {str_model(model, args)}'))
+            if is_valid_model(model):
+                print(color_warn(f'Counterexample: {str_model(model, args)}'))
+            elif args.print_potential_counterexample:
+                print(color_warn(f'Counterexample (potentially invalid): {str_model(model, args)}'))
+            else:
+                print(color_warn(f'Counterexample: unknown'))
         else:
             print(color_warn(f'Counterexample: unknown'))
         if args.verbose >= 1:
@@ -472,12 +478,8 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         if args.debug: print(f'{" "*4}Passed')
         return
     if res == sat:
-        if is_valid_model(model):
-            if args.debug: print(f'{" "*4}Done')
-            models.append((model, idx, ex))
-        else:
-            if args.debug: print(f'{" "*4}Invalid counterexample')
-            models.append((None, idx, ex))
+        if args.debug: print(f'{" "*4}Done')
+        models.append((model, idx, ex))
     else:
         if args.debug: print(f'{" "*4}Timeout')
         models.append((None, idx, ex))
