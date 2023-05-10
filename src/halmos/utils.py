@@ -74,6 +74,7 @@ class EVM:
     MSIZE          = 0x59
     GAS            = 0x5a
     JUMPDEST       = 0x5b
+    PUSH0          = 0x5f
     PUSH1          = 0x60
     PUSH2          = 0x61
     PUSH3          = 0x62
@@ -219,6 +220,7 @@ str_opcode: Dict[int, str] = {
     EVM.MSIZE          : 'MSIZE',
     EVM.GAS            : 'GAS',
     EVM.JUMPDEST       : 'JUMPDEST',
+    EVM.PUSH0          : 'PUSH0',
     EVM.PUSH1          : 'PUSH1',
     EVM.PUSH2          : 'PUSH2',
     EVM.PUSH3          : 'PUSH3',

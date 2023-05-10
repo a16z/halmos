@@ -1392,6 +1392,9 @@ class SEVM:
                         keys.append(ex.st.pop())
                     ex.log.append((keys, wload(ex.st.memory, loc, size) if size > 0 else None))
 
+                elif opcode == EVM.PUSH0:
+                    ex.st.push(con(0))
+
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     if is_bv_value(o.op[1]):
                         val = int(str(o.op[1]))

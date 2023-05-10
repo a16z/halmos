@@ -46,4 +46,27 @@ contract OpcodeTest is Test {
         assertEq(result1, result2);
     }
 
+    function testPush0() public {
+        // target bytecode is 0x365f5f37365ff3
+        //  36 CALLDATASIZE
+        //  5F PUSH0
+        //  5F PUSH0
+        //  37 CALLDATACOPY -> copies calldata at mem[0..calldatasize]
+
+        //  36 CALLDATASIZE
+        //  5F PUSH0
+        //  F3 RETURN -> returns mem[0..calldatasize]
+
+        // a tiny deployer (that uses PUSH0), to deploy the above bytecode
+        uint256 deployCode = 0x66365f5f37365ff35f5260076019f3;
+        address target;
+        assembly {
+            mstore(0, deployCode)
+            target := create(/* value */ 0, /* offset */ 0x11, /* size */ 15)
+        }
+
+        (bool success, bytes memory result) = target.call(bytes("hello PUSH0"));
+        assertTrue(success);
+        assertEq(string(result), "hello PUSH0");
+    }
 }
