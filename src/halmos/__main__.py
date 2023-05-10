@@ -34,6 +34,7 @@ def parse_args(args) -> argparse.Namespace:
     parser.add_argument('--depth', metavar='MAX_DEPTH', type=int, help='set the max path length')
     parser.add_argument('--array-lengths', metavar='NAME1=LENGTH1,NAME2=LENGTH2,...', help='set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)')
 
+    parser.add_argument('--symbolic-storage', action='store_true', help='set default storage values to symbolic')
     parser.add_argument('--symbolic-jump', action='store_true', help='support symbolic jump destination (experimental)')
 
     parser.add_argument('--no-smt-add',          action='store_true', help='do not interpret `+`')
@@ -202,7 +203,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
         callvalue = callvalue,
         caller    = caller,
         this      = this,
-        symbolic  = True,
+        symbolic  = args.symbolic_storage,
         solver    = solver,
     )
     (exs, _) = sevm.run(ex)
@@ -332,7 +333,7 @@ def run(
         st        = State(),
         jumpis    = {},
         output    = None,
-        symbolic  = True,
+        symbolic  = args.symbolic_storage,
         prank     = Prank(), # prank is reset after setUp()
         #
         solver    = solver,
@@ -564,7 +565,7 @@ def main() -> int:
                     num_failed = 0
                     print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
 
-                    setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpPlus(') ])
+                    setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpSymbolic(') ])
                     (setup_name, setup_sig, setup_selector) = (None, None, None)
                     if len(setup_sigs) > 0:
                         (setup_sig, setup_selector) = setup_sigs[-1]
