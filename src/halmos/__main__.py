@@ -25,7 +25,7 @@ def parse_args(args) -> argparse.Namespace:
 
     parser.add_argument('target', metavar='TARGET_DIRECTORY', nargs='?', default=os.getcwd(), help='source root directory (default: current directory)')
     parser.add_argument('--contract', metavar='CONTRACT_NAME', help='run tests in the given contract only')
-    parser.add_argument('--function', metavar='FUNCTION_NAME_PREFIX', default='test', help='run tests matching the given prefix only (default: %(default)s)')
+    parser.add_argument('--function', metavar='FUNCTION_NAME_PREFIX', default='check', help='run tests matching the given prefix only (default: %(default)s)')
 
     parser.add_argument('--bytecode', metavar='HEX_STRING', help='execute the given bytecode')
 
