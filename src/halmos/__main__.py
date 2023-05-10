@@ -565,7 +565,7 @@ def main() -> int:
                     num_failed = 0
                     print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
 
-                    setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpPlus(') ])
+                    setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpSymbolic(') ])
                     (setup_name, setup_sig, setup_selector) = (None, None, None)
                     if len(setup_sigs) > 0:
                         (setup_sig, setup_selector) = setup_sigs[-1]
