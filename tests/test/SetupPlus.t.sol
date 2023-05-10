@@ -18,19 +18,19 @@ contract SetupPlusTest {
         a = new A(11, 200);
     }
 
-    // if setUpPlus() is provided, Halmos uses setUpPlus() instead of setUp().
-    // setUpPlus() is symbolically executed.
+    // if setUpSymbolic() is provided, Halmos uses setUpSymbolic() instead of setUp().
+    // setUpSymbolic() is symbolically executed.
 
-    // if multiple setUpPlus() functions are provided, the last one in the lexicographical order will be used.
-    // e.g., setUpPlus(uint256,uint256) is used instead of setUpPlus(uint256).
+    // if multiple setUpSymbolic() functions are provided, the last one in the lexicographical order will be used.
+    // e.g., setUpSymbolic(uint256,uint256) is used instead of setUpSymbolic(uint256).
 
-    function setUpPlus(uint x, uint y) public {
+    function setUpSymbolic(uint x, uint y) public {
         require(x > 10);
         require(y > 100);
         a = new A(x, y);
     }
 
-    function setUpPlus(uint x) public {
+    function setUpSymbolic(uint x) public {
         a = new A(x, x);
     }
 
@@ -79,7 +79,7 @@ contract SetupPlusTestB {
         mk();
     }
 
-    function setUpPlus(uint[4] memory _init) public {
+    function setUpSymbolic(uint[4] memory _init) public {
         init[0] = _init[0];
         init[1] = _init[1];
         init[2] = _init[2];
