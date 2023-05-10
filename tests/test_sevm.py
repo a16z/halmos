@@ -83,6 +83,7 @@ def test_run(hexcode, stack, pc, opcode, sevm, solver, storage):
     assert str(ex.pgm[ex.this][ex.pc].op[0]) == opcode
 
 @pytest.mark.parametrize('hexcode, params, output', [
+    (o(EVM.PUSH0), [], con(0)),
     (o(EVM.ADD), [x, y], x + y),
     (o(EVM.MUL), [x, y], x * y),
     (o(EVM.SUB), [x, y], x - y),
