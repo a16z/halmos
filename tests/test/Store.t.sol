@@ -22,6 +22,12 @@ contract StoreTest is Test {
 //      assert(vm.load(address(c), key) == value);
 //  }
 
+//  TODO: support uninitialized accounts
+//  function testStoreUninit(bytes32 value) public {
+//      vm.store(address(0), 0, value);
+//      assert(vm.load(address(0), 0) == value);
+//  }
+
     function testStoreScalar(uint value) public {
         assert(uint(vm.load(address(c), 0)) == 0);
         vm.store(address(c), 0, bytes32(value));
