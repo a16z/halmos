@@ -86,6 +86,9 @@ class hevm_cheat_code:
     # bytes4(keccak256("store(address,bytes32,bytes32)"))
     store_sig: int = 0x70ca10bb
 
+    # bytes4(keccak256("load(address,bytes32)"))
+    load_sig: int = 0x667f9d70
+
     # bytes4(keccak256("fee(uint256)"))
     fee_sig: int = 0x39b37ab0
 

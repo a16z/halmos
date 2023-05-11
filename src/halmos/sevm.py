@@ -876,6 +876,16 @@ class SEVM:
                         ex.error = f'uninitialized account: {store_account}'
                         out.append(ex)
                         return
+                # vm.load(address,bytes32)
+                elif eq(arg.sort(), BitVecSort((4+32*2)*8)) and simplify(Extract(543, 512, arg)) == hevm_cheat_code.load_sig:
+                    load_account = simplify(Extract(511, 256, arg))
+                    load_slot = simplify(Extract(255, 0, arg))
+                    if load_account in ex.storage:
+                        ret = ex.sload(load_account, load_slot)
+                    else:
+                        ex.error = f'uninitialized account: {load_account}'
+                        out.append(ex)
+                        return
                 # vm.fee(uint256)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.fee_sig:
                     ex.block.basefee = simplify(Extract(255, 0, arg))

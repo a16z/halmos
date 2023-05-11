@@ -23,19 +23,25 @@ contract StoreTest is Test {
 //  }
 
     function testStoreScalar(uint value) public {
+        assert(uint(vm.load(address(c), 0)) == 0);
         vm.store(address(c), 0, bytes32(value));
         assert(c.x() == value);
+        assert(uint(vm.load(address(c), 0)) == value);
     }
 
     function testStoreMapping(uint key, uint value) public {
+        assert(uint(vm.load(address(c), keccak256(abi.encode(key, 1)))) == 0);
         vm.store(address(c), keccak256(abi.encode(key, 1)), bytes32(value));
         assert(c.m(key) == value);
+        assert(uint(vm.load(address(c), keccak256(abi.encode(key, 1)))) == value);
     }
 
     function testStoreArray(uint key, uint value) public {
         vm.assume(key < 2**32); // to avoid overflow
+        assert(uint(vm.load(address(c), bytes32(uint(keccak256(abi.encode(2))) + key))) == 0);
         vm.store(address(c), bytes32(uint(2)), bytes32(uint(1) + key));
         vm.store(address(c), bytes32(uint(keccak256(abi.encode(2))) + key), bytes32(value));
         assert(c.a(key) == value);
+        assert(uint(vm.load(address(c), bytes32(uint(keccak256(abi.encode(2))) + key))) == value);
     }
 }
