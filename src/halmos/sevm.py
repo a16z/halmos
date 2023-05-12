@@ -39,8 +39,8 @@ f_sdiv = Function('evm_sdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_smod', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
-def con(n: int) -> Word:
-    return BitVecVal(n, 256)
+def con(n: int, size_bits=256) -> Word:
+    return BitVecVal(n, size_bits)
 
 def int_of(x: Any, err: str) -> int:
     if is_bv_value(x):
@@ -951,7 +951,12 @@ class SEVM:
                 # vm.etch(address,bytes)
                 elif extract_funsig(arg) == hevm_cheat_code.etch_sig:
                     # ex.pgm contains 256-bit keys
-                    who = simplify(ZeroExt(96, extract_bytes(arg, 4 + 12, 20)))
+                    who = simplify(Concat(con(0, 96), extract_bytes(arg, 4 + 12, 20)))
+
+                    # who must be concrete
+                    if not is_bv_value(who):
+                        ex.error = f'code argument of vm.etch must be concrete but received {arg}'
+                        raise ValueError(who)
 
                     # code must be concrete
                     try:
