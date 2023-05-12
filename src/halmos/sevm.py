@@ -314,43 +314,43 @@ class Exec: # an execution path
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
 
-    def sinit(self, slot: int, keys) -> None:
-        if slot not in self.storage[self.this]:
-            self.storage[self.this][slot] = {}
-        if len(keys) not in self.storage[self.this][slot]:
+    def sinit(self, addr: Any, slot: int, keys) -> None:
+        if slot not in self.storage[addr]:
+            self.storage[addr][slot] = {}
+        if len(keys) not in self.storage[addr][slot]:
             if len(keys) == 0:
                 if self.symbolic:
-                    self.storage[self.this][slot][len(keys)] = BitVec(f'storage_slot_{str(slot)}_{str(len(keys))}', 256)
+                    self.storage[addr][slot][len(keys)] = BitVec(f'storage_slot_{str(slot)}_{str(len(keys))}', 256)
                 else:
-                    self.storage[self.this][slot][len(keys)] = con(0)
+                    self.storage[addr][slot][len(keys)] = con(0)
             else:
                 if self.symbolic:
-                    self.storage[self.this][slot][len(keys)] = Array(f'storage_slot_{str(slot)}_{str(len(keys))}', BitVecSort(len(keys)*256), BitVecSort(256))
+                    self.storage[addr][slot][len(keys)] = Array(f'storage_slot_{str(slot)}_{str(len(keys))}', BitVecSort(len(keys)*256), BitVecSort(256))
                 else:
-                    self.storage[self.this][slot][len(keys)] = K(BitVecSort(len(keys)*256), con(0))
+                    self.storage[addr][slot][len(keys)] = K(BitVecSort(len(keys)*256), con(0))
 
-    def sload(self, loc: Word) -> Word:
+    def sload(self, addr: Any, loc: Word) -> Word:
         offsets = self.decode_storage_loc(loc)
         if not len(offsets) > 0: raise ValueError(offsets)
         slot, keys = int_of(offsets[0], 'symbolic storage base slot'), offsets[1:]
-        self.sinit(slot, keys)
+        self.sinit(addr, slot, keys)
         if len(keys) == 0:
-            return self.storage[self.this][slot][0]
+            return self.storage[addr][slot][0]
         else:
-            return self.select(self.storage[self.this][slot][len(keys)], concat(keys), self.storages)
+            return self.select(self.storage[addr][slot][len(keys)], concat(keys), self.storages)
 
-    def sstore(self, loc: Any, val: Any) -> None:
+    def sstore(self, addr: Any, loc: Any, val: Any) -> None:
         offsets = self.decode_storage_loc(loc)
         if not len(offsets) > 0: raise ValueError(offsets)
         slot, keys = int_of(offsets[0], 'symbolic storage base slot'), offsets[1:]
-        self.sinit(slot, keys)
+        self.sinit(addr, slot, keys)
         if len(keys) == 0:
-            self.storage[self.this][slot][0] = val
+            self.storage[addr][slot][0] = val
         else:
             new_storage_var = Array(f'storage{self.cnt_sstore()}', BitVecSort(len(keys)*256), BitVecSort(256))
-            new_storage = Store(self.storage[self.this][slot][len(keys)], concat(keys), val)
+            new_storage = Store(self.storage[addr][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
-            self.storage[self.this][slot][len(keys)] = new_storage_var
+            self.storage[addr][slot][len(keys)] = new_storage_var
             self.storages[new_storage_var] = new_storage
 
     def decode_storage_loc(self, loc: Any) -> Any:
@@ -865,6 +865,27 @@ class SEVM:
                     who = simplify(Extract(511, 256, arg))
                     amount = simplify(Extract(255, 0, arg))
                     ex.balance_update(who, amount)
+                # vm.store(address,bytes32,bytes32)
+                elif eq(arg.sort(), BitVecSort((4+32*3)*8)) and simplify(Extract(799, 768, arg)) == hevm_cheat_code.store_sig:
+                    store_account = simplify(Extract(767, 512, arg))
+                    store_slot = simplify(Extract(511, 256, arg))
+                    store_value = simplify(Extract(255, 0, arg))
+                    if store_account in ex.storage:
+                        ex.sstore(store_account, store_slot, store_value)
+                    else:
+                        ex.error = f'uninitialized account: {store_account}'
+                        out.append(ex)
+                        return
+                # vm.load(address,bytes32)
+                elif eq(arg.sort(), BitVecSort((4+32*2)*8)) and simplify(Extract(543, 512, arg)) == hevm_cheat_code.load_sig:
+                    load_account = simplify(Extract(511, 256, arg))
+                    load_slot = simplify(Extract(255, 0, arg))
+                    if load_account in ex.storage:
+                        ret = ex.sload(load_account, load_slot)
+                    else:
+                        ex.error = f'uninitialized account: {load_account}'
+                        out.append(ex)
+                        return
                 # vm.fee(uint256)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.fee_sig:
                     ex.block.basefee = simplify(Extract(255, 0, arg))
@@ -1340,9 +1361,9 @@ class SEVM:
                     ex.st.push(con(size))
 
                 elif opcode == EVM.SLOAD:
-                    ex.st.push(ex.sload(ex.st.pop()))
+                    ex.st.push(ex.sload(ex.this, ex.st.pop()))
                 elif opcode == EVM.SSTORE:
-                    ex.sstore(ex.st.pop(), ex.st.pop())
+                    ex.sstore(ex.this, ex.st.pop(), ex.st.pop())
 
                 elif opcode == EVM.RETURNDATASIZE:
                     ex.st.push(con(ex.returndatasize()))
