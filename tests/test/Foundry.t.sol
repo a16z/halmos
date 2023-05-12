@@ -37,6 +37,20 @@ contract FoundryTest is Test {
         assertEq(uint256(uint8(retval[0])), 0x42);
     }
 
+    function testEtchOverwrite() public {
+        vm.etch(address(0x42), hex"60425f526001601ff3");
+        (, bytes memory retval) = address(0x42).call("");
+
+        assertEq(retval.length, 1);
+        assertEq(uint256(uint8(retval[0])), 0x42);
+
+        vm.etch(address(0x42), hex"60AA5f526001601ff3");
+        (, retval) = address(0x42).call("");
+
+        assertEq(retval.length, 1);
+        assertEq(uint256(uint8(retval[0])), 0xAA);
+    }
+
     function testEtchSymbolicAddr(address who) public {
         vm.etch(who, hex"60425f526001601ff3");
         (bool success, bytes memory retval) = who.call("");
