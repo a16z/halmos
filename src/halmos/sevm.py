@@ -776,7 +776,7 @@ class SEVM:
                     stack.append((new_ex, step_id))
                 else:
                     # got stuck during external call
-                    new_ex.error = f'external call stuck: {mnemonic(opcode)}'
+                    new_ex.error = f'External call stuck at: {mnemonic(opcode)}'
                     out.append(new_ex)
 
         def call_unknown() -> None:
@@ -1066,7 +1066,7 @@ class SEVM:
                 ex.solver.add(target_reachable)
                 if ex.solver.check() != unsat: # jump
                     if self.options.get('debug'):
-                        print(f'we can jump to {target} with model {ex.solver.model()}')
+                        print(f'We can jump to {target} with model {ex.solver.model()}')
                     new_ex = self.create_branch(ex, str(target_reachable), target)
                     stack.append((new_ex, step_id))
                 ex.solver.pop()
