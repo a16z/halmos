@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import sys
-
 from typing import List, Tuple, Any
 
 from z3 import *
@@ -40,7 +38,7 @@ def concat(args):
         return args[0]
 
 # Decode ByteCodes to Opcodes
-def decode(hexcode: BitVecVal) -> Tuple[List[Opcode], List[Any]]:
+def decode(hexcode: BitVecRef) -> Tuple[List[Opcode], List[Any]]:
     bitsize: int = hexcode.size()
     if bitsize % 8 != 0: raise ValueError(hexcode)
     code: List[Any] = [ simplify(Extract(bitsize-1 - i*8, bitsize - (i+1)*8, hexcode)) for i in range(bitsize // 8) ]
