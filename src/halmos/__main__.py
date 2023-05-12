@@ -7,6 +7,7 @@ import uuid
 import json
 import argparse
 import re
+import traceback
 
 from timeit import default_timer as timer
 
@@ -78,7 +79,7 @@ def find_abi(abi: List, funname: str, funsig: str) -> Dict:
     for item in abi:
         if item['type'] == 'function' and item['name'] == funname and str_abi(item) == funsig:
             return item
-    raise ValueError('Not found', abi, funsig)
+    raise ValueError(f'No {funsig} found in {abi}')
 
 def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argparse.Namespace, cd: List, dyn_param_size: List[str]) -> None:
     item = find_abi(abi, funname, funsig)
@@ -88,15 +89,15 @@ def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argpar
         param_name = param['name']
         param_type = param['type']
         if param_type == 'tuple':
-            raise ValueError('Not supported', param_type) # TODO: support struct types
+            raise NotImplementedError(f'Not supported parameter type: {param_type}') # TODO: support struct types
         elif param_type == 'bytes' or param_type == 'string':
             tba.append((4+offset, param)) # wstore(cd, 4+offset, 32, BitVecVal(<?offset?>, 256))
             offset += 32
         elif param_type.endswith('[]'):
-            raise ValueError('Not supported variable sized arrays', param_type)
+            raise NotImplementedError(f'Not supported dynamic arrays: {param_type}')
         else:
             match = re.search(r'(u?int[0-9]*|address|bool|bytes[0-9]+)(\[([0-9]+)\])?', param_type)
-            if not match: raise ValueError('Unknown type', param_type)
+            if not match: raise NotImplementedError(f'Unknown parameter type: {param_type}')
             typ = match.group(1)
             dim = match.group(3)
             if dim: # array
@@ -115,7 +116,7 @@ def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argpar
 
         if param_name not in arrlen:
             size = args.loop
-            if args.debug: print(f'warn: size of {param_name} not given, using default value {size}')
+            if args.debug: print(f'Warning: no size provided for {param_name}; default value {size} will be used.')
         else:
             size = arrlen[param_name]
 
@@ -132,7 +133,7 @@ def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argpar
                 wstore(cd, 4+offset, size_pad_right, BitVec(f'p_{param_name}_{param_type}', 8*size_pad_right))
                 offset += size_pad_right
         else:
-            raise ValueError('not feasible')
+            raise ValueError(param_type)
 
 def is_stop_or_return(opcode: Byte) -> bool:
     return is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]
@@ -263,10 +264,10 @@ def setup(
 
         setup_exs = list(filter(lambda ex: is_stop_or_return(ex.pgm[ex.this][ex.pc].op[0]) and not ex.failed, setup_exs))
 
-        if len(setup_exs) == 0: raise ValueError('setUp() failed')
+        if len(setup_exs) == 0: raise ValueError('No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
+            print(color_warn(f'Warning: multiple paths were found in {setup_sig}; an arbitrary path has been selected for the following tests.'))
             if args.debug: print('\n'.join(map(str, setup_exs)))
-            raise ValueError('multiple paths exist in setUp()')
 
         setup_ex = setup_exs[0]
 
@@ -532,7 +533,8 @@ def main() -> int:
     try:
         cryticCompile = CryticCompile(**vars(args))
     except InvalidCompilation as e:
-        raise ValueError('Parse error', e)
+        print(color_warn(f'Parse error: {e}'))
+        return 1
 
     #
     # run
@@ -571,12 +573,24 @@ def main() -> int:
                         (setup_sig, setup_selector) = setup_sigs[-1]
                         setup_name = setup_sig.split('(')[0]
                         if args.verbose >= 2 or args.debug: print(f'Running {setup_sig}')
-                    setup_ex = setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
+                    try:
+                        setup_ex = setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
+                    except Exception as err:
+                        print(color_warn(f'Error: {setup_sig} failed: {type(err).__name__}: {err}'))
+                        if args.debug: traceback.print_exc()
+                        continue
 
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]
                         funname = funsig.split('(')[0]
-                        exitcode = run(setup_ex, abi, funname, funsig, funselector, arrlen, args, options)
+                        try:
+                            exitcode = run(setup_ex, abi, funname, funsig, funselector, arrlen, args, options)
+                        except Exception as err:
+                            print(f'{color_warn("[SKIP]")} {funsig}')
+                            print(color_warn(f'{type(err).__name__}: {err}'))
+                            if args.debug: traceback.print_exc()
+                            num_failed += 1
+                            continue
                         if exitcode == 0:
                             num_passed += 1
                         else:
@@ -587,7 +601,11 @@ def main() -> int:
                     total_failed += num_failed
 
     if (total_passed + total_failed) == 0:
-        raise ValueError('No matching tests found', args.contract, args.function)
+        error_msg = f'Error: No tests with the prefix `{args.function}`'
+        if args.contract is not None:
+            error_msg += f' in {args.contract}'
+        print(color_warn(error_msg))
+        return 1
 
     # exitcode
     if total_failed == 0:
