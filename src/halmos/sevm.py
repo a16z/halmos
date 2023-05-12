@@ -56,7 +56,7 @@ def wload(mem: List[Byte], loc: int, size: int) -> Bytes:
     wextend(mem, loc, size)
 
     # BitVecSort(size * 8)
-    return mem[loc] if size == 1 else simplify(Concat(mem[loc:loc+size]))
+    return simplify(concat(mem[loc:loc+size]))
 
 def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
     if not eq(val.sort(), BitVecSort(size*8)): raise ValueError(val)
@@ -987,6 +987,9 @@ class SEVM:
             stack.append((ex, step_id))
 
         # separately handle known / unknown external calls
+
+        # TODO: avoid relying directly on dict membership here
+        # it is based on hashing of the z3 expr objects rather than equivalence
         if to in ex.pgm:
             call_known()
         else:
