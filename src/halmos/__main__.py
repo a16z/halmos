@@ -159,7 +159,7 @@ def mk_block() -> Block:
 
 # TODO: addresses are used as keys in the context and could be treated as 160-bit values
 def mk_addr(name: str) -> Word:
-    return ZeroExt(96, BitVec(name, 160))
+    return Concat(BitVecVal(0, 96), BitVec(name, 160))
 
 def mk_solver(args: argparse.Namespace):
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
