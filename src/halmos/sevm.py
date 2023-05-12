@@ -42,6 +42,12 @@ f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 def con(n: int) -> Word:
     return BitVecVal(n, 256)
 
+def int_of(x: Any, err: str) -> int:
+    if is_bv_value(x):
+        return x.as_long()
+    else:
+        raise NotImplementedError(f'{err}: {x}')
+
 def wextend(mem: List[Byte], loc: int, size: int) -> None:
     if len(mem) < loc + size:
         mem.extend([BitVecVal(0, 8) for _ in range(loc + size - len(mem))])
@@ -133,7 +139,7 @@ class State:
         self.stack[n] = tmp
 
     def mloc(self) -> int:
-        loc: int = int(str(self.pop())) # loc must be concrete
+        loc: int = int_of(self.pop(), 'symbolic memory offset')
         return loc
 
     def mstore(self, full: bool) -> None:
@@ -152,7 +158,7 @@ class State:
 
     def ret(self) -> Bytes:
         loc: int = self.mloc()
-        size: int = int(str(self.pop())) # size (in bytes) must be concrete
+        size: int = int_of(self.pop(), 'symbolic return data size') # size in bytes
         if size > 0:
             return wload(self.memory, loc, size)
         else:
@@ -326,7 +332,7 @@ class Exec: # an execution path
     def sload(self, loc: Word) -> Word:
         offsets = self.decode_storage_loc(loc)
         if not len(offsets) > 0: raise ValueError(offsets)
-        slot, keys = int(str(offsets[0])), offsets[1:]
+        slot, keys = int_of(offsets[0], 'symbolic storage base slot'), offsets[1:]
         self.sinit(slot, keys)
         if len(keys) == 0:
             return self.storage[self.this][slot][0]
@@ -336,7 +342,7 @@ class Exec: # an execution path
     def sstore(self, loc: Any, val: Any) -> None:
         offsets = self.decode_storage_loc(loc)
         if not len(offsets) > 0: raise ValueError(offsets)
-        slot, keys = int(str(offsets[0])), offsets[1:]
+        slot, keys = int_of(offsets[0], 'symbolic storage base slot'), offsets[1:]
         self.sinit(slot, keys)
         if len(keys) == 0:
             self.storage[self.this][slot][0] = val
@@ -398,7 +404,7 @@ class Exec: # an execution path
 
     def sha3(self) -> None:
         loc: int = self.st.mloc()
-        size: int = int(str(self.st.pop())) # size (in bytes) must be concrete
+        size: int = int_of(self.st.pop(), 'symbolic SHA3 data size')
         self.sha3_data(wload(self.st.memory, loc, size), size)
 
     def sha3_data(self, data: Bytes, size: int) -> None:
@@ -685,9 +691,9 @@ class SEVM:
         else:
             fund = ex.st.pop()
         arg_loc: int = ex.st.mloc()
-        arg_size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
+        arg_size: int = int_of(ex.st.pop(), 'symbolic CALL input data size') # size (in bytes)
         ret_loc: int = ex.st.mloc()
-        ret_size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
+        ret_size: int = int_of(ex.st.pop(), 'symbolic CALL return data size') # size (in bytes)
 
         if not arg_size >= 0: raise ValueError(arg_size)
         if not ret_size >= 0: raise ValueError(ret_size)
@@ -770,7 +776,7 @@ class SEVM:
                     stack.append((new_ex, step_id))
                 else:
                     # got stuck during external call
-                    new_ex.error = f'external call stuck: {mnemonic(opcode)}'
+                    new_ex.error = f'External call stuck at: {mnemonic(opcode)}'
                     out.append(new_ex)
 
         def call_unknown() -> None:
@@ -903,8 +909,8 @@ class SEVM:
 
     def create(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
         value: Word = ex.st.pop()
-        loc: int = int(str(ex.st.pop()))
-        size: int = int(str(ex.st.pop()))
+        loc: int = int_of(ex.st.pop(), 'symbolic CREATE offset')
+        size: int = int_of(ex.st.pop(), 'symbolic CREATE size')
 
         # contract creation code
         create_hexcode = wload(ex.st.memory, loc, size)
@@ -1008,7 +1014,7 @@ class SEVM:
         jid = ex.jumpi_id()
 
         source: int = ex.pc
-        target: int = int(str(ex.st.pop())) # target must be concrete
+        target: int = int_of(ex.st.pop(), 'symbolic JUMPI target')
         cond: Word = ex.st.pop()
 
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
@@ -1060,13 +1066,13 @@ class SEVM:
                 ex.solver.add(target_reachable)
                 if ex.solver.check() != unsat: # jump
                     if self.options.get('debug'):
-                        print(f'we can jump to {target} with model {ex.solver.model()}')
+                        print(f'We can jump to {target} with model {ex.solver.model()}')
                     new_ex = self.create_branch(ex, str(target_reachable), target)
                     stack.append((new_ex, step_id))
                 ex.solver.pop()
 
         else:
-            raise ValueError(dst)
+            raise NotImplementedError(f'symbolic JUMP target: {dst}')
 
     def create_branch(self, ex: Exec, cond: str, target: int) -> Exec:
         new_solver = SolverFor('QF_AUFBV')
@@ -1231,10 +1237,7 @@ class SEVM:
                     ex.st.push(LShR(ex.st.pop(), w)) # bvlshr
 
                 elif opcode == EVM.SIGNEXTEND:
-                    w = ex.st.pop()
-                    if not is_bv_value(w): raise ValueError(w)
-
-                    w = int(str(w))
+                    w = int_of(ex.st.pop(), 'symbolic SIGNEXTEND size')
                     if w <= 30: # if w == 31, result is SignExt(0, value) == value
                         bl = (w + 1) * 8
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
@@ -1246,7 +1249,7 @@ class SEVM:
                     if ex.calldata is None:
                         ex.st.push(f_calldataload(ex.st.pop()))
                     else:
-                        offset: int = int(str(ex.st.pop()))
+                        offset: int = int_of(ex.st.pop(), 'symbolic CALLDATALOAD offset')
                         ex.st.push(Concat((ex.calldata + [BitVecVal(0, 8)] * 32)[offset:offset+32]))
                     #   try:
                     #       offset: int = int(str(ex.st.pop()))
@@ -1345,14 +1348,14 @@ class SEVM:
                     ex.st.push(con(ex.returndatasize()))
                 elif opcode == EVM.RETURNDATACOPY:
                     loc: int = ex.st.mloc()
-                    offset: int = int(str(ex.st.pop())) # offset must be concrete
-                    size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
+                    offset: int = int_of(ex.st.pop(), 'symbolic RETURNDATACOPY offset')
+                    size: int = int_of(ex.st.pop(), 'symbolic RETURNDATACOPY size') # size (in bytes)
                     wstore_partial(ex.st.memory, loc, offset, size, ex.output, ex.returndatasize())
 
                 elif opcode == EVM.CALLDATACOPY:
                     loc: int = ex.st.mloc()
-                    offset: int = int(str(ex.st.pop())) # offset must be concrete
-                    size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
+                    offset: int = int_of(ex.st.pop(), 'symbolic CALLDATACOPY offset')
+                    size: int = int_of(ex.st.pop(), 'symbolic CALLDATACOPY size') # size (in bytes)
                     if size > 0:
                         if ex.calldata is None:
                             f_calldatacopy = Function('calldatacopy_'+str(size*8), BitVecSort(256), BitVecSort(size*8))
@@ -1368,14 +1371,14 @@ class SEVM:
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()
-                    pc: int = int(str(ex.st.pop())) # pc must be concrete
-                    size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
+                    pc: int = int_of(ex.st.pop(), 'symbolic CODECOPY offset')
+                    size: int = int_of(ex.st.pop(), 'symbolic CODECOPY size') # size (in bytes)
                     wextend(ex.st.memory, loc, size)
                     for i in range(size):
                         ex.st.memory[loc + i] = ex.read_code(pc + i)
 
                 elif opcode == EVM.BYTE:
-                    idx: int = int(str(ex.st.pop())) # index must be concrete
+                    idx: int = int_of(ex.st.pop(), 'symbolic BYTE offset')
                     if idx < 0: raise ValueError(idx)
                     w = ex.st.pop()
                     if idx >= 32:
@@ -1386,7 +1389,7 @@ class SEVM:
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     num_keys: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
-                    size: int = int(str(ex.st.pop())) # size (in bytes) must be concrete
+                    size: int = int_of(ex.st.pop(), 'symbolic LOG data size') # size (in bytes)
                     keys = []
                     for _ in range(num_keys):
                         keys.append(ex.st.pop())
@@ -1418,6 +1421,11 @@ class SEVM:
 
                 ex.next_pc()
                 stack.append((ex, step_id))
+
+            except NotImplementedError as err:
+                ex.error = f'{err}'
+                out.append(ex)
+                continue
 
             except Exception as err:
                 if self.options['debug']:
