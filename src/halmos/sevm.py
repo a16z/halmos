@@ -10,7 +10,7 @@ from functools import reduce
 
 from z3 import *
 from .byte2op import Opcode, decode, concat, mnemonic
-from .utils import EVM, color_good, color_warn, sha3_inv
+from .utils import EVM, color_good, color_warn, sha3_inv, restore_precomputed_hashes
 from .cheatcodes import hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
@@ -420,8 +420,12 @@ class Exec: # an execution path
             args = sorted(map(self.decode_storage_loc, args), key=lambda x: len(x), reverse=True)
             if len(args[1]) > 1: raise ValueError(loc) # only args[0]'s length >= 1, the others must be 1
             return args[0][0:-1] + (reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),)
-        elif is_bv_value(loc) and int(str(loc)) in sha3_inv:
-            return (con(sha3_inv[int(str(loc))]), con(0))
+        elif is_bv_value(loc):
+            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
+            if preimage: # loc == hash(preimage) + delta
+                return (con(preimage), con(delta))
+            else:
+                return (loc,)
         elif is_bv(loc):
             return (loc,)
         else:
