@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-from typing import Dict
+from typing import Dict, Tuple
 from collections import defaultdict
 
 def color_good(text: str) -> str:
@@ -302,6 +302,19 @@ str_opcode: Dict[int, str] = {
     EVM.SELFDESTRUCT   : 'SELFDESTRUCT',
 }
 
+def restore_precomputed_hashes(x: int) -> Tuple[int, int]:
+    (preimage, offset) = sha3_inv_offset.get(x >> 16, (None, None))
+    if preimage is None: return (None, None)
+    delta = (x & 0xffff) - offset
+    if delta < 0: return (None, None)
+    return (preimage, delta) # x == hash(preimage) + delta
+
+def mk_sha3_inv_offset(m: Dict[int, int]) -> Dict[int, Tuple[int, int]]:
+    m2 = {}
+    for (k, v) in m.items():
+        m2[k >> 16] = (v, k & 0xffff)
+    return m2
+
 sha3_inv: Dict[int, int] = { # sha3(x) -> x
     0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563 : 0,
     0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6 : 1,
@@ -560,3 +573,5 @@ sha3_inv: Dict[int, int] = { # sha3(x) -> x
     0x54075df80ec1ae6ac9100e1fd0ebf3246c17f5c933137af392011f4c5f61513a : 254,
     0xe08ec2af2cfc251225e1968fd6ca21e4044f129bffa95bac3503be8bdb30a367 : 255,
 }
+
+sha3_inv_offset: Dict[int, Tuple[int, int]] = mk_sha3_inv_offset(sha3_inv)
