@@ -51,16 +51,17 @@ contract FoundryTest is Test {
         assertEq(uint256(uint8(retval[0])), 0xAA);
     }
 
-    function testEtchSymbolicAddr(address who) public {
-        vm.etch(who, hex"60425f526001601ff3");
-        (bool success, bytes memory retval) = who.call("");
+    /// @notice etching to a symbolic address is not supported
+    // function testEtchSymbolicAddr(address who) public {
+    //     vm.etch(who, hex"60425f526001601ff3");
+    //     (bool success, bytes memory retval) = who.call("");
 
-        assertTrue(success);
-        assertEq(retval.length, 1);
-        assertEq(uint256(uint8(retval[0])), 0x42);
-    }
+    //     assertTrue(success);
+    //     assertEq(retval.length, 1);
+    //     assertEq(uint256(uint8(retval[0])), 0x42);
+    // }
 
-    /// @notice symbolic code is not supported
+    /// @notice etching symbolic code is not supported
     // function testEtchFullSymbolic(address who, bytes memory code) public {
     //     vm.etch(who, code);
     //     assertEq(code, who.code);

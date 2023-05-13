@@ -955,8 +955,9 @@ class SEVM:
 
                     # who must be concrete
                     if not is_bv_value(who):
-                        ex.error = f'code argument of vm.etch must be concrete but received {arg}'
-                        raise ValueError(who)
+                        ex.error = f'vm.etch(address who, bytes code) must have concrete argument `who` but received {who}'
+                        out.append(ex)
+                        return
 
                     # code must be concrete
                     try:
@@ -969,7 +970,7 @@ class SEVM:
                         ex.pgm[who] = pgm
                         ex.code[who] = code
                     except Exception as e:
-                        ex.error = f'code argument of vm.etch must be concrete but received {arg}'
+                        ex.error = f'vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}'
                         out.append(ex)
                         return
 
