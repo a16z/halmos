@@ -138,14 +138,6 @@ def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argpar
 def is_stop_or_return(opcode: Byte) -> bool:
     return is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]
 
-def decode_hex(hexcode: str) -> Tuple[List[Opcode], List[Any]]:
-    if hexcode.startswith('0x'):
-        hexcode = hexcode[2:]
-    if len(hexcode) % 2 != 0: raise ValueError(hexcode)
-    (ops, code) = decode(BitVecVal(int(hexcode, 16), (len(hexcode) // 2) * 8))
-    pgm = ops_to_pgm(ops)
-    return (pgm, code)
-
 def mk_callvalue() -> Word:
     return BitVec('msg_value', 256)
 
@@ -165,15 +157,9 @@ def mk_block() -> Block:
     block.chainid = con(1) # for ethereum
     return block
 
-def mk_caller(solver) -> Word:
-    caller = BitVec('msg_sender', 256)
-    solver.add(Extract(255, 160, caller) == BitVecVal(0, 96))
-    return caller
-
-def mk_this(solver) -> Word:
-    this = BitVec('this_address', 256)
-    solver.add(Extract(255, 160, this) == BitVecVal(0, 96))
-    return this
+# TODO: addresses are used as keys in the context and could be treated as 160-bit values
+def mk_addr(name: str) -> Word:
+    return Concat(BitVecVal(0, 96), BitVec(name, 160))
 
 def mk_solver(args: argparse.Namespace):
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
@@ -190,8 +176,8 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
     balance = mk_balance()
     block = mk_block()
     callvalue = mk_callvalue()
-    caller = mk_caller(solver)
-    this = mk_this(solver)
+    caller = mk_addr('msg_sender')
+    this = mk_addr('this_address')
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
@@ -237,7 +223,7 @@ def setup(
 
     solver = mk_solver(args)
 
-    this = mk_this(solver)
+    this = mk_addr('this_address')
 
     sevm = SEVM(options)
 
@@ -249,7 +235,7 @@ def setup(
         block     = mk_block(),
         calldata  = [],
         callvalue = con(0),
-        caller    = mk_caller(solver),
+        caller    = mk_addr('msg_sender'),
         this      = this,
         symbolic  = False,
         solver    = solver,

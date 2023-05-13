@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import sys
-
 from typing import List, Tuple, Any
 
 from z3 import *
@@ -21,6 +19,11 @@ class Opcode:
             ret += ' ' + str(self.op[1])
         return ret
 
+    def __repr__(self) -> str:
+        m = mnemonic(self.op[0])
+        return f'Opcode(pc={self.pc}, op={" ".join([m] + [str(x) for x in self.op[1:]])})'
+
+
 def mnemonic(opcode) -> str:
     if is_bv_value(opcode):
         opcode = opcode.as_long()
@@ -35,7 +38,7 @@ def concat(args):
         return args[0]
 
 # Decode ByteCodes to Opcodes
-def decode(hexcode: Any) -> Tuple[List[Opcode], List[Any]]:
+def decode(hexcode: BitVecRef) -> Tuple[List[Opcode], List[Any]]:
     bitsize: int = hexcode.size()
     if bitsize % 8 != 0: raise ValueError(hexcode)
     code: List[Any] = [ simplify(Extract(bitsize-1 - i*8, bitsize - (i+1)*8, hexcode)) for i in range(bitsize // 8) ]

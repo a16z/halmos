@@ -106,3 +106,6 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("warp(uint256)"))
     warp_sig: int = 0xe5d6bf02
+
+    # bytes4(keccak256("etch(address,bytes)"))
+    etch_sig: int = 0xb4d6c782

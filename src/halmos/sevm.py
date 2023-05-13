@@ -39,8 +39,8 @@ f_sdiv = Function('evm_sdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_smod', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
-def con(n: int) -> Word:
-    return BitVecVal(n, 256)
+def con(n: int, size_bits=256) -> Word:
+    return BitVecVal(n, size_bits)
 
 def int_of(x: Any, err: str) -> int:
     if is_bv_value(x):
@@ -54,7 +54,9 @@ def wextend(mem: List[Byte], loc: int, size: int) -> None:
 
 def wload(mem: List[Byte], loc: int, size: int) -> Bytes:
     wextend(mem, loc, size)
-    return simplify(Concat(mem[loc:loc+size])) # BitVecSort(size * 8)
+
+    # BitVecSort(size * 8)
+    return simplify(concat(mem[loc:loc+size]))
 
 def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
     if not eq(val.sort(), BitVecSort(size*8)): raise ValueError(val)
@@ -74,6 +76,29 @@ def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
     for i in range(size):
         if not eq(arr[i].sort(), BitVecSort(8)): raise ValueError(arr)
         mem[loc + i] = arr[i]
+
+
+def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecRef:
+    '''Extract bytes from calldata'''
+    n = data.size()
+    if n % 8 != 0: raise ValueError(n)
+
+    # will extract hi - lo + 1 bits
+    hi = n - 1 - byte_offset * 8
+    lo = n - byte_offset * 8 - size_bytes * 8
+
+    val = simplify(Extract(hi, lo, data))
+    if not eq(val.sort(), BitVecSort(size_bytes * 8)): raise ValueError(val)
+
+    return val
+
+
+def extract_funsig(calldata: BitVecRef):
+    '''Extracts the function signature (first 4 bytes) from calldata'''
+    n = calldata.size()
+    # return simplify(Extract(n-1, n-32, calldata))
+    return extract_bytes(calldata, 0, 4)
+
 
 def create_address(cnt: int) -> Word:
     return con(0x220E + cnt)
@@ -474,6 +499,22 @@ def ops_to_pgm(ops: List[Opcode]) -> List[Opcode]:
         pgm[o.pc] = o
     return pgm
 
+def decode_bytes(code_bytes: bytes) -> Tuple[List[Opcode], List[Any]]:
+    code_int = int.from_bytes(code_bytes, 'big')
+    (ops, code) = decode(BitVecVal(code_int, len(code_bytes) * 8))
+    pgm = ops_to_pgm(ops)
+    return (pgm, code)
+
+def decode_hex(hexcode: str) -> Tuple[List[Opcode], List[Any]]:
+    if len(hexcode) % 2 != 0: raise ValueError(hexcode)
+
+    if hexcode.startswith('0x'):
+        hexcode = hexcode[2:]
+
+    (ops, code) = decode(BitVecVal(int(hexcode, 16), (len(hexcode) // 2) * 8))
+    pgm = ops_to_pgm(ops)
+    return (pgm, code)
+
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
 def test(x: Word, b: bool) -> Word:
@@ -685,7 +726,10 @@ class SEVM:
 
     def call(self, ex: Exec, op: int, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
         gas = ex.st.pop()
+
+        # TODO: zero the upper bits
         to = ex.st.pop()
+
         if op == EVM.STATICCALL:
             fund = con(0)
         else:
@@ -824,10 +868,10 @@ class SEVM:
 
                     target = self.options['target'].rstrip('/')
                     path = target + '/' + path
-                    
+
                     with open(path) as f:
                         artifact = json.loads(f.read())
-                    
+
                     if artifact['bytecode']['object']:
                         bytecode = artifact['bytecode']['object'].replace('0x', '')
                     else:
@@ -904,6 +948,32 @@ class SEVM:
                 # vm.warp(uint256)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.warp_sig:
                     ex.block.timestamp = simplify(Extract(255, 0, arg))
+                # vm.etch(address,bytes)
+                elif extract_funsig(arg) == hevm_cheat_code.etch_sig:
+                    # ex.pgm contains 256-bit keys
+                    who = simplify(Concat(con(0, 96), extract_bytes(arg, 4 + 12, 20)))
+
+                    # who must be concrete
+                    if not is_bv_value(who):
+                        ex.error = f'vm.etch(address who, bytes code) must have concrete argument `who` but received {who}'
+                        out.append(ex)
+                        return
+
+                    # code must be concrete
+                    try:
+                        code_offset = extract_bytes(arg, 4 + 32, 32).as_long()
+                        code_length = extract_bytes(arg, 4 + code_offset, 32).as_long()
+                        code_int = extract_bytes(arg, 4 + code_offset + 32, code_length).as_long()
+                        code_bytes = code_int.to_bytes(code_length, 'big')
+
+                        pgm, code = decode_bytes(code_bytes)
+                        ex.pgm[who] = pgm
+                        ex.code[who] = code
+                    except Exception as e:
+                        ex.error = f'vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}'
+                        out.append(ex)
+                        return
+
                 else:
                     # TODO: support other cheat codes
                     ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
@@ -923,6 +993,9 @@ class SEVM:
             stack.append((ex, step_id))
 
         # separately handle known / unknown external calls
+
+        # TODO: avoid relying directly on dict membership here
+        # it is based on hashing of the z3 expr objects rather than equivalence
         if to in ex.pgm:
             call_known()
         else:
