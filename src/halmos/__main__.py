@@ -47,6 +47,7 @@ def parse_args(args=None) -> argparse.Namespace:
     parser.add_argument('--function', metavar='FUNCTION_NAME_PREFIX', default='check', help='run tests matching the given prefix only (default: %(default)s)')
 
     parser.add_argument('--bytecode', metavar='HEX_STRING', help='execute the given bytecode')
+    parser.add_argument('--reset-bytecode', metavar='ADDR1=CODE1,ADDR2=CODE2,...', help='reset the bytecode of given addresses after setUp()')
 
     parser.add_argument('--loop', metavar='MAX_BOUND', type=int, default=2, help='set loop unrolling bounds (default: %(default)s)')
     parser.add_argument('--width', metavar='MAX_WIDTH', type=int, help='set the max number of paths')
@@ -594,6 +595,14 @@ def main() -> int:
                         print(color_warn(f'Error: {setup_sig} failed: {type(err).__name__}: {err}'))
                         if args.debug: traceback.print_exc()
                         continue
+
+                    if args.reset_bytecode:
+                        for assign in [x.split('=') for x in args.reset_bytecode.split(',')]:
+                            addr = con(int(assign[0].strip(), 0))
+                            new_hexcode = assign[1].strip()
+                            (new_pgm, new_code) = decode_hex(new_hexcode)
+                            setup_ex.pgm[addr] = new_pgm
+                            setup_ex.code[addr] = new_code
 
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]
