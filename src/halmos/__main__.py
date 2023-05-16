@@ -22,9 +22,22 @@ if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >
     sys.set_int_max_str_digits(0)
 
 def mk_crytic_parser() -> argparse.ArgumentParser:
-    crytic_compile_parser = argparse.ArgumentParser(prog='crytic-compile')
+    crytic_compile_parser = argparse.ArgumentParser()
     cryticparser.init(crytic_compile_parser)
     return crytic_compile_parser
+
+def print_help_compile(crytic_compile_parser: argparse.ArgumentParser) -> None:
+    formatter = crytic_compile_parser._get_formatter()
+    for action_group in crytic_compile_parser._action_groups:
+        if action_group.title == 'options':
+            # prints "--help", which is not helpful
+            continue
+
+        formatter.start_section(action_group.title)
+        formatter.add_text(action_group.description)
+        formatter.add_arguments(action_group._group_actions)
+        formatter.end_section()
+    crytic_compile_parser._print_message(formatter.format_help())
 
 def parse_args(args=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='halmos', epilog='For more information, see https://github.com/a16z/halmos')
@@ -61,7 +74,7 @@ def parse_args(args=None) -> argparse.Namespace:
     parser.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
     parser.add_argument('--print-revert', action='store_true', help='print reverting paths in verbose mode')
     parser.add_argument('--print-potential-counterexample', action='store_true', help='print potentially invalid counterexamples')
-    parser.add_argument('--compile-help', action='store_true', help='print build options (foundry, hardhat, etc.)')
+    parser.add_argument('--help-compile', action='store_true', help='print build options (foundry, hardhat, etc.)')
 
     return parser.parse_known_args(args)
 
@@ -494,8 +507,8 @@ def main() -> int:
     args, halmos_unknown_args = parse_args()
 
     crytic_compile_parser = mk_crytic_parser()
-    if args.compile_help:
-        crytic_compile_parser.print_help()
+    if args.help_compile:
+        print_help_compile(crytic_compile_parser)
         return 0
 
     options = mk_options(args)
