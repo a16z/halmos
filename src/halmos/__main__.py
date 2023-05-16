@@ -479,6 +479,7 @@ def main() -> int:
     # z3 global options
     #
 
+    set_param("parallel.enable", os.environ.get("PARALLEL_Z3", False))
     set_option(max_width=240)
     set_option(max_lines=100000000)
 #   set_option(max_depth=1000)
