@@ -9,8 +9,10 @@ from halmos.byte2op import decode, Opcode
 
 from halmos.sevm import con
 
-from halmos.__main__ import str_abi, parse_args, decode_hex, mk_options, run_bytecode
+from halmos.__main__ import str_abi, decode_hex, run_bytecode
 import halmos.__main__
+
+from test_fixtures import args, options
 
 @pytest.fixture
 def setup_abi():
@@ -38,13 +40,6 @@ def setup_sig():
 def setup_selector():
     return int('0a9254e4', 16)
 
-@pytest.fixture
-def args():
-    return parse_args([])
-
-@pytest.fixture
-def options(args):
-    return mk_options(args)
 
 def test_run_bytecode(args, options):
     hexcode = '34381856FDFDFDFDFDFD5B00'
