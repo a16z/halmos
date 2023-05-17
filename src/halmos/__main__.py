@@ -46,35 +46,53 @@ def parse_args(args=None) -> argparse.Namespace:
     parser.add_argument('--contract', metavar='CONTRACT_NAME', help='run tests in the given contract only')
     parser.add_argument('--function', metavar='FUNCTION_NAME_PREFIX', default='check', help='run tests matching the given prefix only (default: %(default)s)')
 
-    parser.add_argument('--bytecode', metavar='HEX_STRING', help='execute the given bytecode')
-
     parser.add_argument('--loop', metavar='MAX_BOUND', type=int, default=2, help='set loop unrolling bounds (default: %(default)s)')
     parser.add_argument('--width', metavar='MAX_WIDTH', type=int, help='set the max number of paths')
     parser.add_argument('--depth', metavar='MAX_DEPTH', type=int, help='set the max path length')
     parser.add_argument('--array-lengths', metavar='NAME1=LENGTH1,NAME2=LENGTH2,...', help='set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)')
 
     parser.add_argument('--symbolic-storage', action='store_true', help='set default storage values to symbolic')
-    parser.add_argument('--symbolic-jump', action='store_true', help='support symbolic jump destination (experimental)')
 
-    parser.add_argument('--no-smt-add',          action='store_true', help='do not interpret `+`')
-    parser.add_argument('--no-smt-sub',          action='store_true', help='do not interpret `-`')
-    parser.add_argument('--no-smt-mul',          action='store_true', help='do not interpret `*`')
-    parser.add_argument(   '--smt-div',          action='store_true', help=       'interpret `/`')
-    parser.add_argument(   '--smt-div-by-const', action='store_true', help=       'interpret division by constant')
-    parser.add_argument(   '--smt-mod-by-const', action='store_true', help=       'interpret constant modulo')
-    parser.add_argument(   '--smt-exp-by-const', metavar='N', type=int, default=2, help='interpret constant power up to N (default: %(default)s)')
+    # debugging options
+    group_debug = parser.add_argument_group("Debugging options")
 
-    parser.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
-    parser.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
-    parser.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
-    parser.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
+    group_debug.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
+    group_debug.add_argument('--debug', action='store_true', help='run in debug mode')
+    group_debug.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
+    group_debug.add_argument('--print-revert', action='store_true', help='print reverting paths in verbose mode')
 
-    parser.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
-    parser.add_argument('--debug', action='store_true', help='run in debug mode')
-    parser.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
-    parser.add_argument('--print-revert', action='store_true', help='print reverting paths in verbose mode')
-    parser.add_argument('--print-potential-counterexample', action='store_true', help='print potentially invalid counterexamples')
-    parser.add_argument('--help-compile', action='store_true', help='print build options (foundry, hardhat, etc.)')
+    # build options
+    group_build = parser.add_argument_group("Build options")
+
+    group_build.add_argument('--help-compile', action='store_true', help='print build options (foundry, hardhat, etc.)')
+
+    # smt solver options
+    group_solver = parser.add_argument_group("Solver options")
+
+    group_solver.add_argument('--no-smt-add',          action='store_true', help='do not interpret `+`')
+    group_solver.add_argument('--no-smt-sub',          action='store_true', help='do not interpret `-`')
+    group_solver.add_argument('--no-smt-mul',          action='store_true', help='do not interpret `*`')
+    group_solver.add_argument(   '--smt-div',          action='store_true', help=       'interpret `/`')
+    group_solver.add_argument(   '--smt-div-by-const', action='store_true', help=       'interpret division by constant')
+    group_solver.add_argument(   '--smt-mod-by-const', action='store_true', help=       'interpret constant modulo')
+    group_solver.add_argument(   '--smt-exp-by-const', metavar='N', type=int, default=2, help='interpret constant power up to N (default: %(default)s)')
+
+    group_solver.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
+    group_solver.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
+    group_solver.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
+    group_solver.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
+
+    # internal options
+    group_internal = parser.add_argument_group("Internal options")
+
+    group_internal.add_argument('--bytecode', metavar='HEX_STRING', help='execute the given bytecode')
+    group_internal.add_argument('--reset-bytecode', metavar='ADDR1=CODE1,ADDR2=CODE2,...', help='reset the bytecode of given addresses after setUp()')
+
+    # experimental options
+    group_experimental = parser.add_argument_group("Experimental options")
+
+    group_experimental.add_argument('--symbolic-jump', action='store_true', help='support symbolic jump destination')
+    group_experimental.add_argument('--print-potential-counterexample', action='store_true', help='print potentially invalid counterexamples')
 
     return parser.parse_known_args(args)
 
@@ -594,6 +612,14 @@ def main() -> int:
                         print(color_warn(f'Error: {setup_sig} failed: {type(err).__name__}: {err}'))
                         if args.debug: traceback.print_exc()
                         continue
+
+                    if args.reset_bytecode:
+                        for assign in [x.split('=') for x in args.reset_bytecode.split(',')]:
+                            addr = con(int(assign[0].strip(), 0))
+                            new_hexcode = assign[1].strip()
+                            (new_pgm, new_code) = decode_hex(new_hexcode)
+                            setup_ex.pgm[addr] = new_pgm
+                            setup_ex.code[addr] = new_code
 
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]
