@@ -1,5 +1,4 @@
 import pytest
-import json
 
 from z3 import *
 
@@ -7,21 +6,11 @@ from halmos.utils import EVM
 
 from halmos.byte2op import decode
 
-from halmos.sevm import SEVM, con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin
+from halmos.sevm import con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin
 
-from halmos.__main__ import parse_args, mk_options, mk_block
+from halmos.__main__ import mk_block
 
-@pytest.fixture
-def args():
-    return parse_args([])
-
-@pytest.fixture
-def options(args):
-    return mk_options(args)
-
-@pytest.fixture
-def sevm(options):
-    return SEVM(options)
+from test_fixtures import args, options, sevm
 
 caller = BitVec('msg_sender', 256)
 
