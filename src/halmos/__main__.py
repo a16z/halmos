@@ -9,6 +9,10 @@ import argparse
 import re
 import traceback
 
+from multiprocessing import Pool
+from tempfile import NamedTemporaryFile
+from timeit import default_timer as timer
+
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
 from dataclasses import dataclass
@@ -16,10 +20,11 @@ from multiprocessing import Pool
 from timeit import default_timer as timer
 
 from .utils import color_good, color_warn
+from .serde import save_json, load_json, fancy_type
 from .sevm import *
 from .warnings import *
 
-if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
+if hasattr(sys, 'set_int_max_str_digits'): # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
     sys.set_int_max_str_digits(0)
 
 def mk_crytic_parser() -> argparse.ArgumentParser:
@@ -54,6 +59,8 @@ def parse_args(args=None) -> argparse.Namespace:
 
     parser.add_argument('--symbolic-storage', action='store_true', help='set default storage values to symbolic')
     parser.add_argument('--symbolic-msg-sender', action='store_true', help='set msg.sender symbolic')
+    parser.add_argument('--test-parallel', action='store_true', help='run tests with a shared setUp() in parallel')
+    parser.add_argument('--test-parallel-cores', default=os.cpu_count(), type=int, help='max number of cores to use for running tests in parallel (default: %(default)s)')
 
     # debugging options
     group_debug = parser.add_argument_group("Debugging options")
@@ -327,17 +334,28 @@ class ModelWithContext:
     result: CheckSatResult
 
 
+def run_kwargs(kwargs):
+    return run(**kwargs)
+
 def run(
-    setup_ex: Exec,
+    setup_ex: UnionType[Exec, str],
     abi: List,
-    funname: str,
     funsig: str,
     funselector: str,
     arrlen: Dict,
     args: argparse.Namespace,
     options: Dict
 ) -> int:
+    funname = funsig.split('(')[0]
     if args.debug: print(f'Executing {funname}')
+
+    if isinstance(setup_ex, str):
+        # if we get a string, treat it as a filename and load setup_ex from the file
+        start = timer()
+        setup_ex_json = load_json(setup_ex)
+        setup_ex = ExecModel.parse_obj(setup_ex_json)
+        if args.debug:
+            print(f'Completed setUp() state deserialization in {timer() - start:0.2f}s')
 
     #
     # calldata
@@ -368,6 +386,11 @@ def run(
     solver.set(timeout=args.solver_timeout_branching)
     solver.add(setup_ex.solver.assertions())
 
+    # when loaded from a file, setup_ex.cnts is a dict of dict, but it needs to be a defaultdict of defaultdict
+    cnts = defaultdict(lambda: defaultdict(int))
+    for k in setup_ex.cnts:
+        cnts[k].update(setup_ex.cnts[k])
+
     (exs, steps) = sevm.run(Exec(
         code      = setup_ex.code.copy(), # shallow copy
         storage   = deepcopy(setup_ex.storage),
@@ -388,16 +411,16 @@ def run(
         prank     = Prank(), # prank is reset after setUp()
         #
         solver    = solver,
-        path      = deepcopy(setup_ex.path),
+        path      = [],
         #
         log       = deepcopy(setup_ex.log),
-        cnts      = deepcopy(setup_ex.cnts),
+        cnts      = cnts,
         sha3s     = deepcopy(setup_ex.sha3s),
         storages  = deepcopy(setup_ex.storages),
         balances  = deepcopy(setup_ex.balances),
         calls     = deepcopy(setup_ex.calls),
-        failed    = setup_ex.failed,
-        error     = setup_ex.error,
+        failed    = False,
+        error     = None,
     ))
 
     mid = timer()
@@ -687,50 +710,102 @@ def main() -> int:
                 methodIdentifiers = source_unit.hashes(contract)
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
+                if not funsigs:
+                    continue
 
-                if funsigs:
-                    num_passed = 0
-                    num_failed = 0
-                    print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
+                exitcodes = []
+                num_exc = 0
+                print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
 
-                    setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpSymbolic(') ])
-                    (setup_name, setup_sig, setup_selector) = (None, None, None)
-                    if len(setup_sigs) > 0:
-                        (setup_sig, setup_selector) = setup_sigs[-1]
-                        setup_name = setup_sig.split('(')[0]
-                        if args.verbose >= 2 or args.debug: print(f'Running {setup_sig}')
+                setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpSymbolic(') ])
+                (setup_name, setup_sig, setup_selector) = (None, None, None)
+                if len(setup_sigs) > 0:
+                    (setup_sig, setup_selector) = setup_sigs[-1]
+                    setup_name = setup_sig.split('(')[0]
+                    if args.verbose >= 1 or args.debug: print(f'Running {setup_sig}')
+                try:
+                    start = timer()
+                    setup_ex = setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
+                    end = timer()
+                    if args.verbose >= 1 or args.debug: print(f'Completed setUp() in {end - start:0.2f}s')
+
+                except Exception as err:
+                    print(color_warn(f'Error: {setup_sig} failed: {type(err).__name__}: {err}'))
+                    if args.debug: traceback.print_exc()
+                    continue
+
+                if args.reset_bytecode:
+                    for assign in [x.split('=') for x in args.reset_bytecode.split(',')]:
+                        addr = con_addr(int(assign[0].strip(), 0))
+                        new_hexcode = assign[1].strip()
+                        setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
+
+                if args.test_parallel and len(funsigs) > 1:
+                    # serialize setup_ex and run the tests in parallel
+
+                    start = timer()
+
+                    # prune the state we don't need to serialize/pass down to the tests
+                    setup_ex.callvalue = 0
+                    setup_ex.calldata = []
+                    setup_ex.pc       = None
+                    setup_ex.st       = None
+                    setup_ex.jumpis   = None
+                    setup_ex.output   = None
+                    setup_ex.symbolic = None
+                    setup_ex.prank    = None
+                    setup_ex.path     = []
+
+                    setup_ex_tmpfile = NamedTemporaryFile(delete=False)
                     try:
-                        setup_ex = setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
-                    except Exception as err:
-                        print(color_warn(f'Error: {setup_sig} failed: {type(err).__name__}: {err}'))
-                        if args.debug: traceback.print_exc()
-                        continue
+                        if args.verbose >= 3 or args.debug:
+                            print(f'Writing setUp() state to {setup_ex_tmpfile.name}')
+                        save_json(setup_ex.serialize(), setup_ex_tmpfile.name)
+                        if args.verbose >= 3 or args.debug:
+                            print(f'Completed setUp() state serialization in {timer() - start:0.2f}s')
 
-                    if args.reset_bytecode:
-                        for assign in [x.split('=') for x in args.reset_bytecode.split(',')]:
-                            addr = con_addr(int(assign[0].strip(), 0))
-                            new_hexcode = assign[1].strip()
-                            setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
+                        with Pool(processes=args.test_parallel_cores) as pool:
+                            if args.debug: print(f'Running tests on {args.test_parallel_cores} cores')
+                            run_args = []
+                            for funsig in funsigs:
+                                run_args.append({
+                                    'setup_ex': setup_ex_tmpfile.name,
+                                    'abi': abi,
+                                    'funsig': funsig,
+                                    'funselector': methodIdentifiers[funsig],
+                                    'arrlen': arrlen,
+                                    'args': args,
+                                    'options': options,
+                                })
+                            for exitcode in pool.imap_unordered(run_kwargs, run_args):
+                                exitcodes.append(exitcode)
 
+                            # TODO: handle exceptions
+
+                    except Exception as e:
+                        num_exc += 1
+                        traceback.print_exc()
+
+                else:
+                    # run the tests sequentially
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]
-                        funname = funsig.split('(')[0]
+
                         try:
-                            exitcode = run(setup_ex, abi, funname, funsig, funselector, arrlen, args, options)
+                            exitcode = run(setup_ex, abi, funsig, funselector, arrlen, args, options)
+                            exitcodes.append(exitcode)
                         except Exception as err:
                             print(f'{color_warn("[SKIP]")} {funsig}')
                             print(color_warn(f'{type(err).__name__}: {err}'))
                             if args.debug: traceback.print_exc()
-                            num_failed += 1
+                            num_exc += 1
                             continue
-                        if exitcode == 0:
-                            num_passed += 1
-                        else:
-                            num_failed += 1
 
-                    print(f'Symbolic test result: {num_passed} passed; {num_failed} failed; time: {timer() - contract_start:0.2f}s')
-                    total_passed += num_passed
-                    total_failed += num_failed
+                num_passed = exitcodes.count(0)
+                num_failed = len(exitcodes) - num_passed + num_exc
+                print(f'Symbolic test result: {num_passed} passed; {num_failed} failed; time: {timer() - contract_start:0.2f}s')
+                total_passed += num_passed
+                total_failed += num_failed
 
     main_end = timer()
 

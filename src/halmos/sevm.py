@@ -7,10 +7,13 @@ from copy import deepcopy
 from collections import defaultdict
 from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
+from pydantic import BaseModel
 
 from z3 import *
+
 from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, con_addr
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
+from .serde import serialize
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -42,6 +45,18 @@ f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 magic_address: int = 0xaaaa0000
 
 new_address_offset: int = 1
+
+def deserialize_value(item: str) -> Any:
+    '''Deserialize bytes | z3 expr from string'''
+    if item.startswith('(declare-fun'):
+        return deserialize(item)
+
+    if item.startswith('0x'):
+        return bytes.fromhex(item[2:])
+
+    print(f'Warning: deserializing {item} with type {type(item)} as-is')
+    return item
+
 
 def id_str(x: Any) -> str:
     return str(x).replace(' ', '')
@@ -299,6 +314,16 @@ class Block:
 
         assert_address(self.coinbase)
 
+    @classmethod
+    def validate(cls, d: dict):
+        if not isinstance(d, dict):
+            raise TypeError('dict required')
+        return Block(**{k: deserialize_value(v) for k, v in d.items()})
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+
 class Contract:
     '''Abstraction over contract bytecode. Can include concrete and symbolic elements.'''
 
@@ -322,6 +347,16 @@ class Contract:
 
     def __iter__(self):
         return CodeIterator(self)
+
+    @classmethod
+    def validate(cls, s: str):
+        if not isinstance(v, str):
+            raise TypeError('string required')
+        return Contract(deserialize_value(s))
+
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
 
     def from_hexcode(hexcode: str):
         '''Create a contract from a hexcode string, e.g. "aabbccdd" '''
@@ -385,6 +420,9 @@ class Contract:
         '''Returns the length of the bytecode in bytes.'''
         return byte_length(self._rawcode)
 
+    def serialize(self) -> str:
+        return serialize(self._rawcode)
+
     def valid_jump_destinations(self) -> set:
         '''Returns the set of valid jump destinations.'''
         if not hasattr(self, 'jumpdests'):
@@ -411,6 +449,37 @@ class CodeIterator:
         self.pc += len(insn)
 
         return insn
+
+
+class ExecModel(BaseModel):
+    # network
+    code: Dict[Address, Contract]
+    storage: Dict[Address, Dict[int, Dict[int, BitVecRef]]]
+    balance: ArrayRef # address -> balance
+
+    # block
+    block: Block
+
+    # tx
+    caller: Address # msg.sender
+    this: Address # current account address
+
+    # vm state
+    # (skipped, this is internal to the execution)
+
+    solver: Solver
+
+    # logs
+    log: List[Tuple[List[BitVecRef], Any]] # event logs emitted
+    cnts: Dict[str,Dict[UnionType[int, str],int]] # opcode -> frequency; counters
+    sha3s: List[Tuple[BitVecRef,BitVecRef]] # sha3 hashes generated
+    storages: Dict[Any,Any] # storage updates
+    balances: Dict[Any,Any] # balance updates
+    calls: List[Any] # external calls (keep them string representations)
+
+    class Config:
+        arbitrary_types_allowed = True
+        ignore_extra = True
 
 
 class Exec: # an execution path
@@ -478,6 +547,9 @@ class Exec: # an execution path
 
         assert_address(self.caller)
         assert_address(self.this)
+
+    def serialize(self):
+        return serialize(self.__dict__.copy())
 
     def current_opcode(self) -> UnionType[int, BitVecRef]:
         return unbox_int(self.code[self.this][self.pc])
@@ -556,6 +628,7 @@ class Exec: # an execution path
         assert_address(addr)
         if slot not in self.storage[addr]:
             self.storage[addr][slot] = {}
+
         if len(keys) not in self.storage[addr][slot]:
             if len(keys) == 0:
                 if self.symbolic:
@@ -586,7 +659,10 @@ class Exec: # an execution path
         if len(keys) == 0:
             self.storage[addr][slot][0] = val
         else:
-            new_storage_var = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages)}', BitVecSort(len(keys)*256), BitVecSort(256))
+            new_storage_var = Array(
+                f'storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages)}',
+                BitVecSort(len(keys)*256), BitVecSort(256)
+            )
             new_storage = Store(self.storage[addr][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
             self.storage[addr][slot][len(keys)] = new_storage_var
