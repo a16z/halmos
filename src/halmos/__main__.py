@@ -42,7 +42,7 @@ def print_help_compile(crytic_compile_parser: argparse.ArgumentParser) -> None:
 def parse_args(args=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='halmos', epilog='For more information, see https://github.com/a16z/halmos')
 
-    parser.add_argument('target', metavar='TARGET_DIRECTORY', nargs='?', default=os.getcwd(), help='source root directory (default: current directory)')
+    parser.add_argument('--root', metavar='DIRECTORY', default=os.getcwd(), help='source root directory (default: current directory)')
     parser.add_argument('--contract', metavar='CONTRACT_NAME', help='run tests in the given contract only')
     parser.add_argument('--function', metavar='FUNCTION_NAME_PREFIX', default='check', help='run tests matching the given prefix only (default: %(default)s)')
 
@@ -494,7 +494,7 @@ def str_model(model, args: argparse.Namespace) -> str:
 
 def mk_options(args: argparse.Namespace) -> Dict:
     return {
-        'target': args.target,
+        'target': args.root,
         'verbose': args.verbose,
         'debug': args.debug,
         'log': args.log,
@@ -564,7 +564,7 @@ def main() -> int:
             print(color_warn(f'error: unrecognized arguments: {" ".join(both_unknown)}'))
             return 1
 
-        cryticCompile = CryticCompile(target=args.target, **vars(crytic_compile_args))
+        cryticCompile = CryticCompile(target=args.root, **vars(crytic_compile_args))
     except InvalidCompilation as e:
         print(color_warn(f'Parse error: {e}'))
         return 1
