@@ -57,6 +57,7 @@ def parse_args(args=None) -> argparse.Namespace:
     group_debug = parser.add_argument_group("Debugging options")
 
     group_debug.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
+    group_debug.add_argument('-st', '--statistics', action='store_true', help='print statistics')
     group_debug.add_argument('--debug', action='store_true', help='run in debug mode')
     group_debug.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
     group_debug.add_argument('--print-revert', action='store_true', help='print reverting paths in verbose mode')
@@ -254,6 +255,8 @@ def setup(
     args: argparse.Namespace,
     options: Dict
 ) -> Exec:
+    setup_start = timer()
+
     (pgm, code) = decode_hex(hexcode)
 
     solver = mk_solver(args)
@@ -276,6 +279,8 @@ def setup(
         solver    = solver,
     )
 
+    setup_mid = timer()
+
     if setup_sig:
         wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_selector, 32))
         dyn_param_size = [] # TODO: propagate to run
@@ -294,6 +299,11 @@ def setup(
 
         if args.verbose >= 2:
             print(setup_ex)
+
+    setup_end = timer()
+
+    if args.statistics:
+        print(f'[time] setup: {setup_end - setup_start:0.2f}s (decode: {setup_mid - setup_start:0.2f}s, run: {setup_end - setup_mid:0.2f}s)')
 
     return setup_ex
 
@@ -510,6 +520,8 @@ def mk_options(args: argparse.Namespace) -> Dict:
     }
 
 def main() -> int:
+    main_start = timer()
+
     #
     # z3 global options
     #
@@ -569,6 +581,8 @@ def main() -> int:
         print(color_warn(f'Parse error: {e}'))
         return 1
 
+    main_mid = timer()
+
     #
     # run
     #
@@ -589,6 +603,8 @@ def main() -> int:
                 contracts = sorted(contracts_names)
 
             for contract in contracts:
+                contract_start = timer()
+
                 hexcode = source_unit.bytecodes_runtime[contract]
                 abi = source_unit.abis[contract]
                 methodIdentifiers = source_unit.hashes(contract)
@@ -637,9 +653,14 @@ def main() -> int:
                         else:
                             num_failed += 1
 
-                    print(f'Symbolic test result: {num_passed} passed; {num_failed} failed')
+                    print(f'Symbolic test result: {num_passed} passed; {num_failed} failed; time: {timer() - contract_start:0.2f}s')
                     total_passed += num_passed
                     total_failed += num_failed
+
+    main_end = timer()
+
+    if args.statistics:
+        print(f'\n[time] total: {main_end - main_start:0.2f}s (build: {main_mid - main_start:0.2f}s, tests: {main_end - main_mid:0.2f}s)')
 
     if (total_passed + total_failed) == 0:
         error_msg = f'Error: No tests with the prefix `{args.function}`'
