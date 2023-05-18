@@ -39,4 +39,4 @@ jobs:
         run: pytest
 
       - name: Test Halmos
-        run: halmos tests --symbolic-storage --function test
+        run: halmos --root tests --symbolic-storage --function test
