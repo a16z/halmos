@@ -77,8 +77,8 @@ def parse_args(args=None) -> argparse.Namespace:
     group_solver.add_argument(   '--smt-mod-by-const', action='store_true', help=       'interpret constant modulo')
     group_solver.add_argument(   '--smt-exp-by-const', metavar='N', type=int, default=2, help='interpret constant power up to N (default: %(default)s)')
 
-    group_solver.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
-    group_solver.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
+    group_solver.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
+    group_solver.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
     group_solver.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
     group_solver.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
 
@@ -450,6 +450,7 @@ def run(
 def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> None:
     if args.debug: print(f'{" "*2}Checking assertion violation')
 
+    ex.solver.set(timeout=args.solver_timeout_assertion)
     res = ex.solver.check()
     if res == sat:
         if args.debug: print(f'{" "*4}Generating a counterexample')
@@ -457,7 +458,7 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
     if res == unknown and args.solver_fresh:
         if args.debug: print(f'{" "*4}Checking again with a fresh solver')
         sol2 = SolverFor('QF_AUFBV', ctx=Context())
-        sol2.set(timeout=args.solver_timeout_assertion)
+    #   sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.sexpr())
         res = sol2.check()
         if res == sat: model = sol2.model()
