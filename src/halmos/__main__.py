@@ -374,6 +374,8 @@ def run(
         error     = setup_ex.error,
     ))
 
+    mid = timer()
+
     # check assertion violations
     normal = 0
     models = []
@@ -402,8 +404,12 @@ def run(
     else:
         passfail = color_warn('[FAIL]')
 
+    time_info = f'{end - start:0.2f}s'
+    if args.statistics:
+        time_info += f' (paths: {mid - start:0.2f}s, models: {end - mid:0.2f}s)'
+
     # print result
-    print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {end - start:0.2f}s, bounds: [{', '.join(dyn_param_size)}])")
+    print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])")
     for model, idx, ex in models:
         if model:
             if is_valid_model(model):
