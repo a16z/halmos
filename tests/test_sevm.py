@@ -4,9 +4,7 @@ from z3 import *
 
 from halmos.utils import EVM
 
-from halmos.byte2op import decode
-
-from halmos.sevm import con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin
+from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin
 
 from halmos.__main__ import mk_block
 
@@ -33,11 +31,8 @@ def storage():
     return {}
 
 def mk_ex(hexcode, sevm, solver, storage, caller, this):
-    (ops, code) = decode(hexcode)
-    pgm = ops_to_pgm(ops)
     return sevm.mk_exec(
-        pgm       = { this: pgm },
-        code      = { this: code },
+        code      = { this: Contract.from_hexcode(hexcode) },
         storage   = { this: storage },
         balance   = balance,
         block     = mk_block(),

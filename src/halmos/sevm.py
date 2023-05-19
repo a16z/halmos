@@ -42,11 +42,29 @@ f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, size_bits)
 
-def int_of(x: Any, err: str) -> int:
+def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
+    if isinstance(x, int):
+        return x
+
     if is_bv_value(x):
         return x.as_long()
-    else:
-        raise NotImplementedError(f'{err}: {x}')
+
+    raise NotImplementedError(f'{err}: {x}')
+
+def byte_length(x: Any) -> int:
+    if is_bv(x):
+        assert x.size() % 8 == 0
+        return x.size() >> 3
+
+    # if it's bytes
+    if isinstance(x, bytes):
+        return len(x)
+
+    raise ValueError(x)
+
+def instruction_length(opcode: Any) -> int:
+    opcode = int_of(opcode)
+    return (opcode - EVM.PUSH0 + 1) if EVM.PUSH1 <= opcode <= EVM.PUSH32 else 1
 
 def wextend(mem: List[Byte], loc: int, size: int) -> None:
     if len(mem) < loc + size:
@@ -103,19 +121,6 @@ def extract_funsig(calldata: BitVecRef):
 def create_address(cnt: int) -> Word:
     return con(0x220E + cnt)
 
-def valid_jump_destinations(pgm: List[Opcode]) -> Set[int]:
-    jumpdests = set()
-    i = 0
-    while i < len(pgm):
-        opcode = pgm[i].op[0]
-        if is_bv_value(opcode):
-            opcode = opcode.as_long()
-            if opcode == EVM.JUMPDEST:
-                jumpdests.add(i)
-            elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
-                i += opcode - EVM.PUSH1 + 1
-        i += 1
-    return jumpdests
 
 class State:
     stack: List[Word]
@@ -207,10 +212,149 @@ class Block:
         self.number     = kwargs['number']
         self.timestamp  = kwargs['timestamp']
 
+class Contract:
+    '''Abstraction over contract bytecode. Can include concrete and symbolic elements.'''
+
+    # for completely concrete code: _rawcode is a single bytes element
+    # for completely symbolic code: _rawcode is a single BitVec element
+    # for mixed code (e.g. concrete bytecode with symbolic immutables): _rawcode is a list of bytes and BitVec elements
+    _rawcode: List[Any]
+
+    def __init__(self, rawcode: List[Any]) -> None:
+        if not rawcode:
+            raise ValueError('rawcode cannot be empty')
+        self._rawcode = rawcode
+
+    def __init_jumpdests(self):
+        self.jumpdests = set()
+
+        for (pc, opcode) in iter(self):
+            if opcode == EVM.JUMPDEST:
+                self.jumpdests.add(pc)
+
+    def __iter__(self):
+        return CodeIterator(self)
+
+    def from_hexcode(hexcode: str):
+        '''Create a contract from a hexcode string, e.g. "aabbccdd" '''
+        if len(hexcode) % 2 != 0: raise ValueError(hexcode)
+
+        if hexcode.startswith('0x'):
+            hexcode = hexcode[2:]
+
+        return Contract([bytes.fromhex(hexcode)])
+
+    def from_bytes(bytecode: bytes):
+        '''Create a contract from a bytes object, e.g. b"\xaa\xbb\xcc\xdd"'''
+        return Contract([bytecode])
+
+    def from_bitvec(bv: BitVecRef):
+        '''Create a contract from a BitVec'''
+        # TODO: handle case where bv is a concatenation of multiple BitVecs including mixed concrete and symbolic
+        return Contract([bv])
+
+    def next_pc(self, pc):
+        opcode = self[pc]
+        return pc + instruction_length(opcode)
+
+    def __getitem__(self, offset: int) -> Any:
+        '''Returns the concrete byte at the given offset. May fail if pc is not an instruction boundary.'''
+        if offset < 0:
+            return self[len(self) + offset]
+
+        # if offset < byte_length(self._rawcode[0]):
+        #     return self._rawcode[0][offset]
+
+        curr_idx = 0
+        end = 0
+        while curr_idx < len(self._rawcode):
+            curr_elem = self._rawcode[curr_idx]
+            byte_length_curr_elem = byte_length(curr_elem)
+
+            begin = end
+            end = begin + byte_length_curr_elem
+
+            # extract and return
+            if offset < end:
+                if is_bv(curr_elem):
+                    return extract_bytes(curr_elem, offset - begin, 1)
+
+                return int_of(curr_elem[offset - begin])
+
+            # advance to the next element
+            else:
+                curr_idx += 1
+
+        # if we get here, idx is out of bounds
+        # in the EVM, this is defined as returning 0
+        return 0
+
+    def __len__(self) -> int:
+        '''Returns the length of the bytecode in bytes.'''
+        return sum([byte_length(x) for x in self._rawcode])
+
+    def valid_jump_destinations(self) -> set:
+        '''Returns the set of valid jump destinations.'''
+        if not hasattr(self, 'jumpdests'):
+            self.__init_jumpdests()
+
+        return self.jumpdests
+
+
+class CodeIterator:
+    def __init__(self, contract: Contract):
+        self.contract = contract
+
+        # position of the current code element in the contract
+        self.curr = 0
+
+        # byte offset into the current code element
+        self.curr_offset = 0
+
+        self.pc = 0
+
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> Tuple[int, int]:
+        '''Returns a tuple of (pc, opcode)'''
+        print(f'curr: {self.curr}, curr_offset: {self.curr_offset}, pc: {self.pc}')
+
+        num_code_elems = len(self.contract._rawcode)
+
+        if self.curr >= num_code_elems:
+            raise StopIteration
+
+        curr_code_elem = self.contract._rawcode[self.curr]
+
+        # if we're past the end of the current code element, move to the next one
+
+        while self.curr_offset >= byte_length(curr_code_elem):
+            self.curr_offset -= byte_length(curr_code_elem)
+            self.curr += 1
+            if self.curr >= num_code_elems:
+                raise StopIteration
+            curr_code_elem = self.contract._rawcode[self.curr]
+
+        if is_bv(curr_code_elem):
+            opcode = extract_bytes(curr_code_elem, self.curr_offset, 1)
+        else:
+            opcode = curr_code_elem[self.curr_offset]
+
+        # only concrete opcodes atm
+        pc = self.pc
+        opcode = int_of(opcode)
+
+        delta = instruction_length(opcode)
+        self.curr_offset += delta
+        self.pc += delta
+
+        return (pc, opcode)
+
+
 class Exec: # an execution path
     # network
-    pgm: Dict[Any,List[Opcode]] # address -> { opcode map: pc -> opcode }
-    code: Dict[Any,List[Any]] # address -> opcode sequence
+    code: Dict[Any, Contract]
     storage: Dict[Any,Dict[int,Any]] # address -> { storage slot -> value }
     balance: Any # address -> balance
     # block
@@ -301,9 +445,7 @@ class Exec: # an execution path
         ])
 
     def next_pc(self) -> None:
-        self.pc += 1
-        while self.pgm[self.this][self.pc] is None:
-            self.pc += 1
+        self.pc = self.code[self.this].next_pc(self.pc)
 
     def check(self, cond: Any) -> Any:
         self.solver.push()
@@ -495,29 +637,6 @@ class Exec: # an execution path
 
     def jumpi_id(self) -> str:
         return f'{self.pc}:' + ','.join(map(lambda x: str(x) if self.is_jumpdest(x) else '', self.st.stack))
-
-# convert opcode list to opcode map
-def ops_to_pgm(ops: List[Opcode]) -> List[Opcode]:
-    pgm: List[Opcode] = [None for _ in range(ops[-1].pc + 1)]
-    for o in ops:
-        pgm[o.pc] = o
-    return pgm
-
-def decode_bytes(code_bytes: bytes) -> Tuple[List[Opcode], List[Any]]:
-    code_int = int.from_bytes(code_bytes, 'big')
-    (ops, code) = decode(BitVecVal(code_int, len(code_bytes) * 8))
-    pgm = ops_to_pgm(ops)
-    return (pgm, code)
-
-def decode_hex(hexcode: str) -> Tuple[List[Opcode], List[Any]]:
-    if len(hexcode) % 2 != 0: raise ValueError(hexcode)
-
-    if hexcode.startswith('0x'):
-        hexcode = hexcode[2:]
-
-    (ops, code) = decode(BitVecVal(int(hexcode, 16), (len(hexcode) // 2) * 8))
-    pgm = ops_to_pgm(ops)
-    return (pgm, code)
 
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
@@ -970,9 +1089,7 @@ class SEVM:
                         code_int = extract_bytes(arg, 4 + code_offset + 32, code_length).as_long()
                         code_bytes = code_int.to_bytes(code_length, 'big')
 
-                        pgm, code = decode_bytes(code_bytes)
-                        ex.pgm[who] = pgm
-                        ex.code[who] = code
+                        ex.code[who] = Contract.from_bytes(code_bytes)
                     except Exception as e:
                         ex.error = f'vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}'
                         out.append(ex)
@@ -1000,7 +1117,7 @@ class SEVM:
 
         # TODO: avoid relying directly on dict membership here
         # it is based on hashing of the z3 expr objects rather than equivalence
-        if to in ex.pgm:
+        if to in ex.code:
             call_known()
         else:
             call_unknown()

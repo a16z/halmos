@@ -7,9 +7,9 @@ from halmos.utils import EVM
 
 from halmos.byte2op import decode, Opcode
 
-from halmos.sevm import con
+from halmos.sevm import con, Contract
 
-from halmos.__main__ import str_abi, decode_hex, run_bytecode
+from halmos.__main__ import str_abi, run_bytecode
 import halmos.__main__
 
 from test_fixtures import args, options
@@ -41,13 +41,68 @@ def setup_selector():
     return int('0a9254e4', 16)
 
 
+def test_decode_concrete_bytecode():
+    hexcode = '34381856FDFDFDFDFDFD5B00'
+    contract = Contract.from_hexcode(hexcode)
+
+    # length of the bytecode
+    assert len(contract) == 12
+
+    # random data access
+    assert contract[0] == EVM.CALLVALUE
+    assert contract[1] == EVM.CODESIZE
+    assert contract[-2] == EVM.JUMPDEST
+    assert contract[-1] == EVM.STOP
+
+    # iteration
+    opcodes = [opcode for (pc, opcode) in contract]
+    assert bytes(opcodes).hex() == hexcode.lower()
+
+    # jump destination scanning
+    assert contract.valid_jump_destinations() == set([10])
+
+
+def test_decode_mixed_bytecode():
+    # 73x5f526014600cf3 is bytecode that returns a symbolic address x:
+    # push20 x push0 mstore
+    # push1 20 push1 12 return
+
+    # mix of bytes and bitvectors
+    mixed_concrete_symbolic = Contract([b'\x73', BitVec('x', 160), b'\x5f\x52\x60\x14\x60\x0c\xf3'])
+
+    # same thing, but with as a single bitvector expression
+    concat_concrete_symbolic = Contract.from_bitvec(
+        Concat(
+            BitVecVal(EVM.PUSH20, 8),
+            BitVec('x', 160),
+            BitVecVal(0x5f526014600cf3, 7 * 8)
+        )
+    )
+
+    for contract in (mixed_concrete_symbolic, concat_concrete_symbolic):
+        # length of the bytecode
+        assert len(contract) == 28
+
+        # random data access
+        assert contract[0] == EVM.PUSH20
+        assert contract[-1] == EVM.RETURN
+        assert contract[28] == EVM.STOP # past the end
+
+        # iteration
+        opcodes = [opcode for (pc, opcode) in contract]
+        assert opcodes == [EVM.PUSH20, EVM.PUSH0, EVM.MSTORE, EVM.PUSH1, EVM.PUSH1, EVM.RETURN]
+
+        # jump destination scanning
+        assert contract.valid_jump_destinations() == set()
+
+
 def test_run_bytecode(args, options):
     hexcode = '34381856FDFDFDFDFDFD5B00'
     options['sym_jump'] = True
     exs = run_bytecode(hexcode, args, options)
     assert len(exs) == 1
     ex = exs[0]
-    assert str(ex.pgm[ex.this][ex.pc].op[0]) == str(EVM.STOP)
+    assert str(ex.code[ex.this][ex.pc]) == EVM.STOP
 
 def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args, options):
     hexcode = '600100'
