@@ -651,11 +651,10 @@ class Exec: # an execution path
             if not size % 8 == 0: raise ValueError(size)
             return int(size / 8)
 
-    def read_code(self, idx: int) -> Byte:
-        if idx < len(self.code[self.this]):
-            return self.code[self.this][idx]
-        else:
-            return BitVecVal(0, 8)
+    def read_code(self, offset: int, address=None) -> Byte:
+        address = address or self.this
+        code_byte = self.code[address][offset]
+        return BitVecVal(code_byte, 8) if not is_bv(code_byte) else code_byte
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_concrete(x):
@@ -944,7 +943,7 @@ class SEVM:
 
             # process result
             for idx, new_ex in enumerate(new_exs):
-                opcode = new_ex.code[new_ex.this][new_ex.pc]
+                opcode = new_ex.current_opcode()
 
                 # restore tx msg
                 new_ex.calldata  = ex.calldata
@@ -964,8 +963,8 @@ class SEVM:
                 wstore_partial(new_ex.st.memory, ret_loc, 0, min(ret_size, new_ex.returndatasize()), new_ex.output, new_ex.returndatasize())
 
                 # set status code (in stack)
-                if int_of(opcode) in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
-                    if opcode.as_long() in [EVM.STOP, EVM.RETURN]:
+                if opcode in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
+                    if opcode in [EVM.STOP, EVM.RETURN]:
                         new_ex.st.push(con(1))
                     else:
                         new_ex.st.push(con(0))
@@ -1116,12 +1115,12 @@ class SEVM:
 
                     # code must be concrete
                     try:
-                        code_offset = extract_bytes(arg, 4 + 32, 32).as_long()
-                        code_length = extract_bytes(arg, 4 + code_offset, 32).as_long()
-                        code_int = extract_bytes(arg, 4 + code_offset + 32, code_length).as_long()
+                        code_offset = int_of(extract_bytes(arg, 4 + 32, 32))
+                        code_length = int_of(extract_bytes(arg, 4 + code_offset, 32))
+                        code_int = int_of(extract_bytes(arg, 4 + code_offset + 32, code_length))
                         code_bytes = code_int.to_bytes(code_length, 'big')
 
-                        ex.code[who] = Contract.from_bytes(code_bytes)
+                        ex.code[who] = Contract(code_bytes)
                     except Exception as e:
                         ex.error = f'vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}'
                         out.append(ex)
@@ -1161,7 +1160,7 @@ class SEVM:
 
         # contract creation code
         create_hexcode = wload(ex.st.memory, loc, size)
-        create_code = Contract.from_bitvec(create_hexcode)
+        create_code = Contract(create_hexcode)
 
         # new account address
         new_addr = create_address(ex.cnt_create())
@@ -1224,8 +1223,7 @@ class SEVM:
             if opcode in [EVM.STOP, EVM.RETURN]:
                 # new contract code
                 new_hexcode = new_ex.output
-                print(f'after create, new_hexcode = {new_hexcode}')
-                new_code = Contract.from_bitvec(new_hexcode)
+                new_code = Contract(new_hexcode)
 
                 # set new contract code
                 new_ex.code[new_addr] = new_code

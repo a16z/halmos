@@ -146,7 +146,7 @@ def test_run(hexcode, stack, pc, opcode: int, sevm, solver, storage):
     (o(EVM.ORIGIN), [], f_origin()),
     (o(EVM.CALLER), [], caller),
     (o(EVM.CALLVALUE), [], callvalue),
-    # TODO: CALLDATA*, CODE*, EXTCODE*, RETURNDATA*
+    # TODO: CALLDATA*, CODE*, EXTCODE*, RETURNDATA*, CREATE*
     (o(EVM.SELFBALANCE), [], Select(balance, this)),
 ])
 def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
