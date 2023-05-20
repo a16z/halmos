@@ -141,7 +141,9 @@ def test_decode_hex():
 
 def test_decode():
     code = Contract(Concat(BitVecVal(EVM.PUSH32, 8), BitVec('x', 256)))
-    assert '\n'.join([str(insn) for insn in code]) == 'PUSH32 x'
+    assert len(code) == 33
+    assert str(code.decode_instruction(0)) == 'PUSH32 x'
+    assert str(code.decode_instruction(33)) == 'STOP'
 
     code = Contract(BitVec('x', 256))
     assert len(code) == 32
