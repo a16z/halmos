@@ -15,7 +15,6 @@ from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
 
 from .utils import color_good, color_warn
-from .byte2op import mnemonic
 from .sevm import *
 
 if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
@@ -172,7 +171,7 @@ def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argpar
             raise ValueError(param_type)
 
 def is_stop_or_return(opcode: Byte) -> bool:
-    return is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]
+    return int_of(opcode) in [EVM.STOP, EVM.RETURN]
 
 def mk_callvalue() -> Word:
     return BitVec('msg_value', 256)
@@ -203,7 +202,7 @@ def mk_solver(args: argparse.Namespace):
     return solver
 
 def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[Exec]:
-    (pgm, code) = decode_hex(hexcode)
+    contract = Contract.from_hexcode(hexcode)
 
     storage = {}
 
@@ -217,8 +216,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
-        pgm       = { this: pgm },
-        code      = { this: code },
+        code      = { this: contract },
         storage   = { this: storage },
         balance   = balance,
         block     = block,
@@ -233,7 +231,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
 
     models = []
     for idx, ex in enumerate(exs):
-        opcode = ex.pgm[ex.this][ex.pc].op[0]
+        opcode = ex.code[ex.this][ex.pc]
         if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
             gen_model(args, models, idx, ex)
             print(f'Final opcode: {mnemonic(opcode)} | Return data: {ex.output} | Input example: {models[-1][0]}')
@@ -257,7 +255,7 @@ def setup(
 ) -> Exec:
     setup_start = timer()
 
-    (pgm, code) = decode_hex(hexcode)
+    contract = Contract.from_hexcode(hexcode)
 
     solver = mk_solver(args)
 
@@ -266,8 +264,7 @@ def setup(
     sevm = SEVM(options)
 
     setup_ex = sevm.mk_exec(
-        pgm       = { this: pgm },
-        code      = { this: code },
+        code      = { this: contract },
         storage   = { this: {} },
         balance   = mk_balance(),
         block     = mk_block(),
@@ -288,7 +285,7 @@ def setup(
 
         (setup_exs, setup_steps) = sevm.run(setup_ex)
 
-        setup_exs = list(filter(lambda ex: is_stop_or_return(ex.pgm[ex.this][ex.pc].op[0]) and not ex.failed, setup_exs))
+        setup_exs = list(filter(lambda ex: is_stop_or_return(ex.current_opcode()) and not ex.failed, setup_exs))
 
         if len(setup_exs) == 0: raise ValueError('No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
@@ -349,7 +346,6 @@ def run(
     solver.add(setup_ex.solver.assertions())
 
     (exs, steps) = sevm.run(Exec(
-        pgm       = setup_ex.pgm.copy(), # shallow copy
         code      = setup_ex.code.copy(), # shallow copy
         storage   = deepcopy(setup_ex.storage),
         balance   = setup_ex.balance, # TODO: add callvalue
@@ -388,7 +384,7 @@ def run(
     for idx, ex in enumerate(exs):
         if args.debug: print(f'Checking output: {idx+1} / {len(exs)}')
 
-        opcode = ex.pgm[ex.this][ex.pc].op[0]
+        opcode = ex.code[ex.this][ex.pc]
         if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]:
             if ex.failed:
                 gen_model(args, models, idx, ex)
@@ -433,7 +429,7 @@ def run(
     # print post-states
     if args.verbose >= 2:
         for idx, ex in enumerate(exs):
-            if args.print_revert or (is_stop_or_return(ex.pgm[ex.this][ex.pc].op[0]) and not ex.failed):
+            if args.print_revert or (is_stop_or_return(ex.code[ex.this][ex.pc]) and not ex.failed):
                 print(f'# {idx+1} / {len(exs)}')
                 print(ex)
 
@@ -633,9 +629,7 @@ def main() -> int:
                         for assign in [x.split('=') for x in args.reset_bytecode.split(',')]:
                             addr = con(int(assign[0].strip(), 0))
                             new_hexcode = assign[1].strip()
-                            (new_pgm, new_code) = decode_hex(new_hexcode)
-                            setup_ex.pgm[addr] = new_pgm
-                            setup_ex.code[addr] = new_code
+                            setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
 
                     for funsig in funsigs:
                         funselector = methodIdentifiers[funsig]

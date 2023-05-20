@@ -5,12 +5,11 @@ import math
 
 from copy import deepcopy
 from collections import defaultdict
-from typing import List, Dict, Set, Tuple, Any
+from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
-from .byte2op import Opcode, decode, concat, mnemonic
-from .utils import EVM, color_good, color_warn, sha3_inv, restore_precomputed_hashes
+from .utils import EVM, color_good, color_warn, sha3_inv, restore_precomputed_hashes, str_opcode
 from .cheatcodes import hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
@@ -39,24 +38,80 @@ f_sdiv = Function('evm_sdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_smod', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
-def con(n: int, size_bits=256) -> Word:
-    return BitVecVal(n, size_bits)
+class Instruction:
+    pc: int
+    opcode: int
+    operand: Optional[UnionType[bytes, BitVecRef]]
+
+    def __init__(self, opcode, **kwargs) -> None:
+        self.opcode = opcode
+
+        self.pc = kwargs.get('pc', -1)
+        self.operand = kwargs.get('operand', None)
+
+    def __str__(self) -> str:
+        operand_str = ''
+        if self.operand is not None:
+            operand = self.operand
+            if isinstance(operand, bytes):
+                operand = BitVecVal(int.from_bytes(self.operand, 'big'), len(self.operand) * 8)
+
+            expected_operand_length = instruction_length(self.opcode) - 1
+            actual_operand_length = operand.size() // 8
+            if expected_operand_length != actual_operand_length:
+                operand_str = f' ERROR {operand} ({expected_operand_length - actual_operand_length} bytes missed)'
+            else:
+                operand_str = ' ' + str(operand)
+
+        return f'{mnemonic(self.opcode)}{operand_str}'
+
+    def __repr__(self) -> str:
+        return f'Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})'
+
+    def __len__(self) -> int:
+        return instruction_length(self.opcode)
+
+
+class NotConcreteError(Exception):
+    pass
 
 def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
     if isinstance(x, int):
         return x
 
+    if isinstance(x, bytes):
+        return int.from_bytes(x, 'big')
+
     if is_bv_value(x):
         return x.as_long()
 
-    raise NotImplementedError(f'{err}: {x}')
+    raise NotConcreteError(f'{err}: {x}')
+
+def is_concrete(x: Any) -> bool:
+    return isinstance(x, int) or isinstance(x, bytes) or is_bv_value(x)
+
+def mnemonic(opcode) -> str:
+    if is_concrete(opcode):
+        opcode = int_of(opcode)
+        return str_opcode.get(opcode, hex(opcode))
+    else:
+        return str(opcode)
+
+def concat(args):
+    if len(args) > 1:
+        return Concat(args)
+    else:
+        return args[0]
+
+
+def con(n: int, size_bits=256) -> Word:
+    return BitVecVal(n, size_bits)
 
 def byte_length(x: Any) -> int:
     if is_bv(x):
         assert x.size() % 8 == 0
         return x.size() >> 3
 
-    # if it's bytes
     if isinstance(x, bytes):
         return len(x)
 
@@ -97,17 +152,16 @@ def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
 
 
 def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecRef:
-    '''Extract bytes from calldata'''
+    '''Extract bytes from calldata. May return less than requested if out of bounds.'''
     n = data.size()
     if n % 8 != 0: raise ValueError(n)
 
     # will extract hi - lo + 1 bits
     hi = n - 1 - byte_offset * 8
     lo = n - byte_offset * 8 - size_bytes * 8
+    lo = 0 if lo < 0 else lo
 
     val = simplify(Extract(hi, lo, data))
-    if not eq(val.sort(), BitVecSort(size_bytes * 8)): raise ValueError(val)
-
     return val
 
 
@@ -215,83 +269,85 @@ class Block:
 class Contract:
     '''Abstraction over contract bytecode. Can include concrete and symbolic elements.'''
 
-    # for completely concrete code: _rawcode is a single bytes element
-    # for completely symbolic code: _rawcode is a single BitVec element
-    # for mixed code (e.g. concrete bytecode with symbolic immutables): _rawcode is a list of bytes and BitVec elements
-    _rawcode: List[Any]
+    # for completely concrete code: _rawcode is a bytes object
+    # for completely or partially symbolic code: _rawcode is a single BitVec element
+    #    (typically a Concat() of concrete and symbolic values)
+    _rawcode: UnionType[bytes, BitVecRef]
 
-    def __init__(self, rawcode: List[Any]) -> None:
-        if not rawcode:
-            raise ValueError('rawcode cannot be empty')
+    def __init__(self, rawcode: UnionType[bytes, BitVecRef]) -> None:
         self._rawcode = rawcode
 
     def __init_jumpdests(self):
         self.jumpdests = set()
 
-        for (pc, opcode) in iter(self):
-            if opcode == EVM.JUMPDEST:
-                self.jumpdests.add(pc)
+        for insn in iter(self):
+            if insn.opcode == EVM.JUMPDEST:
+                self.jumpdests.add(insn.pc)
 
     def __iter__(self):
         return CodeIterator(self)
 
     def from_hexcode(hexcode: str):
         '''Create a contract from a hexcode string, e.g. "aabbccdd" '''
+        if not isinstance(hexcode, str): raise ValueError(hexcode)
+
         if len(hexcode) % 2 != 0: raise ValueError(hexcode)
 
         if hexcode.startswith('0x'):
             hexcode = hexcode[2:]
 
-        return Contract([bytes.fromhex(hexcode)])
+        return Contract(bytes.fromhex(hexcode))
 
-    def from_bytes(bytecode: bytes):
-        '''Create a contract from a bytes object, e.g. b"\xaa\xbb\xcc\xdd"'''
-        return Contract([bytecode])
+    def decode_instruction(self, pc: int) -> Instruction:
+        opcode = int_of(self[pc])
 
-    def from_bitvec(bv: BitVecRef):
-        '''Create a contract from a BitVec'''
-        # TODO: handle case where bv is a concatenation of multiple BitVecs including mixed concrete and symbolic
-        return Contract([bv])
+        if EVM.PUSH1 <= opcode <= EVM.PUSH32:
+            operand = self[pc+1:pc+opcode-EVM.PUSH0+1]
+            return Instruction(opcode, pc=pc, operand=operand)
+
+        return Instruction(opcode, pc=pc)
 
     def next_pc(self, pc):
         opcode = self[pc]
         return pc + instruction_length(opcode)
 
-    def __getitem__(self, offset: int) -> Any:
-        '''Returns the concrete byte at the given offset. May fail if pc is not an instruction boundary.'''
+    def __getslice__(self, slice):
+        step = 1 if slice.step is None else slice.step
+        if step != 1:
+            return ValueError(f'slice step must be 1 but got {slice}')
+
+        # symbolic
+        if is_bv(self._rawcode):
+            return extract_bytes(self._rawcode, slice.start, slice.stop - slice.start)
+
+        # concrete
+        return self._rawcode[slice.start:slice.stop]
+
+    def __getitem__(self, key) -> UnionType[int, BitVecRef]:
+        '''Returns the byte at the given offset.'''
+        if isinstance(key, slice):
+            return self.__getslice__(key)
+
+        offset = int_of(key, 'symbolic index into contract bytecode')
+
+        # support for negative indexing, e.g. contract[-1]
         if offset < 0:
             return self[len(self) + offset]
 
-        # if offset < byte_length(self._rawcode[0]):
-        #     return self._rawcode[0][offset]
-
-        curr_idx = 0
-        end = 0
-        while curr_idx < len(self._rawcode):
-            curr_elem = self._rawcode[curr_idx]
-            byte_length_curr_elem = byte_length(curr_elem)
-
-            begin = end
-            end = begin + byte_length_curr_elem
-
-            # extract and return
-            if offset < end:
-                if is_bv(curr_elem):
-                    return extract_bytes(curr_elem, offset - begin, 1)
-
-                return int_of(curr_elem[offset - begin])
-
-            # advance to the next element
-            else:
-                curr_idx += 1
-
-        # if we get here, idx is out of bounds
         # in the EVM, this is defined as returning 0
-        return 0
+        if offset >= len(self):
+            return 0
+
+        # symbolic (the returned value may be concretizable)
+        if is_bv(self._rawcode):
+            return extract_bytes(self._rawcode, offset, 1)
+
+        # concrete
+        return self._rawcode[offset]
 
     def __len__(self) -> int:
         '''Returns the length of the bytecode in bytes.'''
-        return sum([byte_length(x) for x in self._rawcode])
+        return byte_length(self._rawcode)
 
     def valid_jump_destinations(self) -> set:
         '''Returns the set of valid jump destinations.'''
@@ -304,52 +360,21 @@ class Contract:
 class CodeIterator:
     def __init__(self, contract: Contract):
         self.contract = contract
-
-        # position of the current code element in the contract
-        self.curr = 0
-
-        # byte offset into the current code element
-        self.curr_offset = 0
-
         self.pc = 0
+        self.is_symbolic = is_bv(contract._rawcode)
 
     def __iter__(self):
         return self
 
-    def __next__(self) -> Tuple[int, int]:
+    def __next__(self) -> Instruction:
         '''Returns a tuple of (pc, opcode)'''
-        print(f'curr: {self.curr}, curr_offset: {self.curr_offset}, pc: {self.pc}')
-
-        num_code_elems = len(self.contract._rawcode)
-
-        if self.curr >= num_code_elems:
+        if self.pc >= len(self.contract):
             raise StopIteration
 
-        curr_code_elem = self.contract._rawcode[self.curr]
+        insn = self.contract.decode_instruction(self.pc)
+        self.pc += len(insn)
 
-        # if we're past the end of the current code element, move to the next one
-
-        while self.curr_offset >= byte_length(curr_code_elem):
-            self.curr_offset -= byte_length(curr_code_elem)
-            self.curr += 1
-            if self.curr >= num_code_elems:
-                raise StopIteration
-            curr_code_elem = self.contract._rawcode[self.curr]
-
-        if is_bv(curr_code_elem):
-            opcode = extract_bytes(curr_code_elem, self.curr_offset, 1)
-        else:
-            opcode = curr_code_elem[self.curr_offset]
-
-        # only concrete opcodes atm
-        pc = self.pc
-        opcode = int_of(opcode)
-
-        delta = instruction_length(opcode)
-        self.curr_offset += delta
-        self.pc += delta
-
-        return (pc, opcode)
+        return insn
 
 
 class Exec: # an execution path
@@ -385,7 +410,6 @@ class Exec: # an execution path
     error: str
 
     def __init__(self, **kwargs) -> None:
-        self.pgm      = kwargs['pgm']
         self.code     = kwargs['code']
         self.storage  = kwargs['storage']
         self.balance  = kwargs['balance']
@@ -416,6 +440,12 @@ class Exec: # an execution path
         self.failed   = kwargs['failed']
         self.error    = kwargs['error']
 
+    def current_opcode(self) -> int:
+        return self.code[self.this][self.pc]
+
+    def current_instruction(self) -> Instruction:
+        return self.code[self.this].decode_instruction(self.pc)
+
     def str_cnts(self) -> str:
         return ''.join([f'{x[0]}: {x[1]}\n' for x in sorted(self.cnts.items(), key=lambda x: x[0])])
 
@@ -427,7 +457,7 @@ class Exec: # an execution path
 
     def __str__(self) -> str:
         return ''.join([
-            'PC: '              , str(self.this), ' ', str(self.pc), ' ', str(self.pgm[self.this][self.pc]), '\n',
+            'PC: '              , str(self.this), ' ', str(self.pc), ' ', mnemonic(self.current_opcode()), '\n',
             str(self.st),
             'Balance: '         , str(self.balance), '\n',
             'Storage:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.storage[x]) + '\n', self.storage)),
@@ -628,12 +658,15 @@ class Exec: # an execution path
             return BitVecVal(0, 8)
 
     def is_jumpdest(self, x: Word) -> bool:
-        if not is_bv_value(x): return False
-        pc: int = int(str(x))
-        if pc < 0 or pc >= len(self.pgm[self.this]): return False
-        if self.pgm[self.this][pc] is None: return False
-        opcode = self.pgm[self.this][pc].op[0]
-        return is_bv_value(opcode) and opcode.as_long() == EVM.JUMPDEST
+        if not is_concrete(x):
+            return False
+
+        pc: int = int_of(x)
+        if pc < 0:
+            raise ValueError(pc)
+
+        opcode = self.code[self.this][pc]
+        return opcode == EVM.JUMPDEST
 
     def jumpi_id(self) -> str:
         return f'{self.pc}:' + ','.join(map(lambda x: str(x) if self.is_jumpdest(x) else '', self.st.stack))
@@ -878,7 +911,6 @@ class SEVM:
 
             # execute external calls
             (new_exs, new_steps) = self.run(Exec(
-                pgm       = ex.pgm,
                 code      = ex.code,
                 storage   = ex.storage,
                 balance   = ex.balance,
@@ -912,7 +944,7 @@ class SEVM:
 
             # process result
             for idx, new_ex in enumerate(new_exs):
-                opcode = new_ex.pgm[new_ex.this][new_ex.pc].op[0]
+                opcode = new_ex.code[new_ex.this][new_ex.pc]
 
                 # restore tx msg
                 new_ex.calldata  = ex.calldata
@@ -932,7 +964,7 @@ class SEVM:
                 wstore_partial(new_ex.st.memory, ret_loc, 0, min(ret_size, new_ex.returndatasize()), new_ex.output, new_ex.returndatasize())
 
                 # set status code (in stack)
-                if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
+                if int_of(opcode) in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
                     if opcode.as_long() in [EVM.STOP, EVM.RETURN]:
                         new_ex.st.push(con(1))
                     else:
@@ -1073,7 +1105,7 @@ class SEVM:
                     ex.block.timestamp = simplify(Extract(255, 0, arg))
                 # vm.etch(address,bytes)
                 elif extract_funsig(arg) == hevm_cheat_code.etch_sig:
-                    # ex.pgm contains 256-bit keys
+                    # ex.code contains 256-bit keys
                     who = simplify(Concat(con(0, 96), extract_bytes(arg, 4 + 12, 20)))
 
                     # who must be concrete
@@ -1129,16 +1161,14 @@ class SEVM:
 
         # contract creation code
         create_hexcode = wload(ex.st.memory, loc, size)
-        (create_ops, create_code) = decode(create_hexcode)
-        create_pgm = ops_to_pgm(create_ops)
+        create_code = Contract.from_bitvec(create_hexcode)
 
         # new account address
         new_addr = create_address(ex.cnt_create())
-        for addr in ex.pgm:
+        for addr in ex.code:
             ex.solver.add(new_addr != addr) # ensure new address is fresh
 
         # setup new account
-        ex.pgm[new_addr] = create_pgm   # existing pgm must be empty
         ex.code[new_addr] = create_code # existing code must be empty
         ex.storage[new_addr] = {}       # existing storage may not be empty and reset here
 
@@ -1153,7 +1183,6 @@ class SEVM:
 
         # execute contract creation code
         (new_exs, new_steps) = self.run(Exec(
-            pgm       = ex.pgm,
             code      = ex.code,
             storage   = ex.storage,
             balance   = ex.balance,
@@ -1190,15 +1219,15 @@ class SEVM:
             # sanity checks
             if new_ex.failed: raise ValueError(new_ex)
 
-            opcode = new_ex.pgm[new_ex.this][new_ex.pc].op[0]
-            if is_bv_value(opcode) and opcode.as_long() in [EVM.STOP, EVM.RETURN]:
+            insn = new_ex.current_instruction()
+            opcode = insn.opcode
+            if opcode in [EVM.STOP, EVM.RETURN]:
                 # new contract code
                 new_hexcode = new_ex.output
-                (new_ops, new_code) = decode(new_hexcode)
-                new_pgm = ops_to_pgm(new_ops)
+                print(f'after create, new_hexcode = {new_hexcode}')
+                new_code = Contract.from_bitvec(new_hexcode)
 
                 # set new contract code
-                new_ex.pgm[new_addr] = new_pgm
                 new_ex.code[new_addr] = new_code
 
                 # restore tx msg
@@ -1269,13 +1298,13 @@ class SEVM:
         dst = ex.st.pop()
 
         # if dst is concrete, just jump
-        if is_bv_value(dst):
-            ex.pc = int(str(dst))
+        if is_concrete(dst):
+            ex.pc = int_of(dst)
             stack.append((ex, step_id))
 
         # otherwise, create a new execution for feasible targets
         elif self.options['sym_jump']:
-            for target in valid_jump_destinations(ex.pgm[ex.this]):
+            for target in ex.code[ex.this].valid_jump_destinations():
                 ex.solver.push()
                 target_reachable = simplify(dst == target)
                 ex.solver.add(target_reachable)
@@ -1296,8 +1325,7 @@ class SEVM:
         new_path = deepcopy(ex.path)
         new_path.append(cond)
         new_ex = Exec(
-            pgm      = ex.pgm.copy(), # shallow copy for potential new contract creation; existing code doesn't change
-            code     = ex.code.copy(), # shallow copy
+            code     = ex.code.copy(), # shallow copy for potential new contract creation; existing code doesn't change
             storage  = deepcopy(ex.storage),
             balance  = deepcopy(ex.balance),
             #
@@ -1342,13 +1370,16 @@ class SEVM:
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
 
-                o = ex.pgm[ex.this][ex.pc]
-                opcode = o.op[0]
-                if is_bv_value(opcode):
-                    opcode = int(str(opcode))
-                else:
+                try:
+                    insn = ex.current_instruction()
+                except NotConcreteError as err:
+                    if self.options['debug']:
+                        print(err)
+
                     out.append(ex)
                     continue
+
+                opcode = insn.opcode
                 ex.cnts[opcode] += 1
 
                 if 'max_depth' in self.options and sum(ex.cnts.values()) > self.options['max_depth']:
@@ -1614,17 +1645,17 @@ class SEVM:
                     ex.st.push(con(0))
 
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
-                    if is_bv_value(o.op[1]):
-                        val = int(str(o.op[1]))
+                    if is_concrete(insn.operand):
+                        val = int_of(insn.operand)
                         if opcode == EVM.PUSH32 and val in sha3_inv: # restore precomputed hashes
                             ex.sha3_data(con(sha3_inv[val]), 32)
                         else:
                             ex.st.push(con(val))
                     else:
                         if opcode == EVM.PUSH32:
-                            ex.st.push(o.op[1])
+                            ex.st.push(insn.operand)
                         else:
-                            ex.st.push(ZeroExt((EVM.PUSH32 - opcode)*8, o.op[1]))
+                            ex.st.push(ZeroExt((EVM.PUSH32 - opcode)*8, insn.operand))
                 elif EVM.DUP1 <= opcode <= EVM.DUP16:
                     ex.st.dup(opcode - EVM.DUP1 + 1)
                 elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
@@ -1652,7 +1683,6 @@ class SEVM:
     def mk_exec(
         self,
         #
-        pgm,
         code,
         storage,
         balance,
@@ -1684,7 +1714,6 @@ class SEVM:
     #   error,
     ) -> Exec:
         return Exec(
-            pgm      = pgm,
             code     = code,
             storage  = storage,
             balance  = balance,
