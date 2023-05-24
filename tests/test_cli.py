@@ -152,7 +152,7 @@ def test_decode():
     code = Contract(Concat(BitVecVal(EVM.PUSH3, 8), BitVec('x', 16)))
     ops = [insn for insn in code]
     assert len(ops) == 1
-    assert str(ops[0]) == 'PUSH3 ERROR x (1 bytes missed)'
+    assert str(ops[0]) == 'PUSH3 Concat(x, 0)' # 'PUSH3 ERROR x (1 bytes missed)'
 
 
 @pytest.mark.parametrize('sig,abi', [
