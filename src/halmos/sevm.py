@@ -109,7 +109,7 @@ def con(n: int, size_bits=256) -> Word:
 
 def byte_length(x: Any) -> int:
     if is_bv(x):
-        assert x.size() % 8 == 0
+        if x.size() % 8 != 0: raise ValueError(x)
         return x.size() >> 3
 
     if isinstance(x, bytes):
