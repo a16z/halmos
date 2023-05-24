@@ -170,9 +170,6 @@ def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argpar
         else:
             raise ValueError(param_type)
 
-def is_stop_or_return(opcode: Byte) -> bool:
-    return int_of(opcode) in [EVM.STOP, EVM.RETURN]
-
 def mk_callvalue() -> Word:
     return BitVec('msg_value', 256)
 
@@ -285,7 +282,7 @@ def setup(
 
         (setup_exs, setup_steps) = sevm.run(setup_ex)
 
-        setup_exs = list(filter(lambda ex: is_stop_or_return(ex.current_opcode()) and not ex.failed, setup_exs))
+        setup_exs = list(filter(lambda ex: ex.current_opcode() in [EVM.STOP, EVM.RETURN] and not ex.failed, setup_exs))
 
         if len(setup_exs) == 0: raise ValueError('No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
@@ -429,7 +426,7 @@ def run(
     # print post-states
     if args.verbose >= 2:
         for idx, ex in enumerate(exs):
-            if args.print_revert or (is_stop_or_return(ex.current_opcode()) and not ex.failed):
+            if args.print_revert or (ex.current_opcode() in [EVM.STOP, EVM.RETURN] and not ex.failed):
                 print(f'# {idx+1} / {len(exs)}')
                 print(ex)
 
