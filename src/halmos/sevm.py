@@ -75,15 +75,21 @@ class Instruction:
 class NotConcreteError(Exception):
     pass
 
-def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
-    if isinstance(x, int):
-        return x
-
+def unbox_int(x: Any) -> Any:
+    '''Convert int-like objects to int'''
     if isinstance(x, bytes):
         return int.from_bytes(x, 'big')
 
     if is_bv_value(x):
         return x.as_long()
+
+    return x
+
+def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
+    res = unbox_int(x)
+
+    if isinstance(res, int):
+        return res
 
     raise NotConcreteError(f'{err}: {x}')
 
@@ -446,8 +452,8 @@ class Exec: # an execution path
         self.failed   = kwargs['failed']
         self.error    = kwargs['error']
 
-    def current_opcode(self) -> int:
-        return self.code[self.this][self.pc]
+    def current_opcode(self) -> UnionType[int, BitVecRef]:
+        return unbox_int(self.code[self.this][self.pc])
 
     def current_instruction(self) -> Instruction:
         return self.code[self.this].decode_instruction(self.pc)
@@ -670,7 +676,7 @@ class Exec: # an execution path
         if pc < 0:
             raise ValueError(pc)
 
-        opcode = self.code[self.this][pc]
+        opcode = unbox_int(self.code[self.this][pc])
         return opcode == EVM.JUMPDEST
 
     def jumpi_id(self) -> str:
@@ -1224,8 +1230,7 @@ class SEVM:
             # sanity checks
             if new_ex.failed: raise ValueError(new_ex)
 
-            insn = new_ex.current_instruction()
-            opcode = insn.opcode
+            opcode = new_ex.current_opcode()
             if opcode in [EVM.STOP, EVM.RETURN]:
                 # new contract code
                 new_hexcode = new_ex.output
