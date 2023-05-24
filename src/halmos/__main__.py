@@ -282,7 +282,7 @@ def setup(
 
         (setup_exs, setup_steps) = sevm.run(setup_ex)
 
-        setup_exs = list(filter(lambda ex: ex.current_opcode() in [EVM.STOP, EVM.RETURN] and not ex.failed, setup_exs))
+        setup_exs = list(filter(lambda ex: ex.current_opcode() in [EVM.STOP, EVM.RETURN], setup_exs))
 
         if len(setup_exs) == 0: raise ValueError('No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
@@ -385,14 +385,13 @@ def run(
 
         opcode = ex.current_opcode()
         if opcode in [EVM.STOP, EVM.RETURN]:
-            if ex.failed:
-                gen_model(args, models, idx, ex)
-            else:
-                normal += 1
+            normal += 1
         elif opcode in [EVM.REVERT, EVM.INVALID]:
             # Panic(1) # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
             if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
                 gen_model(args, models, idx, ex)
+        elif ex.failed:
+            gen_model(args, models, idx, ex)
         else:
             stuck.append((opcode, idx, ex))
 
@@ -432,7 +431,7 @@ def run(
     # print post-states
     if args.verbose >= 2:
         for idx, ex in enumerate(exs):
-            if args.print_revert or (ex.current_opcode() in [EVM.STOP, EVM.RETURN] and not ex.failed):
+            if args.print_revert or ex.current_opcode() in [EVM.STOP, EVM.RETURN]:
                 print(f'# {idx+1} / {len(exs)}')
                 print(ex)
 
