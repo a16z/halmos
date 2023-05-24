@@ -4,9 +4,7 @@ from z3 import *
 
 from halmos.utils import EVM
 
-from halmos.byte2op import decode
-
-from halmos.sevm import con, ops_to_pgm, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin
+from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of
 
 from halmos.__main__ import mk_block
 
@@ -33,11 +31,8 @@ def storage():
     return {}
 
 def mk_ex(hexcode, sevm, solver, storage, caller, this):
-    (ops, code) = decode(hexcode)
-    pgm = ops_to_pgm(ops)
     return sevm.mk_exec(
-        pgm       = { this: pgm },
-        code      = { this: code },
+        code      = { this: Contract(hexcode) },
         storage   = { this: storage },
         balance   = balance,
         block     = mk_block(),
@@ -56,20 +51,23 @@ def o(opcode):
     return BitVecVal(opcode, 8)
 
 @pytest.mark.parametrize('hexcode, stack, pc, opcode', [
-    (BitVecVal(int('600100', 16), 24), '[1]', 2, '0'),
-    (BitVec('x', 256), '[]', 0, 'Extract(255, 248, x)'),
-    (Concat(BitVecVal(int('6001', 16), 16), BitVec('x', 8), BitVecVal(0, 8)), '[1]', 2, 'x'),
-    (Concat(BitVecVal(int('6101', 16), 16), BitVec('x', 8), BitVecVal(0, 8)), '[Concat(1, x)]', 3, '0'),
-    (BitVecVal(int('58585B5860015800', 16), 64), '[6, 1, 3, 1, 0]', 7, '0'),
+    (BitVecVal(int('600100', 16), 24), '[1]', 2, EVM.STOP),
+
+    # symbolic opcodes are not supported
+    # (BitVec('x', 256), '[]', 0, 'Extract(255, 248, x)'),
+    # (Concat(BitVecVal(int('6001', 16), 16), BitVec('x', 8), BitVecVal(0, 8)), '[1]', 2, 'x'),
+
+    (Concat(BitVecVal(int('6101', 16), 16), BitVec('x', 8), BitVecVal(0, 8)), '[Concat(1, x)]', 3, EVM.STOP),
+    (BitVecVal(int('58585B5860015800', 16), 64), '[6, 1, 3, 1, 0]', 7, EVM.STOP),
 ])
-def test_run(hexcode, stack, pc, opcode, sevm, solver, storage):
+def test_run(hexcode, stack, pc, opcode: int, sevm, solver, storage):
     ex = mk_ex(hexcode, sevm, solver, storage, caller, this)
     (exs, _) = sevm.run(ex)
     assert len(exs) == 1
-    ex = exs[0]
+    ex: Exec = exs[0]
     assert str(ex.st.stack) == stack
     assert ex.pc == pc
-    assert str(ex.pgm[ex.this][ex.pc].op[0]) == opcode
+    assert ex.current_opcode() == int_of(opcode)
 
 @pytest.mark.parametrize('hexcode, params, output', [
     (o(EVM.PUSH0), [], con(0)),
@@ -148,10 +146,10 @@ def test_run(hexcode, stack, pc, opcode, sevm, solver, storage):
     (o(EVM.ORIGIN), [], f_origin()),
     (o(EVM.CALLER), [], caller),
     (o(EVM.CALLVALUE), [], callvalue),
-    # TODO: CALLDATA*, CODE*, EXTCODE*, RETURNDATA*
+    # TODO: CALLDATA*, CODE*, EXTCODE*, RETURNDATA*, CREATE*
     (o(EVM.SELFBALANCE), [], Select(balance, this)),
 ])
-def test_opcode_simple(hexcode, params, output, sevm, solver, storage):
+def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     ex = mk_ex(Concat(hexcode, o(EVM.STOP)), sevm, solver, storage, caller, this)
     ex.st.stack.extend(params)
     (exs, _) = sevm.run(ex)

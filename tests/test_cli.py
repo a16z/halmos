@@ -5,11 +5,9 @@ from z3 import *
 
 from halmos.utils import EVM
 
-from halmos.byte2op import decode, Opcode
+from halmos.sevm import con, Contract, Instruction
 
-from halmos.sevm import con
-
-from halmos.__main__ import str_abi, decode_hex, run_bytecode
+from halmos.__main__ import str_abi, run_bytecode
 import halmos.__main__
 
 from test_fixtures import args, options
@@ -41,53 +39,121 @@ def setup_selector():
     return int('0a9254e4', 16)
 
 
+def test_decode_concrete_bytecode():
+    hexcode = '34381856FDFDFDFDFDFD5B00'
+    contract = Contract.from_hexcode(hexcode)
+
+    # length of the bytecode
+    assert len(contract) == 12
+
+    # random data access
+    assert contract[0] == EVM.CALLVALUE
+    assert contract[1] == EVM.CODESIZE
+    assert contract[-2] == EVM.JUMPDEST
+    assert contract[-1] == EVM.STOP
+
+    # iteration
+    opcodes = [insn.opcode for insn in contract]
+    assert bytes(opcodes).hex() == hexcode.lower()
+
+    # jump destination scanning
+    assert contract.valid_jump_destinations() == set([10])
+
+
+def test_decode_mixed_bytecode():
+    # mix of bytes and bitvectors as a single bitvector expression
+    contract = Contract(
+        Concat(
+            BitVecVal(EVM.PUSH20, 8),
+            BitVec('x', 160),
+            BitVecVal(0x5f526014600cf3, 7 * 8)
+        )
+    )
+
+    # length of the bytecode
+    assert len(contract) == 28
+
+    # random data access
+    assert contract[0] == EVM.PUSH20
+    assert contract[-1] == EVM.RETURN
+    assert contract[28] == EVM.STOP # past the end
+
+    # iteration
+    opcodes = [insn.opcode for insn in contract]
+    assert opcodes == [EVM.PUSH20, EVM.PUSH0, EVM.MSTORE, EVM.PUSH1, EVM.PUSH1, EVM.RETURN]
+
+    disassembly = '\n'.join([str(insn) for insn in contract])
+    assert disassembly == (
+"""PUSH20 x
+PUSH0
+MSTORE
+PUSH1 20
+PUSH1 12
+RETURN""")
+
+    # jump destination scanning
+    assert contract.valid_jump_destinations() == set()
+
+
 def test_run_bytecode(args, options):
     hexcode = '34381856FDFDFDFDFDFD5B00'
     options['sym_jump'] = True
     exs = run_bytecode(hexcode, args, options)
     assert len(exs) == 1
-    ex = exs[0]
-    assert str(ex.pgm[ex.this][ex.pc].op[0]) == str(EVM.STOP)
+    assert exs[0].current_opcode() == EVM.STOP
+
 
 def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args, options):
     hexcode = '600100'
     abi = setup_abi
     arrlen = {}
     setup_ex = halmos.__main__.setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
-    assert str(setup_ex.st.stack) == '[1]'
+    assert setup_ex.st.stack == [1]
 
-def test_opcode():
-    assert str(Opcode(0, [con(0)])) == 'STOP'
-    assert str(Opcode(0, [con(1)])) == 'ADD'
-    assert str(Opcode(0, [con(EVM.PUSH32), con(1)])) == 'PUSH32 1'
-    assert str(Opcode(0, [con(EVM.BASEFEE)])) == 'BASEFEE'
-    assert str(Opcode(0, [BitVec('x',8)])) == 'x'
-    assert str(Opcode(0, [BitVec('x',8), BitVec('y',8)])) == 'x y'
-    assert str(Opcode(0, [BitVec('x',8), BitVec('y',8), BitVec('z',8)])) == 'x y'
+
+def test_instruction():
+    assert str(Instruction(con(0))) == 'STOP'
+    assert str(Instruction(con(1))) == 'ADD'
+    assert str(Instruction(con(EVM.PUSH32), operand=con(1))) == 'PUSH32 1'
+    assert str(Instruction(con(EVM.BASEFEE))) == 'BASEFEE'
+
+    # symbolic opcode is not supported
+    # assert str(Instruction(BitVec('x', 8))) == 'x'
+    # assert str(Instruction(BitVec('x', 8), operand=BitVec('y', 8), pc=BitVec('z', 16))) == 'x y'
+
+    assert str(Instruction(EVM.STOP)) == 'STOP'
+    assert str(Instruction(EVM.ADD)) == 'ADD'
+    assert str(Instruction(EVM.PUSH32, operand=bytes.fromhex('00' * 31 + '01'))) == 'PUSH32 1'
+
 
 def test_decode_hex():
-    (pgm, code) = decode_hex('600100')
-    assert str(pgm[0]) == 'PUSH1 1'
-    assert str(code) == '[96, 1, 0]'
+    code = Contract.from_hexcode('600100')
+    assert str(code.decode_instruction(0)) == 'PUSH1 1'
+    assert [insn.opcode for insn in code] == [0x60, 0x00]
 
-    (pgm, code) = decode_hex('01')
-    assert str(pgm[0]) == 'ADD'
-    assert str(code) == '[1]'
+    code = Contract.from_hexcode('01')
+    assert str(code.decode_instruction(0)) == 'ADD'
+    assert [insn.opcode for insn in code] == [1]
 
     with pytest.raises(ValueError, match='1'):
-        decode_hex('1')
+        Contract.from_hexcode('1')
+
 
 def test_decode():
-    (ops, code) = decode(Concat(BitVecVal(EVM.PUSH32, 8), BitVec('x', 256)))
-    assert ','.join(map(str,ops)) == 'PUSH32 x'
+    code = Contract(Concat(BitVecVal(EVM.PUSH32, 8), BitVec('x', 256)))
+    assert len(code) == 33
+    assert str(code.decode_instruction(0)) == 'PUSH32 x'
+    assert str(code.decode_instruction(33)) == 'STOP'
 
-    (ops, code) = decode(BitVec('x', 256))
-    assert len(ops) == 32
-    assert str(ops[-1]) == 'Extract(7, 0, x)'
+    code = Contract(BitVec('x', 256))
+    assert len(code) == 32
+    assert str(code[-1]) == 'Extract(7, 0, x)'
 
-    (ops, code) = decode(Concat(BitVecVal(EVM.PUSH3, 8), BitVec('x', 16)))
+    code = Contract(Concat(BitVecVal(EVM.PUSH3, 8), BitVec('x', 16)))
+    ops = [insn for insn in code]
     assert len(ops) == 1
-    assert str(ops[0]) == 'PUSH3 ERROR x (1 bytes missed)'
+    assert str(ops[0]) == 'PUSH3 Concat(x, 0)' # 'PUSH3 ERROR x (1 bytes missed)'
+
 
 @pytest.mark.parametrize('sig,abi', [
     ('fooInt(uint256)', """
