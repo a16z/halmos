@@ -152,7 +152,7 @@ def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
 
 
 def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecRef:
-    '''Extract bytes from calldata. May return less than requested if out of bounds.'''
+    '''Extract bytes from calldata. Zero-pad if out of bounds.'''
     n = data.size()
     if n % 8 != 0: raise ValueError(n)
 
@@ -162,6 +162,12 @@ def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecR
     lo = 0 if lo < 0 else lo
 
     val = simplify(Extract(hi, lo, data))
+
+    zero_padding = size_bytes * 8 - val.size()
+    if zero_padding < 0: raise ValueError(val)
+    if zero_padding > 0:
+        val = simplify(Concat(val, con(0, zero_padding)))
+
     return val
 
 
