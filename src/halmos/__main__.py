@@ -280,9 +280,15 @@ def setup(
         dyn_param_size = [] # TODO: propagate to run
         mk_calldata(abi, setup_name, setup_sig, arrlen, args, setup_ex.calldata, dyn_param_size)
 
-        (setup_exs, setup_steps) = sevm.run(setup_ex)
+        (setup_exs_all, setup_steps) = sevm.run(setup_ex)
 
-        setup_exs = list(filter(lambda ex: ex.current_opcode() in [EVM.STOP, EVM.RETURN], setup_exs))
+        setup_exs = []
+        for idx, setup_ex in enumerate(setup_exs_all):
+            if setup_ex.current_opcode() in [EVM.STOP, EVM.RETURN]:
+                setup_ex.solver.set(timeout=args.solver_timeout_assertion)
+                res = setup_ex.solver.check()
+                if res != unsat:
+                    setup_exs.append(setup_ex)
 
         if len(setup_exs) == 0: raise ValueError('No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
