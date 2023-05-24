@@ -1017,6 +1017,8 @@ class SEVM:
                 # vm.fail()
                 if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
                     ex.failed = True
+                    out.append(ex)
+                    return
                 # vm.assume(bool)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.assume_sig:
                     assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
@@ -1325,7 +1327,7 @@ class SEVM:
                 ex.solver.pop()
 
         else:
-            raise NotImplementedError(f'symbolic JUMP target: {dst}')
+            raise NotConcreteError(f'symbolic JUMP target: {dst}')
 
     def create_branch(self, ex: Exec, cond: str, target: int) -> Exec:
         new_solver = SolverFor('QF_AUFBV')
@@ -1379,15 +1381,7 @@ class SEVM:
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
 
-                try:
-                    insn = ex.current_instruction()
-                except NotConcreteError as err:
-                    if self.options['debug']:
-                        print(err)
-
-                    out.append(ex)
-                    continue
-
+                insn = ex.current_instruction()
                 opcode = insn.opcode
                 ex.cnts[opcode] += 1
 
@@ -1677,7 +1671,7 @@ class SEVM:
                 ex.next_pc()
                 stack.append((ex, step_id))
 
-            except NotImplementedError as err:
+            except NotConcreteError as err:
                 ex.error = f'{err}'
                 out.append(ex)
                 continue

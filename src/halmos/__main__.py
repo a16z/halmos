@@ -77,8 +77,8 @@ def parse_args(args=None) -> argparse.Namespace:
     group_solver.add_argument(   '--smt-mod-by-const', action='store_true', help=       'interpret constant modulo')
     group_solver.add_argument(   '--smt-exp-by-const', metavar='N', type=int, default=2, help='interpret constant power up to N (default: %(default)s)')
 
-    group_solver.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
-    group_solver.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=60000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
+    group_solver.add_argument('--solver-timeout-branching', metavar='TIMEOUT', type=int, default=1, help='set timeout (in milliseconds) for solving branching conditions (default: %(default)s)')
+    group_solver.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
     group_solver.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
     group_solver.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
 
@@ -280,9 +280,15 @@ def setup(
         dyn_param_size = [] # TODO: propagate to run
         mk_calldata(abi, setup_name, setup_sig, arrlen, args, setup_ex.calldata, dyn_param_size)
 
-        (setup_exs, setup_steps) = sevm.run(setup_ex)
+        (setup_exs_all, setup_steps) = sevm.run(setup_ex)
 
-        setup_exs = list(filter(lambda ex: ex.current_opcode() in [EVM.STOP, EVM.RETURN] and not ex.failed, setup_exs))
+        setup_exs = []
+        for idx, setup_ex in enumerate(setup_exs_all):
+            if setup_ex.current_opcode() in [EVM.STOP, EVM.RETURN]:
+                setup_ex.solver.set(timeout=args.solver_timeout_assertion)
+                res = setup_ex.solver.check()
+                if res != unsat:
+                    setup_exs.append(setup_ex)
 
         if len(setup_exs) == 0: raise ValueError('No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
@@ -374,6 +380,8 @@ def run(
         error     = setup_ex.error,
     ))
 
+    mid = timer()
+
     # check assertion violations
     normal = 0
     models = []
@@ -383,14 +391,13 @@ def run(
 
         opcode = ex.current_opcode()
         if opcode in [EVM.STOP, EVM.RETURN]:
-            if ex.failed:
-                gen_model(args, models, idx, ex)
-            else:
-                normal += 1
+            normal += 1
         elif opcode in [EVM.REVERT, EVM.INVALID]:
             # Panic(1) # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
             if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
                 gen_model(args, models, idx, ex)
+        elif ex.failed:
+            gen_model(args, models, idx, ex)
         else:
             stuck.append((opcode, idx, ex))
 
@@ -402,8 +409,12 @@ def run(
     else:
         passfail = color_warn('[FAIL]')
 
+    time_info = f'{end - start:0.2f}s'
+    if args.statistics:
+        time_info += f' (paths: {mid - start:0.2f}s, models: {end - mid:0.2f}s)'
+
     # print result
-    print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {end - start:0.2f}s, bounds: [{', '.join(dyn_param_size)}])")
+    print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])")
     for model, idx, ex in models:
         if model:
             if is_valid_model(model):
@@ -426,7 +437,7 @@ def run(
     # print post-states
     if args.verbose >= 2:
         for idx, ex in enumerate(exs):
-            if args.print_revert or (ex.current_opcode() in [EVM.STOP, EVM.RETURN] and not ex.failed):
+            if args.print_revert or ex.current_opcode() in [EVM.STOP, EVM.RETURN]:
                 print(f'# {idx+1} / {len(exs)}')
                 print(ex)
 
@@ -444,6 +455,7 @@ def run(
 def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> None:
     if args.debug: print(f'{" "*2}Checking assertion violation')
 
+    ex.solver.set(timeout=args.solver_timeout_assertion)
     res = ex.solver.check()
     if res == sat:
         if args.debug: print(f'{" "*4}Generating a counterexample')
@@ -451,7 +463,7 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
     if res == unknown and args.solver_fresh:
         if args.debug: print(f'{" "*4}Checking again with a fresh solver')
         sol2 = SolverFor('QF_AUFBV', ctx=Context())
-        sol2.set(timeout=args.solver_timeout_assertion)
+    #   sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.sexpr())
         res = sol2.check()
         if res == sat: model = sol2.model()
