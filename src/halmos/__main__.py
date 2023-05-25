@@ -471,10 +471,12 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         if args.debug: print(f'{" "*4}Checking again in an external process')
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'
         if args.verbose >= 4: print(f'z3 -smt2 {fname}')
+        query = ex.solver.to_smt2()
+        query = query.replace('(evm_div', '(bvudiv') # TODO: replace `(evm_div x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))` as bvudiv is undefined when y = 0
         with open(fname, 'w') as f:
-            f.write('(set-logic QF_AUFBV)\n')
-            f.write(ex.solver.to_smt2())
-        res_str = subprocess.run(['z3', fname], capture_output=True, text=True).stdout.strip()
+        #   f.write('(set-logic QF_AUFBV)\n') # generated queries may include non smtlib2 symbols, like const arrays
+            f.write(query)
+        res_str = subprocess.run(['z3', '-model', fname], capture_output=True, text=True).stdout.strip()
         if args.verbose >= 4: print(res_str)
         if res_str == 'unsat':
             res = unsat

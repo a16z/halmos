@@ -184,10 +184,6 @@ def extract_funsig(calldata: BitVecRef):
     return extract_bytes(calldata, 0, 4)
 
 
-def create_address(cnt: int) -> Word:
-    return con(0x220E + cnt)
-
-
 class State:
     stack: List[Word]
     memory: List[Byte]
@@ -413,7 +409,7 @@ class Exec: # an execution path
     path: List[Any] # path conditions
     # logs
     log: List[Tuple[List[Word], Any]] # event logs emitted
-    cnts: Dict[int,int] # opcode -> frequency
+    cnts: Dict[str,Dict[int,int]] # opcode -> frequency; counters
     sha3s: List[Tuple[Word,Word]] # sha3 hashes generated
     storages: Dict[Any,Any] # storage updates
     balances: Dict[Any,Any] # balance updates
@@ -459,7 +455,7 @@ class Exec: # an execution path
         return self.code[self.this].decode_instruction(self.pc)
 
     def str_cnts(self) -> str:
-        return ''.join([f'{x[0]}: {x[1]}\n' for x in sorted(self.cnts.items(), key=lambda x: x[0])])
+        return ''.join([f'{x[0]}: {x[1]}\n' for x in sorted(self.cnts['opcode'].items(), key=lambda x: x[0])])
 
     def str_solver(self) -> str:
         return '\n'.join([str(cond) for cond in self.solver.assertions()])
@@ -556,7 +552,7 @@ class Exec: # an execution path
         if len(keys) == 0:
             self.storage[addr][slot][0] = val
         else:
-            new_storage_var = Array(f'storage{self.cnt_sstore()}', BitVecSort(len(keys)*256), BitVecSort(256))
+            new_storage_var = Array(f'storage{1+len(self.storages)}', BitVecSort(len(keys)*256), BitVecSort(256))
             new_storage = Store(self.storage[addr][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
             self.storage[addr][slot][len(keys)] = new_storage_var
@@ -623,7 +619,7 @@ class Exec: # an execution path
     def sha3_data(self, data: Bytes, size: int) -> None:
         f_sha3 = Function('sha3_'+str(size*8), BitVecSort(size*8), BitVecSort(256))
         sha3 = f_sha3(data)
-        sha3_var = BitVec(f'sha3_var{self.cnt_sha3()}', 256)
+        sha3_var = BitVec(f'sha3_var{len(self.sha3s)}', 256)
         self.solver.add(sha3_var == sha3)
         self.solver.add(ULE(sha3_var, con(2**256 - 2**64))) # assume hash values are sufficiently smaller than the uint max
         self.assume_sha3_distinct(sha3_var, sha3)
@@ -642,18 +638,13 @@ class Exec: # an execution path
         self.solver.add(sha3_var != con(0))
         self.sha3s.append((sha3_var, sha3))
 
-    def cnt_call(self) -> int:
-        return self.cnts[EVM.CALL] + self.cnts[EVM.STATICCALL]
-    def cnt_sstore(self) -> int:
-        return self.cnts[EVM.SSTORE]
-    def cnt_gas(self) -> int:
-        return self.cnts[EVM.GAS]
-    def cnt_balance(self) -> int:
-        return self.cnts[EVM.BALANCE]
-    def cnt_sha3(self) -> int:
-        return self.cnts[EVM.SHA3]
-    def cnt_create(self) -> int:
-        return self.cnts[EVM.CREATE]
+    def new_gas_id(self) -> int:
+        self.cnts['fresh']['gas'] += 1
+        return self.cnts['fresh']['gas']
+
+    def new_address(self) -> BitVecRef:
+        self.cnts['fresh']['address'] += 1
+        return con(1000 + self.cnts['fresh']['address'])
 
     def returndatasize(self) -> int:
         if self.output is None:
@@ -990,15 +981,17 @@ class SEVM:
                     out.append(new_ex)
 
         def call_unknown() -> None:
+            call_id = len(ex.calls)
+
             # push exit code
             if arg_size > 0:
                 arg = wload(ex.st.memory, arg_loc, arg_size)
                 f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(arg_size*8), BitVecSort(256))
-                exit_code = f_call(con(ex.cnt_call()), gas, to, fund, arg)
+                exit_code = f_call(con(call_id), gas, to, fund, arg)
             else:
                 f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256),                         BitVecSort(256))
-                exit_code = f_call(con(ex.cnt_call()), gas, to, fund)
-            exit_code_var = BitVec(f'call{ex.cnt_call()}', 256)
+                exit_code = f_call(con(call_id), gas, to, fund)
+            exit_code_var = BitVec(f'call{call_id}', 256)
             ex.solver.add(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
@@ -1177,7 +1170,8 @@ class SEVM:
         create_code = Contract(create_hexcode)
 
         # new account address
-        new_addr = create_address(ex.cnt_create())
+        new_addr = ex.new_address()
+
         for addr in ex.code:
             ex.solver.add(new_addr != addr) # ensure new address is fresh
 
@@ -1383,9 +1377,9 @@ class SEVM:
 
                 insn = ex.current_instruction()
                 opcode = insn.opcode
-                ex.cnts[opcode] += 1
+                ex.cnts['opcode'][opcode] += 1
 
-                if 'max_depth' in self.options and sum(ex.cnts.values()) > self.options['max_depth']:
+                if 'max_depth' in self.options and sum(ex.cnts['opcode'].values()) > self.options['max_depth']:
                     continue
 
                 if self.options.get('log'):
@@ -1533,7 +1527,7 @@ class SEVM:
                 elif opcode == EVM.CODESIZE:
                     ex.st.push(con(len(ex.code[ex.this])))
                 elif opcode == EVM.GAS:
-                    ex.st.push(f_gas(con(ex.cnt_gas())))
+                    ex.st.push(f_gas(con(ex.new_gas_id())))
                 elif opcode == EVM.GASPRICE:
                     ex.st.push(f_gasprice())
 
@@ -1739,7 +1733,7 @@ class SEVM:
             path     = [],
             #
             log      = [],
-            cnts     = defaultdict(int),
+            cnts     = defaultdict(lambda: defaultdict(int)),
             sha3s    = [],
             storages = {},
             balances = {},
