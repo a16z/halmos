@@ -38,6 +38,9 @@ f_sdiv = Function('evm_sdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_smod', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
+def id_str(x: Any) -> str:
+    return str(x).replace(' ', '')
+
 class Instruction:
     pc: int
     opcode: int
@@ -513,7 +516,7 @@ class Exec: # an execution path
         return value
 
     def balance_update(self, addr: Word, value: Word):
-        new_balance_var = Array(f'balance{1+len(self.balances)}', BitVecSort(256), BitVecSort(256))
+        new_balance_var = Array(f'balance_{1+len(self.balances)}', BitVecSort(256), BitVecSort(256))
         new_balance = Store(self.balance, addr, value)
         self.solver.add(new_balance_var == new_balance)
         self.balance = new_balance_var
@@ -525,12 +528,12 @@ class Exec: # an execution path
         if len(keys) not in self.storage[addr][slot]:
             if len(keys) == 0:
                 if self.symbolic:
-                    self.storage[addr][slot][len(keys)] = BitVec(f'storage_slot_{str(slot)}_{str(len(keys))}', 256)
+                    self.storage[addr][slot][len(keys)] = BitVec(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', 256)
                 else:
                     self.storage[addr][slot][len(keys)] = con(0)
             else:
                 if self.symbolic:
-                    self.storage[addr][slot][len(keys)] = Array(f'storage_slot_{str(slot)}_{str(len(keys))}', BitVecSort(len(keys)*256), BitVecSort(256))
+                    self.storage[addr][slot][len(keys)] = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', BitVecSort(len(keys)*256), BitVecSort(256))
                 else:
                     self.storage[addr][slot][len(keys)] = K(BitVecSort(len(keys)*256), con(0))
 
@@ -552,7 +555,7 @@ class Exec: # an execution path
         if len(keys) == 0:
             self.storage[addr][slot][0] = val
         else:
-            new_storage_var = Array(f'storage{1+len(self.storages)}', BitVecSort(len(keys)*256), BitVecSort(256))
+            new_storage_var = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages)}', BitVecSort(len(keys)*256), BitVecSort(256))
             new_storage = Store(self.storage[addr][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
             self.storage[addr][slot][len(keys)] = new_storage_var
@@ -619,7 +622,7 @@ class Exec: # an execution path
     def sha3_data(self, data: Bytes, size: int) -> None:
         f_sha3 = Function('sha3_'+str(size*8), BitVecSort(size*8), BitVecSort(256))
         sha3 = f_sha3(data)
-        sha3_var = BitVec(f'sha3_var{len(self.sha3s)}', 256)
+        sha3_var = BitVec(f'sha3_var_{len(self.sha3s)}', 256)
         self.solver.add(sha3_var == sha3)
         self.solver.add(ULE(sha3_var, con(2**256 - 2**64))) # assume hash values are sufficiently smaller than the uint max
         self.assume_sha3_distinct(sha3_var, sha3)
@@ -991,7 +994,7 @@ class SEVM:
             else:
                 f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256),                         BitVecSort(256))
                 exit_code = f_call(con(call_id), gas, to, fund)
-            exit_code_var = BitVec(f'call{call_id}', 256)
+            exit_code_var = BitVec(f'call_exit_code_{call_id}', 256)
             ex.solver.add(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
