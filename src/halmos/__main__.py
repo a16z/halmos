@@ -174,7 +174,7 @@ def mk_callvalue() -> Word:
     return BitVec('msg_value', 256)
 
 def mk_balance() -> Word:
-    return Array('balance0', BitVecSort(256), BitVecSort(256))
+    return Array('balance_0', BitVecSort(256), BitVecSort(256))
 
 def mk_block() -> Block:
     block = Block(
