@@ -417,7 +417,9 @@ def run(
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])")
     for model, idx, ex in models:
         if model:
-            if is_valid_model(model):
+            if isinstance(model, str):
+                print(color_warn(f'Counterexample: see {model}'))
+            elif is_valid_model(model):
                 print(color_warn(f'Counterexample: {str_model(model, args)}'))
             elif args.print_potential_counterexample:
                 print(color_warn(f'Counterexample (potentially invalid): {str_model(model, args)}'))
@@ -470,21 +472,31 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
     if res == unknown and args.solver_subprocess:
         if args.debug: print(f'{" "*4}Checking again in an external process')
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'
-        if args.verbose >= 4: print(f'z3 -smt2 {fname}')
+        if args.verbose >= 4 or args.debug: print(f'{" "*6}z3 -model {fname} >{fname}.out')
         query = ex.solver.to_smt2()
         query = query.replace('(evm_div', '(bvudiv') # TODO: replace `(evm_div x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))` as bvudiv is undefined when y = 0
         with open(fname, 'w') as f:
         #   f.write('(set-logic QF_AUFBV)\n') # generated queries may include non smtlib2 symbols, like const arrays
             f.write(query)
         res_str = subprocess.run(['z3', '-model', fname], capture_output=True, text=True).stdout.strip()
-        if args.verbose >= 4: print(res_str)
-        if res_str == 'unsat':
+        res_str_head = res_str.split('\n', 1)[0]
+        if args.verbose >= 4 or args.debug:
+            with open(f'{fname}.out', 'w') as f:
+                f.write(res_str)
+            if args.verbose >= 4:
+                print(res_str)
+            else:
+                print(f'{" "*6}{res_str_head}')
+        if res_str_head == 'unsat':
             res = unsat
+        elif res_str_head == 'sat':
+            res = sat
+            model = f'{fname}.out'
     if res == unsat:
-        if args.debug: print(f'{" "*4}Passed')
+        if args.debug: print(f'{" "*4}No assertion violation')
         return
     if res == sat:
-        if args.debug: print(f'{" "*4}Done')
+        if args.debug: print(f'{" "*4}Counterexample generated')
         models.append((model, idx, ex))
     else:
         if args.debug: print(f'{" "*4}Timeout')
