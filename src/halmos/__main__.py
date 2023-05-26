@@ -51,6 +51,7 @@ def parse_args(args=None) -> argparse.Namespace:
     parser.add_argument('--array-lengths', metavar='NAME1=LENGTH1,NAME2=LENGTH2,...', help='set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)')
 
     parser.add_argument('--symbolic-storage', action='store_true', help='set default storage values to symbolic')
+    parser.add_argument('--symbolic-msg-sender', action='store_true', help='set msg.sender symbolic')
 
     # debugging options
     group_debug = parser.add_argument_group("Debugging options")
@@ -192,6 +193,15 @@ def mk_block() -> Block:
 def mk_addr(name: str) -> Word:
     return BitVec(name, 160)
 
+def mk_caller(args: argparse.Namespace) -> Word:
+    if args.symbolic_msg_sender:
+        return mk_addr('msg_sender')
+    else:
+        return con_addr(999)
+
+def mk_this() -> Word:
+    return con_addr(1000)
+
 def mk_solver(args: argparse.Namespace):
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
     solver.set(timeout=args.solver_timeout_branching)
@@ -207,8 +217,8 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
     balance = mk_balance()
     block = mk_block()
     callvalue = mk_callvalue()
-    caller = con_addr(999)
-    this = con_addr(1000)
+    caller = mk_caller(args)
+    this = mk_this()
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
@@ -255,7 +265,7 @@ def setup(
 
     solver = mk_solver(args)
 
-    this = con_addr(1000)
+    this = mk_this()
 
     sevm = SEVM(options)
 
@@ -266,7 +276,7 @@ def setup(
         block     = mk_block(),
         calldata  = [],
         callvalue = con(0),
-        caller    = con_addr(999),
+        caller    = mk_caller(args),
         this      = this,
         symbolic  = False,
         solver    = solver,
