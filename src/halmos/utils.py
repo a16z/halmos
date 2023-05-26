@@ -3,6 +3,16 @@
 from typing import Dict, Tuple
 from collections import defaultdict
 
+from z3 import *
+
+def assert_address(x: BitVecRef) -> None:
+    if x.size() != 160: raise ValueError(x)
+    pass
+
+def con_addr(n: int) -> BitVecRef:
+    if n >= 2**160: raise ValueError(n)
+    return BitVecVal(n, 160)
+
 def color_good(text: str) -> str:
     return '\033[32m' + text + '\033[0m'
 

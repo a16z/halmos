@@ -4,11 +4,14 @@ from typing import List, Dict, Set, Tuple, Any
 
 from z3 import *
 
+from .utils import assert_address, con_addr
+
 class Prank:
     addr: Any # prank address
     keep: bool # start / stop prank
 
     def __init__(self, addr: Any = None, keep: bool = False) -> None:
+        if addr is not None: assert_address(addr)
         self.addr = addr
         self.keep = keep
 
@@ -22,20 +25,24 @@ class Prank:
             return 'None'
 
     def lookup(self, this: Any, to: Any) -> Any:
+        assert_address(this)
+        assert_address(to)
         caller = this
-        if self.addr is not None and not eq(to, BitVecVal(hevm_cheat_code.address, 256)):
+        if self.addr is not None and not eq(to, hevm_cheat_code.address):
             caller = self.addr
             if not self.keep:
                 self.addr = None
         return caller
 
     def prank(self, addr: Any) -> bool:
+        assert_address(addr)
         if self.addr is not None: return False
         self.addr = addr
         self.keep = False
         return True
 
     def startPrank(self, addr: Any) -> bool:
+        assert_address(addr)
         if self.addr is not None: return False
         self.addr = addr
         self.keep = True
@@ -52,7 +59,7 @@ class hevm_cheat_code:
 
     # address constant HEVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('hevm cheat code')))));
-    address: int = 0x7109709ECfa91a80626fF3989D68f67F5b1DD12D
+    address: BitVecRef = con_addr(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D)
 
     # abi.encodePacked(
     #     bytes4(keccak256("store(address,bytes32,bytes32)")),
