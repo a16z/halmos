@@ -189,7 +189,6 @@ def mk_block() -> Block:
     block.chainid = con(1) # for ethereum
     return block
 
-# TODO: addresses are used as keys in the context and could be treated as 160-bit values
 def mk_addr(name: str) -> Word:
     return BitVec(name, 160)
 
