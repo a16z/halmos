@@ -207,8 +207,8 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
     balance = mk_balance()
     block = mk_block()
     callvalue = mk_callvalue()
-    caller = mk_addr('msg_sender')
-    this = mk_addr('this_address')
+    caller = con_addr(999)
+    this = con_addr(1000)
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
@@ -255,7 +255,7 @@ def setup(
 
     solver = mk_solver(args)
 
-    this = mk_addr('this_address')
+    this = con_addr(1000)
 
     sevm = SEVM(options)
 
@@ -266,7 +266,7 @@ def setup(
         block     = mk_block(),
         calldata  = [],
         callvalue = con(0),
-        caller    = mk_addr('msg_sender'),
+        caller    = con_addr(999),
         this      = this,
         symbolic  = False,
         solver    = solver,
