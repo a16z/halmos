@@ -4,17 +4,17 @@ from z3 import *
 
 from halmos.utils import EVM
 
-from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of
+from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of, uint256, uint160
 
 from halmos.__main__ import mk_block
 
 from test_fixtures import args, options, sevm
 
-caller = BitVec('msg_sender', 256)
+caller = BitVec('msg_sender', 160)
 
-this = BitVec('this_address', 256)
+this = BitVec('this_address', 160)
 
-balance = Array('balance0', BitVecSort(256), BitVecSort(256))
+balance = Array('balance_0', BitVecSort(160), BitVecSort(256))
 
 callvalue = BitVec('msg_value', 256)
 
@@ -22,8 +22,6 @@ callvalue = BitVec('msg_value', 256)
 def solver(args):
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
     solver.set(timeout=args.solver_timeout_branching)
-    solver.add(Extract(255, 160, caller) == BitVecVal(0, 96))
-    solver.add(Extract(255, 160, this) == BitVecVal(0, 96))
     return solver
 
 @pytest.fixture
@@ -141,10 +139,10 @@ def test_run(hexcode, stack, pc, opcode: int, sevm, solver, storage):
     (o(EVM.SAR), [con(256), y], y >> con(256)), # not necessarily 0; TODO: prove it is equal to y >> 255
     (o(EVM.SAR), [con(2**256-1), y], y >> con(2**256-1)), # not necessarily 0; TODO: prove it is equal to y >> 255
     # TODO: SHA3
-    (o(EVM.ADDRESS), [], this),
-    (o(EVM.BALANCE), [x], Select(balance, x)),
-    (o(EVM.ORIGIN), [], f_origin()),
-    (o(EVM.CALLER), [], caller),
+    (o(EVM.ADDRESS), [], uint256(this)),
+    (o(EVM.BALANCE), [x], Select(balance, uint160(x))),
+    (o(EVM.ORIGIN), [], uint256(f_origin())),
+    (o(EVM.CALLER), [], uint256(caller)),
     (o(EVM.CALLVALUE), [], callvalue),
     # TODO: CALLDATA*, CODE*, EXTCODE*, RETURNDATA*, CREATE*
     (o(EVM.SELFBALANCE), [], Select(balance, this)),

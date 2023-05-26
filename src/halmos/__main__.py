@@ -174,13 +174,13 @@ def mk_callvalue() -> Word:
     return BitVec('msg_value', 256)
 
 def mk_balance() -> Word:
-    return Array('balance_0', BitVecSort(256), BitVecSort(256))
+    return Array('balance_0', BitVecSort(160), BitVecSort(256))
 
 def mk_block() -> Block:
     block = Block(
         basefee    = ZeroExt(160, BitVec('block_basefee', 96)),     # practical limit 96 bit
         chainid    = ZeroExt(192, BitVec('block_chainid', 64)),     # chainid 64 bit
-        coinbase   = ZeroExt(96, BitVec('block_coinbase', 160)),    # address 160 bit
+        coinbase   = mk_addr('block_coinbase'),                     # address 160 bit
         difficulty = BitVec('block_difficulty', 256),
         gaslimit   = ZeroExt(160, BitVec('block_gaslimit', 96)),    # practical limit 96 bit
         number     = ZeroExt(192, BitVec('block_number', 64)),      # practical limit 64 bit
@@ -189,9 +189,8 @@ def mk_block() -> Block:
     block.chainid = con(1) # for ethereum
     return block
 
-# TODO: addresses are used as keys in the context and could be treated as 160-bit values
 def mk_addr(name: str) -> Word:
-    return Concat(BitVecVal(0, 96), BitVec(name, 160))
+    return BitVec(name, 160)
 
 def mk_solver(args: argparse.Namespace):
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
@@ -650,7 +649,7 @@ def main() -> int:
 
                     if args.reset_bytecode:
                         for assign in [x.split('=') for x in args.reset_bytecode.split(',')]:
-                            addr = con(int(assign[0].strip(), 0))
+                            addr = con_addr(int(assign[0].strip(), 0))
                             new_hexcode = assign[1].strip()
                             setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
 

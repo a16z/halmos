@@ -9,24 +9,25 @@ from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
-from .utils import EVM, color_good, color_warn, sha3_inv, restore_precomputed_hashes, str_opcode
+from .utils import EVM, color_good, color_warn, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, con_addr
 from .cheatcodes import hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
 Bytes = Any # z3 expression (including constants)
+Address = BitVecRef # 160-bitvector
 
 Steps = Dict[int,Dict[str,Any]] # execution tree
 
 # symbolic states
 f_calldataload = Function('calldataload', BitVecSort(256), BitVecSort(256)) # index
 f_calldatasize = Function('calldatasize', BitVecSort(256))
-f_extcodesize  = Function('extcodesize' , BitVecSort(256), BitVecSort(256)) # target address
-f_extcodehash  = Function('extcodehash' , BitVecSort(256), BitVecSort(256)) # target address
+f_extcodesize  = Function('extcodesize' , BitVecSort(160), BitVecSort(256)) # target address
+f_extcodehash  = Function('extcodehash' , BitVecSort(160), BitVecSort(256)) # target address
 f_blockhash    = Function('blockhash'   , BitVecSort(256), BitVecSort(256)) # block number
 f_gas          = Function('gas'         , BitVecSort(256), BitVecSort(256)) # cnt
 f_gasprice     = Function('gasprice'    , BitVecSort(256))
-f_origin       = Function('origin'      , BitVecSort(256))
+f_origin       = Function('origin'      , BitVecSort(160))
 
 # uninterpreted arithmetic
 f_add  = Function('evm_add' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
@@ -112,6 +113,21 @@ def concat(args):
     else:
         return args[0]
 
+
+def uint256(x: BitVecRef) -> BitVecRef:
+    bitsize = x.size()
+    if bitsize > 256: raise ValueError(x)
+    if bitsize == 256: return x
+    return simplify(ZeroExt(256 - bitsize, x))
+
+def uint160(x: BitVecRef) -> BitVecRef:
+    bitsize = x.size()
+    if bitsize > 256: raise ValueError(x)
+    if bitsize == 160: return x
+    if bitsize > 160:
+        return simplify(Extract(159, 0, x))
+    else:
+        return simplify(ZeroExt(160 - bitsize, x))
 
 def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, size_bits)
@@ -260,13 +276,13 @@ class State:
             return None
 
 class Block:
-    basefee: Any
-    chainid: Any
-    coinbase: Any
-    difficulty: Any # prevrandao
-    gaslimit: Any
-    number: Any
-    timestamp: Any
+    basefee: BitVecRef
+    chainid: BitVecRef
+    coinbase: Address
+    difficulty: BitVecRef # prevrandao
+    gaslimit: BitVecRef
+    number: BitVecRef
+    timestamp: BitVecRef
 
     def __init__(self, **kwargs) -> None:
         self.basefee    = kwargs['basefee']
@@ -276,6 +292,8 @@ class Block:
         self.gaslimit   = kwargs['gaslimit']
         self.number     = kwargs['number']
         self.timestamp  = kwargs['timestamp']
+
+        assert_address(self.coinbase)
 
 class Contract:
     '''Abstraction over contract bytecode. Can include concrete and symbolic elements.'''
@@ -390,16 +408,16 @@ class CodeIterator:
 
 class Exec: # an execution path
     # network
-    code: Dict[Any, Contract]
-    storage: Dict[Any,Dict[int,Any]] # address -> { storage slot -> value }
+    code: Dict[Address, Contract]
+    storage: Dict[Address,Dict[int,Any]] # address -> { storage slot -> value }
     balance: Any # address -> balance
     # block
     block: Block
     # tx
     calldata: List[Byte] # msg.data
     callvalue: Word # msg.value
-    caller: Word # msg.sender
-    this: Word # current account address
+    caller: Address # msg.sender
+    this: Address # current account address
     # vm state
     pc: int
     st: State # stack and memory
@@ -450,6 +468,9 @@ class Exec: # an execution path
         self.calls    = kwargs['calls']
         self.failed   = kwargs['failed']
         self.error    = kwargs['error']
+
+        assert_address(self.caller)
+        assert_address(self.this)
 
     def current_opcode(self) -> UnionType[int, BitVecRef]:
         return unbox_int(self.code[self.this][self.pc])
@@ -511,18 +532,21 @@ class Exec: # an execution path
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
+        assert_address(addr)
         value = self.select(self.balance, addr, self.balances)
         self.solver.add(ULT(value, con(2**96))) # practical assumption on the max balance per account
         return value
 
     def balance_update(self, addr: Word, value: Word):
-        new_balance_var = Array(f'balance_{1+len(self.balances)}', BitVecSort(256), BitVecSort(256))
+        assert_address(addr)
+        new_balance_var = Array(f'balance_{1+len(self.balances)}', BitVecSort(160), BitVecSort(256))
         new_balance = Store(self.balance, addr, value)
         self.solver.add(new_balance_var == new_balance)
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
 
     def sinit(self, addr: Any, slot: int, keys) -> None:
+        assert_address(addr)
         if slot not in self.storage[addr]:
             self.storage[addr][slot] = {}
         if len(keys) not in self.storage[addr][slot]:
@@ -645,9 +669,9 @@ class Exec: # an execution path
         self.cnts['fresh']['gas'] += 1
         return self.cnts['fresh']['gas']
 
-    def new_address(self) -> BitVecRef:
+    def new_address(self) -> Address:
         self.cnts['fresh']['address'] += 1
-        return con(1000 + self.cnts['fresh']['address'])
+        return con_addr(1000 + self.cnts['fresh']['address'])
 
     def returndatasize(self) -> int:
         if self.output is None:
@@ -659,6 +683,7 @@ class Exec: # an execution path
 
     def read_code(self, offset: int, address=None) -> Byte:
         address = address or self.this
+        assert_address(address)
         code_byte = self.code[address][offset]
         return BitVecVal(code_byte, 8) if not is_bv(code_byte) else code_byte
 
@@ -888,8 +913,7 @@ class SEVM:
     def call(self, ex: Exec, op: int, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
         gas = ex.st.pop()
 
-        # TODO: zero the upper bits
-        to = ex.st.pop()
+        to = uint160(ex.st.pop())
 
         if op == EVM.STATICCALL:
             fund = con(0)
@@ -989,10 +1013,10 @@ class SEVM:
             # push exit code
             if arg_size > 0:
                 arg = wload(ex.st.memory, arg_loc, arg_size)
-                f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(arg_size*8), BitVecSort(256))
+                f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(160), BitVecSort(256), BitVecSort(arg_size*8), BitVecSort(256))
                 exit_code = f_call(con(call_id), gas, to, fund, arg)
             else:
-                f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(256), BitVecSort(256),                         BitVecSort(256))
+                f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(160), BitVecSort(256),                         BitVecSort(256))
                 exit_code = f_call(con(call_id), gas, to, fund)
             exit_code_var = BitVec(f'call_exit_code_{call_id}', 256)
             ex.solver.add(exit_code_var == exit_code)
@@ -1004,11 +1028,11 @@ class SEVM:
                 ret = f_ret(exit_code_var)
 
             # TODO: cover other precompiled
-            if to == con(1): # ecrecover exit code is always 1
+            if to == con_addr(1): # ecrecover exit code is always 1
                 ex.solver.add(exit_code_var != con(0))
 
             # vm cheat code
-            if to == con(hevm_cheat_code.address):
+            if to == hevm_cheat_code.address:
                 ex.solver.add(exit_code_var != con(0))
                 # vm.fail()
                 if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
@@ -1053,14 +1077,14 @@ class SEVM:
                     ret = BitVecVal(int.from_bytes(ret_bytes, 'big'), ret_len * 8)
                 # vm.prank(address)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.prank_sig:
-                    result = ex.prank.prank(simplify(Extract(255, 0, arg)))
+                    result = ex.prank.prank(uint160(Extract(255, 0, arg)))
                     if not result:
                         ex.error = 'You have an active prank already.'
                         out.append(ex)
                         return
                 # vm.startPrank(address)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.start_prank_sig:
-                    result = ex.prank.startPrank(simplify(Extract(255, 0, arg)))
+                    result = ex.prank.startPrank(uint160(Extract(255, 0, arg)))
                     if not result:
                         ex.error = 'You have an active prank already.'
                         out.append(ex)
@@ -1070,12 +1094,12 @@ class SEVM:
                     ex.prank.stopPrank()
                 # vm.deal(address,uint256)
                 elif eq(arg.sort(), BitVecSort((4+32*2)*8)) and simplify(Extract(543, 512, arg)) == hevm_cheat_code.deal_sig:
-                    who = simplify(Extract(511, 256, arg))
+                    who = uint160(Extract(511, 256, arg))
                     amount = simplify(Extract(255, 0, arg))
                     ex.balance_update(who, amount)
                 # vm.store(address,bytes32,bytes32)
                 elif eq(arg.sort(), BitVecSort((4+32*3)*8)) and simplify(Extract(799, 768, arg)) == hevm_cheat_code.store_sig:
-                    store_account = simplify(Extract(767, 512, arg))
+                    store_account = uint160(Extract(767, 512, arg))
                     store_slot = simplify(Extract(511, 256, arg))
                     store_value = simplify(Extract(255, 0, arg))
                     if store_account in ex.storage:
@@ -1086,7 +1110,7 @@ class SEVM:
                         return
                 # vm.load(address,bytes32)
                 elif eq(arg.sort(), BitVecSort((4+32*2)*8)) and simplify(Extract(543, 512, arg)) == hevm_cheat_code.load_sig:
-                    load_account = simplify(Extract(511, 256, arg))
+                    load_account = uint160(Extract(511, 256, arg))
                     load_slot = simplify(Extract(255, 0, arg))
                     if load_account in ex.storage:
                         ret = ex.sload(load_account, load_slot)
@@ -1102,7 +1126,7 @@ class SEVM:
                     ex.block.chainid = simplify(Extract(255, 0, arg))
                 # vm.coinbase(address)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.coinbase_sig:
-                    ex.block.coinbase = simplify(Extract(255, 0, arg))
+                    ex.block.coinbase = uint160(Extract(255, 0, arg))
                 # vm.difficulty(uint256)
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.difficulty_sig:
                     ex.block.difficulty = simplify(Extract(255, 0, arg))
@@ -1114,8 +1138,7 @@ class SEVM:
                     ex.block.timestamp = simplify(Extract(255, 0, arg))
                 # vm.etch(address,bytes)
                 elif extract_funsig(arg) == hevm_cheat_code.etch_sig:
-                    # ex.code contains 256-bit keys
-                    who = simplify(Concat(con(0, 96), extract_bytes(arg, 4 + 12, 20)))
+                    who = simplify(extract_bytes(arg, 4 + 12, 20))
 
                     # who must be concrete
                     if not is_bv_value(who):
@@ -1253,7 +1276,7 @@ class SEVM:
                 new_ex.prank = ex.prank
 
                 # push new address to stack
-                new_ex.st.push(new_addr)
+                new_ex.st.push(uint256(new_addr))
 
                 # add to worklist
                 new_ex.next_pc()
@@ -1510,19 +1533,18 @@ class SEVM:
                 elif opcode == EVM.CALLVALUE:
                     ex.st.push(ex.callvalue)
                 elif opcode == EVM.CALLER:
-                    ex.st.push(ex.caller)
+                    ex.st.push(uint256(ex.caller))
                 elif opcode == EVM.ORIGIN:
-                    ex.st.push(f_origin())
-                    ex.solver.add(Extract(255, 160, f_origin()) == BitVecVal(0, 96))
+                    ex.st.push(uint256(f_origin()))
                 elif opcode == EVM.ADDRESS:
-                    ex.st.push(ex.this)
+                    ex.st.push(uint256(ex.this))
                 elif opcode == EVM.EXTCODESIZE:
-                    address = ex.st.pop()
+                    address = uint160(ex.st.pop())
                     if address in ex.code:
                         codesize = con(len(ex.code[address]))
                     else:
                         codesize = f_extcodesize(address)
-                        if address == con(hevm_cheat_code.address):
+                        if address == hevm_cheat_code.address:
                             ex.solver.add(codesize > 0)
                     ex.st.push(codesize)
                 elif opcode == EVM.EXTCODEHASH:
@@ -1539,7 +1561,7 @@ class SEVM:
                 elif opcode == EVM.CHAINID:
                     ex.st.push(ex.block.chainid)
                 elif opcode == EVM.COINBASE:
-                    ex.st.push(ex.block.coinbase)
+                    ex.st.push(uint256(ex.block.coinbase))
                 elif opcode == EVM.DIFFICULTY:
                     ex.st.push(ex.block.difficulty)
                 elif opcode == EVM.GASLIMIT:
@@ -1556,7 +1578,7 @@ class SEVM:
                     ex.st.push(f_blockhash(ex.st.pop()))
 
                 elif opcode == EVM.BALANCE:
-                    ex.st.push(ex.balance_of(ex.st.pop()))
+                    ex.st.push(ex.balance_of(uint160(ex.st.pop())))
                 elif opcode == EVM.SELFBALANCE:
                     ex.st.push(ex.balance_of(ex.this))
 
