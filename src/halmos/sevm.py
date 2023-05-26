@@ -304,6 +304,9 @@ class Contract:
     _rawcode: UnionType[bytes, BitVecRef]
 
     def __init__(self, rawcode: UnionType[bytes, BitVecRef]) -> None:
+        if is_bv_value(rawcode):
+            if rawcode.size() % 8 != 0: raise ValueError(rawcode)
+            rawcode = rawcode.as_long().to_bytes(rawcode.size() // 8, 'big')
         self._rawcode = rawcode
 
     def __init_jumpdests(self):
