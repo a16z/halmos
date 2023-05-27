@@ -1303,25 +1303,17 @@ class SEVM:
         potential_true: bool = ex.check(cond_true) != unsat
         potential_false: bool = ex.check(cond_false) != unsat
 
+        # note: both may be false if the previous path condition was considered unknown but turns out to be unsat later
+
         follow_true = False
         follow_false = False
 
         if potential_true and potential_false: # for loop unrolling
-            if visited[True] < self.options['max_loop'] and visited[False] < self.options['max_loop']:
-                follow_true = True
-                follow_false = True
-            elif visited[True] < self.options['max_loop']:
-                follow_true = True
-            elif visited[False] < self.options['max_loop']:
-                follow_false = True
-            else:
-                pass
-        elif potential_true: # for constant-bounded loops
-            follow_true = True
-        elif potential_false:
-            follow_false = True
-        else:
-            pass # this may happen if the previous path condition was considered unknown but turns out to be unsat later
+            follow_true = visited[True] < self.options['max_loop']
+            follow_false = visited[False] < self.options['max_loop']
+        else: # for constant-bounded loops
+            follow_true = potential_true
+            follow_false = potential_false
 
         new_ex_true = None
         new_ex_false = None
