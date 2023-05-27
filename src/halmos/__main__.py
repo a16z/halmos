@@ -359,10 +359,10 @@ def run(
 
     (exs, steps) = sevm.run(Exec(
         code      = setup_ex.code.copy(), # shallow copy
-        storage   = deepcopy(setup_ex.storage),
+        storage   = deepcopy3(setup_ex.storage),
         balance   = setup_ex.balance, # TODO: add callvalue
         #
-        block     = deepcopy(setup_ex.block),
+        block     = copy.copy(setup_ex.block),
         #
         calldata  = cd,
         callvalue = callvalue,
@@ -377,14 +377,14 @@ def run(
         prank     = Prank(), # prank is reset after setUp()
         #
         solver    = solver,
-        path      = deepcopy(setup_ex.path),
+        path      = copy.copy(setup_ex.path),
         #
-        log       = deepcopy(setup_ex.log),
+        log       = copy.copy(setup_ex.log),
         cnts      = deepcopy(setup_ex.cnts),
-        sha3s     = deepcopy(setup_ex.sha3s),
-        storages  = deepcopy(setup_ex.storages),
-        balances  = deepcopy(setup_ex.balances),
-        calls     = deepcopy(setup_ex.calls),
+        sha3s     = copy.copy(setup_ex.sha3s),
+        storages  = copy.copy(setup_ex.storages),
+        balances  = copy.copy(setup_ex.balances),
+        calls     = copy.copy(setup_ex.calls),
         failed    = setup_ex.failed,
         error     = setup_ex.error,
     ))

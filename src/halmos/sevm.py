@@ -217,8 +217,8 @@ class State:
 
     def __deepcopy__(self, memo): # -> State:
         st = State()
-        st.stack = deepcopy(self.stack)
-        st.memory = deepcopy(self.memory)
+        st.stack = copy.copy(self.stack)
+        st.memory = copy.copy(self.memory)
         return st
 
     def __str__(self) -> str:
@@ -412,11 +412,17 @@ class CodeIterator:
 
         return insn
 
+def deepcopy2(d: Dict[Any,Dict[Any,Any]]) -> Dict:
+    return { k : copy.copy(v) for k, v in d.items() }
+
+def deepcopy3(d: Dict[Any,Dict[Any,Dict[Any,Any]]]) -> Dict:
+    return { k : deepcopy2(v) for k, v in d.items() }
+
 
 class Exec: # an execution path
     # network
     code: Dict[Address, Contract]
-    storage: Dict[Address,Dict[int,Any]] # address -> { storage slot -> value }
+    storage: Dict[Address,Dict[int,Dict[int,Any]]] # address -> slot -> keys -> value
     balance: Any # address -> balance
     # block
     block: Block
@@ -1372,14 +1378,14 @@ class SEVM:
         new_solver.set(timeout=self.options['timeout'])
         new_solver.add(ex.solver.assertions())
         new_solver.add(cond)
-        new_path = deepcopy(ex.path)
+        new_path = copy.copy(ex.path)
         new_path.append(str(cond))
         new_ex = Exec(
             code     = ex.code.copy(), # shallow copy for potential new contract creation; existing code doesn't change
-            storage  = deepcopy(ex.storage),
-            balance  = deepcopy(ex.balance),
+            storage  = deepcopy3(ex.storage),
+            balance  = ex.balance,
             #
-            block    = deepcopy(ex.block),
+            block    = copy.copy(ex.block),
             #
             calldata = ex.calldata,
             callvalue= ex.callvalue,
@@ -1388,20 +1394,20 @@ class SEVM:
             #
             pc       = target,
             st       = deepcopy(ex.st),
-            jumpis   = deepcopy(ex.jumpis),
-            output   = deepcopy(ex.output),
+            jumpis   = deepcopy2(ex.jumpis),
+            output   = ex.output,
             symbolic = ex.symbolic,
-            prank    = deepcopy(ex.prank),
+            prank    = copy.copy(ex.prank),
             #
             solver   = new_solver,
             path     = new_path,
             #
-            log      = deepcopy(ex.log),
+            log      = copy.copy(ex.log),
             cnts     = deepcopy(ex.cnts),
-            sha3s    = deepcopy(ex.sha3s),
-            storages = deepcopy(ex.storages),
-            balances = deepcopy(ex.balances),
-            calls    = deepcopy(ex.calls),
+            sha3s    = copy.copy(ex.sha3s),
+            storages = copy.copy(ex.storages),
+            balances = copy.copy(ex.balances),
+            calls    = copy.copy(ex.calls),
             failed   = ex.failed,
             error    = ex.error,
         )
