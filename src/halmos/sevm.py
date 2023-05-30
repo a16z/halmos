@@ -39,6 +39,10 @@ f_sdiv = Function('evm_sdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_smod', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
+magic_address: int = 0xaaaa0000
+
+new_address_offset: int = 1
+
 def id_str(x: Any) -> str:
     return str(x).replace(' ', '')
 
@@ -674,7 +678,7 @@ class Exec: # an execution path
 
     def new_address(self) -> Address:
         self.cnts['fresh']['address'] += 1
-        return con_addr(1000 + self.cnts['fresh']['address'])
+        return con_addr(magic_address + new_address_offset + self.cnts['fresh']['address'])
 
     def returndatasize(self) -> int:
         if self.output is None:

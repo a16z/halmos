@@ -190,17 +190,17 @@ def mk_block() -> Block:
     block.chainid = con(1) # for ethereum
     return block
 
-def mk_addr(name: str) -> Word:
+def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
-def mk_caller(args: argparse.Namespace) -> Word:
+def mk_caller(args: argparse.Namespace) -> Address:
     if args.symbolic_msg_sender:
         return mk_addr('msg_sender')
     else:
-        return con_addr(999)
+        return con_addr(magic_address)
 
-def mk_this() -> Word:
-    return con_addr(1000)
+def mk_this() -> Address:
+    return con_addr(magic_address + 1)
 
 def mk_solver(args: argparse.Namespace):
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
