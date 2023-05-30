@@ -1301,36 +1301,51 @@ class SEVM:
 
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
+        cond_true = simplify(is_non_zero(cond))
+        cond_false = simplify(is_zero(cond))
+
+        potential_true: bool = ex.check(cond_true) != unsat
+        potential_false: bool = ex.check(cond_false) != unsat
+
+        # note: both may be false if the previous path condition was considered unknown but turns out to be unsat later
+
+        follow_true = False
+        follow_false = False
+
+        if potential_true and potential_false: # for loop unrolling
+            follow_true = visited[True] < self.options['max_loop']
+            follow_false = visited[False] < self.options['max_loop']
+        else: # for constant-bounded loops
+            follow_true = potential_true
+            follow_false = potential_false
+
         new_ex_true = None
         new_ex_false = None
 
-        ex.solver.push()
-        cond_true = simplify(is_non_zero(cond))
-        ex.solver.add(cond_true)
-        if ex.solver.check() != unsat: # jump
-            new_ex_true = self.create_branch(ex, str(cond_true), target)
-        ex.solver.pop()
+        if follow_true:
+            if follow_false:
+                new_ex_true = self.create_branch(ex, cond_true, target)
+            else:
+                new_ex_true = ex
+                new_ex_true.solver.add(cond_true)
+                new_ex_true.path.append(str(cond_true))
+                new_ex_true.pc = target
 
-        cond_false = simplify(is_zero(cond))
-        ex.solver.add(cond_false)
-        if ex.solver.check() != unsat:
-            ex.path.append(str(cond_false))
-            ex.next_pc()
+        if follow_false:
             new_ex_false = ex
+            new_ex_false.solver.add(cond_false)
+            new_ex_false.path.append(str(cond_false))
+            new_ex_false.next_pc()
 
-        if new_ex_true and new_ex_false: # for loop unrolling
-            if visited[True] < self.options['max_loop']: # or source < target:
+        if new_ex_true:
+            if potential_true and potential_false:
                 new_ex_true.jumpis[jid] = {True: visited[True] + 1, False: visited[False]}
-                stack.append((new_ex_true, step_id))
-            if visited[False] < self.options['max_loop']: # or source < target:
-                new_ex_false.jumpis[jid] = {True: visited[True], False: visited[False] + 1}
-                stack.append((new_ex_false, step_id))
-        elif new_ex_true: # for constant-bounded loops
             stack.append((new_ex_true, step_id))
-        elif new_ex_false:
+
+        if new_ex_false:
+            if potential_true and potential_false:
+                new_ex_false.jumpis[jid] = {True: visited[True], False: visited[False] + 1}
             stack.append((new_ex_false, step_id))
-        else:
-            pass # this may happen if the previous path condition was considered unknown but turns out to be unsat later
 
     def jump(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int) -> None:
         dst = ex.st.pop()
@@ -1343,25 +1358,22 @@ class SEVM:
         # otherwise, create a new execution for feasible targets
         elif self.options['sym_jump']:
             for target in ex.code[ex.this].valid_jump_destinations():
-                ex.solver.push()
                 target_reachable = simplify(dst == target)
-                ex.solver.add(target_reachable)
-                if ex.solver.check() != unsat: # jump
+                if ex.check(target_reachable) != unsat: # jump
                     if self.options.get('debug'):
                         print(f'We can jump to {target} with model {ex.solver.model()}')
-                    new_ex = self.create_branch(ex, str(target_reachable), target)
+                    new_ex = self.create_branch(ex, target_reachable, target)
                     stack.append((new_ex, step_id))
-                ex.solver.pop()
-
         else:
             raise NotConcreteError(f'symbolic JUMP target: {dst}')
 
-    def create_branch(self, ex: Exec, cond: str, target: int) -> Exec:
+    def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
         new_solver = SolverFor('QF_AUFBV')
         new_solver.set(timeout=self.options['timeout'])
         new_solver.add(ex.solver.assertions())
+        new_solver.add(cond)
         new_path = deepcopy(ex.path)
-        new_path.append(cond)
+        new_path.append(str(cond))
         new_ex = Exec(
             code     = ex.code.copy(), # shallow copy for potential new contract creation; existing code doesn't change
             storage  = deepcopy(ex.storage),
