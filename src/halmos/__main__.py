@@ -51,6 +51,7 @@ def parse_args(args=None) -> argparse.Namespace:
     parser.add_argument('--array-lengths', metavar='NAME1=LENGTH1,NAME2=LENGTH2,...', help='set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)')
 
     parser.add_argument('--symbolic-storage', action='store_true', help='set default storage values to symbolic')
+    parser.add_argument('--symbolic-msg-sender', action='store_true', help='set msg.sender symbolic')
 
     # debugging options
     group_debug = parser.add_argument_group("Debugging options")
@@ -189,8 +190,17 @@ def mk_block() -> Block:
     block.chainid = con(1) # for ethereum
     return block
 
-def mk_addr(name: str) -> Word:
+def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
+
+def mk_caller(args: argparse.Namespace) -> Address:
+    if args.symbolic_msg_sender:
+        return mk_addr('msg_sender')
+    else:
+        return con_addr(magic_address)
+
+def mk_this() -> Address:
+    return con_addr(magic_address + 1)
 
 def mk_solver(args: argparse.Namespace):
     solver = SolverFor('QF_AUFBV') # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
@@ -207,8 +217,8 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
     balance = mk_balance()
     block = mk_block()
     callvalue = mk_callvalue()
-    caller = mk_addr('msg_sender')
-    this = mk_addr('this_address')
+    caller = mk_caller(args)
+    this = mk_this()
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
@@ -255,7 +265,7 @@ def setup(
 
     solver = mk_solver(args)
 
-    this = mk_addr('this_address')
+    this = mk_this()
 
     sevm = SEVM(options)
 
@@ -266,7 +276,7 @@ def setup(
         block     = mk_block(),
         calldata  = [],
         callvalue = con(0),
-        caller    = mk_addr('msg_sender'),
+        caller    = mk_caller(args),
         this      = this,
         symbolic  = False,
         solver    = solver,
