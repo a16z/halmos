@@ -1368,10 +1368,17 @@ class SEVM:
             raise NotConcreteError(f'symbolic JUMP target: {dst}')
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
-        new_solver = SolverFor('QF_AUFBV')
-        new_solver.set(timeout=self.options['timeout'])
-        new_solver.add(ex.solver.assertions())
-        new_solver.add(cond)
+    #   new_solver = SolverFor('QF_AUFBV')
+    #   new_solver.set(timeout=self.options['timeout'])
+    #   new_solver.add(ex.solver.assertions())
+    #   new_solver.add(cond)
+
+        ex.solver.push()
+        def mk_new_solver():
+            ex.solver.pop()
+            ex.solver.add(cond)
+            return ex.solver
+
         new_path = deepcopy(ex.path)
         new_path.append(str(cond))
         new_ex = Exec(
@@ -1393,7 +1400,7 @@ class SEVM:
             symbolic = ex.symbolic,
             prank    = deepcopy(ex.prank),
             #
-            solver   = new_solver,
+            solver   = mk_new_solver,
             path     = new_path,
             #
             log      = deepcopy(ex.log),
@@ -1419,6 +1426,9 @@ class SEVM:
 
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
+
+                if callable(ex.solver):
+                    ex.solver = ex.solver()
 
                 insn = ex.current_instruction()
                 opcode = insn.opcode
