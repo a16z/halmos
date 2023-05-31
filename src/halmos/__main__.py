@@ -425,7 +425,7 @@ def run(
         else:
             stuck.append((opcode, idx, ex))
 
-    if len(execs_to_model) > 2 and args.solver_parallel:
+    if len(execs_to_model) > 1 and args.solver_parallel:
         with Pool(processes=args.solver_parallel_cores) as pool:
             if args.debug: print(f'Spawning {len(execs_to_model)} parallel assertion solvers on {args.solver_parallel_cores} cores')
             models = [m for m in pool.starmap(gen_model_from_sexpr, [(args, idx, ex.solver.sexpr()) for idx, ex in execs_to_model])]
@@ -435,7 +435,8 @@ def run(
 
     end = timer()
 
-    passed = (normal > 0 and any(m.model is not None for m in models) == 0 and len(stuck) == 0)
+    no_counterexample = all(m.model is None for m in models)
+    passed = (no_counterexample and normal > 0 and len(stuck) == 0)
     passfail = color_good('[PASS]') if passed else color_warn('[FAIL]')
 
     time_info = f'{end - start:0.2f}s'
@@ -456,6 +457,8 @@ def run(
                 print(color_warn(f'Counterexample (potentially invalid): {str_model(model, args)}'))
             else:
                 print(color_warn(f'Counterexample: {result}'))
+        else:
+            print(color_warn(f'Counterexample: {result}'))
 
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
