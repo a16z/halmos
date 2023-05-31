@@ -1064,6 +1064,22 @@ class SEVM:
                     symbolic_bytes = BitVec(f'halmos_symbolic_bytes_{ex.new_symbol_id()}', byte_size * 8)
                     ret = Concat(BitVecVal(32, 256), BitVecVal(byte_size, 256), symbolic_bytes)
 
+                # createSymbolicUint256() returns (uint256)
+                elif funsig == halmos_cheat_code.create_symbolic_uint256:
+                    ret = BitVec(f'halmos_symbolic_uint256_{ex.new_symbol_id()}', 256)
+
+                # createSymbolicBytes32() returns (bytes32)
+                elif funsig == halmos_cheat_code.create_symbolic_bytes32:
+                    ret = BitVec(f'halmos_symbolic_bytes32_{ex.new_symbol_id()}', 256)
+
+                # createSymbolicAddress() returns (address)
+                elif funsig == halmos_cheat_code.create_symbolic_address:
+                    ret = uint256(BitVec(f'halmos_symbolic_address_{ex.new_symbol_id()}', 160))
+
+                # createSymbolicBool() returns (bool)
+                elif funsig == halmos_cheat_code.create_symbolic_bool:
+                    ret = uint256(BitVec(f'halmos_symbolic_bool_{ex.new_symbol_id()}', 1))
+
                 else:
                     ex.error = f'Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {arg}'
                     out.append(ex)
