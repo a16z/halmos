@@ -54,6 +54,17 @@ class Prank:
         self.keep = False
         return True
 
+class halmos_cheat_code:
+    # address constant HALMOS_ADDRESS =
+    #     address(bytes20(uint160(uint256(keccak256('halmos cheat code')))));
+    address: BitVecRef = con_addr(0x23059c36bb741986638baf337ff4d70fd1c4ef91)
+
+    # bytes4(keccak256("createSymbolicUint(uint256)"))
+    create_symbolic_uint: int = 0xfb6f0a62
+
+    # bytes4(keccak256("createSymbolicBytes(uint256)"))
+    create_symbolic_bytes: int = 0x7af8ffa5
+
 class hevm_cheat_code:
     # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
 
