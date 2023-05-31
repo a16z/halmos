@@ -9,13 +9,15 @@ import argparse
 import re
 import traceback
 
-from timeit import default_timer as timer
-
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
+from dataclasses import dataclass
+from multiprocessing import Pool
+from timeit import default_timer as timer
 
 from .utils import color_good, color_warn
 from .sevm import *
+from .warnings import *
 
 if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
     sys.set_int_max_str_digits(0)
@@ -82,6 +84,8 @@ def parse_args(args=None) -> argparse.Namespace:
     group_solver.add_argument('--solver-timeout-assertion', metavar='TIMEOUT', type=int, default=1000, help='set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)')
     group_solver.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
     group_solver.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
+    group_solver.add_argument('--solver-parallel', action='store_true', help='run assertion solvers in parallel')
+    group_solver.add_argument('--solver-parallel-cores', default=os.cpu_count(), type=int, help='max number of cores to use for parallel assertion solvers (default: %(default)s)')
 
     # internal options
     group_internal = parser.add_argument_group("Internal options")
@@ -235,12 +239,11 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
     )
     (exs, _) = sevm.run(ex)
 
-    models = []
     for idx, ex in enumerate(exs):
         opcode = ex.current_opcode()
         if opcode in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
-            gen_model(args, models, idx, ex)
-            print(f'Final opcode: {mnemonic(opcode)} | Return data: {ex.output} | Input example: {models[-1][0]}')
+            model_with_context = gen_model(args, idx, ex)
+            print(f'Final opcode: {mnemonic(opcode)} | Return data: {ex.output} | Input example: {model_with_context.model}')
         else:
             print(color_warn(f'Not supported: {mnemonic(opcode)} {ex.error}'))
         if args.verbose >= 1:
@@ -315,6 +318,14 @@ def setup(
         print(f'[time] setup: {setup_end - setup_start:0.2f}s (decode: {setup_mid - setup_start:0.2f}s, run: {setup_end - setup_mid:0.2f}s)')
 
     return setup_ex
+
+
+@dataclass(frozen=True)
+class ModelWithContext:
+    model: UnionType[Model, str]
+    index: int
+    result: CheckSatResult
+
 
 def run(
     setup_ex: Exec,
@@ -393,8 +404,10 @@ def run(
 
     # check assertion violations
     normal = 0
-    models = []
+    execs_to_model = []
+    models: List[ModelWithContext] = []
     stuck = []
+
     for idx, ex in enumerate(exs):
         if args.debug: print(f'Checking output: {idx+1} / {len(exs)}')
 
@@ -402,21 +415,30 @@ def run(
         if opcode in [EVM.STOP, EVM.RETURN]:
             normal += 1
         elif opcode in [EVM.REVERT, EVM.INVALID]:
-            # Panic(1) # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
-            if ex.output == int('4e487b71' + '0000000000000000000000000000000000000000000000000000000000000001', 16): # 152078208365357342262005707660225848957176981554335715805457651098985835139029979365377
-                gen_model(args, models, idx, ex)
+            # Panic(1)
+            # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
+            if args.debug: print(f'  Will generate model for Panic(1)')
+            if ex.output == 0x4e487b710000000000000000000000000000000000000000000000000000000000000001:
+                execs_to_model.append((idx, ex))
         elif ex.failed:
-            gen_model(args, models, idx, ex)
+            if args.debug: print(f'  Will generate model for failed execution')
+            execs_to_model.append((idx, ex))
         else:
             stuck.append((opcode, idx, ex))
 
+    if len(execs_to_model) > 1 and args.solver_parallel:
+        with Pool(processes=args.solver_parallel_cores) as pool:
+            if args.debug: print(f'Spawning {len(execs_to_model)} parallel assertion solvers on {args.solver_parallel_cores} cores')
+            models = [m for m in pool.starmap(gen_model_from_sexpr, [(args, idx, ex.solver.sexpr()) for idx, ex in execs_to_model])]
+
+    else:
+        models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
+
     end = timer()
 
-    passed = (normal > 0 and len(models) == 0 and len(stuck) == 0)
-    if passed:
-        passfail = color_good('[PASS]')
-    else:
-        passfail = color_warn('[FAIL]')
+    no_counterexample = all(m.model is None for m in models)
+    passed = (no_counterexample and normal > 0 and len(stuck) == 0)
+    passfail = color_good('[PASS]') if passed else color_warn('[FAIL]')
 
     time_info = f'{end - start:0.2f}s'
     if args.statistics:
@@ -424,21 +446,26 @@ def run(
 
     # print result
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])")
-    for model, idx, ex in models:
+    for m in models:
+        model, idx, result = m.model, m.index, m.result
+        ex = exs[idx]
         if model:
             if isinstance(model, str):
-                print(color_warn(f'Counterexample: see {model}'))
+                print(color_warn(f' : see {model}'))
             elif is_valid_model(model):
                 print(color_warn(f'Counterexample: {str_model(model, args)}'))
             elif args.print_potential_counterexample:
-                print(color_warn(f'Counterexample (potentially invalid): {str_model(model, args)}'))
+                warn(COUNTEREXAMPLE_INVALID, f'Counterexample (potentially invalid): {str_model(model, args)}')
             else:
-                print(color_warn(f'Counterexample: unknown'))
-        else:
-            print(color_warn(f'Counterexample: unknown'))
+                warn(COUNTEREXAMPLE_INVALID,
+                     f'Counterexample (potentially invalid): (not displayed, use --print-potential-counterexample)')
+        elif result != unsat:
+            warn(COUNTEREXAMPLE_UNKNOWN, f'Counterexample: {result}')
+
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
+
     for opcode, idx, ex in stuck:
         print(color_warn(f'Not supported: {mnemonic(opcode)} {ex.error}'))
         if args.verbose >= 1:
@@ -458,16 +485,27 @@ def run(
             json.dump(steps, json_file)
 
     # exitcode
-    if passed:
-        return 0
-    else:
-        return 1
+    return 0 if passed else 1
 
-def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> None:
-    if args.debug: print(f'{" "*2}Checking assertion violation')
+
+def gen_model_from_sexpr(args: argparse.Namespace, idx: int, sexpr: str) -> ModelWithContext:
+    solver = SolverFor('QF_AUFBV', ctx=Context())
+    solver.set(timeout=args.solver_timeout_assertion)
+    solver.from_string(sexpr)
+    res = solver.check()
+    model = solver.model() if res == sat else None
+
+    # TODO: handle args.solver_subprocess
+
+    return package_result(model, idx, res, args.debug)
+
+
+def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
+    if args.debug: print(f'  Checking assertion violation')
 
     ex.solver.set(timeout=args.solver_timeout_assertion)
     res = ex.solver.check()
+    model = None
     if res == sat:
         if args.debug: print(f'{" "*4}Generating a counterexample')
         model = ex.solver.model()
@@ -501,22 +539,30 @@ def gen_model(args: argparse.Namespace, models: List, idx: int, ex: Exec) -> Non
         elif res_str_head == 'sat':
             res = sat
             model = f'{fname}.out'
-    if res == unsat:
-        if args.debug: print(f'{" "*4}No assertion violation')
-        return
-    if res == sat:
-        if args.debug: print(f'{" "*4}Counterexample generated')
-        models.append((model, idx, ex))
+
+    return package_result(model, idx, res, args.debug)
+
+
+def package_result(model: UnionType[Model, str], idx: int, result: CheckSatResult, debug=False) -> ModelWithContext:
+    if result == unsat:
+        if debug: print(f'    No assertion violation')
+        return ModelWithContext(None, idx, result)
+
+    if result == sat:
+        if debug: print(f'    Counterexample generated')
+        return ModelWithContext(model, idx, result)
+
     else:
-        if args.debug: print(f'{" "*4}Timeout')
-        models.append((None, idx, ex))
+        if debug: print(f'    Timeout')
+        return ModelWithContext(None, idx, result)
+
 
 def is_valid_model(model) -> bool:
     for decl in model:
-        inter = model[decl]
         if str(decl).startswith('evm_'):
             return False
     return True
+
 
 def str_model(model, args: argparse.Namespace) -> str:
     def select(var):
@@ -529,6 +575,7 @@ def str_model(model, args: argparse.Namespace) -> str:
         return str(model)
     else:
         return '[' + ', '.join(sorted(map(lambda decl: f'{decl} = {model[decl]}', filter(select, model)))) + ']'
+
 
 def mk_options(args: argparse.Namespace) -> Dict:
     return {
@@ -546,6 +593,7 @@ def mk_options(args: argparse.Namespace) -> Dict:
         'timeout': args.solver_timeout_branching,
         'sym_jump': args.symbolic_jump,
     }
+
 
 def main() -> int:
     main_start = timer()

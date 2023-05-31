@@ -9,7 +9,7 @@ from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
-from .utils import EVM, color_good, color_warn, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, con_addr
+from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, con_addr
 from .cheatcodes import hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)

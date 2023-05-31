@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 from typing import Dict, Tuple
-from collections import defaultdict
 
 from z3 import *
 
