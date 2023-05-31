@@ -457,7 +457,7 @@ def run(
                 print(color_warn(f'Counterexample (potentially invalid): {str_model(model, args)}'))
             else:
                 print(color_warn(f'Counterexample: {result}'))
-        else:
+        elif result != unsat:
             print(color_warn(f'Counterexample: {result}'))
 
         if args.verbose >= 1:
