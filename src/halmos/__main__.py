@@ -17,6 +17,7 @@ from timeit import default_timer as timer
 
 from .utils import color_good, color_warn
 from .sevm import *
+from .warnings import *
 
 if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
     sys.set_int_max_str_digits(0)
@@ -450,15 +451,16 @@ def run(
         ex = exs[idx]
         if model:
             if isinstance(model, str):
-                print(color_warn(f'Counterexample: see {model}'))
+                print(color_warn(f' : see {model}'))
             elif is_valid_model(model):
                 print(color_warn(f'Counterexample: {str_model(model, args)}'))
             elif args.print_potential_counterexample:
-                print(color_warn(f'Counterexample (potentially invalid): {str_model(model, args)}'))
+                warn(COUNTEREXAMPLE_INVALID, f'Counterexample (potentially invalid): {str_model(model, args)}')
             else:
-                print(color_warn(f'Counterexample: {result}'))
+                warn(COUNTEREXAMPLE_INVALID,
+                     f'Counterexample (potentially invalid): (not displayed, use --print-potential-counterexample)')
         elif result != unsat:
-            print(color_warn(f'Counterexample: {result}'))
+            warn(COUNTEREXAMPLE_UNKNOWN, f'Counterexample: {result}')
 
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
