@@ -451,7 +451,7 @@ def run(
         ex = exs[idx]
         if model:
             if isinstance(model, str):
-                print(color_warn(f' : see {model}'))
+                print(color_warn(f'Counterexample: see {model}'))
             elif is_valid_model(model):
                 print(color_warn(f'Counterexample: {str_model(model, args)}'))
             elif args.print_potential_counterexample:
