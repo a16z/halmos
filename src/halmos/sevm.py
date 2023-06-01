@@ -10,7 +10,7 @@ from functools import reduce
 
 from z3 import *
 from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, con_addr
-from .cheatcodes import hevm_cheat_code, Prank
+from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -680,6 +680,10 @@ class Exec: # an execution path
         self.cnts['fresh']['address'] += 1
         return con_addr(magic_address + new_address_offset + self.cnts['fresh']['address'])
 
+    def new_symbol_id(self) -> int:
+        self.cnts['fresh']['symbol'] += 1
+        return self.cnts['fresh']['symbol']
+
     def returndatasize(self) -> int:
         if self.output is None:
             return 0
@@ -1037,6 +1041,49 @@ class SEVM:
             # TODO: cover other precompiled
             if to == con_addr(1): # ecrecover exit code is always 1
                 ex.solver.add(exit_code_var != con(0))
+
+            # halmos cheat code
+            if to == halmos_cheat_code.address:
+                ex.solver.add(exit_code_var != con(0))
+
+                funsig: int = int_of(extract_funsig(arg), 'symbolic halmos cheatcode function selector')
+
+                # createSymbolicUint(uint256) returns (uint256)
+                if funsig == halmos_cheat_code.create_symbolic_uint:
+                    bit_size = int_of(simplify(extract_bytes(arg, 4, 32)), 'symbolic bit size for halmos.createSymbolicUint()')
+                    if bit_size <= 256:
+                        ret = uint256(BitVec(f'halmos_symbolic_uint{bit_size}_{ex.new_symbol_id()}', bit_size))
+                    else:
+                        ex.error = f'bitsize larger than 256: {bit_size}'
+                        out.append(ex)
+                        return
+
+                # createSymbolicBytes(uint256) returns (bytes)
+                elif funsig == halmos_cheat_code.create_symbolic_bytes:
+                    byte_size = int_of(simplify(extract_bytes(arg, 4, 32)), 'symbolic byte size for halmos.createSymbolicBytes()')
+                    symbolic_bytes = BitVec(f'halmos_symbolic_bytes_{ex.new_symbol_id()}', byte_size * 8)
+                    ret = Concat(BitVecVal(32, 256), BitVecVal(byte_size, 256), symbolic_bytes)
+
+                # createSymbolicUint256() returns (uint256)
+                elif funsig == halmos_cheat_code.create_symbolic_uint256:
+                    ret = BitVec(f'halmos_symbolic_uint256_{ex.new_symbol_id()}', 256)
+
+                # createSymbolicBytes32() returns (bytes32)
+                elif funsig == halmos_cheat_code.create_symbolic_bytes32:
+                    ret = BitVec(f'halmos_symbolic_bytes32_{ex.new_symbol_id()}', 256)
+
+                # createSymbolicAddress() returns (address)
+                elif funsig == halmos_cheat_code.create_symbolic_address:
+                    ret = uint256(BitVec(f'halmos_symbolic_address_{ex.new_symbol_id()}', 160))
+
+                # createSymbolicBool() returns (bool)
+                elif funsig == halmos_cheat_code.create_symbolic_bool:
+                    ret = uint256(BitVec(f'halmos_symbolic_bool_{ex.new_symbol_id()}', 1))
+
+                else:
+                    ex.error = f'Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {arg}'
+                    out.append(ex)
+                    return
 
             # vm cheat code
             if to == hevm_cheat_code.address:

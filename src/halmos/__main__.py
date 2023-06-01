@@ -568,6 +568,7 @@ def str_model(model, args: argparse.Namespace) -> str:
     def select(var):
         name = str(var)
         if name.startswith('p_'): return True
+        if name.startswith('halmos_'): return True
         elif args.verbose >= 1:
             if name.startswith('storage') or name.startswith('msg_') or name.startswith('this_'): return True
         return False
