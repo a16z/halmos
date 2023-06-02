@@ -28,7 +28,7 @@ class Prank:
         assert_address(this)
         assert_address(to)
         caller = this
-        if self.addr is not None and not eq(to, hevm_cheat_code.address):
+        if self.addr is not None and not eq(to, hevm_cheat_code.address) and not eq(to, halmos_cheat_code.address):
             caller = self.addr
             if not self.keep:
                 self.addr = None
@@ -55,27 +55,27 @@ class Prank:
         return True
 
 class halmos_cheat_code:
-    # address constant HALMOS_ADDRESS =
-    #     address(bytes20(uint160(uint256(keccak256('halmos cheat code')))));
-    address: BitVecRef = con_addr(0x23059c36bb741986638baf337ff4d70fd1c4ef91)
+    # address constant SVM_ADDRESS =
+    #     address(bytes20(uint160(uint256(keccak256('svm cheat code')))));
+    address: BitVecRef = con_addr(0xf3993a62377bcd56ae39d773740a5390411e8bc9)
 
-    # bytes4(keccak256("createSymbolicUint(uint256)"))
-    create_symbolic_uint: int = 0xfb6f0a62
+    # bytes4(keccak256("createUint(uint256)"))
+    create_symbolic_uint: int = 0xd90c7c38
 
-    # bytes4(keccak256("createSymbolicBytes(uint256)"))
-    create_symbolic_bytes: int = 0x7af8ffa5
+    # bytes4(keccak256("createBytes(uint256)"))
+    create_symbolic_bytes: int = 0x57f9200b
 
-    # bytes4(keccak256("createSymbolicUint256()"))
-    create_symbolic_uint256: int = 0xcbf11591
+    # bytes4(keccak256("createUint256()"))
+    create_symbolic_uint256: int = 0xbabe11c4
 
-    # bytes4(keccak256("createSymbolicBytes32()"))
-    create_symbolic_bytes32: int = 0xea2e22e6
+    # bytes4(keccak256("createBytes32()"))
+    create_symbolic_bytes32: int = 0x27c045e3
 
-    # bytes4(keccak256("createSymbolicAddress()"))
-    create_symbolic_address: int = 0xb6933bbe
+    # bytes4(keccak256("createAddress()"))
+    create_symbolic_address: int = 0xc7f40b64
 
-    # bytes4(keccak256("createSymbolicBool()"))
-    create_symbolic_bool: int = 0xa7e9f494
+    # bytes4(keccak256("createBool()"))
+    create_symbolic_bool: int = 0x57b40092
 
 class hevm_cheat_code:
     # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
