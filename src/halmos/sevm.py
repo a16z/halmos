@@ -1610,7 +1610,7 @@ class SEVM:
                         codesize = con(len(ex.code[address]))
                     else:
                         codesize = f_extcodesize(address)
-                        if address == hevm_cheat_code.address:
+                        if address == hevm_cheat_code.address or address == halmos_cheat_code.address:
                             ex.solver.add(codesize > 0)
                     ex.st.push(codesize)
                 elif opcode == EVM.EXTCODEHASH:

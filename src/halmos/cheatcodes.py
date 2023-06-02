@@ -28,7 +28,7 @@ class Prank:
         assert_address(this)
         assert_address(to)
         caller = this
-        if self.addr is not None and not eq(to, hevm_cheat_code.address):
+        if self.addr is not None and not eq(to, hevm_cheat_code.address) and not eq(to, halmos_cheat_code.address):
             caller = self.addr
             if not self.keep:
                 self.addr = None
