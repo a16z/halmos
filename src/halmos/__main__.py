@@ -429,7 +429,7 @@ def run(
     if len(execs_to_model) > 1 and args.solver_parallel:
         with Pool(processes=args.solver_parallel_cores) as pool:
             if args.debug: print(f'Spawning {len(execs_to_model)} parallel assertion solvers on {args.solver_parallel_cores} cores')
-            models = [m for m in pool.starmap(gen_model_from_sexpr, [(args, idx, ex.solver.sexpr()) for idx, ex in execs_to_model])]
+            models = [m for m in pool.starmap(gen_model_from_sexpr, [(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model])]
 
     else:
         models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
@@ -513,7 +513,7 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
         if args.debug: print(f'{" "*4}Checking again with a fresh solver')
         sol2 = SolverFor('QF_AUFBV', ctx=Context())
     #   sol2.set(timeout=args.solver_timeout_assertion)
-        sol2.from_string(ex.solver.sexpr())
+        sol2.from_string(ex.solver.to_smt2())
         res = sol2.check()
         if res == sat: model = sol2.model()
     if res == unknown and args.solver_subprocess:
