@@ -8,12 +8,17 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
+        os: ["ubuntu-latest", "windows-2022"]
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.8.13", "3.9.13", "3.10.6"]
         solver-parallel: ["", "--solver-parallel"]
+        exclude:
+          # python 3.8.13 is not available in windows-2022
+          - os: "windows-2022"
+            python-version: "3.8.13"
 
     steps:
       - uses: actions/checkout@v3
