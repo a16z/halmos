@@ -9,18 +9,16 @@ import argparse
 import re
 import traceback
 
+from dataclasses import dataclass
 from multiprocessing import Pool
 from tempfile import NamedTemporaryFile
 from timeit import default_timer as timer
 
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
-from dataclasses import dataclass
-from multiprocessing import Pool
-from timeit import default_timer as timer
 
 from .utils import color_good, color_warn
-from .serde import save_json, load_json, fancy_type
+from .serde import save_json, load_json
 from .sevm import *
 from .warnings import *
 
