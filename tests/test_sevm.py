@@ -67,6 +67,43 @@ def test_run(hexcode, stack, pc, opcode: int, sevm, solver, storage):
     assert ex.pc == pc
     assert ex.current_opcode() == int_of(opcode)
 
+def byte_of(i, x):
+    return ZeroExt(248,
+        If(i == con( 0), Extract(255, 248, x),
+        If(i == con( 1), Extract(247, 240, x),
+        If(i == con( 2), Extract(239, 232, x),
+        If(i == con( 3), Extract(231, 224, x),
+        If(i == con( 4), Extract(223, 216, x),
+        If(i == con( 5), Extract(215, 208, x),
+        If(i == con( 6), Extract(207, 200, x),
+        If(i == con( 7), Extract(199, 192, x),
+        If(i == con( 8), Extract(191, 184, x),
+        If(i == con( 9), Extract(183, 176, x),
+        If(i == con(10), Extract(175, 168, x),
+        If(i == con(11), Extract(167, 160, x),
+        If(i == con(12), Extract(159, 152, x),
+        If(i == con(13), Extract(151, 144, x),
+        If(i == con(14), Extract(143, 136, x),
+        If(i == con(15), Extract(135, 128, x),
+        If(i == con(16), Extract(127, 120, x),
+        If(i == con(17), Extract(119, 112, x),
+        If(i == con(18), Extract(111, 104, x),
+        If(i == con(19), Extract(103,  96, x),
+        If(i == con(20), Extract( 95,  88, x),
+        If(i == con(21), Extract( 87,  80, x),
+        If(i == con(22), Extract( 79,  72, x),
+        If(i == con(23), Extract( 71,  64, x),
+        If(i == con(24), Extract( 63,  56, x),
+        If(i == con(25), Extract( 55,  48, x),
+        If(i == con(26), Extract( 47,  40, x),
+        If(i == con(27), Extract( 39,  32, x),
+        If(i == con(28), Extract( 31,  24, x),
+        If(i == con(29), Extract( 23,  16, x),
+        If(i == con(30), Extract( 15,   8, x),
+        If(i == con(31), Extract(  7,   0, x),
+        BitVecVal(0, 8)))))))))))))))))))))))))))))))))
+    )
+
 @pytest.mark.parametrize('hexcode, params, output', [
     (o(EVM.PUSH0), [], con(0)),
     (o(EVM.ADD), [x, y], x + y),
@@ -123,6 +160,7 @@ def test_run(hexcode, stack, pc, opcode: int, sevm, solver, storage):
     (o(EVM.BYTE), [con(32), y], con(0)),
     (o(EVM.BYTE), [con(33), y], con(0)),
     (o(EVM.BYTE), [con(2**256-1), y], con(0)),
+    (o(EVM.BYTE), [x, y], byte_of(x, y)),
     (o(EVM.SHL), [x, y], y << x),
     (o(EVM.SHL), [con(0), y], y),
     (o(EVM.SHL), [con(255), y], y << con(255)),
