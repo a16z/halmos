@@ -17,5 +17,7 @@ class ErrorCode:
 COUNTEREXAMPLE_INVALID = ErrorCode('counterexample-invalid')
 COUNTEREXAMPLE_UNKNOWN = ErrorCode('counterexample-unknown')
 
+LOOP_BOUND = ErrorCode('loop-bound')
+
 def warn(error_code: ErrorCode, msg: str):
     logger.warning(f'{color_warn(msg)}\n(see {error_code.url()})')

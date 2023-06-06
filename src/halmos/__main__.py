@@ -296,7 +296,7 @@ def setup(
         (setup_exs_all, setup_steps, setup_bounded_loops) = sevm.run(setup_ex)
 
         if setup_bounded_loops:
-            print(color_warn(f'Warning: {setup_sig}: paths in have not been fully explored due to the loop unrolling bound: {args.loop}'))
+            warn(LOOP_BOUND, f'{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}')
             if args.debug: print('\n'.join(setup_bounded_loops))
 
         setup_exs = []
@@ -478,7 +478,7 @@ def run(
             print(ex)
 
     if bounded_loops:
-        print(color_warn(f'Warning: paths have not been fully explored due to the loop unrolling bound: {args.loop}'))
+        warn(LOOP_BOUND, f'{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}')
         if args.debug: print('\n'.join(bounded_loops))
 
     # print post-states
