@@ -1015,7 +1015,7 @@ class SEVM:
                     stack.append((new_ex, step_id))
                 else:
                     # got stuck during external call
-                    new_ex.error = f'External call stuck at: {mnemonic(opcode)}'
+                    new_ex.error = f'External call stuck at: {mnemonic(opcode)}: {new_ex.error}'
                     out.append(new_ex)
 
         def call_unknown() -> None:
@@ -1454,6 +1454,16 @@ class SEVM:
         )
         return new_ex
 
+    def sym_byte_of(self, idx: BitVecRef, w: BitVecRef) -> BitVecRef:
+        '''generate symbolic BYTE opcode result using 32 nested ite'''
+        def gen_nested_ite(curr: int) -> BitVecRef:
+            if curr < 32:
+                return If(idx == con(curr), Extract((31-curr)*8+7, (31-curr)*8, w), gen_nested_ite(curr+1))
+            else:
+                return con(0, 8)
+        # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
+        return ZeroExt(248, gen_nested_ite(0))
+
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps]:
         out: List[Exec] = []
         steps: Steps = {}
@@ -1712,13 +1722,18 @@ class SEVM:
                         ex.st.memory[loc + i] = ex.read_code(pc + i)
 
                 elif opcode == EVM.BYTE:
-                    idx: int = int_of(ex.st.pop(), 'symbolic BYTE offset')
-                    if idx < 0: raise ValueError(idx)
+                    idx = ex.st.pop()
                     w = ex.st.pop()
-                    if idx >= 32:
-                        ex.st.push(con(0))
+                    if is_bv_value(idx):
+                        idx = idx.as_long()
+                        if idx < 0: raise ValueError(idx)
+                        if idx >= 32:
+                            ex.st.push(con(0))
+                        else:
+                            ex.st.push(ZeroExt(248, Extract((31-idx)*8+7, (31-idx)*8, w)))
                     else:
-                        ex.st.push(ZeroExt(248, Extract((31-idx)*8+7, (31-idx)*8, w)))
+                        if self.options['debug']: print(f'Warning: the use of symbolic BYTE indexing may potentially impact the performance of symbolic reasoning: BYTE {idx} {w}')
+                        ex.st.push(self.sym_byte_of(idx, w))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     num_keys: int = opcode - EVM.LOG0
