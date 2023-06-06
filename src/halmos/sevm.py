@@ -934,12 +934,12 @@ class SEVM:
         w2 = b2i(w2)
         w3 = b2i(w3)
         if op == EVM.ADDMOD:
-            r1 = self.arith(ex, EVM.ADD, ZeroExt(1, w1), ZeroExt(1, w2)) # to avoid add overflow
-            r2 = self.arith(ex, EVM.MOD, r1, ZeroExt(1, w3))
+            r1 = self.arith(ex, EVM.ADD, simplify(ZeroExt(1, w1)), simplify(ZeroExt(1, w2))) # to avoid add overflow
+            r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(1, w3)))
             return Extract(255, 0, r2)
         elif op == EVM.MULMOD:
-            r1 = self.arith(ex, EVM.MUL, ZeroExt(256, w1), ZeroExt(256, w2)) # to avoid mul overflow
-            r2 = self.arith(ex, EVM.MOD, r1, ZeroExt(256, w3))
+            r1 = self.arith(ex, EVM.MUL, simplify(ZeroExt(256, w1)), simplify(ZeroExt(256, w2))) # to avoid mul overflow
+            r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(256, w3)))
             return Extract(255, 0, r2)
         else:
             raise ValueError(op)
