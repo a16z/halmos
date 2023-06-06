@@ -238,7 +238,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
         symbolic  = args.symbolic_storage,
         solver    = solver,
     )
-    (exs, _) = sevm.run(ex)
+    (exs, _, _) = sevm.run(ex)
 
     for idx, ex in enumerate(exs):
         opcode = ex.current_opcode()
@@ -293,7 +293,11 @@ def setup(
         dyn_param_size = [] # TODO: propagate to run
         mk_calldata(abi, setup_name, setup_sig, arrlen, args, setup_ex.calldata, dyn_param_size)
 
-        (setup_exs_all, setup_steps) = sevm.run(setup_ex)
+        (setup_exs_all, setup_steps, setup_bounded_loops) = sevm.run(setup_ex)
+
+        if setup_bounded_loops:
+            warn(LOOP_BOUND, f'{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}')
+            if args.debug: print('\n'.join(setup_bounded_loops))
 
         setup_exs = []
         for idx, setup_ex in enumerate(setup_exs_all):
@@ -369,7 +373,7 @@ def run(
     solver.set(timeout=args.solver_timeout_branching)
     solver.add(setup_ex.solver.assertions())
 
-    (exs, steps) = sevm.run(Exec(
+    (exs, steps, bounded_loops) = sevm.run(Exec(
         code      = setup_ex.code.copy(), # shallow copy
         storage   = deepcopy(setup_ex.storage),
         balance   = setup_ex.balance, # TODO: add callvalue
@@ -472,6 +476,10 @@ def run(
         if args.verbose >= 1:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
+
+    if bounded_loops:
+        warn(LOOP_BOUND, f'{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}')
+        if args.debug: print('\n'.join(bounded_loops))
 
     # print post-states
     if args.verbose >= 2:

@@ -949,7 +949,7 @@ class SEVM:
         else:
             raise ValueError(op)
 
-    def call(self, ex: Exec, op: int, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
+    def call(self, ex: Exec, op: int, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec], bounded_loops: List[str]) -> None:
         gas = ex.st.pop()
 
         to = uint160(ex.st.pop())
@@ -978,7 +978,7 @@ class SEVM:
             wstore_bytes(calldata, 0, arg_size, ex.st.memory[arg_loc:arg_loc+arg_size])
 
             # execute external calls
-            (new_exs, new_steps) = self.run(Exec(
+            (new_exs, new_steps, new_bounded_loops) = self.run(Exec(
                 code      = ex.code,
                 storage   = ex.storage,
                 balance   = ex.balance,
@@ -1009,6 +1009,8 @@ class SEVM:
                 failed    = ex.failed,
                 error     = ex.error,
             ))
+
+            bounded_loops.extend(new_bounded_loops)
 
             # process result
             for idx, new_ex in enumerate(new_exs):
@@ -1268,7 +1270,7 @@ class SEVM:
         else:
             call_unknown()
 
-    def create(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec]) -> None:
+    def create(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int, out: List[Exec], bounded_loops: List[str]) -> None:
         value: Word = ex.st.pop()
         loc: int = int_of(ex.st.pop(), 'symbolic CREATE offset')
         size: int = int_of(ex.st.pop(), 'symbolic CREATE size')
@@ -1297,7 +1299,7 @@ class SEVM:
             ex.balance_update(new_addr, self.arith(ex, EVM.ADD, ex.balance_of(new_addr), value))
 
         # execute contract creation code
-        (new_exs, new_steps) = self.run(Exec(
+        (new_exs, new_steps, new_bounded_loops) = self.run(Exec(
             code      = ex.code,
             storage   = ex.storage,
             balance   = ex.balance,
@@ -1328,6 +1330,8 @@ class SEVM:
             failed    = ex.failed,
             error     = ex.error,
         ))
+
+        bounded_loops.extend(new_bounded_loops)
 
         # process result
         for idx, new_ex in enumerate(new_exs):
@@ -1367,7 +1371,7 @@ class SEVM:
                 # creation failed
                 out.append(new_ex)
 
-    def jumpi(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int) -> None:
+    def jumpi(self, ex: Exec, stack: List[Tuple[Exec,int]], step_id: int, bounded_loops: List[str]) -> None:
         jid = ex.jumpi_id()
 
         source: int = ex.pc
@@ -1390,6 +1394,8 @@ class SEVM:
         if potential_true and potential_false: # for loop unrolling
             follow_true = visited[True] < self.options['max_loop']
             follow_false = visited[False] < self.options['max_loop']
+            if not (follow_true and follow_false):
+                bounded_loops.append(jid)
         else: # for constant-bounded loops
             follow_true = potential_true
             follow_false = potential_false
@@ -1494,6 +1500,7 @@ class SEVM:
 
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps]:
         out: List[Exec] = []
+        bounded_loops: List[str] = []
         steps: Steps = {}
         step_id: int = 0
 
@@ -1544,7 +1551,7 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.JUMPI:
-                    self.jumpi(ex, stack, step_id)
+                    self.jumpi(ex, stack, step_id, bounded_loops)
                     continue
 
                 elif opcode == EVM.JUMP:
@@ -1690,14 +1697,14 @@ class SEVM:
                     ex.st.push(ex.balance_of(ex.this))
 
                 elif opcode == EVM.CALL or opcode == EVM.STATICCALL:
-                    self.call(ex, opcode, stack, step_id, out)
+                    self.call(ex, opcode, stack, step_id, out, bounded_loops)
                     continue
 
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
                 elif opcode == EVM.CREATE:
-                    self.create(ex, stack, step_id, out)
+                    self.create(ex, stack, step_id, out, bounded_loops)
                     continue
 
                 elif opcode == EVM.POP:
@@ -1812,7 +1819,7 @@ class SEVM:
                     print(ex)
                 raise
 
-        return (out, steps)
+        return (out, steps, bounded_loops)
 
     def mk_exec(
         self,
