@@ -61,7 +61,7 @@ def o(opcode):
 ])
 def test_run(hexcode, stack, pc, opcode: int, sevm, solver, storage):
     ex = mk_ex(hexcode, sevm, solver, storage, caller, this)
-    (exs, _) = sevm.run(ex)
+    (exs, _, _) = sevm.run(ex)
     assert len(exs) == 1
     ex: Exec = exs[0]
     assert str(ex.st.stack) == stack
@@ -201,7 +201,7 @@ def byte_of(i, x):
 def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     ex = mk_ex(Concat(hexcode, o(EVM.STOP)), sevm, solver, storage, caller, this)
     ex.st.stack.extend(params)
-    (exs, _) = sevm.run(ex)
+    (exs, _, _) = sevm.run(ex)
     assert len(exs) == 1
     ex = exs[0]
     assert ex.st.stack[0] == simplify(output)
