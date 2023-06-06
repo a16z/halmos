@@ -9,7 +9,7 @@ from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
-from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, con_addr
+from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
@@ -546,6 +546,7 @@ class Exec: # an execution path
 
     def balance_update(self, addr: Word, value: Word):
         assert_address(addr)
+        assert_uint256(value)
         new_balance_var = Array(f'balance_{1+len(self.balances)}', BitVecSort(160), BitVecSort(256))
         new_balance = Store(self.balance, addr, value)
         self.solver.add(new_balance_var == new_balance)
@@ -936,10 +937,14 @@ class SEVM:
         if op == EVM.ADDMOD:
             r1 = self.arith(ex, EVM.ADD, simplify(ZeroExt(1, w1)), simplify(ZeroExt(1, w2))) # to avoid add overflow
             r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(1, w3)))
+            if r1.size() != 257: raise ValueError(r1)
+            if r2.size() != 257: raise ValueError(r2)
             return Extract(255, 0, r2)
         elif op == EVM.MULMOD:
             r1 = self.arith(ex, EVM.MUL, simplify(ZeroExt(256, w1)), simplify(ZeroExt(256, w2))) # to avoid mul overflow
             r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(256, w3)))
+            if r1.size() != 512: raise ValueError(r1)
+            if r2.size() != 512: raise ValueError(r2)
             return Extract(255, 0, r2)
         else:
             raise ValueError(op)
