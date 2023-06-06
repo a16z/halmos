@@ -30,11 +30,11 @@ f_gasprice     = Function('gasprice'    , BitVecSort(256))
 f_origin       = Function('origin'      , BitVecSort(160))
 
 # uninterpreted arithmetic
-f_add  = Function('evm_add' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_add  = { 256: Function('evm_add', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_add_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)) }
 f_sub  = Function('evm_sub' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_mul  = Function('evm_mul' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_mul  = { 256: Function('evm_mul', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 512: Function('evm_mul_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
 f_div  = Function('evm_div' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_mod  = Function('evm_mod' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_mod  = { 256: Function('evm_mod', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_mod_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)), 512: Function('evm_mod_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
 f_sdiv = Function('evm_sdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_smod', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
@@ -799,13 +799,19 @@ class SEVM:
                         return x
         return None
 
+    def mk_add(self, x: Any, y: Any) -> Any:
+        f_add[x.size()](x, y)
+
+    def mk_mul(self, x: Any, y: Any) -> Any:
+        f_mul[x.size()](x, y)
+
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_div(x, y)
         ex.solver.add(ULE(term, x)) # (x / y) <= x
         return term
 
     def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
-        term = f_mod(x, y)
+        term = f_mod[x.size()](x, y)
         ex.solver.add(                ULE(term, y) ) # (x % y) <= y
     #   ex.solver.add(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
         return term
@@ -819,7 +825,7 @@ class SEVM:
             if is_bv_value(w1) and is_bv_value(w2):
                 return w1 + w2
             else:
-                return f_add(w1, w2)
+                return mk_add(w1, w2)
         elif op == EVM.SUB:
             if self.options.get('sub'):
                 return w1 - w2
@@ -835,21 +841,21 @@ class SEVM:
             elif is_bv_value(w1):
                 i1: int = int(str(w1)) # must be concrete
                 if i1 == 0:
-                    return con(0)
+                    return w1
                 elif is_power_of_two(i1):
                     return w2 << int(math.log(i1,2))
                 else:
-                    return f_mul(w1, w2)
+                    return mk_mul(w1, w2)
             elif is_bv_value(w2):
                 i2: int = int(str(w2)) # must be concrete
                 if i2 == 0:
-                    return con(0)
+                    return w2
                 elif is_power_of_two(i2):
                     return w1 << int(math.log(i2,2))
                 else:
-                    return f_mul(w1, w2)
+                    return mk_mul(w1, w2)
             else:
-                return f_mul(w1, w2)
+                return mk_mul(w1, w2)
         elif op == EVM.DIV:
             div_for_overflow_check = self.div_xy_y(w1, w2)
             if div_for_overflow_check is not None: # xy/x or xy/y
@@ -861,7 +867,7 @@ class SEVM:
             elif is_bv_value(w2):
                 i2: int = int(str(w2)) # must be concrete
                 if i2 == 0:
-                    return con(0)
+                    return w2
                 elif i2 == 1:
                     return w1
                 elif is_power_of_two(i2):
@@ -873,15 +879,17 @@ class SEVM:
             else:
                 return self.mk_div(ex, w1, w2)
         elif op == EVM.MOD:
+            if self.options.get('mod'):
+                return URem(w1, w2)
             if is_bv_value(w1) and is_bv_value(w2):
                 return URem(w1, w2) # bvurem
             elif is_bv_value(w2):
                 i2: int = int(str(w2))
                 if i2 == 0 or i2 == 1:
-                    return con(0)
+                    return con(0, w2.size())
                 elif is_power_of_two(i2):
                     bitsize = int(math.log(i2,2))
-                    return ZeroExt(256-bitsize, Extract(bitsize-1, 0, w1))
+                    return ZeroExt(w2.size() - bitsize, Extract(bitsize-1, 0, w1))
                 elif self.options.get('modByConst'):
                     return URem(w1, w2)
                 else:
@@ -918,6 +926,21 @@ class SEVM:
                     return f_exp(w1, w2)
             else:
                 return f_exp(w1, w2)
+        else:
+            raise ValueError(op)
+
+    def arith2(self, ex: Exec, op: int, w1: Word, w2: Word, w3: Word) -> Word:
+        w1 = b2i(w1)
+        w2 = b2i(w2)
+        w3 = b2i(w3)
+        if op == EVM.ADDMOD:
+            r1 = self.arith(ex, EVM.ADD, ZeroExt(1, w1), ZeroExt(1, w2)) # to avoid add overflow
+            r2 = self.arith(ex, EVM.MOD, r1, ZeroExt(1, w3))
+            return Extract(255, 0, r2)
+        elif op == EVM.MULMOD:
+            r1 = self.arith(ex, EVM.MUL, ZeroExt(256, w1), ZeroExt(256, w2)) # to avoid mul overflow
+            r2 = self.arith(ex, EVM.MOD, r1, ZeroExt(256, w3))
+            return Extract(255, 0, r2)
         else:
             raise ValueError(op)
 
@@ -1528,6 +1551,9 @@ class SEVM:
 
                 elif EVM.ADD <= opcode <= EVM.SMOD: # ADD MUL SUB DIV SDIV MOD SMOD
                     ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
+
+                elif EVM.ADDMOD <= opcode <= EVM.MULMOD: # ADDMOD MULMOD
+                    ex.st.push(self.arith2(ex, opcode, ex.st.pop(), ex.st.pop(), ex.st.pop()))
 
                 elif opcode == EVM.EXP:
                     ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))

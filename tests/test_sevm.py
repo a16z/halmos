@@ -121,7 +121,7 @@ def byte_of(i, x):
     (o(EVM.SDIV), [con(-5), con(-3)], con(1)),
     (o(EVM.SDIV), [con(-2**255), con(-1)], con(-2**255)), # overflow
     (o(EVM.SDIV), [con(-2**255), con(-1)], con(2**255)), # overflow
-    (o(EVM.MOD), [x, y], f_mod(x,y)),
+    (o(EVM.MOD), [x, y], f_mod[x.size()](x,y)),
     (o(EVM.MOD), [con(5), con(3)], con(2)),
     (o(EVM.MOD), [x, con(0)], con(0)),
     (o(EVM.MOD), [x, con(1)], con(0)),
