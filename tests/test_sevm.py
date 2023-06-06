@@ -44,6 +44,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
 
 x = BitVec('x', 256)
 y = BitVec('y', 256)
+z = BitVec('z', 256)
 
 def o(opcode):
     return BitVecVal(opcode, 8)
@@ -121,7 +122,7 @@ def byte_of(i, x):
     (o(EVM.SDIV), [con(-5), con(-3)], con(1)),
     (o(EVM.SDIV), [con(-2**255), con(-1)], con(-2**255)), # overflow
     (o(EVM.SDIV), [con(-2**255), con(-1)], con(2**255)), # overflow
-    (o(EVM.MOD), [x, y], f_mod(x,y)),
+    (o(EVM.MOD), [x, y], f_mod[x.size()](x,y)),
     (o(EVM.MOD), [con(5), con(3)], con(2)),
     (o(EVM.MOD), [x, con(0)], con(0)),
     (o(EVM.MOD), [x, con(1)], con(0)),
@@ -131,8 +132,20 @@ def byte_of(i, x):
     (o(EVM.SMOD), [con(-5), con(3)], con(-2)),
     (o(EVM.SMOD), [con(5), con(-3)], con(2)),
     (o(EVM.SMOD), [con(-5), con(-3)], con(-2)),
-    # TODO: ADDMOD
-    # TODO: MULMOD
+    (o(EVM.ADDMOD), [con(4), con(1), con(3)], con(2)),
+    (o(EVM.ADDMOD), [x, y, con(0)], con(0)),
+    (o(EVM.ADDMOD), [x, y, con(1)], con(0)),
+    (o(EVM.ADDMOD), [x, y, con(2**3)], ZeroExt(253, Extract(2, 0, ZeroExt(1, x) + ZeroExt(1, y)))),
+    (o(EVM.ADDMOD), [x, y, z], Extract(255, 0, f_mod[257](ZeroExt(1, x) + ZeroExt(1, y), ZeroExt(1, z)))),
+    (o(EVM.ADDMOD), [con(10), con(10), con(8)], con(4)),
+    (o(EVM.ADDMOD), [con(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF), con(2), con(2)], con(1)),
+    (o(EVM.MULMOD), [con(5), con(1), con(3)], con(2)),
+    (o(EVM.MULMOD), [x, y, con(0)], con(0)),
+    (o(EVM.MULMOD), [x, y, con(1)], con(0)),
+    (o(EVM.MULMOD), [x, y, con(2**3)], ZeroExt(253, Extract(2, 0, ZeroExt(256, x) * ZeroExt(256, y)))),
+    (o(EVM.MULMOD), [x, y, z], Extract(255, 0, f_mod[512](ZeroExt(256, x) * ZeroExt(256, y), ZeroExt(256, z)))),
+    (o(EVM.MULMOD), [con(10), con(10), con(8)], con(4)),
+    (o(EVM.MULMOD), [con(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF), con(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF), con(12)], con(9)),
     (o(EVM.EXP), [x, y], f_exp(x,y)),
     (o(EVM.EXP), [x, con(0)], con(1)),
     (o(EVM.EXP), [x, con(1)], x),

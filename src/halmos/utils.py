@@ -8,6 +8,10 @@ def assert_address(x: BitVecRef) -> None:
     if x.size() != 160: raise ValueError(x)
     pass
 
+def assert_uint256(x: BitVecRef) -> None:
+    if x.size() != 256: raise ValueError(x)
+    pass
+
 def con_addr(n: int) -> BitVecRef:
     if n >= 2**160: raise ValueError(n)
     return BitVecVal(n, 160)

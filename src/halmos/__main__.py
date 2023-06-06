@@ -76,6 +76,7 @@ def parse_args(args=None) -> argparse.Namespace:
     group_solver.add_argument('--no-smt-sub',          action='store_true', help='do not interpret `-`')
     group_solver.add_argument('--no-smt-mul',          action='store_true', help='do not interpret `*`')
     group_solver.add_argument(   '--smt-div',          action='store_true', help=       'interpret `/`')
+    group_solver.add_argument(   '--smt-mod',          action='store_true', help=       'interpret `mod`')
     group_solver.add_argument(   '--smt-div-by-const', action='store_true', help=       'interpret division by constant')
     group_solver.add_argument(   '--smt-mod-by-const', action='store_true', help=       'interpret constant modulo')
     group_solver.add_argument(   '--smt-exp-by-const', metavar='N', type=int, default=2, help='interpret constant power up to N (default: %(default)s)')
@@ -588,6 +589,7 @@ def mk_options(args: argparse.Namespace) -> Dict:
         'sub': not args.no_smt_sub,
         'mul': not args.no_smt_mul,
         'div': args.smt_div,
+        'mod': args.smt_mod,
         'divByConst': args.smt_div_by_const,
         'modByConst': args.smt_mod_by_const,
         'expByConst': args.smt_exp_by_const,
