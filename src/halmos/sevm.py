@@ -104,6 +104,11 @@ def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
     raise NotConcreteError(f'{err}: {x}')
 
 
+def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
+    if x.size() % 8 != 0: raise ValueError(x)
+    return x.as_long().to_bytes(x.size() // 8, 'big')
+
+
 def iter_bytes(x: Any):
     '''Return an iterable over the bytes of x (concrete or symbolic)'''
 
@@ -114,8 +119,7 @@ def iter_bytes(x: Any):
         return x.to_bytes((x.bit_length() + 7) // 8, 'big')
 
     if is_bv_value(x):
-        if x.size() % 8 != 0: raise ValueError(x)
-        return x.as_long().to_bytes(x.size() // 8, 'big')
+        return bv_value_to_bytes(x)
 
     if is_bv(x):
         if x.size() % 8 != 0: raise ValueError(x)
@@ -184,7 +188,6 @@ def wload(mem: List[Byte], loc: int, size: int, prefer_concrete=False) -> UnionT
     memslice = mem[loc:loc+size]
 
     if prefer_concrete and all(is_concrete(i) for i in memslice):
-        print(f'🥳 loading {len(memslice)} bytes from memory!')
         return bytes([int_of(i) for i in memslice])
 
     # wrap concrete bytes in BitVecs
@@ -201,9 +204,16 @@ def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
 
 def wstore_partial(mem: List[Byte], loc: int, offset: int, size: int, data: Bytes, datasize: int) -> None:
     if size > 0:
-        if not datasize >= offset + size: raise ValueError(datasize, offset, size)
-        sub_data = Extract((datasize-1 - offset)*8+7, (datasize - offset - size)*8, data)
-        wstore(mem, loc, size, sub_data)
+        if not datasize >= offset + size:
+            raise ValueError(datasize, offset, size)
+
+        if is_bv(data):
+            sub_data = Extract((datasize-1 - offset)*8+7, (datasize - offset - size)*8, data)
+            wstore(mem, loc, size, sub_data)
+        else:
+            sub_data = data[offset:offset+size]
+            mem[loc:loc+size] = sub_data
+
 
 def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
     if not size == len(arr): raise ValueError(size, arr)
@@ -387,7 +397,14 @@ class Contract:
 
         # symbolic
         if is_bv(self._rawcode):
-            return extract_bytes(self._rawcode, slice.start, slice.stop - slice.start)
+            extracted = extract_bytes(self._rawcode, slice.start, slice.stop - slice.start)
+
+            # check if that part of the code is concrete
+            if is_bv_value(extracted):
+                return bv_value_to_bytes(extracted)
+
+            else:
+                return extracted
 
         # concrete
         return self._rawcode[slice.start:slice.stop]
@@ -407,9 +424,12 @@ class Contract:
         if offset >= len(self):
             return 0
 
-        # symbolic (the returned value may be concretizable)
+        # symbolic
         if is_bv(self._rawcode):
-            return extract_bytes(self._rawcode, offset, 1)
+            extracted = extract_bytes(self._rawcode, offset, 1)
+
+            # return as concrete if possible
+            return unbox_int(extracted)
 
         # concrete
         return self._rawcode[offset]
@@ -719,7 +739,7 @@ class Exec: # an execution path
         return self.cnts['fresh']['symbol']
 
     def returndatasize(self) -> int:
-        return byte_length(self.output) if self.output else 0
+        return 0 if self.output is None else byte_length(self.output)
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_concrete(x):
@@ -1302,10 +1322,6 @@ class SEVM:
         create_hexcode = wload(ex.st.memory, loc, size, prefer_concrete=True)
         create_code = Contract(create_hexcode)
 
-        print('👨‍🔬 CREATE')
-        print(f'type(create_hexcode): {type(create_hexcode)}')
-        print(f'len(create_hexcode): {len(create_hexcode)}')
-
         # new account address
         new_addr = ex.new_address()
 
@@ -1368,15 +1384,7 @@ class SEVM:
             opcode = new_ex.current_opcode()
             if opcode in [EVM.STOP, EVM.RETURN]:
                 # new contract code
-                new_hexcode = new_ex.output
-
-                print(f'type(new_hexcode): {type(new_hexcode)}')
-                print(f'len(new_hexcode): {len(new_hexcode)}')
-
-                new_code = Contract(new_hexcode)
-
-                # set new contract code
-                new_ex.code[new_addr] = new_code
+                new_ex.code[new_addr] = Contract(new_ex.output)
 
                 # restore tx msg
                 new_ex.calldata  = ex.calldata
@@ -1790,10 +1798,6 @@ class SEVM:
 
                     codeslice = ex.code[ex.this][offset:offset+size]
                     ex.st.memory[loc:loc+size] = iter_bytes(codeslice)
-
-                    print(f'👩‍🔬 CODECOPY')
-                    print(f'len(codeslice): {len(codeslice)}')
-                    print(f'type(codeslice): {type(codeslice)}')
 
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()
