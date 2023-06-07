@@ -306,7 +306,7 @@ def setup(
                 if res != unsat:
                     setup_exs.append(setup_ex)
 
-        if len(setup_exs) == 0: raise ValueError('No successful path found in {setup_sig}')
+        if len(setup_exs) == 0: raise ValueError(f'No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
             print(color_warn(f'Warning: multiple paths were found in {setup_sig}; an arbitrary path has been selected for the following tests.'))
             if args.debug: print('\n'.join(map(str, setup_exs)))

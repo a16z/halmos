@@ -4,7 +4,7 @@ from z3 import *
 
 from halmos.utils import EVM
 
-from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of, uint256, uint160
+from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of, uint256, uint160, iter_bytes
 
 from halmos.__main__ import mk_block
 
@@ -205,3 +205,21 @@ def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     assert len(exs) == 1
     ex = exs[0]
     assert ex.st.stack[0] == simplify(output)
+
+def test_stack_underflow_pop(sevm: SEVM, solver, storage):
+    # check that we get an exception when popping from an empty stack
+    ex = mk_ex(o(EVM.POP), sevm, solver, storage, caller, this)
+
+    # TODO: from the outside, we should get an execution with failed=True
+    # TODO: from the outside, we should get an specific exception like StackUnderflowError
+    with pytest.raises(Exception):
+        sevm.run(ex)
+
+def test_iter_bytes_bv_val():
+    b = BitVecVal(0x12345678, 32)
+    assert list(iter_bytes(b)) == [0x12, 0x34, 0x56, 0x78]
+
+def test_iter_bytes_bv_ref():
+    x = BitVec('x', 8)
+    b = Concat(BitVecVal(0x123456, 24), x)
+    assert list(iter_bytes(b)) == [0x12, 0x34, 0x56, x]

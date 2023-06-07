@@ -83,6 +83,7 @@ class Instruction:
 class NotConcreteError(Exception):
     pass
 
+
 def unbox_int(x: Any) -> Any:
     '''Convert int-like objects to int'''
     if isinstance(x, bytes):
@@ -93,6 +94,7 @@ def unbox_int(x: Any) -> Any:
 
     return x
 
+
 def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
     res = unbox_int(x)
 
@@ -101,8 +103,37 @@ def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
 
     raise NotConcreteError(f'{err}: {x}')
 
+
+def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
+    if x.size() % 8 != 0: raise ValueError(x)
+    return x.as_long().to_bytes(x.size() // 8, 'big')
+
+
+def iter_bytes(x: Any):
+    '''Return an iterable over the bytes of x (concrete or symbolic)'''
+
+    if isinstance(x, bytes):
+        return x
+
+    if isinstance(x, int):
+        return x.to_bytes((x.bit_length() + 7) // 8, 'big')
+
+    if is_bv_value(x):
+        return bv_value_to_bytes(x)
+
+    if is_bv(x):
+        if x.size() % 8 != 0: raise ValueError(x)
+
+        # size in bytes
+        size = x.size() // 8
+        return [simplify(Extract((size - 1 - i) * 8 + 7, (size - 1 - i) * 8, x)) for i in range(size)]
+
+    raise ValueError(x)
+
+
 def is_concrete(x: Any) -> bool:
     return isinstance(x, int) or isinstance(x, bytes) or is_bv_value(x)
+
 
 def mnemonic(opcode) -> str:
     if is_concrete(opcode):
@@ -110,6 +141,7 @@ def mnemonic(opcode) -> str:
         return str_opcode.get(opcode, hex(opcode))
     else:
         return str(opcode)
+
 
 def concat(args):
     if len(args) > 1:
@@ -151,14 +183,21 @@ def instruction_length(opcode: Any) -> int:
     return (opcode - EVM.PUSH0 + 1) if EVM.PUSH1 <= opcode <= EVM.PUSH32 else 1
 
 def wextend(mem: List[Byte], loc: int, size: int) -> None:
-    if len(mem) < loc + size:
-        mem.extend([BitVecVal(0, 8) for _ in range(loc + size - len(mem))])
+    mem.extend([0] * (loc + size - len(mem)))
 
-def wload(mem: List[Byte], loc: int, size: int) -> Bytes:
+def wload(mem: List[Byte], loc: int, size: int, prefer_concrete=False) -> UnionType[bytes,Bytes]:
     wextend(mem, loc, size)
 
+    memslice = mem[loc:loc+size]
+
+    if prefer_concrete and all(is_concrete(i) for i in memslice):
+        return bytes([int_of(i) for i in memslice])
+
+    # wrap concrete bytes in BitVecs
+    wrapped = [BitVecVal(i, 8) if not is_bv(i) else i for i in mem[loc:loc+size]]
+
     # BitVecSort(size * 8)
-    return simplify(concat(mem[loc:loc+size]))
+    return simplify(concat(wrapped))
 
 def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
     if not eq(val.sort(), BitVecSort(size*8)): raise ValueError(val)
@@ -168,9 +207,16 @@ def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
 
 def wstore_partial(mem: List[Byte], loc: int, offset: int, size: int, data: Bytes, datasize: int) -> None:
     if size > 0:
-        if not datasize >= offset + size: raise ValueError(datasize, offset, size)
-        sub_data = Extract((datasize-1 - offset)*8+7, (datasize - offset - size)*8, data)
-        wstore(mem, loc, size, sub_data)
+        if not datasize >= offset + size:
+            raise ValueError(datasize, offset, size)
+
+        if is_bv(data):
+            sub_data = Extract((datasize-1 - offset)*8+7, (datasize - offset - size)*8, data)
+            wstore(mem, loc, size, sub_data)
+        else:
+            sub_data = data[offset:offset+size]
+            mem[loc:loc+size] = sub_data
+
 
 def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
     if not size == len(arr): raise ValueError(size, arr)
@@ -275,7 +321,7 @@ class State:
         loc: int = self.mloc()
         size: int = int_of(self.pop(), 'symbolic return data size') # size in bytes
         if size > 0:
-            return wload(self.memory, loc, size)
+            return wload(self.memory, loc, size, prefer_concrete=True)
         else:
             return None
 
@@ -354,7 +400,14 @@ class Contract:
 
         # symbolic
         if is_bv(self._rawcode):
-            return extract_bytes(self._rawcode, slice.start, slice.stop - slice.start)
+            extracted = extract_bytes(self._rawcode, slice.start, slice.stop - slice.start)
+
+            # check if that part of the code is concrete
+            if is_bv_value(extracted):
+                return bv_value_to_bytes(extracted)
+
+            else:
+                return extracted
 
         # concrete
         return self._rawcode[slice.start:slice.stop]
@@ -374,9 +427,12 @@ class Contract:
         if offset >= len(self):
             return 0
 
-        # symbolic (the returned value may be concretizable)
+        # symbolic
         if is_bv(self._rawcode):
-            return extract_bytes(self._rawcode, offset, 1)
+            extracted = extract_bytes(self._rawcode, offset, 1)
+
+            # return as concrete if possible
+            return unbox_int(extracted)
 
         # concrete
         return self._rawcode[offset]
@@ -686,18 +742,7 @@ class Exec: # an execution path
         return self.cnts['fresh']['symbol']
 
     def returndatasize(self) -> int:
-        if self.output is None:
-            return 0
-        else:
-            size: int = self.output.size()
-            if not size % 8 == 0: raise ValueError(size)
-            return int(size / 8)
-
-    def read_code(self, offset: int, address=None) -> Byte:
-        address = address or self.this
-        assert_address(address)
-        code_byte = self.code[address][offset]
-        return BitVecVal(code_byte, 8) if not is_bv(code_byte) else code_byte
+        return 0 if self.output is None else byte_length(self.output)
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_concrete(x):
@@ -1031,7 +1076,8 @@ class SEVM:
                 new_ex.prank = ex.prank
 
                 # set return data (in memory)
-                wstore_partial(new_ex.st.memory, ret_loc, 0, min(ret_size, new_ex.returndatasize()), new_ex.output, new_ex.returndatasize())
+                actual_ret_size = new_ex.returndatasize()
+                wstore_partial(new_ex.st.memory, ret_loc, 0, min(ret_size, actual_ret_size), new_ex.output, actual_ret_size)
 
                 # set status code (in stack)
                 if opcode in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
@@ -1276,7 +1322,7 @@ class SEVM:
         size: int = int_of(ex.st.pop(), 'symbolic CREATE size')
 
         # contract creation code
-        create_hexcode = wload(ex.st.memory, loc, size)
+        create_hexcode = wload(ex.st.memory, loc, size, prefer_concrete=True)
         create_code = Contract(create_hexcode)
 
         # new account address
@@ -1341,11 +1387,7 @@ class SEVM:
             opcode = new_ex.current_opcode()
             if opcode in [EVM.STOP, EVM.RETURN]:
                 # new contract code
-                new_hexcode = new_ex.output
-                new_code = Contract(new_hexcode)
-
-                # set new contract code
-                new_ex.code[new_addr] = new_code
+                new_ex.code[new_addr] = Contract(new_ex.output)
 
                 # restore tx msg
                 new_ex.calldata  = ex.calldata
@@ -1753,11 +1795,12 @@ class SEVM:
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()
-                    pc: int = int_of(ex.st.pop(), 'symbolic CODECOPY offset')
+                    offset: int = int_of(ex.st.pop(), 'symbolic CODECOPY offset')
                     size: int = int_of(ex.st.pop(), 'symbolic CODECOPY size') # size (in bytes)
                     wextend(ex.st.memory, loc, size)
-                    for i in range(size):
-                        ex.st.memory[loc + i] = ex.read_code(pc + i)
+
+                    codeslice = ex.code[ex.this][offset:offset+size]
+                    ex.st.memory[loc:loc+size] = iter_bytes(codeslice)
 
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()
