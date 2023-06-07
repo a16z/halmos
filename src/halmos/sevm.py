@@ -30,13 +30,13 @@ f_gasprice     = Function('gasprice'    , BitVecSort(256))
 f_origin       = Function('origin'      , BitVecSort(160))
 
 # uninterpreted arithmetic
-f_add  = { 256: Function('evm_add', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_add_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)) }
-f_sub  = Function('evm_sub' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_mul  = { 256: Function('evm_mul', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 512: Function('evm_mul_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
-f_div  = Function('evm_div' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_mod  = { 256: Function('evm_mod', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_mod_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)), 512: Function('evm_mod_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
-f_sdiv = Function('evm_sdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_smod = Function('evm_smod', BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_add  = { 256: Function('evm_bvadd', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_bvadd_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)) }
+f_sub  = Function('evm_bvsub' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_mul  = { 256: Function('evm_bvmul', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 512: Function('evm_bvmul_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
+f_div  = Function('evm_bvudiv' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_mod  = { 256: Function('evm_bvurem', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_bvurem_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)), 512: Function('evm_bvurem_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
+f_sdiv = Function('evm_bvsdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_smod = Function('evm_bvsrem', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
 magic_address: int = 0xaaaa0000

@@ -414,22 +414,20 @@ def run(
     stuck = []
 
     for idx, ex in enumerate(exs):
-        if args.debug: print(f'Checking output: {idx+1} / {len(exs)}')
-
         opcode = ex.current_opcode()
         if opcode in [EVM.STOP, EVM.RETURN]:
             normal += 1
         elif opcode in [EVM.REVERT, EVM.INVALID]:
             # Panic(1)
             # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
-            if args.debug: print(f'  Will generate model for Panic(1)')
             if ex.output == 0x4e487b710000000000000000000000000000000000000000000000000000000000000001:
                 execs_to_model.append((idx, ex))
         elif ex.failed:
-            if args.debug: print(f'  Will generate model for failed execution')
             execs_to_model.append((idx, ex))
         else:
             stuck.append((opcode, idx, ex))
+
+    if len(execs_to_model) > 0 and args.debug: print(f'# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}')
 
     if len(execs_to_model) > 1 and args.solver_parallel:
         with Pool(processes=args.solver_parallel_cores) as pool:
@@ -509,28 +507,33 @@ def gen_model_from_sexpr(args: argparse.Namespace, idx: int, sexpr: str) -> Mode
     return package_result(model, idx, res, args.debug)
 
 
+def is_unknown(result: CheckSatResult, model: Model) -> bool:
+    return result == unknown or (result == sat and not is_valid_model(model))
+
 def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
-    if args.debug: print(f'  Checking assertion violation')
+    if args.debug: print(f'Checking path condition (path id: {idx+1})')
+
+    model = None
 
     ex.solver.set(timeout=args.solver_timeout_assertion)
     res = ex.solver.check()
-    model = None
-    if res == sat:
-        if args.debug: print(f'{" "*4}Generating a counterexample')
-        model = ex.solver.model()
-    if res == unknown and args.solver_fresh:
-        if args.debug: print(f'{" "*4}Checking again with a fresh solver')
+    if res == sat: model = ex.solver.model()
+
+    if is_unknown(res, model) and args.solver_fresh:
+        if args.debug: print(f'  Checking again with a fresh solver')
         sol2 = SolverFor('QF_AUFBV', ctx=Context())
     #   sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.to_smt2())
         res = sol2.check()
         if res == sat: model = sol2.model()
-    if res == unknown and args.solver_subprocess:
-        if args.debug: print(f'{" "*4}Checking again in an external process')
+
+    if is_unknown(res, model) and args.solver_subprocess:
+        if args.debug: print(f'  Checking again in an external process')
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'
-        if args.verbose >= 4 or args.debug: print(f'{" "*6}z3 -model {fname} >{fname}.out')
+        if args.verbose >= 4 or args.debug: print(f'    z3 -model {fname} >{fname}.out')
         query = ex.solver.to_smt2()
-        query = query.replace('(evm_div', '(bvudiv') # TODO: replace `(evm_div x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))` as bvudiv is undefined when y = 0
+        # replace uninterpreted abstraction with actual symbols for assertion solving
+        query = re.sub(r'(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b', r'\1\2', query) # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))` as bvudiv is undefined when y = 0; also similarly for evm_bvurem
         with open(fname, 'w') as f:
         #   f.write('(set-logic QF_AUFBV)\n') # generated queries may include non smtlib2 symbols, like const arrays
             f.write(query)
@@ -542,7 +545,7 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
             if args.verbose >= 4:
                 print(res_str)
             else:
-                print(f'{" "*6}{res_str_head}')
+                print(f'    {res_str_head}')
         if res_str_head == 'unsat':
             res = unsat
         elif res_str_head == 'sat':
@@ -554,15 +557,15 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
 
 def package_result(model: UnionType[Model, str], idx: int, result: CheckSatResult, debug=False) -> ModelWithContext:
     if result == unsat:
-        if debug: print(f'    No assertion violation')
+        if debug: print(f'  Invalid path; ignored (path id: {idx+1})')
         return ModelWithContext(None, idx, result)
 
     if result == sat:
-        if debug: print(f'    Counterexample generated')
+        if debug: print(f'  Valid path; counterexample generated (path id: {idx+1})')
         return ModelWithContext(model, idx, result)
 
     else:
-        if debug: print(f'    Timeout')
+        if debug: print(f'  Timeout (path id: {idx+1})')
         return ModelWithContext(None, idx, result)
 
 
