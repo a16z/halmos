@@ -1527,7 +1527,7 @@ class SEVM:
                     else:
                     #   steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
                         steps[step_id] = {'parent': prev_step_id, 'exec': str(ex)}
-                    if self.options.get('verbose', 0) >= 3:
+                    if self.options.get('verbose', 0) >= 5:
                         print(ex)
 
                 if opcode == EVM.STOP:

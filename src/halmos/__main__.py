@@ -58,11 +58,10 @@ def parse_args(args=None) -> argparse.Namespace:
     # debugging options
     group_debug = parser.add_argument_group("Debugging options")
 
-    group_debug.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv')
+    group_debug.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv, -vvvvv')
     group_debug.add_argument('-st', '--statistics', action='store_true', help='print statistics')
     group_debug.add_argument('--debug', action='store_true', help='run in debug mode')
     group_debug.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
-    group_debug.add_argument('--print-revert', action='store_true', help='print reverting paths in verbose mode')
 
     # build options
     group_build = parser.add_argument_group("Build options")
@@ -451,7 +450,9 @@ def run(
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])")
     for m in models:
         model, idx, result = m.model, m.index, m.result
+        if result == unsat: continue
         ex = exs[idx]
+
         if model:
             if isinstance(model, str):
                 print(color_warn(f'Counterexample: see {model}'))
@@ -462,7 +463,7 @@ def run(
             else:
                 warn(COUNTEREXAMPLE_INVALID,
                      f'Counterexample (potentially invalid): (not displayed, use --print-potential-counterexample)')
-        elif result != unsat:
+        else:
             warn(COUNTEREXAMPLE_UNKNOWN, f'Counterexample: {result}')
 
         if args.verbose >= 1:
@@ -471,7 +472,7 @@ def run(
 
     for opcode, idx, ex in stuck:
         print(color_warn(f'Not supported: {mnemonic(opcode)}: {ex.error}'))
-        if args.verbose >= 1:
+        if args.verbose >= 3:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
 
@@ -480,11 +481,10 @@ def run(
         if args.debug: print('\n'.join(bounded_loops))
 
     # print post-states
-    if args.verbose >= 2:
+    if args.verbose >= 5:
         for idx, ex in enumerate(exs):
-            if args.print_revert or ex.current_opcode() in [EVM.STOP, EVM.RETURN]:
-                print(f'# {idx+1} / {len(exs)}')
-                print(ex)
+            print(f'# {idx+1} / {len(exs)}')
+            print(ex)
 
     # log steps
     if args.log:
