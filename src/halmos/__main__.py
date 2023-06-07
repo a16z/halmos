@@ -539,13 +539,12 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
             f.write(query)
         res_str = subprocess.run(['z3', '-model', fname], capture_output=True, text=True).stdout.strip()
         res_str_head = res_str.split('\n', 1)[0]
-        if args.verbose >= 4 or args.debug:
-            with open(f'{fname}.out', 'w') as f:
-                f.write(res_str)
-            if args.verbose >= 4:
-                print(res_str)
-            else:
-                print(f'    {res_str_head}')
+        with open(f'{fname}.out', 'w') as f:
+            f.write(res_str)
+        if args.verbose >= 4:
+            print(res_str)
+        elif args.debug:
+            print(f'    {res_str_head}')
         if res_str_head == 'unsat':
             res = unsat
         elif res_str_head == 'sat':
