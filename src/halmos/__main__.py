@@ -307,7 +307,7 @@ def setup(
                 if res != unsat:
                     setup_exs.append(setup_ex)
             elif args.debug:
-                print(color_warn(f'setup execution finished with {mnemonic(setup_ex.current_opcode())} (error={setup_ex.error})'))
+                print(color_warn(f'Setup execution encountered an issue at {mnemonic(setup_ex.current_opcode())}: {setup_ex.error}'))
 
         if len(setup_exs) == 0: raise ValueError(f'No successful path found in {setup_sig}')
         if len(setup_exs) > 1:

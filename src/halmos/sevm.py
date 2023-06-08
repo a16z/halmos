@@ -1091,7 +1091,7 @@ class SEVM:
                     stack.append((new_ex, step_id))
                 else:
                     # got stuck during external call
-                    new_ex.error = f'External call stuck at: {mnemonic(opcode)}: {new_ex.error}'
+                    new_ex.error = f'External call encountered an issue at {mnemonic(opcode)}: {new_ex.error}'
                     out.append(new_ex)
 
         def call_unknown() -> None:
