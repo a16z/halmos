@@ -536,7 +536,9 @@ class Exec: # an execution path
                     return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat: # key == key0
                     return val0
-        # TODO: should we explicitly simplify when array is empty?
+        # TODO: simplifying empty array access might have a negative impact on solver performance
+        # elif re.search(r'^storage_.+_00$', str(array)): # empty array
+        #     return con(0)
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
