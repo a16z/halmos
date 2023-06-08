@@ -223,3 +223,11 @@ def test_iter_bytes_bv_ref():
     x = BitVec('x', 8)
     b = Concat(BitVecVal(0x123456, 24), x)
     assert list(iter_bytes(b)) == [0x12, 0x34, 0x56, x]
+
+def test_iter_bytes_int():
+    # can not iterate bytes of an integer without explicit size
+    with pytest.raises(Exception):
+        list(iter_bytes(0x12345678))
+
+    assert list(iter_bytes(0x12345678, _byte_length=4)) == [0x12, 0x34, 0x56, 0x78]
+    assert list(iter_bytes(0x12345678, _byte_length=6)) == [0x00, 0x00, 0x12, 0x34, 0x56, 0x78]

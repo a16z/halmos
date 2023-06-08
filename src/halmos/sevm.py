@@ -109,14 +109,15 @@ def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
     return x.as_long().to_bytes(x.size() // 8, 'big')
 
 
-def iter_bytes(x: Any):
+def iter_bytes(x: Any, _byte_length: int = -1):
     '''Return an iterable over the bytes of x (concrete or symbolic)'''
 
     if isinstance(x, bytes):
         return x
 
     if isinstance(x, int):
-        return x.to_bytes((x.bit_length() + 7) // 8, 'big')
+        # the byte length must be passed explicitly for ints, or this will fail
+        return x.to_bytes(_byte_length, 'big')
 
     if is_bv_value(x):
         return bv_value_to_bytes(x)
