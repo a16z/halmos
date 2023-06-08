@@ -536,6 +536,7 @@ class Exec: # an execution path
                     return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat: # key == key0
                     return val0
+        # TODO: should we explicitly simplify when array is empty?
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
