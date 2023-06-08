@@ -191,11 +191,16 @@ def wload(mem: List[Byte], loc: int, size: int, prefer_concrete=False) -> UnionT
 
     memslice = mem[loc:loc+size]
 
+    # runtime sanity check: mem should only contain ints or BitVecs (not bytes)
+    if not all(isinstance(i, int) or is_bv(i) for i in memslice):
+        raise ValueError(memslice)
+
     if prefer_concrete and all(is_concrete(i) for i in memslice):
+        # will raise an error if any i is not in range(0, 256)
         return bytes([int_of(i) for i in memslice])
 
     # wrap concrete bytes in BitVecs
-    wrapped = [BitVecVal(i, 8) if not is_bv(i) else i for i in mem[loc:loc+size]]
+    wrapped = [BitVecVal(i, 8) if not is_bv(i) else i for i in memslice]
 
     # BitVecSort(size * 8)
     return simplify(concat(wrapped))
