@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from multiprocessing import Pool
 from timeit import default_timer as timer
 
-from .utils import color_good, color_warn
+from .utils import color_good, color_warn, hexify
 from .sevm import *
 from .warnings import *
 
@@ -583,10 +583,8 @@ def str_model(model, args: argparse.Namespace) -> str:
         elif args.verbose >= 1:
             if name.startswith('storage') or name.startswith('msg_') or name.startswith('this_'): return True
         return False
-    if args.debug:
-        return str(model)
-    else:
-        return '[' + ', '.join(sorted(map(lambda decl: f'{decl} = {model[decl]}', filter(select, model)))) + ']'
+    select_model = filter(select, model) if not args.debug else model
+    return '[' + f',\n{" "*17}'.join(sorted(map(lambda decl: f'{decl} = {hexify(model[decl])}', select_model))) + ']'
 
 
 def mk_options(args: argparse.Namespace) -> Dict:

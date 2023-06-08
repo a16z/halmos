@@ -9,7 +9,7 @@ from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
-from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr
+from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr, hexify
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
@@ -1110,7 +1110,7 @@ class SEVM:
                     ret = uint256(BitVec(f'halmos_symbolic_bool_{ex.new_symbol_id()}', 1))
 
                 else:
-                    ex.error = f'Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {arg}'
+                    ex.error = f'Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}'
                     out.append(ex)
                     return
 

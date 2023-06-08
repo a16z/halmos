@@ -1,8 +1,20 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import re
+
 from typing import Dict, Tuple
 
 from z3 import *
+
+def hexify(x):
+    if isinstance(x, str):
+        return re.sub(r'\b(\d+)\b', lambda match: hex(int(match.group(1))), x)
+    elif isinstance(x, int):
+        return hex(x)
+    elif is_bv_value(x):
+        return hex(x.as_long())
+    else:
+        return hexify(str(x))
 
 def assert_address(x: BitVecRef) -> None:
     if x.size() != 160: raise ValueError(x)
