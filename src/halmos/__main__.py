@@ -422,7 +422,7 @@ def run(
         elif opcode in [EVM.REVERT, EVM.INVALID]:
             # Panic(1)
             # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
-            if ex.output == 0x4e487b710000000000000000000000000000000000000000000000000000000000000001:
+            if unbox_int(ex.output) == 0x4e487b710000000000000000000000000000000000000000000000000000000000000001:
                 execs_to_model.append((idx, ex))
         elif ex.failed:
             execs_to_model.append((idx, ex))
