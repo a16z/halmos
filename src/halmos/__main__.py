@@ -681,6 +681,7 @@ def main() -> int:
 
     total_passed = 0
     total_failed = 0
+    total_found = 0
 
     for compilation_id, compilation_unit in cryticCompile.compilation_units.items():
 
@@ -702,6 +703,7 @@ def main() -> int:
                 methodIdentifiers = source_unit.hashes(contract)
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
+                total_found += len(funsigs)
 
                 if funsigs:
                     num_passed = 0
@@ -752,7 +754,7 @@ def main() -> int:
     if args.statistics:
         print(f'\n[time] total: {main_end - main_start:0.2f}s (build: {main_mid - main_start:0.2f}s, tests: {main_end - main_mid:0.2f}s)')
 
-    if not funsigs:
+    if total_found == 0:
         error_msg = f'Error: No tests with the prefix `{args.function}`'
         if args.contract is not None:
             error_msg += f' in {args.contract}'
