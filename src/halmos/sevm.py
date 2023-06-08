@@ -567,6 +567,8 @@ class Exec: # an execution path
                 else:
                     self.storage[addr][slot][len(keys)] = con(0)
             else:
+                # do not use z3 const array `K(BitVecSort(len(keys)*256), con(0))` when not self.symbolic
+                # instead use normal smt array, and generate emptyness axiom; see sload()
                 self.storage[addr][slot][len(keys)] = self.empty_storage_of(addr, slot, len(keys))
 
     def sload(self, addr: Any, loc: Word) -> Word:
@@ -578,6 +580,7 @@ class Exec: # an execution path
             return self.storage[addr][slot][0]
         else:
             if not self.symbolic:
+                # generate emptyness axiom for each array index, instead of using quantified formula; see sinit()
                 self.solver.add(Select(self.empty_storage_of(addr, slot, len(keys)), concat(keys)) == con(0))
             return self.select(self.storage[addr][slot][len(keys)], concat(keys), self.storages)
 
