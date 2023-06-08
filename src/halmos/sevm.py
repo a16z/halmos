@@ -564,10 +564,7 @@ class Exec: # an execution path
                 else:
                     self.storage[addr][slot][len(keys)] = con(0)
             else:
-                if self.symbolic:
-                    self.storage[addr][slot][len(keys)] = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', BitVecSort(len(keys)*256), BitVecSort(256))
-                else:
-                    self.storage[addr][slot][len(keys)] = K(BitVecSort(len(keys)*256), con(0))
+                self.storage[addr][slot][len(keys)] = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', BitVecSort(len(keys)*256), BitVecSort(256))
 
     def sload(self, addr: Any, loc: Word) -> Word:
         offsets = self.decode_storage_loc(loc)
@@ -577,6 +574,8 @@ class Exec: # an execution path
         if len(keys) == 0:
             return self.storage[addr][slot][0]
         else:
+            if not self.symbolic:
+                self.solver.add(Select(Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', BitVecSort(len(keys)*256), BitVecSort(256)), concat(keys)) == con(0))
             return self.select(self.storage[addr][slot][len(keys)], concat(keys), self.storages)
 
     def sstore(self, addr: Any, loc: Any, val: Any) -> None:

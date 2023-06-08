@@ -535,7 +535,7 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
         # replace uninterpreted abstraction with actual symbols for assertion solving
         query = re.sub(r'(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b', r'\1\2', query) # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))` as bvudiv is undefined when y = 0; also similarly for evm_bvurem
         with open(fname, 'w') as f:
-        #   f.write('(set-logic QF_AUFBV)\n') # generated queries may include non smtlib2 symbols, like const arrays
+            f.write('(set-logic QF_AUFBV)\n')
             f.write(query)
         res_str = subprocess.run(['z3', '-model', fname], capture_output=True, text=True).stdout.strip()
         res_str_head = res_str.split('\n', 1)[0]
