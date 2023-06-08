@@ -547,7 +547,7 @@ class Exec: # an execution path
     def balance_update(self, addr: Word, value: Word):
         assert_address(addr)
         assert_uint256(value)
-        new_balance_var = Array(f'balance_{1+len(self.balances)}', BitVecSort(160), BitVecSort(256))
+        new_balance_var = Array(f'balance_{1+len(self.balances):>02}', BitVecSort(160), BitVecSort(256))
         new_balance = Store(self.balance, addr, value)
         self.solver.add(new_balance_var == new_balance)
         self.balance = new_balance_var
@@ -560,11 +560,11 @@ class Exec: # an execution path
         if len(keys) not in self.storage[addr][slot]:
             if len(keys) == 0:
                 if self.symbolic:
-                    self.storage[addr][slot][len(keys)] = BitVec(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', 256)
+                    self.storage[addr][slot][len(keys)] = BitVec(f'storage_{id_str(addr)}_{slot}_{len(keys)}_00', 256)
                 else:
                     self.storage[addr][slot][len(keys)] = con(0)
             else:
-                self.storage[addr][slot][len(keys)] = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', BitVecSort(len(keys)*256), BitVecSort(256))
+                self.storage[addr][slot][len(keys)] = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_00', BitVecSort(len(keys)*256), BitVecSort(256))
 
     def sload(self, addr: Any, loc: Word) -> Word:
         offsets = self.decode_storage_loc(loc)
@@ -575,7 +575,7 @@ class Exec: # an execution path
             return self.storage[addr][slot][0]
         else:
             if not self.symbolic:
-                self.solver.add(Select(Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', BitVecSort(len(keys)*256), BitVecSort(256)), concat(keys)) == con(0))
+                self.solver.add(Select(Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_00', BitVecSort(len(keys)*256), BitVecSort(256)), concat(keys)) == con(0))
             return self.select(self.storage[addr][slot][len(keys)], concat(keys), self.storages)
 
     def sstore(self, addr: Any, loc: Any, val: Any) -> None:
@@ -586,7 +586,7 @@ class Exec: # an execution path
         if len(keys) == 0:
             self.storage[addr][slot][0] = val
         else:
-            new_storage_var = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages)}', BitVecSort(len(keys)*256), BitVecSort(256))
+            new_storage_var = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages):>02}', BitVecSort(len(keys)*256), BitVecSort(256))
             new_storage = Store(self.storage[addr][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
             self.storage[addr][slot][len(keys)] = new_storage_var
@@ -653,7 +653,7 @@ class Exec: # an execution path
     def sha3_data(self, data: Bytes, size: int) -> None:
         f_sha3 = Function('sha3_'+str(size*8), BitVecSort(size*8), BitVecSort(256))
         sha3 = f_sha3(data)
-        sha3_var = BitVec(f'sha3_var_{len(self.sha3s)}', 256)
+        sha3_var = BitVec(f'sha3_var_{len(self.sha3s):>02}', 256)
         self.solver.add(sha3_var == sha3)
         self.solver.add(ULE(sha3_var, con(2**256 - 2**64))) # assume hash values are sufficiently smaller than the uint max
         self.assume_sha3_distinct(sha3_var, sha3)
@@ -1058,7 +1058,7 @@ class SEVM:
             else:
                 f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(160), BitVecSort(256),                         BitVecSort(256))
                 exit_code = f_call(con(call_id), gas, to, fund)
-            exit_code_var = BitVec(f'call_exit_code_{call_id}', 256)
+            exit_code_var = BitVec(f'call_exit_code_{call_id:>02}', 256)
             ex.solver.add(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
@@ -1081,7 +1081,7 @@ class SEVM:
                 if funsig == halmos_cheat_code.create_symbolic_uint:
                     bit_size = int_of(simplify(extract_bytes(arg, 4, 32)), 'symbolic bit size for halmos.createSymbolicUint()')
                     if bit_size <= 256:
-                        ret = uint256(BitVec(f'halmos_symbolic_uint{bit_size}_{ex.new_symbol_id()}', bit_size))
+                        ret = uint256(BitVec(f'halmos_symbolic_uint{bit_size}_{ex.new_symbol_id():>02}', bit_size))
                     else:
                         ex.error = f'bitsize larger than 256: {bit_size}'
                         out.append(ex)
@@ -1090,24 +1090,24 @@ class SEVM:
                 # createSymbolicBytes(uint256) returns (bytes)
                 elif funsig == halmos_cheat_code.create_symbolic_bytes:
                     byte_size = int_of(simplify(extract_bytes(arg, 4, 32)), 'symbolic byte size for halmos.createSymbolicBytes()')
-                    symbolic_bytes = BitVec(f'halmos_symbolic_bytes_{ex.new_symbol_id()}', byte_size * 8)
+                    symbolic_bytes = BitVec(f'halmos_symbolic_bytes_{ex.new_symbol_id():>02}', byte_size * 8)
                     ret = Concat(BitVecVal(32, 256), BitVecVal(byte_size, 256), symbolic_bytes)
 
                 # createSymbolicUint256() returns (uint256)
                 elif funsig == halmos_cheat_code.create_symbolic_uint256:
-                    ret = BitVec(f'halmos_symbolic_uint256_{ex.new_symbol_id()}', 256)
+                    ret = BitVec(f'halmos_symbolic_uint256_{ex.new_symbol_id():>02}', 256)
 
                 # createSymbolicBytes32() returns (bytes32)
                 elif funsig == halmos_cheat_code.create_symbolic_bytes32:
-                    ret = BitVec(f'halmos_symbolic_bytes32_{ex.new_symbol_id()}', 256)
+                    ret = BitVec(f'halmos_symbolic_bytes32_{ex.new_symbol_id():>02}', 256)
 
                 # createSymbolicAddress() returns (address)
                 elif funsig == halmos_cheat_code.create_symbolic_address:
-                    ret = uint256(BitVec(f'halmos_symbolic_address_{ex.new_symbol_id()}', 160))
+                    ret = uint256(BitVec(f'halmos_symbolic_address_{ex.new_symbol_id():>02}', 160))
 
                 # createSymbolicBool() returns (bool)
                 elif funsig == halmos_cheat_code.create_symbolic_bool:
-                    ret = uint256(BitVec(f'halmos_symbolic_bool_{ex.new_symbol_id()}', 1))
+                    ret = uint256(BitVec(f'halmos_symbolic_bool_{ex.new_symbol_id():>02}', 1))
 
                 else:
                     ex.error = f'Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}'
