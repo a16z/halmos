@@ -553,6 +553,9 @@ class Exec: # an execution path
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
 
+    def empty_storage_of(self, addr: BitVecRef, slot: int, len_keys: int) -> ArrayRef:
+        return Array(f'storage_{id_str(addr)}_{slot}_{len_keys}_00', BitVecSort(len_keys*256), BitVecSort(256))
+
     def sinit(self, addr: Any, slot: int, keys) -> None:
         assert_address(addr)
         if slot not in self.storage[addr]:
@@ -564,7 +567,7 @@ class Exec: # an execution path
                 else:
                     self.storage[addr][slot][len(keys)] = con(0)
             else:
-                self.storage[addr][slot][len(keys)] = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_00', BitVecSort(len(keys)*256), BitVecSort(256))
+                self.storage[addr][slot][len(keys)] = self.empty_storage_of(addr, slot, len(keys))
 
     def sload(self, addr: Any, loc: Word) -> Word:
         offsets = self.decode_storage_loc(loc)
@@ -575,7 +578,7 @@ class Exec: # an execution path
             return self.storage[addr][slot][0]
         else:
             if not self.symbolic:
-                self.solver.add(Select(Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_00', BitVecSort(len(keys)*256), BitVecSort(256)), concat(keys)) == con(0))
+                self.solver.add(Select(self.empty_storage_of(addr, slot, len(keys)), concat(keys)) == con(0))
             return self.select(self.storage[addr][slot][len(keys)], concat(keys), self.storages)
 
     def sstore(self, addr: Any, loc: Any, val: Any) -> None:
