@@ -169,6 +169,7 @@ def uint160(x: BitVecRef) -> BitVecRef:
 def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, size_bits)
 
+
 def byte_length(x: Any) -> int:
     if is_bv(x):
         if x.size() % 8 != 0: raise ValueError(x)
@@ -179,14 +180,17 @@ def byte_length(x: Any) -> int:
 
     raise ValueError(x)
 
+
 def instruction_length(opcode: Any) -> int:
     opcode = int_of(opcode)
     return (opcode - EVM.PUSH0 + 1) if EVM.PUSH1 <= opcode <= EVM.PUSH32 else 1
 
-def wextend(mem: List[Byte], loc: int, size: int) -> None:
+
+def wextend(mem: List[UnionType[int, BitVecRef]], loc: int, size: int) -> None:
     mem.extend([0] * (loc + size - len(mem)))
 
-def wload(mem: List[Byte], loc: int, size: int, prefer_concrete=False) -> UnionType[bytes,Bytes]:
+
+def wload(mem: List[UnionType[int, BitVecRef]], loc: int, size: int, prefer_concrete=False) -> UnionType[bytes,Bytes]:
     wextend(mem, loc, size)
 
     memslice = mem[loc:loc+size]
@@ -205,26 +209,32 @@ def wload(mem: List[Byte], loc: int, size: int, prefer_concrete=False) -> UnionT
     # BitVecSort(size * 8)
     return simplify(concat(wrapped))
 
-def wstore(mem: List[Byte], loc: int, size: int, val: Bytes) -> None:
+
+def wstore(mem: List[UnionType[int, BitVecRef]], loc: int, size: int, val: Bytes) -> None:
     if not eq(val.sort(), BitVecSort(size*8)): raise ValueError(val)
     wextend(mem, loc, size)
     for i in range(size):
         mem[loc + i] = simplify(Extract((size-1 - i)*8+7, (size-1 - i)*8, val))
 
-def wstore_partial(mem: List[Byte], loc: int, offset: int, size: int, data: Bytes, datasize: int) -> None:
-    if size > 0:
-        if not datasize >= offset + size:
-            raise ValueError(datasize, offset, size)
 
-        if is_bv(data):
-            sub_data = Extract((datasize-1 - offset)*8+7, (datasize - offset - size)*8, data)
-            wstore(mem, loc, size, sub_data)
-        else:
-            sub_data = data[offset:offset+size]
-            mem[loc:loc+size] = sub_data
+def wstore_partial(mem: List[UnionType[int, BitVecRef]], loc: int, offset: int, size: int, data: UnionType[bytes, Bytes], datasize: int) -> None:
+    if size <= 0:
+        return
+
+    if not datasize >= offset + size:
+        raise ValueError(datasize, offset, size)
+
+    if is_bv(data):
+        sub_data = Extract((datasize-1 - offset)*8+7, (datasize - offset - size)*8, data)
+        wstore(mem, loc, size, sub_data)
+    elif isinstance(data, bytes):
+        sub_data = data[offset:offset+size]
+        mem[loc:loc+size] = sub_data
+    else:
+        raise ValueError(data)
 
 
-def wstore_bytes(mem: List[Byte], loc: int, size: int, arr: List[Byte]) -> None:
+def wstore_bytes(mem: List[UnionType[int, BitVecRef]], loc: int, size: int, arr: List[Byte]) -> None:
     if not size == len(arr): raise ValueError(size, arr)
     wextend(mem, loc, size)
     for i in range(size):
