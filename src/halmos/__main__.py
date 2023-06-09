@@ -9,15 +9,27 @@ import argparse
 import re
 import traceback
 
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
 from dataclasses import dataclass
-from multiprocessing import Pool
 from timeit import default_timer as timer
 
 from .utils import color_good, color_warn, hexify
 from .sevm import *
 from .warnings import *
+
+class ProcessPoolSingleton:
+    def __init__(self) -> None:
+        self._pool = None
+
+    def get(self, max_workers=None):
+        if self._pool is None:
+            self._pool = ProcessPoolExecutor(max_workers=max_workers)
+
+        return self._pool
+
+PROCESS_POOL_SINGLETON = ProcessPoolSingleton()
 
 if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
     sys.set_int_max_str_digits(0)
@@ -85,13 +97,13 @@ def parse_args(args=None) -> argparse.Namespace:
     group_solver.add_argument('--solver-fresh', action='store_true', help='run an extra solver with a fresh state for unknown')
     group_solver.add_argument('--solver-subprocess', action='store_true', help='run an extra solver in subprocess for unknown')
     group_solver.add_argument('--solver-parallel', action='store_true', help='run assertion solvers in parallel')
-    group_solver.add_argument('--solver-parallel-cores', default=os.cpu_count(), type=int, help='max number of cores to use for parallel assertion solvers (default: %(default)s)')
 
     # internal options
     group_internal = parser.add_argument_group("Internal options")
 
     group_internal.add_argument('--bytecode', metavar='HEX_STRING', help='execute the given bytecode')
     group_internal.add_argument('--reset-bytecode', metavar='ADDR1=CODE1,ADDR2=CODE2,...', help='reset the bytecode of given addresses after setUp()')
+    group_internal.add_argument('--max-cores', default=None, type=int, help=f'max number of cores to use for parallel processing (default: # of available cores)')
 
     # experimental options
     group_experimental = parser.add_argument_group("Experimental options")
@@ -433,9 +445,12 @@ def run(
     if len(execs_to_model) > 0 and args.debug: print(f'# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}')
 
     if len(execs_to_model) > 1 and args.solver_parallel:
-        with Pool(processes=args.solver_parallel_cores) as pool:
-            if args.debug: print(f'Spawning {len(execs_to_model)} parallel assertion solvers on {args.solver_parallel_cores} cores')
-            models = [m for m in pool.starmap(gen_model_from_sexpr, [(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model])]
+        pool = PROCESS_POOL_SINGLETON.get(max_workers=args.max_cores)
+        if args.debug:
+            print(f'Spawning {len(execs_to_model)} parallel assertion solvers')
+
+        fn_args = [GenModelArgs(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model]
+        models = [m for m in pool.map(gen_model_from_sexpr, fn_args)]
 
     else:
         models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
@@ -498,8 +513,14 @@ def run(
     # exitcode
     return 0 if passed else 1
 
+@dataclass(frozen=True)
+class GenModelArgs:
+    args: argparse.Namespace
+    idx: int
+    sexpr: str
 
-def gen_model_from_sexpr(args: argparse.Namespace, idx: int, sexpr: str) -> ModelWithContext:
+def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
+    args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
     solver = SolverFor('QF_AUFBV', ctx=Context())
     solver.set(timeout=args.solver_timeout_assertion)
     solver.from_string(sexpr)
