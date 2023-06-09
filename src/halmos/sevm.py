@@ -30,11 +30,11 @@ f_gasprice     = Function('gasprice'    , BitVecSort(256))
 f_origin       = Function('origin'      , BitVecSort(160))
 
 # uninterpreted arithmetic
-f_add  = { 256: Function('evm_bvadd', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_bvadd_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)) }
+f_add  = { 256: Function('evm_bvadd', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 264: Function('evm_bvadd_264', BitVecSort(264), BitVecSort(264), BitVecSort(264)) }
 f_sub  = Function('evm_bvsub' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_mul  = { 256: Function('evm_bvmul', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 512: Function('evm_bvmul_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
 f_div  = Function('evm_bvudiv' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_mod  = { 256: Function('evm_bvurem', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_bvurem_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)), 512: Function('evm_bvurem_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
+f_mod  = { 256: Function('evm_bvurem', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 264: Function('evm_bvurem_264', BitVecSort(264), BitVecSort(264), BitVecSort(264)), 512: Function('evm_bvurem_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
 f_sdiv = Function('evm_bvsdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_bvsrem', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
@@ -1012,10 +1012,10 @@ class SEVM:
         w2 = b2i(w2)
         w3 = b2i(w3)
         if op == EVM.ADDMOD:
-            r1 = self.arith(ex, EVM.ADD, simplify(ZeroExt(1, w1)), simplify(ZeroExt(1, w2))) # to avoid add overflow
-            r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(1, w3)))
-            if r1.size() != 257: raise ValueError(r1)
-            if r2.size() != 257: raise ValueError(r2)
+            r1 = self.arith(ex, EVM.ADD, simplify(ZeroExt(8, w1)), simplify(ZeroExt(8, w2))) # to avoid add overflow; and to be a multiple of 8-bit
+            r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(8, w3)))
+            if r1.size() != 264: raise ValueError(r1)
+            if r2.size() != 264: raise ValueError(r2)
             return Extract(255, 0, r2)
         elif op == EVM.MULMOD:
             r1 = self.arith(ex, EVM.MUL, simplify(ZeroExt(256, w1)), simplify(ZeroExt(256, w2))) # to avoid mul overflow
