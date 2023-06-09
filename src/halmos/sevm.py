@@ -9,7 +9,7 @@ from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
-from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr, hexify
+from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr, bv_value_to_bytes, hexify
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
@@ -102,11 +102,6 @@ def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
         return res
 
     raise NotConcreteError(f'{err}: {x}')
-
-
-def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
-    if x.size() % 8 != 0: raise ValueError(x)
-    return x.as_long().to_bytes(x.size() // 8, 'big')
 
 
 def iter_bytes(x: Any, _byte_length: int = -1):
