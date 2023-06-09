@@ -299,14 +299,17 @@ def setup(
             if args.debug: print('\n'.join(setup_bounded_loops))
 
         setup_exs = []
+
         for idx, setup_ex in enumerate(setup_exs_all):
             if setup_ex.current_opcode() in [EVM.STOP, EVM.RETURN]:
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
                 res = setup_ex.solver.check()
                 if res != unsat:
                     setup_exs.append(setup_ex)
+            elif args.debug:
+                print(color_warn(f'Setup execution encountered an issue at {mnemonic(setup_ex.current_opcode())}: {setup_ex.error}'))
 
-        if len(setup_exs) == 0: raise ValueError('No successful path found in {setup_sig}')
+        if len(setup_exs) == 0: raise ValueError(f'No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
             print(color_warn(f'Warning: multiple paths were found in {setup_sig}; an arbitrary path has been selected for the following tests.'))
             if args.debug: print('\n'.join(map(str, setup_exs)))
@@ -419,7 +422,7 @@ def run(
         elif opcode in [EVM.REVERT, EVM.INVALID]:
             # Panic(1)
             # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
-            if ex.output == 0x4e487b710000000000000000000000000000000000000000000000000000000000000001:
+            if unbox_int(ex.output) == 0x4e487b710000000000000000000000000000000000000000000000000000000000000001:
                 execs_to_model.append((idx, ex))
         elif ex.failed:
             execs_to_model.append((idx, ex))
@@ -678,6 +681,7 @@ def main() -> int:
 
     total_passed = 0
     total_failed = 0
+    total_found = 0
 
     for compilation_id, compilation_unit in cryticCompile.compilation_units.items():
 
@@ -699,6 +703,7 @@ def main() -> int:
                 methodIdentifiers = source_unit.hashes(contract)
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
+                total_found += len(funsigs)
 
                 if funsigs:
                     num_passed = 0
@@ -749,7 +754,7 @@ def main() -> int:
     if args.statistics:
         print(f'\n[time] total: {main_end - main_start:0.2f}s (build: {main_mid - main_start:0.2f}s, tests: {main_end - main_mid:0.2f}s)')
 
-    if (total_passed + total_failed) == 0:
+    if total_found == 0:
         error_msg = f'Error: No tests with the prefix `{args.function}`'
         if args.contract is not None:
             error_msg += f' in {args.contract}'
