@@ -301,13 +301,14 @@ def setup(
         setup_exs = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
-            if setup_ex.current_opcode() in [EVM.STOP, EVM.RETURN]:
+            opcode = setup_ex.current_opcode()
+            if opcode in [EVM.STOP, EVM.RETURN]:
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
                 res = setup_ex.solver.check()
                 if res != unsat:
                     setup_exs.append(setup_ex)
-            elif args.debug:
-                print(color_warn(f'Setup execution encountered an issue at {mnemonic(setup_ex.current_opcode())}: {setup_ex.error}'))
+            elif opcode not in [EVM.REVERT, EVM.INVALID]:
+                print(color_warn(f'Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {setup_ex.error}'))
 
         if len(setup_exs) == 0: raise ValueError(f'No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
