@@ -196,14 +196,27 @@ def wload(mem: List[UnionType[int, BitVecRef]], loc: int, size: int, prefer_conc
     memslice = mem[loc:loc+size]
 
     # runtime sanity check: mem should only contain ints or BitVecs (not bytes)
-    if not all(isinstance(i, int) or is_bv(i) for i in memslice):
-        raise ValueError(memslice)
+    all_concrete = True
+    for i in memslice:
+        if isinstance(i, int):
+            if not i in range(0, 256):
+                raise ValueError(i)
+            continue
 
-    if prefer_concrete and all(is_concrete(i) for i in memslice):
+        if is_bv(i):
+            if not is_bv_value(i):
+                all_concrete = False
+            continue
+
+        raise ValueError(i)
+
+    if prefer_concrete and all_concrete:
         # will raise an error if any i is not in range(0, 256)
         return bytes([int_of(i) for i in memslice])
 
     # wrap concrete bytes in BitVecs
+    # this would truncate the upper bits if the value didn't fit in 8 bits
+    # therefore we rely on the value range check above to raise an error
     wrapped = [BitVecVal(i, 8) if not is_bv(i) else i for i in memslice]
 
     # BitVecSort(size * 8)

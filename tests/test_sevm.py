@@ -4,7 +4,7 @@ from z3 import *
 
 from halmos.utils import EVM
 
-from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of, uint256, uint160, iter_bytes
+from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of, uint256, uint160, iter_bytes, wload, wstore
 
 from halmos.__main__ import mk_block
 
@@ -231,3 +231,31 @@ def test_iter_bytes_int():
 
     assert list(iter_bytes(0x12345678, _byte_length=4)) == [0x12, 0x34, 0x56, 0x78]
     assert list(iter_bytes(0x12345678, _byte_length=6)) == [0x00, 0x00, 0x12, 0x34, 0x56, 0x78]
+
+def test_wload_wrong_type():
+    with pytest.raises(ValueError):
+        wload([bytes.fromhex("aa")], 0, 4)
+
+def test_wload_concrete():
+    # using ints or concrete bitvector values should be equivalent
+    assert wload([0x12, 0x34, 0x56, 0x78], 0, 4, prefer_concrete=True) == bytes.fromhex("12345678")
+    assert wload([0x12, 0x34, 0x56, 0x78], 0, 4, prefer_concrete=False) == con(0x12345678, 32)
+    assert wload([con(x, 8) for x in [0x12, 0x34, 0x56, 0x78]], 0, 4, prefer_concrete=True) == bytes.fromhex("12345678")
+    assert wload([con(x, 8) for x in [0x12, 0x34, 0x56, 0x78]], 0, 4, prefer_concrete=False) == con(0x12345678, 32)
+
+def test_wload_symbolic():
+    x = BitVec('x', 32)
+    mem = []
+    wstore(mem, 0, 4, x)
+
+    assert wload(mem, 0, 4, prefer_concrete=False) == x
+
+    # no effect because the memory is not concrete
+    assert wload(mem, 0, 4, prefer_concrete=True) == x
+
+def test_wload_bad_byte():
+    with pytest.raises(ValueError):
+        wload([512], 0, 1, prefer_concrete=True)
+
+    with pytest.raises(ValueError):
+        wload([512], 0, 1, prefer_concrete=False)
