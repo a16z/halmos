@@ -461,9 +461,9 @@ def run(
             if isinstance(model, str):
                 print(color_warn(f'Counterexample: see {model}'))
             elif is_valid_model(model):
-                print(color_warn(f'Counterexample:\n{str_model(model, args)}'))
+                print(color_warn(f'Counterexample: {str_model(model, args)}'))
             elif args.print_potential_counterexample:
-                warn(COUNTEREXAMPLE_INVALID, f'Counterexample (potentially invalid):\n{str_model(model, args)}')
+                warn(COUNTEREXAMPLE_INVALID, f'Counterexample (potentially invalid): {str_model(model, args)}')
             else:
                 warn(COUNTEREXAMPLE_INVALID,
                      f'Counterexample (potentially invalid): (not displayed, use --print-potential-counterexample)')
@@ -588,7 +588,7 @@ def str_model(model, args: argparse.Namespace) -> str:
             if name.startswith('storage') or name.startswith('msg_') or name.startswith('this_'): return True
         return False
     select_model = filter(select, model) if not args.debug else model
-    return ',\n'.join(sorted(map(lambda decl: f'    {decl} = {hexify(model[decl])}', select_model)))
+    return '[' + ','.join(sorted(map(lambda decl: f'\n    {decl} = {hexify(model[decl])}', select_model))) + ']'
 
 
 def mk_options(args: argparse.Namespace) -> Dict:
