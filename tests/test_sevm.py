@@ -4,7 +4,7 @@ from z3 import *
 
 from halmos.utils import EVM
 
-from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of, uint256, uint160
+from halmos.sevm import con, Contract, f_div, f_sdiv, f_mod, f_smod, f_exp, f_origin, SEVM, Exec, int_of, uint256, uint160, iter_bytes, wload, wstore
 
 from halmos.__main__ import mk_block
 
@@ -205,3 +205,57 @@ def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     assert len(exs) == 1
     ex = exs[0]
     assert ex.st.stack[0] == simplify(output)
+
+def test_stack_underflow_pop(sevm: SEVM, solver, storage):
+    # check that we get an exception when popping from an empty stack
+    ex = mk_ex(o(EVM.POP), sevm, solver, storage, caller, this)
+
+    # TODO: from the outside, we should get an execution with failed=True
+    # TODO: from the outside, we should get an specific exception like StackUnderflowError
+    with pytest.raises(Exception):
+        sevm.run(ex)
+
+def test_iter_bytes_bv_val():
+    b = BitVecVal(0x12345678, 32)
+    assert list(iter_bytes(b)) == [0x12, 0x34, 0x56, 0x78]
+
+def test_iter_bytes_bv_ref():
+    x = BitVec('x', 8)
+    b = Concat(BitVecVal(0x123456, 24), x)
+    assert list(iter_bytes(b)) == [0x12, 0x34, 0x56, x]
+
+def test_iter_bytes_int():
+    # can not iterate bytes of an integer without explicit size
+    with pytest.raises(Exception):
+        list(iter_bytes(0x12345678))
+
+    assert list(iter_bytes(0x12345678, _byte_length=4)) == [0x12, 0x34, 0x56, 0x78]
+    assert list(iter_bytes(0x12345678, _byte_length=6)) == [0x00, 0x00, 0x12, 0x34, 0x56, 0x78]
+
+def test_wload_wrong_type():
+    with pytest.raises(ValueError):
+        wload([bytes.fromhex("aa")], 0, 4)
+
+def test_wload_concrete():
+    # using ints or concrete bitvector values should be equivalent
+    assert wload([0x12, 0x34, 0x56, 0x78], 0, 4, prefer_concrete=True) == bytes.fromhex("12345678")
+    assert wload([0x12, 0x34, 0x56, 0x78], 0, 4, prefer_concrete=False) == con(0x12345678, 32)
+    assert wload([con(x, 8) for x in [0x12, 0x34, 0x56, 0x78]], 0, 4, prefer_concrete=True) == bytes.fromhex("12345678")
+    assert wload([con(x, 8) for x in [0x12, 0x34, 0x56, 0x78]], 0, 4, prefer_concrete=False) == con(0x12345678, 32)
+
+def test_wload_symbolic():
+    x = BitVec('x', 32)
+    mem = []
+    wstore(mem, 0, 4, x)
+
+    assert wload(mem, 0, 4, prefer_concrete=False) == x
+
+    # no effect because the memory is not concrete
+    assert wload(mem, 0, 4, prefer_concrete=True) == x
+
+def test_wload_bad_byte():
+    with pytest.raises(ValueError):
+        wload([512], 0, 1, prefer_concrete=True)
+
+    with pytest.raises(ValueError):
+        wload([512], 0, 1, prefer_concrete=False)
