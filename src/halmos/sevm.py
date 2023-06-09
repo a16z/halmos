@@ -9,7 +9,7 @@ from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
-from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr
+from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr, bv_value_to_bytes, hexify
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 
 Word = Any # z3 expression (including constants)
@@ -30,11 +30,11 @@ f_gasprice     = Function('gasprice'    , BitVecSort(256))
 f_origin       = Function('origin'      , BitVecSort(160))
 
 # uninterpreted arithmetic
-f_add  = { 256: Function('evm_bvadd', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_bvadd_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)) }
+f_add  = { 256: Function('evm_bvadd', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 264: Function('evm_bvadd_264', BitVecSort(264), BitVecSort(264), BitVecSort(264)) }
 f_sub  = Function('evm_bvsub' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_mul  = { 256: Function('evm_bvmul', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 512: Function('evm_bvmul_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
 f_div  = Function('evm_bvudiv' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_mod  = { 256: Function('evm_bvurem', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 257: Function('evm_bvurem_257', BitVecSort(257), BitVecSort(257), BitVecSort(257)), 512: Function('evm_bvurem_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
+f_mod  = { 256: Function('evm_bvurem', BitVecSort(256), BitVecSort(256), BitVecSort(256)), 264: Function('evm_bvurem_264', BitVecSort(264), BitVecSort(264), BitVecSort(264)), 512: Function('evm_bvurem_512', BitVecSort(512), BitVecSort(512), BitVecSort(512)) }
 f_sdiv = Function('evm_bvsdiv', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_smod = Function('evm_bvsrem', BitVecSort(256), BitVecSort(256), BitVecSort(256))
 f_exp  = Function('evm_exp' , BitVecSort(256), BitVecSort(256), BitVecSort(256))
@@ -102,11 +102,6 @@ def int_of(x: Any, err: str = 'expected concrete value but got') -> int:
         return res
 
     raise NotConcreteError(f'{err}: {x}')
-
-
-def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
-    if x.size() % 8 != 0: raise ValueError(x)
-    return x.as_long().to_bytes(x.size() // 8, 'big')
 
 
 def iter_bytes(x: Any, _byte_length: int = -1):
@@ -621,6 +616,9 @@ class Exec: # an execution path
                     return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat: # key == key0
                     return val0
+        # TODO: simplifying empty array access might have a negative impact on solver performance
+        # elif re.search(r'^storage_.+_00$', str(array)): # empty array
+        #     return con(0)
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
@@ -632,11 +630,14 @@ class Exec: # an execution path
     def balance_update(self, addr: Word, value: Word):
         assert_address(addr)
         assert_uint256(value)
-        new_balance_var = Array(f'balance_{1+len(self.balances)}', BitVecSort(160), BitVecSort(256))
+        new_balance_var = Array(f'balance_{1+len(self.balances):>02}', BitVecSort(160), BitVecSort(256))
         new_balance = Store(self.balance, addr, value)
         self.solver.add(new_balance_var == new_balance)
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
+
+    def empty_storage_of(self, addr: BitVecRef, slot: int, len_keys: int) -> ArrayRef:
+        return Array(f'storage_{id_str(addr)}_{slot}_{len_keys}_00', BitVecSort(len_keys*256), BitVecSort(256))
 
     def sinit(self, addr: Any, slot: int, keys) -> None:
         assert_address(addr)
@@ -645,14 +646,13 @@ class Exec: # an execution path
         if len(keys) not in self.storage[addr][slot]:
             if len(keys) == 0:
                 if self.symbolic:
-                    self.storage[addr][slot][len(keys)] = BitVec(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', 256)
+                    self.storage[addr][slot][len(keys)] = BitVec(f'storage_{id_str(addr)}_{slot}_{len(keys)}_00', 256)
                 else:
                     self.storage[addr][slot][len(keys)] = con(0)
             else:
-                if self.symbolic:
-                    self.storage[addr][slot][len(keys)] = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_0', BitVecSort(len(keys)*256), BitVecSort(256))
-                else:
-                    self.storage[addr][slot][len(keys)] = K(BitVecSort(len(keys)*256), con(0))
+                # do not use z3 const array `K(BitVecSort(len(keys)*256), con(0))` when not self.symbolic
+                # instead use normal smt array, and generate emptyness axiom; see sload()
+                self.storage[addr][slot][len(keys)] = self.empty_storage_of(addr, slot, len(keys))
 
     def sload(self, addr: Any, loc: Word) -> Word:
         offsets = self.decode_storage_loc(loc)
@@ -662,6 +662,9 @@ class Exec: # an execution path
         if len(keys) == 0:
             return self.storage[addr][slot][0]
         else:
+            if not self.symbolic:
+                # generate emptyness axiom for each array index, instead of using quantified formula; see sinit()
+                self.solver.add(Select(self.empty_storage_of(addr, slot, len(keys)), concat(keys)) == con(0))
             return self.select(self.storage[addr][slot][len(keys)], concat(keys), self.storages)
 
     def sstore(self, addr: Any, loc: Any, val: Any) -> None:
@@ -672,7 +675,7 @@ class Exec: # an execution path
         if len(keys) == 0:
             self.storage[addr][slot][0] = val
         else:
-            new_storage_var = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages)}', BitVecSort(len(keys)*256), BitVecSort(256))
+            new_storage_var = Array(f'storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages):>02}', BitVecSort(len(keys)*256), BitVecSort(256))
             new_storage = Store(self.storage[addr][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
             self.storage[addr][slot][len(keys)] = new_storage_var
@@ -739,7 +742,7 @@ class Exec: # an execution path
     def sha3_data(self, data: Bytes, size: int) -> None:
         f_sha3 = Function('sha3_'+str(size*8), BitVecSort(size*8), BitVecSort(256))
         sha3 = f_sha3(data)
-        sha3_var = BitVec(f'sha3_var_{len(self.sha3s)}', 256)
+        sha3_var = BitVec(f'sha3_var_{len(self.sha3s):>02}', 256)
         self.solver.add(sha3_var == sha3)
         self.solver.add(ULE(sha3_var, con(2**256 - 2**64))) # assume hash values are sufficiently smaller than the uint max
         self.assume_sha3_distinct(sha3_var, sha3)
@@ -1009,10 +1012,10 @@ class SEVM:
         w2 = b2i(w2)
         w3 = b2i(w3)
         if op == EVM.ADDMOD:
-            r1 = self.arith(ex, EVM.ADD, simplify(ZeroExt(1, w1)), simplify(ZeroExt(1, w2))) # to avoid add overflow
-            r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(1, w3)))
-            if r1.size() != 257: raise ValueError(r1)
-            if r2.size() != 257: raise ValueError(r2)
+            r1 = self.arith(ex, EVM.ADD, simplify(ZeroExt(8, w1)), simplify(ZeroExt(8, w2))) # to avoid add overflow; and to be a multiple of 8-bit
+            r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(8, w3)))
+            if r1.size() != 264: raise ValueError(r1)
+            if r2.size() != 264: raise ValueError(r2)
             return Extract(255, 0, r2)
         elif op == EVM.MULMOD:
             r1 = self.arith(ex, EVM.MUL, simplify(ZeroExt(256, w1)), simplify(ZeroExt(256, w2))) # to avoid mul overflow
@@ -1134,7 +1137,7 @@ class SEVM:
             else:
                 f_call = Function('call_'+str(arg_size*8), BitVecSort(256), BitVecSort(256), BitVecSort(160), BitVecSort(256),                         BitVecSort(256))
                 exit_code = f_call(con(call_id), gas, to, fund)
-            exit_code_var = BitVec(f'call_exit_code_{call_id}', 256)
+            exit_code_var = BitVec(f'call_exit_code_{call_id:>02}', 256)
             ex.solver.add(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
@@ -1157,7 +1160,7 @@ class SEVM:
                 if funsig == halmos_cheat_code.create_symbolic_uint:
                     bit_size = int_of(simplify(extract_bytes(arg, 4, 32)), 'symbolic bit size for halmos.createSymbolicUint()')
                     if bit_size <= 256:
-                        ret = uint256(BitVec(f'halmos_symbolic_uint{bit_size}_{ex.new_symbol_id()}', bit_size))
+                        ret = uint256(BitVec(f'halmos_symbolic_uint{bit_size}_{ex.new_symbol_id():>02}', bit_size))
                     else:
                         ex.error = f'bitsize larger than 256: {bit_size}'
                         out.append(ex)
@@ -1166,27 +1169,27 @@ class SEVM:
                 # createSymbolicBytes(uint256) returns (bytes)
                 elif funsig == halmos_cheat_code.create_symbolic_bytes:
                     byte_size = int_of(simplify(extract_bytes(arg, 4, 32)), 'symbolic byte size for halmos.createSymbolicBytes()')
-                    symbolic_bytes = BitVec(f'halmos_symbolic_bytes_{ex.new_symbol_id()}', byte_size * 8)
+                    symbolic_bytes = BitVec(f'halmos_symbolic_bytes_{ex.new_symbol_id():>02}', byte_size * 8)
                     ret = Concat(BitVecVal(32, 256), BitVecVal(byte_size, 256), symbolic_bytes)
 
                 # createSymbolicUint256() returns (uint256)
                 elif funsig == halmos_cheat_code.create_symbolic_uint256:
-                    ret = BitVec(f'halmos_symbolic_uint256_{ex.new_symbol_id()}', 256)
+                    ret = BitVec(f'halmos_symbolic_uint256_{ex.new_symbol_id():>02}', 256)
 
                 # createSymbolicBytes32() returns (bytes32)
                 elif funsig == halmos_cheat_code.create_symbolic_bytes32:
-                    ret = BitVec(f'halmos_symbolic_bytes32_{ex.new_symbol_id()}', 256)
+                    ret = BitVec(f'halmos_symbolic_bytes32_{ex.new_symbol_id():>02}', 256)
 
                 # createSymbolicAddress() returns (address)
                 elif funsig == halmos_cheat_code.create_symbolic_address:
-                    ret = uint256(BitVec(f'halmos_symbolic_address_{ex.new_symbol_id()}', 160))
+                    ret = uint256(BitVec(f'halmos_symbolic_address_{ex.new_symbol_id():>02}', 160))
 
                 # createSymbolicBool() returns (bool)
                 elif funsig == halmos_cheat_code.create_symbolic_bool:
-                    ret = uint256(BitVec(f'halmos_symbolic_bool_{ex.new_symbol_id()}', 1))
+                    ret = uint256(BitVec(f'halmos_symbolic_bool_{ex.new_symbol_id():>02}', 1))
 
                 else:
-                    ex.error = f'Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {arg}'
+                    ex.error = f'Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}'
                     out.append(ex)
                     return
 

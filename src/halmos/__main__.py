@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from multiprocessing import Pool
 from timeit import default_timer as timer
 
-from .utils import color_good, color_warn
+from .utils import color_good, color_warn, hexify
 from .sevm import *
 from .warnings import *
 
@@ -301,13 +301,14 @@ def setup(
         setup_exs = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
-            if setup_ex.current_opcode() in [EVM.STOP, EVM.RETURN]:
+            opcode = setup_ex.current_opcode()
+            if opcode in [EVM.STOP, EVM.RETURN]:
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
                 res = setup_ex.solver.check()
                 if res != unsat:
                     setup_exs.append(setup_ex)
-            elif args.debug:
-                print(color_warn(f'Setup execution encountered an issue at {mnemonic(setup_ex.current_opcode())}: {setup_ex.error}'))
+            elif opcode not in [EVM.REVERT, EVM.INVALID]:
+                print(color_warn(f'Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {setup_ex.error}'))
 
         if len(setup_exs) == 0: raise ValueError(f'No successful path found in {setup_sig}')
         if len(setup_exs) > 1:
@@ -538,7 +539,7 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
         # replace uninterpreted abstraction with actual symbols for assertion solving
         query = re.sub(r'(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b', r'\1\2', query) # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))` as bvudiv is undefined when y = 0; also similarly for evm_bvurem
         with open(fname, 'w') as f:
-        #   f.write('(set-logic QF_AUFBV)\n') # generated queries may include non smtlib2 symbols, like const arrays
+            f.write('(set-logic QF_AUFBV)\n')
             f.write(query)
         res_str = subprocess.run(['z3', '-model', fname], capture_output=True, text=True).stdout.strip()
         res_str_head = res_str.split('\n', 1)[0]
@@ -586,10 +587,8 @@ def str_model(model, args: argparse.Namespace) -> str:
         elif args.verbose >= 1:
             if name.startswith('storage') or name.startswith('msg_') or name.startswith('this_'): return True
         return False
-    if args.debug:
-        return str(model)
-    else:
-        return '[' + ', '.join(sorted(map(lambda decl: f'{decl} = {model[decl]}', filter(select, model)))) + ']'
+    select_model = filter(select, model) if not args.debug else model
+    return '[' + ','.join(sorted(map(lambda decl: f'\n    {decl} = {hexify(model[decl])}', select_model))) + ']'
 
 
 def mk_options(args: argparse.Namespace) -> Dict:
