@@ -19,6 +19,11 @@ from .utils import color_good, color_warn, hexify
 from .sevm import *
 from .warnings import *
 
+SETUP_FAILED = 127
+TEST_FAILED = 128
+
+args: argparse.Namespace
+
 class ProcessPoolSingleton:
     def __init__(self) -> None:
         self._pool = None
@@ -103,6 +108,7 @@ def parse_args(args=None) -> argparse.Namespace:
 
     group_internal.add_argument('--bytecode', metavar='HEX_STRING', help='execute the given bytecode')
     group_internal.add_argument('--reset-bytecode', metavar='ADDR1=CODE1,ADDR2=CODE2,...', help='reset the bytecode of given addresses after setUp()')
+    group_internal.add_argument('--test-parallel', action='store_true', help='run tests in parallel')
     group_internal.add_argument('--max-cores', default=None, type=int, help=f'max number of cores to use for parallel processing (default: # of available cores)')
 
     # experimental options
@@ -112,6 +118,13 @@ def parse_args(args=None) -> argparse.Namespace:
     group_experimental.add_argument('--print-potential-counterexample', action='store_true', help='print potentially invalid counterexamples')
 
     return parser.parse_known_args(args)
+
+@dataclass(frozen=True)
+class FunctionInfo:
+    name: Optional[str] = None
+    sig: Optional[str] = None
+    selector: Optional[str] = None
+
 
 def str_abi(item: Dict) -> str:
     def str_tuple(args: List) -> str:
@@ -127,14 +140,15 @@ def str_abi(item: Dict) -> str:
     if item['type'] != 'function': raise ValueError(item)
     return item['name'] + str_tuple(item['inputs'])
 
-def find_abi(abi: List, funname: str, funsig: str) -> Dict:
+def find_abi(abi: List, fun_info: FunctionInfo) -> Dict:
+    funname, funsig = fun_info.name, fun_info.sig
     for item in abi:
         if item['type'] == 'function' and item['name'] == funname and str_abi(item) == funsig:
             return item
     raise ValueError(f'No {funsig} found in {abi}')
 
-def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argparse.Namespace, cd: List, dyn_param_size: List[str]) -> None:
-    item = find_abi(abi, funname, funsig)
+def mk_calldata(abi: List, fun_info: FunctionInfo, cd: List, dyn_param_size: List[str]) -> None:
+    item = find_abi(abi, fun_info)
     tba = []
     offset = 0
     for param in item['inputs']:
@@ -160,6 +174,7 @@ def mk_calldata(abi: List, funname: str, funsig: str, arrlen: Dict, args: argpar
                 wstore(cd, 4+offset, 32, BitVec(f'p_{param_name}_{typ}', 256))
                 offset += 32
 
+    arrlen = mk_arrlen(args)
     for loc_param in tba:
         loc   = loc_param[0]
         param = loc_param[1]
@@ -223,7 +238,7 @@ def mk_solver(args: argparse.Namespace):
     solver.set(timeout=args.solver_timeout_branching)
     return solver
 
-def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[Exec]:
+def run_bytecode(hexcode: str) -> List[Exec]:
     contract = Contract.from_hexcode(hexcode)
 
     storage = {}
@@ -235,6 +250,7 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
     callvalue = mk_callvalue()
     caller = mk_caller(args)
     this = mk_this()
+    options = mk_options(args)
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
@@ -267,20 +283,15 @@ def run_bytecode(hexcode: str, args: argparse.Namespace, options: Dict) -> List[
 def setup(
     hexcode: str,
     abi: List,
-    setup_name: str,
-    setup_sig: str,
-    setup_selector: str,
-    arrlen: Dict,
-    args: argparse.Namespace,
-    options: Dict
+    setup_info: FunctionInfo,
 ) -> Exec:
     setup_start = timer()
 
     contract = Contract.from_hexcode(hexcode)
 
     solver = mk_solver(args)
-
     this = mk_this()
+    options = mk_options(args)
 
     sevm = SEVM(options)
 
@@ -299,10 +310,11 @@ def setup(
 
     setup_mid = timer()
 
+    setup_sig, setup_name, setup_selector = setup_info.sig, setup_info.name, setup_info.selector
     if setup_sig:
         wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_selector, 32))
         dyn_param_size = [] # TODO: propagate to run
-        mk_calldata(abi, setup_name, setup_sig, arrlen, args, setup_ex.calldata, dyn_param_size)
+        mk_calldata(abi, setup_info, setup_ex.calldata, dyn_param_size)
 
         (setup_exs_all, setup_steps, setup_bounded_loops) = sevm.run(setup_ex)
 
@@ -332,6 +344,12 @@ def setup(
         if args.verbose >= 2:
             print(setup_ex)
 
+    if args.reset_bytecode:
+        for assign in [x.split('=') for x in args.reset_bytecode.split(',')]:
+            addr = con_addr(int(assign[0].strip(), 0))
+            new_hexcode = assign[1].strip()
+            setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
+
     setup_end = timer()
 
     if args.statistics:
@@ -350,13 +368,9 @@ class ModelWithContext:
 def run(
     setup_ex: Exec,
     abi: List,
-    funname: str,
-    funsig: str,
-    funselector: str,
-    arrlen: Dict,
-    args: argparse.Namespace,
-    options: Dict
+    fun_info: FunctionInfo,
 ) -> int:
+    funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
     if args.debug: print(f'Executing {funname}')
 
     #
@@ -368,7 +382,7 @@ def run(
     wstore(cd, 0, 4, BitVecVal(funselector, 32))
 
     dyn_param_size = []
-    mk_calldata(abi, funname, funsig, arrlen, args, cd, dyn_param_size)
+    mk_calldata(abi, fun_info, cd, dyn_param_size)
 
     #
     # callvalue
@@ -382,6 +396,7 @@ def run(
 
     start = timer()
 
+    options = mk_options(args)
     sevm = SEVM(options)
 
     solver = SolverFor('QF_AUFBV')
@@ -513,6 +528,115 @@ def run(
     # exitcode
     return 0 if passed else 1
 
+
+@dataclass(frozen=True)
+class SetupAndRunSingleArgs:
+    hexcode: str
+    abi: List
+    setup_info: FunctionInfo
+    fun_info: FunctionInfo
+
+
+def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
+    try:
+        setup_ex = setup(
+            fn_args.hexcode,
+            fn_args.abi,
+            fn_args.setup_info,
+        )
+    except Exception as err:
+        print(color_warn(f'Error: {fn_args.setup_info.sig} failed: {type(err).__name__}: {err}'))
+        if args.debug: traceback.print_exc()
+        return SETUP_FAILED
+
+    try:
+        exitcode = run(
+            setup_ex,
+            fn_args.abi,
+            fn_args.fun_info,
+        )
+    except Exception as err:
+        print(f'{color_warn("[SKIP]")} {fn_args.fun_info.sig}')
+        print(color_warn(f'{type(err).__name__}: {err}'))
+        if args.debug: traceback.print_exc()
+        return TEST_FAILED
+
+    return exitcode
+
+
+def extract_setup(methodIdentifiers: Dict[str, str]) -> FunctionInfo:
+    setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpSymbolic(') ])
+
+    if not setup_sigs:
+        return FunctionInfo()
+
+    (setup_sig, setup_selector) = setup_sigs[-1]
+    setup_name = setup_sig.split('(')[0]
+    return FunctionInfo(setup_name, setup_sig, setup_selector)
+
+
+@dataclass(frozen=True)
+class RunArgs:
+    # signatures of test functions to run
+    funsigs: List[str]
+
+    # code of the current contract
+    hexcode: str
+
+    abi: List
+    methodIdentifiers: Dict[str, str]
+
+
+def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
+    hexcode, abi, methodIdentifiers = run_args.hexcode, run_args.abi, run_args.methodIdentifiers
+
+    setup_info = extract_setup(methodIdentifiers)
+    if args.verbose >= 2 or args.debug:
+        print(f'Running {setup_info.setup_sig}')
+
+    pool = PROCESS_POOL_SINGLETON.get(max_workers=args.max_cores)
+
+    fun_infos = [FunctionInfo(funsig.split('(')[0], funsig, methodIdentifiers[funsig]) for funsig in run_args.funsigs]
+    single_run_args = [SetupAndRunSingleArgs(hexcode, abi, setup_info, fun_info) for fun_info in fun_infos]
+
+    # dispatch to the shared process pool
+    exitcodes = pool.map(setup_and_run_single, single_run_args)
+
+    num_passed = exitcodes.count(0)
+    num_failed = sum(1 for x in exitcodes if x != 0)
+    return num_passed, num_failed
+
+
+def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
+    setup_info = extract_setup(run_args.methodIdentifiers)
+    if args.verbose >= 2 or args.debug:
+        print(f'Running {setup_info.setup_sig}')
+
+    try:
+        setup_ex = setup(run_args.hexcode, run_args.abi, setup_info)
+    except Exception as err:
+        print(color_warn(f'Error: {setup_info.setup_sig} failed: {type(err).__name__}: {err}'))
+        if args.debug: traceback.print_exc()
+        return (0, 0)
+
+    num_passed, num_failed = 0, 0
+    for funsig in run_args.funsigs:
+        fun_info = FunctionInfo(funsig.split('(')[0], funsig, run_args.methodIdentifiers[funsig])
+        try:
+            exitcode = run(setup_ex, run_args.abi, fun_info)
+        except Exception as err:
+            print(f'{color_warn("[SKIP]")} {funsig}')
+            print(color_warn(f'{type(err).__name__}: {err}'))
+            if args.debug: traceback.print_exc()
+            num_failed += 1
+            continue
+        if exitcode == 0:
+            num_passed += 1
+        else:
+            num_failed += 1
+
+    return (num_passed, num_failed)
+
 @dataclass(frozen=True)
 class GenModelArgs:
     args: argparse.Namespace
@@ -613,7 +737,7 @@ def str_model(model, args: argparse.Namespace) -> str:
 
 
 def mk_options(args: argparse.Namespace) -> Dict:
-    return {
+    options = {
         'target': args.root,
         'verbose': args.verbose,
         'debug': args.debug,
@@ -629,6 +753,27 @@ def mk_options(args: argparse.Namespace) -> Dict:
         'timeout': args.solver_timeout_branching,
         'sym_jump': args.symbolic_jump,
     }
+
+    if args.width is not None:
+        options['max_width'] = args.width
+
+    if args.depth is not None:
+        options['max_depth'] = args.depth
+
+    if args.loop is not None:
+        options['max_loop'] = args.loop
+
+    return options
+
+
+def mk_arrlen(args: argparse.Namespace) -> Dict[str, int]:
+    arrlen = {}
+    if args.array_lengths:
+        for assign in [x.split('=') for x in args.array_lengths.split(',')]:
+            name = assign[0].strip()
+            size = assign[1].strip()
+            arrlen[name] = int(size)
+    return arrlen
 
 
 def main() -> int:
@@ -646,6 +791,7 @@ def main() -> int:
     # command line arguments
     #
 
+    global args
     args, halmos_unknown_args = parse_args()
 
     crytic_compile_parser = mk_crytic_parser()
@@ -653,27 +799,9 @@ def main() -> int:
         print_help_compile(crytic_compile_parser)
         return 0
 
-    options = mk_options(args)
-
-    if args.width is not None:
-        options['max_width'] = args.width
-
-    if args.depth is not None:
-        options['max_depth'] = args.depth
-
-    if args.loop is not None:
-        options['max_loop'] = args.loop
-
-    arrlen = {}
-    if args.array_lengths:
-        for assign in [x.split('=') for x in args.array_lengths.split(',')]:
-            name = assign[0].strip()
-            size = assign[1].strip()
-            arrlen[name] = int(size)
-
     # quick bytecode execution mode
     if args.bytecode is not None:
-        run_bytecode(args.bytecode, args, options)
+        run_bytecode(args.bytecode)
         return 0
 
     #
@@ -723,47 +851,14 @@ def main() -> int:
                 methodIdentifiers = source_unit.hashes(contract)
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
-                total_found += len(funsigs)
 
                 if funsigs:
-                    num_passed = 0
-                    num_failed = 0
+                    total_found += len(funsigs)
                     print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
 
-                    setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpSymbolic(') ])
-                    (setup_name, setup_sig, setup_selector) = (None, None, None)
-                    if len(setup_sigs) > 0:
-                        (setup_sig, setup_selector) = setup_sigs[-1]
-                        setup_name = setup_sig.split('(')[0]
-                        if args.verbose >= 2 or args.debug: print(f'Running {setup_sig}')
-                    try:
-                        setup_ex = setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
-                    except Exception as err:
-                        print(color_warn(f'Error: {setup_sig} failed: {type(err).__name__}: {err}'))
-                        if args.debug: traceback.print_exc()
-                        continue
-
-                    if args.reset_bytecode:
-                        for assign in [x.split('=') for x in args.reset_bytecode.split(',')]:
-                            addr = con_addr(int(assign[0].strip(), 0))
-                            new_hexcode = assign[1].strip()
-                            setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
-
-                    for funsig in funsigs:
-                        funselector = methodIdentifiers[funsig]
-                        funname = funsig.split('(')[0]
-                        try:
-                            exitcode = run(setup_ex, abi, funname, funsig, funselector, arrlen, args, options)
-                        except Exception as err:
-                            print(f'{color_warn("[SKIP]")} {funsig}')
-                            print(color_warn(f'{type(err).__name__}: {err}'))
-                            if args.debug: traceback.print_exc()
-                            num_failed += 1
-                            continue
-                        if exitcode == 0:
-                            num_passed += 1
-                        else:
-                            num_failed += 1
+                    run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers)
+                    enable_parallel = args.test_parallel and len(funsigs) > 1
+                    num_passed, num_failed = run_parallel(run_args) if enable_parallel else run_sequential(run_args)
 
                     print(f'Symbolic test result: {num_passed} passed; {num_failed} failed; time: {timer() - contract_start:0.2f}s')
                     total_passed += num_passed
