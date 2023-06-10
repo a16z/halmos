@@ -108,7 +108,7 @@ def test_run_bytecode(args):
 def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args):
     hexcode = '600100'
     abi = setup_abi
-    setup_ex = halmos.__main__.setup(hexcode, abi, FunctionInfo(setup_name, setup_sig, setup_selector))
+    setup_ex = halmos.__main__.setup(hexcode, abi, FunctionInfo(setup_name, setup_sig, setup_selector), args)
     assert setup_ex.st.stack == [1]
 
 

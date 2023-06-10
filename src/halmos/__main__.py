@@ -147,7 +147,7 @@ def find_abi(abi: List, fun_info: FunctionInfo) -> Dict:
             return item
     raise ValueError(f'No {funsig} found in {abi}')
 
-def mk_calldata(abi: List, fun_info: FunctionInfo, cd: List, dyn_param_size: List[str]) -> None:
+def mk_calldata(abi: List, fun_info: FunctionInfo, cd: List, dyn_param_size: List[str], args: argparse.Namespace) -> None:
     item = find_abi(abi, fun_info)
     tba = []
     offset = 0
@@ -284,6 +284,7 @@ def setup(
     hexcode: str,
     abi: List,
     setup_info: FunctionInfo,
+    args: argparse.Namespace,
 ) -> Exec:
     setup_start = timer()
 
@@ -314,7 +315,7 @@ def setup(
     if setup_sig:
         wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_selector, 32))
         dyn_param_size = [] # TODO: propagate to run
-        mk_calldata(abi, setup_info, setup_ex.calldata, dyn_param_size)
+        mk_calldata(abi, setup_info, setup_ex.calldata, dyn_param_size, args)
 
         (setup_exs_all, setup_steps, setup_bounded_loops) = sevm.run(setup_ex)
 
@@ -369,6 +370,7 @@ def run(
     setup_ex: Exec,
     abi: List,
     fun_info: FunctionInfo,
+    args: argparse.Namespace,
 ) -> int:
     funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
     if args.debug: print(f'Executing {funname}')
@@ -382,7 +384,7 @@ def run(
     wstore(cd, 0, 4, BitVecVal(funselector, 32))
 
     dyn_param_size = []
-    mk_calldata(abi, fun_info, cd, dyn_param_size)
+    mk_calldata(abi, fun_info, cd, dyn_param_size, args)
 
     #
     # callvalue
@@ -535,6 +537,7 @@ class SetupAndRunSingleArgs:
     abi: List
     setup_info: FunctionInfo
     fun_info: FunctionInfo
+    args: argparse.Namespace
 
 
 def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
@@ -543,6 +546,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
             fn_args.hexcode,
             fn_args.abi,
             fn_args.setup_info,
+            fn_args.args,
         )
     except Exception as err:
         print(color_warn(f'Error: {fn_args.setup_info.sig} failed: {type(err).__name__}: {err}'))
@@ -554,6 +558,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
             setup_ex,
             fn_args.abi,
             fn_args.fun_info,
+            fn_args.args,
         )
     except Exception as err:
         print(f'{color_warn("[SKIP]")} {fn_args.fun_info.sig}')
@@ -592,17 +597,17 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
 
     setup_info = extract_setup(methodIdentifiers)
     if args.verbose >= 2 or args.debug:
-        print(f'Running {setup_info.setup_sig}')
+        print(f'Running {setup_info.sig}')
 
     pool = PROCESS_POOL_SINGLETON.get(max_workers=args.max_cores)
 
     fun_infos = [FunctionInfo(funsig.split('(')[0], funsig, methodIdentifiers[funsig]) for funsig in run_args.funsigs]
-    single_run_args = [SetupAndRunSingleArgs(hexcode, abi, setup_info, fun_info) for fun_info in fun_infos]
+    single_run_args = [SetupAndRunSingleArgs(hexcode, abi, setup_info, fun_info, args) for fun_info in fun_infos]
 
     # dispatch to the shared process pool
     exitcodes = pool.map(setup_and_run_single, single_run_args)
 
-    num_passed = exitcodes.count(0)
+    num_passed = sum(1 for x in exitcodes if x == 0)
     num_failed = sum(1 for x in exitcodes if x != 0)
     return num_passed, num_failed
 
@@ -610,12 +615,12 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
 def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
     setup_info = extract_setup(run_args.methodIdentifiers)
     if args.verbose >= 2 or args.debug:
-        print(f'Running {setup_info.setup_sig}')
+        print(f'Running {setup_info.sig}')
 
     try:
-        setup_ex = setup(run_args.hexcode, run_args.abi, setup_info)
+        setup_ex = setup(run_args.hexcode, run_args.abi, setup_info, args)
     except Exception as err:
-        print(color_warn(f'Error: {setup_info.setup_sig} failed: {type(err).__name__}: {err}'))
+        print(color_warn(f'Error: {setup_info.sig} failed: {type(err).__name__}: {err}'))
         if args.debug: traceback.print_exc()
         return (0, 0)
 
@@ -623,7 +628,7 @@ def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
     for funsig in run_args.funsigs:
         fun_info = FunctionInfo(funsig.split('(')[0], funsig, run_args.methodIdentifiers[funsig])
         try:
-            exitcode = run(setup_ex, run_args.abi, fun_info)
+            exitcode = run(setup_ex, run_args.abi, fun_info, args)
         except Exception as err:
             print(f'{color_warn("[SKIP]")} {funsig}')
             print(color_warn(f'{type(err).__name__}: {err}'))
