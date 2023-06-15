@@ -582,7 +582,7 @@ class Exec: # an execution path
             'Storage:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.storage[x]) + '\n', self.storage)),
         #   'Solver:\n'         , self.str_solver(), '\n',
             'Path:\n'           , self.str_path(),
-            'Output: '          , str(self.output) , '\n',
+            'Output: '          , self.output.hex() if isinstance(self.output, bytes) else str(self.output), '\n',
             'Log: '             , str(self.log)    , '\n',
         #   'Opcodes:\n'        , self.str_cnts(),
         #   'Memsize: '         , str(len(self.st.memory)), '\n',
