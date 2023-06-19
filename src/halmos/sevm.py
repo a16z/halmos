@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 
 from copy import deepcopy
 from collections import defaultdict
@@ -616,9 +617,8 @@ class Exec: # an execution path
                     return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat: # key == key0
                     return val0
-        # TODO: simplifying empty array access might have a negative impact on solver performance
-        # elif re.search(r'^storage_.+_00$', str(array)): # empty array
-        #     return con(0)
+        elif not self.symbolic and re.search(r'^storage_.+_00$', str(array)): # empty array
+            return con(0) # note: simplifying empty array access might have a negative impact on solver performance
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
