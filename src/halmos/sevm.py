@@ -693,7 +693,7 @@ class Exec: # an execution path
                         x = arg00.arg(0)
                         y = arg00.arg(1)
                         if arg1.decl().name() == 'bvadd' and arg1.num_args() == 2:
-                            if arg1.arg(0) == Extract(7, 0, x) and arg1.arg(1) == Extract(7, 0, y):
+                            if eq(arg1.arg(0), simplify(Extract(7, 0, x))) and eq(arg1.arg(1), simplify(Extract(7, 0, y))):
                                 return x + y
             return expr
         loc = normalize(loc)
