@@ -867,11 +867,11 @@ class SEVM:
         if w1.decl().name() == 'bvmul' and w1.num_args() == 2:
             x = w1.arg(0)
             y = w1.arg(1)
-            if w2 == x or w2 == y: # xy/x or xy/y
+            if eq(w2, x) or eq(w2, y): # xy/x or xy/y
                 size_x = bitsize(x)
                 size_y = bitsize(y)
                 if size_x + size_y <= 256:
-                    if w2 == x: # xy/x == y
+                    if eq(w2, x): # xy/x == y
                         return y
                     else: # xy/y == x
                         return x
@@ -1147,11 +1147,11 @@ class SEVM:
                 ret = f_ret(exit_code_var)
 
             # TODO: cover other precompiled
-            if to == con_addr(1): # ecrecover exit code is always 1
+            if eq(to, con_addr(1)): # ecrecover exit code is always 1
                 ex.solver.add(exit_code_var != con(0))
 
             # halmos cheat code
-            if to == halmos_cheat_code.address:
+            if eq(to, halmos_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
 
                 funsig: int = int_of(extract_funsig(arg), 'symbolic halmos cheatcode function selector')
@@ -1194,7 +1194,7 @@ class SEVM:
                     return
 
             # vm cheat code
-            if to == hevm_cheat_code.address:
+            if eq(to, hevm_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
                 # vm.fail()
                 if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
