@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 
 from copy import deepcopy
 from collections import defaultdict
@@ -582,7 +583,7 @@ class Exec: # an execution path
             'Storage:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.storage[x]) + '\n', self.storage)),
         #   'Solver:\n'         , self.str_solver(), '\n',
             'Path:\n'           , self.str_path(),
-            'Output: '          , str(self.output) , '\n',
+            'Output: '          , self.output.hex() if isinstance(self.output, bytes) else str(self.output), '\n',
             'Log: '             , str(self.log)    , '\n',
         #   'Opcodes:\n'        , self.str_cnts(),
         #   'Memsize: '         , str(len(self.st.memory)), '\n',
@@ -616,9 +617,8 @@ class Exec: # an execution path
                     return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat: # key == key0
                     return val0
-        # TODO: simplifying empty array access might have a negative impact on solver performance
-        # elif re.search(r'^storage_.+_00$', str(array)): # empty array
-        #     return con(0)
+        elif not self.symbolic and re.search(r'^storage_.+_00$', str(array)): # empty array
+            return con(0) # note: simplifying empty array access might have a negative impact on solver performance
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
@@ -693,7 +693,7 @@ class Exec: # an execution path
                         x = arg00.arg(0)
                         y = arg00.arg(1)
                         if arg1.decl().name() == 'bvadd' and arg1.num_args() == 2:
-                            if arg1.arg(0) == Extract(7, 0, x) and arg1.arg(1) == Extract(7, 0, y):
+                            if eq(arg1.arg(0), simplify(Extract(7, 0, x))) and eq(arg1.arg(1), simplify(Extract(7, 0, y))):
                                 return x + y
             return expr
         loc = normalize(loc)
@@ -867,11 +867,11 @@ class SEVM:
         if w1.decl().name() == 'bvmul' and w1.num_args() == 2:
             x = w1.arg(0)
             y = w1.arg(1)
-            if w2 == x or w2 == y: # xy/x or xy/y
+            if eq(w2, x) or eq(w2, y): # xy/x or xy/y
                 size_x = bitsize(x)
                 size_y = bitsize(y)
                 if size_x + size_y <= 256:
-                    if w2 == x: # xy/x == y
+                    if eq(w2, x): # xy/x == y
                         return y
                     else: # xy/y == x
                         return x
@@ -1147,11 +1147,11 @@ class SEVM:
                 ret = f_ret(exit_code_var)
 
             # TODO: cover other precompiled
-            if to == con_addr(1): # ecrecover exit code is always 1
+            if eq(to, con_addr(1)): # ecrecover exit code is always 1
                 ex.solver.add(exit_code_var != con(0))
 
             # halmos cheat code
-            if to == halmos_cheat_code.address:
+            if eq(to, halmos_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
 
                 funsig: int = int_of(extract_funsig(arg), 'symbolic halmos cheatcode function selector')
@@ -1194,7 +1194,7 @@ class SEVM:
                     return
 
             # vm cheat code
-            if to == hevm_cheat_code.address:
+            if eq(to, hevm_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
                 # vm.fail()
                 if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
@@ -1601,8 +1601,9 @@ class SEVM:
                     else:
                     #   steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
                         steps[step_id] = {'parent': prev_step_id, 'exec': str(ex)}
-                    if self.options.get('verbose', 0) >= 5:
-                        print(ex)
+
+                if self.options.get('print_steps'):
+                    print(ex)
 
                 if opcode == EVM.STOP:
                     ex.output = None
