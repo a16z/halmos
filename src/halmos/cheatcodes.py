@@ -139,3 +139,11 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("etch(address,bytes)"))
     etch_sig: int = 0xb4d6c782
+
+class console:
+    # address constant CONSOLE_ADDRESS = address(0x000000000000000000636F6e736F6c652e6c6f67);
+    address: BitVecRef = con_addr(0x000000000000000000636F6e736F6c652e6c6f67)
+
+    log_uint: int = 0xf5b1bba9 # bytes4(keccak256("log(uint)"))
+
+    log_string: int = 0x41304fac # bytes4(keccak256("log(string)"))
