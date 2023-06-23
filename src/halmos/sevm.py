@@ -295,7 +295,7 @@ class State:
     def __str__(self) -> str:
         return ''.join([
             'Stack: ', str(self.stack), '\n',
-            self.str_memory(),
+        #   self.str_memory(),
         ])
 
     def str_memory(self) -> str:
