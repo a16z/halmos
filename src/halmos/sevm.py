@@ -11,7 +11,7 @@ from functools import reduce
 
 from z3 import *
 from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr, bv_value_to_bytes, hexify
-from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
+from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -45,7 +45,7 @@ magic_address: int = 0xaaaa0000
 new_address_offset: int = 1
 
 def id_str(x: Any) -> str:
-    return str(x).replace(' ', '')
+    return hexify(x).replace(' ', '')
 
 class Instruction:
     pc: int
@@ -295,7 +295,7 @@ class State:
     def __str__(self) -> str:
         return ''.join([
             'Stack: ', str(self.stack), '\n',
-            self.str_memory(),
+        #   self.str_memory(),
         ])
 
     def str_memory(self) -> str:
@@ -576,7 +576,7 @@ class Exec: # an execution path
         return ''.join(map(lambda x: '- ' + str(x) + '\n', filter(lambda x: str(x) != 'True', self.path)))
 
     def __str__(self) -> str:
-        return ''.join([
+        return hexify(''.join([
             'PC: '              , str(self.this), ' ', str(self.pc), ' ', mnemonic(self.current_opcode()), '\n',
             str(self.st),
             'Balance: '         , str(self.balance), '\n',
@@ -592,7 +592,7 @@ class Exec: # an execution path
             'SHA3 hashes:\n'    , ''.join(map(lambda x: '- ' + str(x) + '\n', self.sha3s)),
             'External calls:\n' , ''.join(map(lambda x: '- ' + str(x) + '\n', self.calls)),
         #   'Calldata: '        , str(self.calldata), '\n',
-        ])
+        ]))
 
     def next_pc(self) -> None:
         self.pc = self.code[self.this].next_pc(self.pc)
@@ -1323,7 +1323,24 @@ class SEVM:
 
                 else:
                     # TODO: support other cheat codes
-                    ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
+                    ex.error = f'Unsupported cheat code: calldata = {hexify(arg)}'
+                    out.append(ex)
+                    return
+
+            # console
+            if eq(to, console.address):
+                ex.solver.add(exit_code_var != con(0))
+
+                funsig: int = int_of(extract_funsig(arg), 'symbolic console function selector')
+
+                if funsig == console.log_uint:
+                    print(simplify(extract_bytes(arg, 4, 32)))
+
+            #   elif funsig == console.log_string:
+
+                else:
+                    # TODO: support other console functions
+                    ex.error = f'Unsupported console function: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}'
                     out.append(ex)
                     return
 

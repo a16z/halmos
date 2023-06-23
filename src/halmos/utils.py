@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 from z3 import *
 
 def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
-    if x.size() % 8 != 0: raise ValueError(x)
+    if x.size() % 8 != 0: raise ValueError(x, x.size())
     return x.as_long().to_bytes(x.size() // 8, 'big')
 
 def hexify(x):
@@ -18,7 +18,9 @@ def hexify(x):
     elif isinstance(x, bytes):
         return '0x' + x.hex()
     elif is_bv_value(x):
-        return hexify(bv_value_to_bytes(x))
+        # preserving bitsize could be confusing due to some bv values given as strings; need refactoring to fix properly
+        # return hexify(x.as_long().to_bytes((x.size() + 7) // 8, 'big')) # bitsize may not be a multiple of 8
+        return hex(x.as_long())
     else:
         return hexify(str(x))
 
