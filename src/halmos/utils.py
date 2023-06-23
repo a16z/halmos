@@ -18,7 +18,9 @@ def hexify(x):
     elif isinstance(x, bytes):
         return '0x' + x.hex()
     elif is_bv_value(x):
-        return hexify(x.as_long().to_bytes((x.size() + 7) // 8, 'big'))
+        # preserving bitsize could be confusing due to some bv values given as strings; need refactoring to fix properly
+        # return hexify(x.as_long().to_bytes((x.size() + 7) // 8, 'big')) # bitsize may not be a multiple of 8
+        return hex(x.as_long())
     else:
         return hexify(str(x))
 
