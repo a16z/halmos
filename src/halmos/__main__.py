@@ -573,11 +573,11 @@ def package_result(model: UnionType[Model, str], idx: int, result: CheckSatResul
         validity = None
         if model:
             if isinstance(model, str):
-                model = f'see {model}'
                 validity = True
+                model = f'see {model}'
             else:
-                model = f'{str_model(model, args)}'
                 validity = is_valid_model(model)
+                model = f'{str_model(model, args)}'
 
         return ModelWithContext(model, validity, idx, result)
 
