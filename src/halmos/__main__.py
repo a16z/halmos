@@ -336,7 +336,8 @@ def setup(
 
 @dataclass(frozen=True)
 class ModelWithContext:
-    model: UnionType[Model, str]
+    model: str
+    validity: bool
     index: int
     result: CheckSatResult
 
@@ -459,17 +460,15 @@ def run(
     # print result
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])")
     for m in models:
-        model, idx, result = m.model, m.index, m.result
+        model, validity, idx, result = m.model, m.validity, m.index, m.result
         if result == unsat: continue
         ex = exs[idx]
 
         if model:
-            if isinstance(model, str):
-                print(color_warn(f'Counterexample: see {model}'))
-            elif is_valid_model(model):
-                print(color_warn(f'Counterexample: {str_model(model, args)}'))
+            if validity:
+                print(color_warn(f'Counterexample: {model}'))
             elif args.print_potential_counterexample:
-                warn(COUNTEREXAMPLE_INVALID, f'Counterexample (potentially invalid): {str_model(model, args)}')
+                warn(COUNTEREXAMPLE_INVALID, f'Counterexample (potentially invalid): {model}')
             else:
                 warn(COUNTEREXAMPLE_INVALID,
                      f'Counterexample (potentially invalid): (not displayed, use --print-potential-counterexample)')
@@ -514,7 +513,7 @@ def gen_model_from_sexpr(args: argparse.Namespace, idx: int, sexpr: str) -> Mode
 
     # TODO: handle args.solver_subprocess
 
-    return package_result(model, idx, res, args.verbose >= 1)
+    return package_result(model, idx, res, args)
 
 
 def is_unknown(result: CheckSatResult, model: Model) -> bool:
@@ -559,21 +558,32 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
             res = sat
             model = f'{fname}.out'
 
-    return package_result(model, idx, res, args.verbose >= 1)
+    return package_result(model, idx, res, args)
 
 
-def package_result(model: UnionType[Model, str], idx: int, result: CheckSatResult, progress=False) -> ModelWithContext:
+def package_result(model: UnionType[Model, str], idx: int, result: CheckSatResult, args: argparse.Namespace) -> ModelWithContext:
     if result == unsat:
-        if progress: print(f'  Invalid path; ignored (path id: {idx+1})')
-        return ModelWithContext(None, idx, result)
+        if args.verbose >= 1: print(f'  Invalid path; ignored (path id: {idx+1})')
+        return ModelWithContext(None, None, idx, result)
 
     if result == sat:
-        if progress: print(f'  Valid path; counterexample generated (path id: {idx+1})')
-        return ModelWithContext(model, idx, result)
+        if args.verbose >= 1: print(f'  Valid path; counterexample generated (path id: {idx+1})')
+
+        # convert model into string to avoid pickling errors for z3 (ctypes) objects containing pointers
+        validity = None
+        if model:
+            if isinstance(model, str):
+                validity = True
+                model = f'see {model}'
+            else:
+                validity = is_valid_model(model)
+                model = f'{str_model(model, args)}'
+
+        return ModelWithContext(model, validity, idx, result)
 
     else:
-        if progress: print(f'  Timeout (path id: {idx+1})')
-        return ModelWithContext(None, idx, result)
+        if args.verbose >= 1: print(f'  Timeout (path id: {idx+1})')
+        return ModelWithContext(None, None, idx, result)
 
 
 def is_valid_model(model) -> bool:
