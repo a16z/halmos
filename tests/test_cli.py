@@ -36,7 +36,7 @@ def setup_sig():
 
 @pytest.fixture
 def setup_selector():
-    return int('0a9254e4', 16)
+    return '0a9254e4'
 
 
 def test_decode_concrete_bytecode():

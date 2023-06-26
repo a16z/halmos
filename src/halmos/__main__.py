@@ -8,6 +8,7 @@ import json
 import argparse
 import re
 import traceback
+import shutil
 
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
@@ -294,7 +295,7 @@ def setup(
     setup_mid = timer()
 
     if setup_sig:
-        wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_selector, 32))
+        wstore(setup_ex.calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
         dyn_param_size = [] # TODO: propagate to run
         mk_calldata(abi, setup_name, setup_sig, arrlen, args, setup_ex.calldata, dyn_param_size)
 
@@ -360,7 +361,7 @@ def run(
 
     cd = []
 
-    wstore(cd, 0, 4, BitVecVal(funselector, 32))
+    wstore(cd, 0, 4, BitVecVal(int(funselector, 16), 32))
 
     dyn_param_size = []
     mk_calldata(abi, funname, funsig, arrlen, args, cd, dyn_param_size)
@@ -672,18 +673,89 @@ def main() -> int:
     # compile
     #
 
-    try:
-        crytic_compile_args, crytic_compile_unknown_args  = crytic_compile_parser.parse_known_args()
+#   try:
+#       crytic_compile_args, crytic_compile_unknown_args  = crytic_compile_parser.parse_known_args()
 
-        both_unknown = set(halmos_unknown_args) & set(crytic_compile_unknown_args)
-        if both_unknown:
-            print(color_warn(f'error: unrecognized arguments: {" ".join(both_unknown)}'))
+#       both_unknown = set(halmos_unknown_args) & set(crytic_compile_unknown_args)
+#       if both_unknown:
+#           print(color_warn(f'error: unrecognized arguments: {" ".join(both_unknown)}'))
+#           return 1
+
+#       cryticCompile = CryticCompile(target=args.root, **vars(crytic_compile_args))
+#   except InvalidCompilation as e:
+#       print(color_warn(f'Parse error: {e}'))
+#       return 1
+
+    cmd = [
+        "forge",
+        "build",
+        '--extra-output',
+        'storageLayout',
+        'metadata'
+    ]
+
+    with subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd=args.root,
+        executable=shutil.which(cmd[0]),
+    ) as process:
+
+        stdout_bytes, stderr_bytes = process.communicate()
+        stdout, stderr = (
+            stdout_bytes.decode(errors="backslashreplace"),
+            stderr_bytes.decode(errors="backslashreplace"),
+        )  # convert bytestrings to unicode strings
+
+    #   print(stdout)
+        if stderr:
+            print(color_warn(f'Parse error: {stderr}'))
             return 1
 
-        cryticCompile = CryticCompile(target=args.root, **vars(crytic_compile_args))
-    except InvalidCompilation as e:
-        print(color_warn(f'Parse error: {e}'))
-        return 1
+    src_ids = {} # compiler version -> id -> abspath
+
+    contract_json = {} # compiler version -> filename -> contract name -> (json, type)
+
+    out_path = os.path.join(args.root, 'out')
+    for sol_dirname in os.listdir(out_path):
+        if sol_dirname.endswith('.sol'):
+            sol_path = os.path.join(out_path, sol_dirname)
+            if os.path.isdir(sol_path):
+                for json_filename in os.listdir(sol_path):
+                #   print(sol_dirname, json_filename)
+                    if json_filename.startswith('.'): continue
+                    if not json_filename.endswith('.json'): continue
+
+                    json_path = os.path.join(sol_path, json_filename)
+                    with open(json_path, encoding='utf8') as f:
+                        json_out = json.load(f)
+
+                    compiler_version = json_out['metadata']['compiler']['version']
+                    if compiler_version not in src_ids:
+                        src_ids[compiler_version] = {}
+                    _src_ids = src_ids[compiler_version]
+                    if compiler_version not in contract_json:
+                        contract_json[compiler_version] = {}
+                    if sol_dirname not in contract_json[compiler_version]:
+                        contract_json[compiler_version][sol_dirname] = {}
+                    _contract_json = contract_json[compiler_version][sol_dirname]
+
+                    src_id = json_out['id']
+                    abspath = json_out['ast']['absolutePath']
+                    if src_id in _src_ids and _src_ids[src_id] != abspath: raise ValueError(src_id, _src_ids[src_id], abspath)
+                    _src_ids[src_id] = abspath
+
+                    contract_name = json_filename.split('.')[0]
+
+                    for node in json_out['ast']['nodes']:
+                        if node['nodeType'] == 'ContractDefinition' and node['name'] == contract_name:
+                            abstract = 'abstract ' if node.get('abstract') else ''
+                            contract_type = abstract + node['contractKind']
+                            break
+
+                    if contract_name in _contract_json: raise ValueError(contract_name)
+                    _contract_json[contract_name] = (json_out, contract_type)
 
     main_mid = timer()
 
@@ -695,24 +767,49 @@ def main() -> int:
     total_failed = 0
     total_found = 0
 
-    for compilation_id, compilation_unit in cryticCompile.compilation_units.items():
+#   for compilation_id, compilation_unit in cryticCompile.compilation_units.items():
 
-        for filename in sorted(compilation_unit.filenames):
-            contracts_names = compilation_unit.filename_to_contracts[filename]
-            source_unit = compilation_unit.source_units[filename]
+#       for filename in sorted(compilation_unit.filenames):
+#           contracts_names = compilation_unit.filename_to_contracts[filename]
+#           source_unit = compilation_unit.source_units[filename]
 
-            if args.contract:
-                if args.contract not in contracts_names: continue
-                contracts = [args.contract]
-            else:
-                contracts = sorted(contracts_names)
+#           if args.contract:
+#               if args.contract not in contracts_names: continue
+#               contracts = [args.contract]
+#           else:
+#               contracts = sorted(contracts_names)
 
-            for contract in contracts:
+#           for contract in contracts:
+#               contract_start = timer()
+
+#               hexcode = source_unit.bytecodes_runtime[contract]
+#               abi = source_unit.abis[contract]
+#               methodIdentifiers = source_unit.hashes(contract)
+
+#               funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
+#               total_found += len(funsigs)
+
+#               if funsigs:
+#                   num_passed = 0
+#                   num_failed = 0
+#                   print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
+
+    for compiler_version in sorted(contract_json):
+        contract_json_compiler = contract_json[compiler_version]
+        for filename in sorted(contract_json_compiler):
+            for cname in sorted(contract_json_compiler[filename]):
+
+                if args.contract and args.contract != cname: continue
+
+                (out, contract_type) = contract_json_compiler[filename][cname]
+
+                if contract_type != 'contract': continue
+
                 contract_start = timer()
 
-                hexcode = source_unit.bytecodes_runtime[contract]
-                abi = source_unit.abis[contract]
-                methodIdentifiers = source_unit.hashes(contract)
+                hexcode = out['deployedBytecode']['object']
+                abi = out['abi']
+                methodIdentifiers = out['methodIdentifiers']
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
                 total_found += len(funsigs)
@@ -720,7 +817,8 @@ def main() -> int:
                 if funsigs:
                     num_passed = 0
                     num_failed = 0
-                    print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
+                    print(f"\nRunning {len(funsigs)} tests for {out['ast']['absolutePath']}:{cname}")
+
 
                     setup_sigs = sorted([ (k,v) for k,v in methodIdentifiers.items() if k == 'setUp()' or k.startswith('setUpSymbolic(') ])
                     (setup_name, setup_sig, setup_selector) = (None, None, None)
