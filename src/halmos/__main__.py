@@ -717,6 +717,8 @@ def main() -> int:
 
     contract_json = {} # compiler version -> filename -> contract name -> (json, type)
 
+    srcmap = {} # compiler version -> bytecode -> srcmap
+
     out_path = os.path.join(args.root, 'out')
     for sol_dirname in os.listdir(out_path):
         if sol_dirname.endswith('.sol'):
@@ -724,13 +726,16 @@ def main() -> int:
             if os.path.isdir(sol_path):
                 for json_filename in os.listdir(sol_path):
                 #   print(sol_dirname, json_filename)
+
                     if json_filename.startswith('.'): continue
                     if not json_filename.endswith('.json'): continue
 
+                    # parse json
                     json_path = os.path.join(sol_path, json_filename)
                     with open(json_path, encoding='utf8') as f:
                         json_out = json.load(f)
 
+                    # process compiler version
                     compiler_version = json_out['metadata']['compiler']['version']
                     if compiler_version not in src_ids:
                         src_ids[compiler_version] = {}
@@ -740,12 +745,17 @@ def main() -> int:
                     if sol_dirname not in contract_json[compiler_version]:
                         contract_json[compiler_version][sol_dirname] = {}
                     _contract_json = contract_json[compiler_version][sol_dirname]
+                    if compiler_version not in srcmap:
+                        srcmap[compiler_version] = {}
+                    _srcmap = srcmap[compiler_version]
 
+                    # process src_ids
                     src_id = json_out['id']
                     abspath = json_out['ast']['absolutePath']
                     if src_id in _src_ids and _src_ids[src_id] != abspath: raise ValueError(src_id, _src_ids[src_id], abspath)
                     _src_ids[src_id] = abspath
 
+                    # process contract_json
                     contract_name = json_filename.split('.')[0]
 
                     for node in json_out['ast']['nodes']:
@@ -756,6 +766,13 @@ def main() -> int:
 
                     if contract_name in _contract_json: raise ValueError(contract_name)
                     _contract_json[contract_name] = (json_out, contract_type)
+
+                    # process srcmap
+                    for bytecode_type in ['bytecode', 'deployedBytecode']:
+                        bytecode = json_out[bytecode_type]['object']
+                        if bytecode == '0x': continue
+                        if bytecode in _srcmap: raise ValueError(sol_dirname, json_filename, bytecode_type, bytecode)
+                        _srcmap[bytecode] = json_out[bytecode_type]['sourceMap']
 
     main_mid = timer()
 
@@ -795,6 +812,9 @@ def main() -> int:
 #                   print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
 
     for compiler_version in sorted(contract_json):
+        options['src_ids'] = src_ids[compiler_version]
+        options['srcmap'] = srcmap[compiler_version]
+
         contract_json_compiler = contract_json[compiler_version]
         for filename in sorted(contract_json_compiler):
             for cname in sorted(contract_json_compiler[filename]):

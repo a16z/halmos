@@ -404,6 +404,29 @@ class Contract:
             if insn.opcode == EVM.JUMPDEST:
                 self.jumpdests.add(insn.pc)
 
+    def __init_srcmap(self, root: str, fpath: Dict[int, str], srcmap: List[str]):
+        self.srctext_map = {}
+
+        pc = 0
+        start, length, fileid, jump, mdepth = 0, 0, 0, '-', 0
+        for idx, sm in enumerate(srcmap):
+            arr = sm.split(':') + ['']*5
+            start  = int(arr[0]) if arr[0] != '' else start
+            length = int(arr[1]) if arr[1] != '' else length
+            srcidx = int(arr[2]) if arr[2] != '' else srcidx
+            jump   =     arr[3]  if arr[3] != '' else jump
+            mdepth = int(arr[4]) if arr[4] != '' else mdepth
+
+            if srcidx in fpath:
+                with open(f'{root}/{fpath[srcidx]}') as f:
+                    f.seek(start)
+                    text = repr(f.read(length))
+            else:
+                text = '<generated>'
+
+            self.srctext_map[pc] = text
+            pc = self.next_pc(pc)
+
     def __iter__(self):
         return CodeIterator(self)
 
@@ -485,6 +508,15 @@ class Contract:
             self.__init_jumpdests()
 
         return self.jumpdests
+
+    def srctext(self, pc: int, root: str, fpath: Dict[int, str], srcmap: Dict[str, str]):
+        if not hasattr(self, 'srctext_map'):
+            sm = srcmap.get('0x'+self._rawcode.hex())
+            if sm is None: return 'unknown source code'
+
+            self.__init_srcmap(root, fpath, sm.split(';'))
+
+        return self.srctext_map[pc]
 
 
 class CodeIterator:
@@ -1224,7 +1256,8 @@ class SEVM:
                 elif eq(arg.sort(), BitVecSort((4+32)*8)) and simplify(Extract(287, 256, arg)) == hevm_cheat_code.assume_sig:
                     assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
                     ex.solver.add(assume_cond)
-                    ex.path.append(str(assume_cond))
+                    srctext = ex.code[ex.this].srctext(ex.pc, self.options.get('target'), self.options.get('src_ids'), self.options.get('srcmap'))
+                    ex.path.append(str(assume_cond) + f'  /* taken true branch at: {srctext} */')
                 # vm.getCode(string)
                 elif simplify(Extract(arg_size*8-1, arg_size*8-32, arg)) == hevm_cheat_code.get_code_sig:
                     calldata = bytes.fromhex(hex(arg.as_long())[2:])
@@ -1488,6 +1521,8 @@ class SEVM:
         target: int = int_of(ex.st.pop(), 'symbolic JUMPI target')
         cond: Word = ex.st.pop()
 
+        srctext = ex.code[ex.this].srctext(ex.pc, self.options.get('target'), self.options.get('src_ids'), self.options.get('srcmap'))
+
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
         cond_true = simplify(is_non_zero(cond))
@@ -1515,17 +1550,17 @@ class SEVM:
 
         if follow_true:
             if follow_false:
-                new_ex_true = self.create_branch(ex, cond_true, target)
+                new_ex_true = self.create_branch(ex, cond_true, target, f'  /* taken true branch at: {srctext} */')
             else:
                 new_ex_true = ex
                 new_ex_true.solver.add(cond_true)
-                new_ex_true.path.append(str(cond_true))
+                new_ex_true.path.append(str(cond_true) + f'  /* taken true branch at: {srctext} */')
                 new_ex_true.pc = target
 
         if follow_false:
             new_ex_false = ex
             new_ex_false.solver.add(cond_false)
-            new_ex_false.path.append(str(cond_false))
+            new_ex_false.path.append(str(cond_false) + f'  /* taken false branch at: {srctext} */')
             new_ex_false.next_pc()
 
         if new_ex_true:
@@ -1553,18 +1588,18 @@ class SEVM:
                 if ex.check(target_reachable) != unsat: # jump
                     if self.options.get('debug'):
                         print(f'We can jump to {target} with model {ex.solver.model()}')
-                    new_ex = self.create_branch(ex, target_reachable, target)
+                    new_ex = self.create_branch(ex, target_reachable, target, '')
                     stack.append((new_ex, step_id))
         else:
             raise NotConcreteError(f'symbolic JUMP target: {dst}')
 
-    def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
+    def create_branch(self, ex: Exec, cond: BitVecRef, target: int, srctext) -> Exec:
         new_solver = SolverFor('QF_AUFBV')
         new_solver.set(timeout=self.options['timeout'])
         new_solver.add(ex.solver.assertions())
         new_solver.add(cond)
         new_path = deepcopy(ex.path)
-        new_path.append(str(cond))
+        new_path.append(str(cond) + srctext)
         new_ex = Exec(
             code     = ex.code.copy(), # shallow copy for potential new contract creation; existing code doesn't change
             storage  = deepcopy(ex.storage),
