@@ -98,7 +98,6 @@ def parse_args(args=None) -> argparse.Namespace:
     group_internal.add_argument('--bytecode', metavar='HEX_STRING', help='execute the given bytecode')
     group_internal.add_argument('--reset-bytecode', metavar='ADDR1=CODE1,ADDR2=CODE2,...', help='reset the bytecode of given addresses after setUp()')
     group_internal.add_argument('--test-parallel', action='store_true', help='run tests in parallel')
-    group_internal.add_argument('--max-cores', default=None, type=int, help=f'max number of cores to use for parallel processing (default: # of available cores)')
 
     # experimental options
     group_experimental = parser.add_argument_group("Experimental options")
