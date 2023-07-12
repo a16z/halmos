@@ -9,14 +9,14 @@ import argparse
 import re
 import traceback
 
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
 from dataclasses import dataclass
 from timeit import default_timer as timer
 
-from .utils import color_good, color_warn, hexify
+from .pools import thread_pool, process_pool
 from .sevm import *
+from .utils import color_good, color_warn, hexify
 from .warnings import *
 
 SETUP_FAILED = 127
@@ -24,19 +24,8 @@ TEST_FAILED = 128
 
 args: argparse.Namespace
 
-class ProcessPoolSingleton:
-    def __init__(self) -> None:
-        self._pool = None
 
-    def get(self, max_workers=None):
-        if self._pool is None:
-            self._pool = ProcessPoolExecutor(max_workers=max_workers)
-
-        return self._pool
-
-PROCESS_POOL_SINGLETON = ProcessPoolSingleton()
-
-if hasattr(sys, 'set_int_max_str_digits'): # Python verion >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
+if hasattr(sys, 'set_int_max_str_digits'): # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
     sys.set_int_max_str_digits(0)
 
 def mk_crytic_parser() -> argparse.ArgumentParser:
@@ -462,12 +451,11 @@ def run(
     if len(execs_to_model) > 0 and args.debug: print(f'# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}')
 
     if len(execs_to_model) > 1 and args.solver_parallel:
-        pool = PROCESS_POOL_SINGLETON.get(max_workers=args.max_cores)
         if args.debug:
             print(f'Spawning {len(execs_to_model)} parallel assertion solvers')
 
         fn_args = [GenModelArgs(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model]
-        models = [m for m in pool.map(gen_model_from_sexpr, fn_args)]
+        models = [m for m in thread_pool.map(gen_model_from_sexpr, fn_args)]
 
     else:
         models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
@@ -599,13 +587,11 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
     if args.verbose >= 2 or args.debug:
         print(f'Running {setup_info.sig}')
 
-    pool = PROCESS_POOL_SINGLETON.get(max_workers=args.max_cores)
-
     fun_infos = [FunctionInfo(funsig.split('(')[0], funsig, methodIdentifiers[funsig]) for funsig in run_args.funsigs]
     single_run_args = [SetupAndRunSingleArgs(hexcode, abi, setup_info, fun_info, args) for fun_info in fun_infos]
 
     # dispatch to the shared process pool
-    exitcodes = pool.map(setup_and_run_single, single_run_args)
+    exitcodes = process_pool.map(setup_and_run_single, single_run_args)
 
     num_passed = sum(1 for x in exitcodes if x == 0)
     num_failed = sum(1 for x in exitcodes if x != 0)
