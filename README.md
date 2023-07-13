@@ -24,6 +24,11 @@ Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
 $ pip install halmos
 ```
 
+Or, if you want to try the latest dev version:
+```
+$ pip install git+https://github.com/a16z/halmos
+```
+
 ## Usage
 
 ```

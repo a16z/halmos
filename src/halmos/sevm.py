@@ -2,6 +2,7 @@
 
 import json
 import math
+import re
 
 from copy import deepcopy
 from collections import defaultdict
@@ -10,7 +11,7 @@ from functools import reduce
 
 from z3 import *
 from .utils import EVM, sha3_inv, restore_precomputed_hashes, str_opcode, assert_address, assert_uint256, con_addr, bv_value_to_bytes, hexify
-from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
+from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
 
 Word = Any # z3 expression (including constants)
 Byte = Any # z3 expression (including constants)
@@ -44,7 +45,10 @@ magic_address: int = 0xaaaa0000
 new_address_offset: int = 1
 
 def id_str(x: Any) -> str:
-    return str(x).replace(' ', '')
+    return hexify(x).replace(' ', '')
+
+def name_of(x: str) -> str:
+    return re.sub(r'\s+', '_', x)
 
 class Instruction:
     pc: int
@@ -277,6 +281,16 @@ def extract_funsig(calldata: BitVecRef):
     return extract_bytes(calldata, 0, 4)
 
 
+def extract_string_argument(calldata: BitVecRef, arg_idx: int):
+    '''Extracts idx-th argument of string from calldata'''
+    string_offset = int_of(extract_bytes(calldata, 4 + arg_idx * 32, 32), 'symbolic offset for string argument')
+    string_length = int_of(extract_bytes(calldata, 4 + string_offset, 32), 'symbolic size for string argument')
+    if string_length == 0: return ''
+    string_value = int_of(extract_bytes(calldata, 4 + string_offset + 32, string_length), 'symbolic string argument')
+    string_bytes = string_value.to_bytes(string_length, 'big')
+    return string_bytes.decode('utf-8')
+
+
 class State:
     stack: List[Word]
     memory: List[Byte]
@@ -294,7 +308,7 @@ class State:
     def __str__(self) -> str:
         return ''.join([
             'Stack: ', str(self.stack), '\n',
-            self.str_memory(),
+        #   self.str_memory(),
         ])
 
     def str_memory(self) -> str:
@@ -575,14 +589,14 @@ class Exec: # an execution path
         return ''.join(map(lambda x: '- ' + str(x) + '\n', filter(lambda x: str(x) != 'True', self.path)))
 
     def __str__(self) -> str:
-        return ''.join([
+        return hexify(''.join([
             'PC: '              , str(self.this), ' ', str(self.pc), ' ', mnemonic(self.current_opcode()), '\n',
             str(self.st),
             'Balance: '         , str(self.balance), '\n',
             'Storage:\n'        , ''.join(map(lambda x: '- ' + str(x) + ': ' + str(self.storage[x]) + '\n', self.storage)),
         #   'Solver:\n'         , self.str_solver(), '\n',
             'Path:\n'           , self.str_path(),
-            'Output: '          , str(self.output) , '\n',
+            'Output: '          , self.output.hex() if isinstance(self.output, bytes) else str(self.output), '\n',
             'Log: '             , str(self.log)    , '\n',
         #   'Opcodes:\n'        , self.str_cnts(),
         #   'Memsize: '         , str(len(self.st.memory)), '\n',
@@ -591,7 +605,7 @@ class Exec: # an execution path
             'SHA3 hashes:\n'    , ''.join(map(lambda x: '- ' + str(x) + '\n', self.sha3s)),
             'External calls:\n' , ''.join(map(lambda x: '- ' + str(x) + '\n', self.calls)),
         #   'Calldata: '        , str(self.calldata), '\n',
-        ])
+        ]))
 
     def next_pc(self) -> None:
         self.pc = self.code[self.this].next_pc(self.pc)
@@ -616,9 +630,8 @@ class Exec: # an execution path
                     return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat: # key == key0
                     return val0
-        # TODO: simplifying empty array access might have a negative impact on solver performance
-        # elif re.search(r'^storage_.+_00$', str(array)): # empty array
-        #     return con(0)
+        elif not self.symbolic and re.search(r'^storage_.+_00$', str(array)): # empty array
+            return con(0) # note: simplifying empty array access might have a negative impact on solver performance
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
@@ -693,7 +706,7 @@ class Exec: # an execution path
                         x = arg00.arg(0)
                         y = arg00.arg(1)
                         if arg1.decl().name() == 'bvadd' and arg1.num_args() == 2:
-                            if arg1.arg(0) == Extract(7, 0, x) and arg1.arg(1) == Extract(7, 0, y):
+                            if eq(arg1.arg(0), simplify(Extract(7, 0, x))) and eq(arg1.arg(1), simplify(Extract(7, 0, y))):
                                 return x + y
             return expr
         loc = normalize(loc)
@@ -867,11 +880,11 @@ class SEVM:
         if w1.decl().name() == 'bvmul' and w1.num_args() == 2:
             x = w1.arg(0)
             y = w1.arg(1)
-            if w2 == x or w2 == y: # xy/x or xy/y
+            if eq(w2, x) or eq(w2, y): # xy/x or xy/y
                 size_x = bitsize(x)
                 size_y = bitsize(y)
                 if size_x + size_y <= 256:
-                    if w2 == x: # xy/x == y
+                    if eq(w2, x): # xy/x == y
                         return y
                     else: # xy/y == x
                         return x
@@ -1147,46 +1160,52 @@ class SEVM:
                 ret = f_ret(exit_code_var)
 
             # TODO: cover other precompiled
-            if to == con_addr(1): # ecrecover exit code is always 1
+            if eq(to, con_addr(1)): # ecrecover exit code is always 1
                 ex.solver.add(exit_code_var != con(0))
 
             # halmos cheat code
-            if to == halmos_cheat_code.address:
+            if eq(to, halmos_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
 
                 funsig: int = int_of(extract_funsig(arg), 'symbolic halmos cheatcode function selector')
 
-                # createSymbolicUint(uint256) returns (uint256)
-                if funsig == halmos_cheat_code.create_symbolic_uint:
-                    bit_size = int_of(simplify(extract_bytes(arg, 4, 32)), 'symbolic bit size for halmos.createSymbolicUint()')
+                # createUint(uint256,string) returns (uint256)
+                if funsig == halmos_cheat_code.create_uint:
+                    bit_size = int_of(extract_bytes(arg, 4, 32), 'symbolic bit size for halmos.createUint()')
+                    label = name_of(extract_string_argument(arg, 1))
                     if bit_size <= 256:
-                        ret = uint256(BitVec(f'halmos_symbolic_uint{bit_size}_{ex.new_symbol_id():>02}', bit_size))
+                        ret = uint256(BitVec(f'halmos_{label}_uint{bit_size}_{ex.new_symbol_id():>02}', bit_size))
                     else:
                         ex.error = f'bitsize larger than 256: {bit_size}'
                         out.append(ex)
                         return
 
-                # createSymbolicBytes(uint256) returns (bytes)
-                elif funsig == halmos_cheat_code.create_symbolic_bytes:
-                    byte_size = int_of(simplify(extract_bytes(arg, 4, 32)), 'symbolic byte size for halmos.createSymbolicBytes()')
-                    symbolic_bytes = BitVec(f'halmos_symbolic_bytes_{ex.new_symbol_id():>02}', byte_size * 8)
+                # createBytes(uint256,string) returns (bytes)
+                elif funsig == halmos_cheat_code.create_bytes:
+                    byte_size = int_of(extract_bytes(arg, 4, 32), 'symbolic byte size for halmos.createBytes()')
+                    label = name_of(extract_string_argument(arg, 1))
+                    symbolic_bytes = BitVec(f'halmos_{label}_bytes_{ex.new_symbol_id():>02}', byte_size * 8)
                     ret = Concat(BitVecVal(32, 256), BitVecVal(byte_size, 256), symbolic_bytes)
 
-                # createSymbolicUint256() returns (uint256)
-                elif funsig == halmos_cheat_code.create_symbolic_uint256:
-                    ret = BitVec(f'halmos_symbolic_uint256_{ex.new_symbol_id():>02}', 256)
+                # createUint256(string) returns (uint256)
+                elif funsig == halmos_cheat_code.create_uint256:
+                    label = name_of(extract_string_argument(arg, 0))
+                    ret = BitVec(f'halmos_{label}_uint256_{ex.new_symbol_id():>02}', 256)
 
-                # createSymbolicBytes32() returns (bytes32)
-                elif funsig == halmos_cheat_code.create_symbolic_bytes32:
-                    ret = BitVec(f'halmos_symbolic_bytes32_{ex.new_symbol_id():>02}', 256)
+                # createBytes32(string) returns (bytes32)
+                elif funsig == halmos_cheat_code.create_bytes32:
+                    label = name_of(extract_string_argument(arg, 0))
+                    ret = BitVec(f'halmos_{label}_bytes32_{ex.new_symbol_id():>02}', 256)
 
-                # createSymbolicAddress() returns (address)
-                elif funsig == halmos_cheat_code.create_symbolic_address:
-                    ret = uint256(BitVec(f'halmos_symbolic_address_{ex.new_symbol_id():>02}', 160))
+                # createAddress(string) returns (address)
+                elif funsig == halmos_cheat_code.create_address:
+                    label = name_of(extract_string_argument(arg, 0))
+                    ret = uint256(BitVec(f'halmos_{label}_address_{ex.new_symbol_id():>02}', 160))
 
-                # createSymbolicBool() returns (bool)
-                elif funsig == halmos_cheat_code.create_symbolic_bool:
-                    ret = uint256(BitVec(f'halmos_symbolic_bool_{ex.new_symbol_id():>02}', 1))
+                # createBool(string) returns (bool)
+                elif funsig == halmos_cheat_code.create_bool:
+                    label = name_of(extract_string_argument(arg, 0))
+                    ret = uint256(BitVec(f'halmos_{label}_bool_{ex.new_symbol_id():>02}', 1))
 
                 else:
                     ex.error = f'Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}'
@@ -1194,7 +1213,7 @@ class SEVM:
                     return
 
             # vm cheat code
-            if to == hevm_cheat_code.address:
+            if eq(to, hevm_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
                 # vm.fail()
                 if arg == hevm_cheat_code.fail_payload: # BitVecVal(hevm_cheat_code.fail_payload, 800)
@@ -1300,7 +1319,7 @@ class SEVM:
                     ex.block.timestamp = simplify(Extract(255, 0, arg))
                 # vm.etch(address,bytes)
                 elif extract_funsig(arg) == hevm_cheat_code.etch_sig:
-                    who = simplify(extract_bytes(arg, 4 + 12, 20))
+                    who = extract_bytes(arg, 4 + 12, 20)
 
                     # who must be concrete
                     if not is_bv_value(who):
@@ -1323,7 +1342,24 @@ class SEVM:
 
                 else:
                     # TODO: support other cheat codes
-                    ex.error = str('Unsupported cheat code: calldata: ' + str(arg))
+                    ex.error = f'Unsupported cheat code: calldata = {hexify(arg)}'
+                    out.append(ex)
+                    return
+
+            # console
+            if eq(to, console.address):
+                ex.solver.add(exit_code_var != con(0))
+
+                funsig: int = int_of(extract_funsig(arg), 'symbolic console function selector')
+
+                if funsig == console.log_uint:
+                    print(extract_bytes(arg, 4, 32))
+
+            #   elif funsig == console.log_string:
+
+                else:
+                    # TODO: support other console functions
+                    ex.error = f'Unsupported console function: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}'
                     out.append(ex)
                     return
 
@@ -1601,8 +1637,9 @@ class SEVM:
                     else:
                     #   steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
                         steps[step_id] = {'parent': prev_step_id, 'exec': str(ex)}
-                    if self.options.get('verbose', 0) >= 5:
-                        print(ex)
+
+                if self.options.get('print_steps'):
+                    print(ex)
 
                 if opcode == EVM.STOP:
                     ex.output = None

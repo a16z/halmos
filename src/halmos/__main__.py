@@ -64,10 +64,16 @@ def parse_args(args=None) -> argparse.Namespace:
     # debugging options
     group_debug = parser.add_argument_group("Debugging options")
 
-    group_debug.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, -vvvv, -vvvvv')
+    group_debug.add_argument('-v', '--verbose', action='count', default=0, help='increase verbosity levels: -v, -vv, -vvv, ...')
     group_debug.add_argument('-st', '--statistics', action='store_true', help='print statistics')
     group_debug.add_argument('--debug', action='store_true', help='run in debug mode')
-    group_debug.add_argument('--log', metavar='LOG_FILE_PATH', help='log individual execution steps in JSON')
+    group_debug.add_argument('--log', metavar='LOG_FILE_PATH', help='log every execution steps in JSON')
+    group_debug.add_argument('--print-steps', action='store_true', help='print every execution steps')
+    group_debug.add_argument('--print-states', action='store_true', help='print all final execution states')
+    group_debug.add_argument('--print-failed-states', action='store_true', help='print failed execution states')
+    group_debug.add_argument('--print-blocked-states', action='store_true', help='print blocked execution states')
+    group_debug.add_argument('--print-setup-states', action='store_true', help='print setup execution states')
+    group_debug.add_argument('--print-full-model', action='store_true', help='print full counterexample model')
 
     # build options
     group_build = parser.add_argument_group("Build options")
@@ -262,7 +268,7 @@ def run_bytecode(hexcode: str) -> List[Exec]:
             print(f'Final opcode: {mnemonic(opcode)} | Return data: {ex.output} | Input example: {model_with_context.model}')
         else:
             print(color_warn(f'Not supported: {mnemonic(opcode)} {ex.error}'))
-        if args.verbose >= 1:
+        if args.print_states:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
 
@@ -330,7 +336,7 @@ def setup(
 
         setup_ex = setup_exs[0]
 
-        if args.verbose >= 2:
+        if args.print_setup_states:
             print(setup_ex)
 
     if args.reset_bytecode:
@@ -349,7 +355,8 @@ def setup(
 
 @dataclass(frozen=True)
 class ModelWithContext:
-    model: UnionType[Model, str]
+    model: str
+    validity: bool
     index: int
     result: CheckSatResult
 
@@ -361,7 +368,7 @@ def run(
     args: argparse.Namespace,
 ) -> int:
     funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
-    if args.debug: print(f'Executing {funname}')
+    if args.verbose >= 1: print(f'Executing {funname}')
 
     #
     # calldata
@@ -447,10 +454,10 @@ def run(
         else:
             stuck.append((opcode, idx, ex))
 
-    if len(execs_to_model) > 0 and args.debug: print(f'# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}')
+    if len(execs_to_model) > 0 and args.verbose >= 1: print(f'# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}')
 
     if len(execs_to_model) > 1 and args.solver_parallel:
-        if args.debug:
+        if args.verbose >= 1:
             print(f'Spawning {len(execs_to_model)} parallel assertion solvers')
 
         fn_args = [GenModelArgs(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model]
@@ -472,30 +479,28 @@ def run(
     # print result
     print(f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])")
     for m in models:
-        model, idx, result = m.model, m.index, m.result
+        model, validity, idx, result = m.model, m.validity, m.index, m.result
         if result == unsat: continue
         ex = exs[idx]
 
         if model:
-            if isinstance(model, str):
-                print(color_warn(f'Counterexample: see {model}'))
-            elif is_valid_model(model):
-                print(color_warn(f'Counterexample: {str_model(model, args)}'))
+            if validity:
+                print(color_warn(f'Counterexample: {model}'))
             elif args.print_potential_counterexample:
-                warn(COUNTEREXAMPLE_INVALID, f'Counterexample (potentially invalid): {str_model(model, args)}')
+                warn(COUNTEREXAMPLE_INVALID, f'Counterexample (potentially invalid): {model}')
             else:
                 warn(COUNTEREXAMPLE_INVALID,
                      f'Counterexample (potentially invalid): (not displayed, use --print-potential-counterexample)')
         else:
             warn(COUNTEREXAMPLE_UNKNOWN, f'Counterexample: {result}')
 
-        if args.verbose >= 1:
+        if args.print_failed_states:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
 
     for opcode, idx, ex in stuck:
         print(color_warn(f'Not supported: {mnemonic(opcode)}: {ex.error}'))
-        if args.verbose >= 3:
+        if args.print_blocked_states:
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
 
@@ -504,7 +509,7 @@ def run(
         if args.debug: print('\n'.join(bounded_loops))
 
     # print post-states
-    if args.verbose >= 5:
+    if args.print_states:
         for idx, ex in enumerate(exs):
             print(f'# {idx+1} / {len(exs)}')
             print(ex)
@@ -583,7 +588,7 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
     hexcode, abi, methodIdentifiers = run_args.hexcode, run_args.abi, run_args.methodIdentifiers
 
     setup_info = extract_setup(methodIdentifiers)
-    if args.verbose >= 2 or args.debug:
+    if args.verbose >= 1:
         print(f'Running {setup_info.sig}')
 
     fun_infos = [FunctionInfo(funsig.split('(')[0], funsig, methodIdentifiers[funsig]) for funsig in run_args.funsigs]
@@ -599,7 +604,7 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
 
 def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
     setup_info = extract_setup(run_args.methodIdentifiers)
-    if args.verbose >= 2 or args.debug:
+    if args.verbose >= 1:
         print(f'Running {setup_info.sig}')
 
     try:
@@ -643,14 +648,14 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
     # TODO: handle args.solver_subprocess
 
-    return package_result(model, idx, res, args.debug)
+    return package_result(model, idx, res, args)
 
 
 def is_unknown(result: CheckSatResult, model: Model) -> bool:
     return result == unknown or (result == sat and not is_valid_model(model))
 
 def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
-    if args.debug: print(f'Checking path condition (path id: {idx+1})')
+    if args.verbose >= 1: print(f'Checking path condition (path id: {idx+1})')
 
     model = None
 
@@ -659,7 +664,7 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
     if res == sat: model = ex.solver.model()
 
     if is_unknown(res, model) and args.solver_fresh:
-        if args.debug: print(f'  Checking again with a fresh solver')
+        if args.verbose >= 1: print(f'  Checking again with a fresh solver')
         sol2 = SolverFor('QF_AUFBV', ctx=Context())
     #   sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.to_smt2())
@@ -667,9 +672,9 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
         if res == sat: model = sol2.model()
 
     if is_unknown(res, model) and args.solver_subprocess:
-        if args.debug: print(f'  Checking again in an external process')
+        if args.verbose >= 1: print(f'  Checking again in an external process')
         fname = f'/tmp/{uuid.uuid4().hex}.smt2'
-        if args.verbose >= 4 or args.debug: print(f'    z3 -model {fname} >{fname}.out')
+        if args.verbose >= 1: print(f'    z3 -model {fname} >{fname}.out')
         query = ex.solver.to_smt2()
         # replace uninterpreted abstraction with actual symbols for assertion solving
         query = re.sub(r'(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b', r'\1\2', query) # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))` as bvudiv is undefined when y = 0; also similarly for evm_bvurem
@@ -680,9 +685,7 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
         res_str_head = res_str.split('\n', 1)[0]
         with open(f'{fname}.out', 'w') as f:
             f.write(res_str)
-        if args.verbose >= 4:
-            print(res_str)
-        elif args.debug:
+        if args.verbose >= 1:
             print(f'    {res_str_head}')
         if res_str_head == 'unsat':
             res = unsat
@@ -690,21 +693,32 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
             res = sat
             model = f'{fname}.out'
 
-    return package_result(model, idx, res, args.debug)
+    return package_result(model, idx, res, args)
 
 
-def package_result(model: UnionType[Model, str], idx: int, result: CheckSatResult, debug=False) -> ModelWithContext:
+def package_result(model: UnionType[Model, str], idx: int, result: CheckSatResult, args: argparse.Namespace) -> ModelWithContext:
     if result == unsat:
-        if debug: print(f'  Invalid path; ignored (path id: {idx+1})')
-        return ModelWithContext(None, idx, result)
+        if args.verbose >= 1: print(f'  Invalid path; ignored (path id: {idx+1})')
+        return ModelWithContext(None, None, idx, result)
 
     if result == sat:
-        if debug: print(f'  Valid path; counterexample generated (path id: {idx+1})')
-        return ModelWithContext(model, idx, result)
+        if args.verbose >= 1: print(f'  Valid path; counterexample generated (path id: {idx+1})')
+
+        # convert model into string to avoid pickling errors for z3 (ctypes) objects containing pointers
+        validity = None
+        if model:
+            if isinstance(model, str):
+                validity = True
+                model = f'see {model}'
+            else:
+                validity = is_valid_model(model)
+                model = f'{str_model(model, args)}'
+
+        return ModelWithContext(model, validity, idx, result)
 
     else:
-        if debug: print(f'  Timeout (path id: {idx+1})')
-        return ModelWithContext(None, idx, result)
+        if args.verbose >= 1: print(f'  Timeout (path id: {idx+1})')
+        return ModelWithContext(None, None, idx, result)
 
 
 def is_valid_model(model) -> bool:
@@ -719,10 +733,8 @@ def str_model(model, args: argparse.Namespace) -> str:
         name = str(var)
         if name.startswith('p_'): return True
         if name.startswith('halmos_'): return True
-        elif args.verbose >= 1:
-            if name.startswith('storage') or name.startswith('msg_') or name.startswith('this_'): return True
         return False
-    select_model = filter(select, model) if not args.debug else model
+    select_model = filter(select, model) if not args.print_full_model else model
     return '[' + ','.join(sorted(map(lambda decl: f'\n    {decl} = {hexify(model[decl])}', select_model))) + ']'
 
 
@@ -742,6 +754,7 @@ def mk_options(args: argparse.Namespace) -> Dict:
         'expByConst': args.smt_exp_by_const,
         'timeout': args.solver_timeout_branching,
         'sym_jump': args.symbolic_jump,
+        'print_steps': args.print_steps,
     }
 
     if args.width is not None:
