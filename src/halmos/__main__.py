@@ -595,10 +595,11 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
     single_run_args = [SetupAndRunSingleArgs(hexcode, abi, setup_info, fun_info, args) for fun_info in fun_infos]
 
     # dispatch to the shared process pool
-    exitcodes = process_pool.map(setup_and_run_single, single_run_args)
+    exitcodes = list(process_pool.map(setup_and_run_single, single_run_args))
 
-    num_passed = sum(1 for x in exitcodes if x == 0)
-    num_failed = sum(1 for x in exitcodes if x != 0)
+    num_passed = exitcodes.count(0)
+    num_failed = len(exitcodes) - num_passed
+
     return num_passed, num_failed
 
 
