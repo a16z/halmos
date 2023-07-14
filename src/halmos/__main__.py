@@ -29,24 +29,6 @@ args: argparse.Namespace
 if hasattr(sys, 'set_int_max_str_digits'): # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
     sys.set_int_max_str_digits(0)
 
-def mk_crytic_parser() -> argparse.ArgumentParser:
-    crytic_compile_parser = argparse.ArgumentParser()
-    cryticparser.init(crytic_compile_parser)
-    return crytic_compile_parser
-
-def print_help_compile(crytic_compile_parser: argparse.ArgumentParser) -> None:
-    formatter = crytic_compile_parser._get_formatter()
-    for action_group in crytic_compile_parser._action_groups:
-        if action_group.title == 'options':
-            # prints "--help", which is not helpful
-            continue
-
-        formatter.start_section(action_group.title)
-        formatter.add_text(action_group.description)
-        formatter.add_arguments(action_group._group_actions)
-        formatter.end_section()
-    crytic_compile_parser._print_message(formatter.format_help())
-
 def parse_args(args=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='halmos', epilog='For more information, see https://github.com/a16z/halmos')
 
@@ -77,11 +59,6 @@ def parse_args(args=None) -> argparse.Namespace:
     group_debug.add_argument('--print-blocked-states', action='store_true', help='print blocked execution states')
     group_debug.add_argument('--print-setup-states', action='store_true', help='print setup execution states')
     group_debug.add_argument('--print-full-model', action='store_true', help='print full counterexample model')
-
-    # build options
-    group_build = parser.add_argument_group("Build options")
-
-    group_build.add_argument('--help-compile', action='store_true', help='print build options (foundry, hardhat, etc.)')
 
     # smt solver options
     group_solver = parser.add_argument_group("Solver options")
@@ -114,7 +91,7 @@ def parse_args(args=None) -> argparse.Namespace:
     group_experimental.add_argument('--symbolic-jump', action='store_true', help='support symbolic jump destination')
     group_experimental.add_argument('--print-potential-counterexample', action='store_true', help='print potentially invalid counterexamples')
 
-    return parser.parse_known_args(args)
+    return parser.parse_args(args)
 
 @dataclass(frozen=True)
 class FunctionInfo:
@@ -799,12 +776,7 @@ def main() -> int:
     #
 
     global args
-    args, halmos_unknown_args = parse_args()
-
-    crytic_compile_parser = mk_crytic_parser()
-    if args.help_compile:
-        print_help_compile(crytic_compile_parser)
-        return 0
+    args = parse_args()
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")
@@ -818,19 +790,6 @@ def main() -> int:
     #
     # compile
     #
-
-#   try:
-#       crytic_compile_args, crytic_compile_unknown_args  = crytic_compile_parser.parse_known_args()
-
-#       both_unknown = set(halmos_unknown_args) & set(crytic_compile_unknown_args)
-#       if both_unknown:
-#           print(color_warn(f'error: unrecognized arguments: {" ".join(both_unknown)}'))
-#           return 1
-
-#       cryticCompile = CryticCompile(target=args.root, **vars(crytic_compile_args))
-#   except InvalidCompilation as e:
-#       print(color_warn(f'Parse error: {e}'))
-#       return 1
 
     forge_cmd = [
         'forge', 'build', # shutil.which('forge')
