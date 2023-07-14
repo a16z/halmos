@@ -9,8 +9,6 @@ import argparse
 import re
 import traceback
 
-from crytic_compile import cryticparser
-from crytic_compile import CryticCompile, InvalidCompilation
 from dataclasses import dataclass
 from timeit import default_timer as timer
 from importlib import metadata
@@ -28,24 +26,6 @@ args: argparse.Namespace
 
 if hasattr(sys, 'set_int_max_str_digits'): # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
     sys.set_int_max_str_digits(0)
-
-def mk_crytic_parser() -> argparse.ArgumentParser:
-    crytic_compile_parser = argparse.ArgumentParser()
-    cryticparser.init(crytic_compile_parser)
-    return crytic_compile_parser
-
-def print_help_compile(crytic_compile_parser: argparse.ArgumentParser) -> None:
-    formatter = crytic_compile_parser._get_formatter()
-    for action_group in crytic_compile_parser._action_groups:
-        if action_group.title == 'options':
-            # prints "--help", which is not helpful
-            continue
-
-        formatter.start_section(action_group.title)
-        formatter.add_text(action_group.description)
-        formatter.add_arguments(action_group._group_actions)
-        formatter.end_section()
-    crytic_compile_parser._print_message(formatter.format_help())
 
 def parse_args(args=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='halmos', epilog='For more information, see https://github.com/a16z/halmos')
@@ -81,7 +61,7 @@ def parse_args(args=None) -> argparse.Namespace:
     # build options
     group_build = parser.add_argument_group("Build options")
 
-    group_build.add_argument('--help-compile', action='store_true', help='print build options (foundry, hardhat, etc.)')
+    group_build.add_argument('--forge-build-out', metavar='DIRECTORY_NAME', default='out', help='forge build artifacts directory name (default: %(default)s)')
 
     # smt solver options
     group_solver = parser.add_argument_group("Solver options")
@@ -114,7 +94,7 @@ def parse_args(args=None) -> argparse.Namespace:
     group_experimental.add_argument('--symbolic-jump', action='store_true', help='support symbolic jump destination')
     group_experimental.add_argument('--print-potential-counterexample', action='store_true', help='print potentially invalid counterexamples')
 
-    return parser.parse_known_args(args)
+    return parser.parse_args(args)
 
 @dataclass(frozen=True)
 class FunctionInfo:
@@ -129,8 +109,7 @@ def str_abi(item: Dict) -> str:
         for arg in args:
             typ = arg['type']
             if typ == 'tuple':
-            #   ret.append(str_tuple(arg['components']))
-                ret.append(typ) # crytic-compile bug
+                ret.append(str_tuple(arg['components']))
             else:
                 ret.append(typ)
         return '(' + ','.join(ret) + ')'
@@ -310,7 +289,7 @@ def setup(
 
     setup_sig, setup_name, setup_selector = setup_info.sig, setup_info.name, setup_info.selector
     if setup_sig:
-        wstore(setup_ex.calldata, 0, 4, BitVecVal(setup_selector, 32))
+        wstore(setup_ex.calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
         dyn_param_size = [] # TODO: propagate to run
         mk_calldata(abi, setup_info, setup_ex.calldata, dyn_param_size, args)
 
@@ -379,7 +358,7 @@ def run(
 
     cd = []
 
-    wstore(cd, 0, 4, BitVecVal(funselector, 32))
+    wstore(cd, 0, 4, BitVecVal(int(funselector, 16), 32))
 
     dyn_param_size = []
     mk_calldata(abi, fun_info, cd, dyn_param_size, args)
@@ -783,6 +762,49 @@ def mk_arrlen(args: argparse.Namespace) -> Dict[str, int]:
     return arrlen
 
 
+def parse_build_out(args: argparse.Namespace) -> Dict:
+    result = {} # compiler version -> source filename -> contract name -> (json, type)
+
+    out_path = os.path.join(args.root, args.forge_build_out)
+    if not os.path.exists(out_path): raise FileNotFoundError(f'the build output directory `{out_path}` does not exist')
+
+    for sol_dirname in os.listdir(out_path): # for each source filename
+        if not sol_dirname.endswith('.sol'): continue
+
+        sol_path = os.path.join(out_path, sol_dirname)
+        if not os.path.isdir(sol_path): continue
+
+        for json_filename in os.listdir(sol_path): # for each contract name
+            if not json_filename.endswith('.json'): continue
+            if json_filename.startswith('.'): continue
+
+            json_path = os.path.join(sol_path, json_filename)
+            with open(json_path, encoding='utf8') as f:
+                json_out = json.load(f)
+
+            compiler_version = json_out['metadata']['compiler']['version']
+            if compiler_version not in result:
+                result[compiler_version] = {}
+            if sol_dirname not in result[compiler_version]:
+                result[compiler_version][sol_dirname] = {}
+            contract_map = result[compiler_version][sol_dirname]
+
+            contract_name = json_filename.split('.')[0] # cut off compiler version number as well
+
+            contract_type = None
+            for node in json_out['ast']['nodes']:
+                if node['nodeType'] == 'ContractDefinition' and node['name'] == contract_name:
+                    abstract = 'abstract ' if node.get('abstract') else ''
+                    contract_type = abstract + node['contractKind']
+                    break
+            if contract_type is None: raise ValueError('no contract type', contract_name)
+
+            if contract_name in contract_map: raise ValueError('duplicate contract names in the same file', contract_name, sol_dirname)
+            contract_map[contract_name] = (json_out, contract_type)
+
+    return result
+
+
 def main() -> int:
     main_start = timer()
 
@@ -799,12 +821,7 @@ def main() -> int:
     #
 
     global args
-    args, halmos_unknown_args = parse_args()
-
-    crytic_compile_parser = mk_crytic_parser()
-    if args.help_compile:
-        print_help_compile(crytic_compile_parser)
-        return 0
+    args = parse_args()
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")
@@ -819,17 +836,24 @@ def main() -> int:
     # compile
     #
 
+    build_cmd = [
+        'forge', # shutil.which('forge')
+        'build',
+        '--root', args.root,
+        '--extra-output', 'storageLayout', 'metadata'
+    ]
+
+    # run forge without capturing stdout/stderr
+    build_exitcode = subprocess.run(build_cmd).returncode
+
+    if build_exitcode:
+        print(color_warn(f'build failed: {build_cmd}'))
+        return 1
+
     try:
-        crytic_compile_args, crytic_compile_unknown_args  = crytic_compile_parser.parse_known_args()
-
-        both_unknown = set(halmos_unknown_args) & set(crytic_compile_unknown_args)
-        if both_unknown:
-            print(color_warn(f'error: unrecognized arguments: {" ".join(both_unknown)}'))
-            return 1
-
-        cryticCompile = CryticCompile(target=args.root, **vars(crytic_compile_args))
-    except InvalidCompilation as e:
-        print(color_warn(f'Parse error: {e}'))
+        build_out = parse_build_out(args)
+    except Exception as err:
+        print(color_warn(f'build output parsing failed: {err}'))
         return 1
 
     main_mid = timer()
@@ -842,30 +866,25 @@ def main() -> int:
     total_failed = 0
     total_found = 0
 
-    for compilation_id, compilation_unit in cryticCompile.compilation_units.items():
+    for compiler_version in sorted(build_out):
+        build_out_map = build_out[compiler_version]
+        for filename in sorted(build_out_map):
+            for contract_name in sorted(build_out_map[filename]):
+                if args.contract and args.contract != contract_name: continue
 
-        for filename in sorted(compilation_unit.filenames):
-            contracts_names = compilation_unit.filename_to_contracts[filename]
-            source_unit = compilation_unit.source_units[filename]
+                (contract_json, contract_type) = build_out_map[filename][contract_name]
+                if contract_type != 'contract': continue
 
-            if args.contract:
-                if args.contract not in contracts_names: continue
-                contracts = [args.contract]
-            else:
-                contracts = sorted(contracts_names)
-
-            for contract in contracts:
-                contract_start = timer()
-
-                hexcode = source_unit.bytecodes_runtime[contract]
-                abi = source_unit.abis[contract]
-                methodIdentifiers = source_unit.hashes(contract)
+                hexcode = contract_json['deployedBytecode']['object']
+                abi = contract_json['abi']
+                methodIdentifiers = contract_json['methodIdentifiers']
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
                 if funsigs:
                     total_found += len(funsigs)
-                    print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
+                    print(f"\nRunning {len(funsigs)} tests for {contract_json['ast']['absolutePath']}:{contract_name}")
+                    contract_start = timer()
 
                     run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers)
                     enable_parallel = args.test_parallel and len(funsigs) > 1

@@ -7,7 +7,7 @@ import halmos.__main__
 
 @pytest.fixture
 def args():
-    (args, unknown_args) = parse_args([])
+    args = parse_args([])
 
     # set the global args for the main module
     halmos.__main__.args = args
