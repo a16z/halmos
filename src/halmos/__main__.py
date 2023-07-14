@@ -9,8 +9,6 @@ import argparse
 import re
 import traceback
 
-from crytic_compile import cryticparser
-from crytic_compile import CryticCompile, InvalidCompilation
 from dataclasses import dataclass
 from timeit import default_timer as timer
 from importlib import metadata
