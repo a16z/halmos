@@ -852,7 +852,7 @@ def main() -> int:
 
     try:
         build_out = parse_build_out(args)
-    except Error as err:
+    except Exception as err:
         print(color_warn(f'build output parsing failed: {err}'))
 
     main_mid = timer()
