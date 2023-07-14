@@ -13,6 +13,7 @@ from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
 from dataclasses import dataclass
 from timeit import default_timer as timer
+from importlib import metadata
 
 from .pools import thread_pool, process_pool
 from .sevm import *
@@ -60,6 +61,8 @@ def parse_args(args=None) -> argparse.Namespace:
 
     parser.add_argument('--symbolic-storage', action='store_true', help='set default storage values to symbolic')
     parser.add_argument('--symbolic-msg-sender', action='store_true', help='set msg.sender symbolic')
+
+    parser.add_argument('--version', action='store_true', help='print the version number')
 
     # debugging options
     group_debug = parser.add_argument_group("Debugging options")
@@ -801,6 +804,10 @@ def main() -> int:
     crytic_compile_parser = mk_crytic_parser()
     if args.help_compile:
         print_help_compile(crytic_compile_parser)
+        return 0
+
+    if args.version:
+        print(f"Halmos {metadata.version('halmos')}")
         return 0
 
     # quick bytecode execution mode
