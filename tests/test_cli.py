@@ -7,7 +7,7 @@ from halmos.utils import EVM
 
 from halmos.sevm import con, Contract, Instruction
 
-from halmos.__main__ import str_abi, run_bytecode
+from halmos.__main__ import str_abi, run_bytecode, FunctionInfo
 import halmos.__main__
 
 from test_fixtures import args, options
@@ -95,19 +95,20 @@ RETURN""")
     assert contract.valid_jump_destinations() == set()
 
 
-def test_run_bytecode(args, options):
+def test_run_bytecode(args):
+    # sets the flag in the global args for the main module
+    args.symbolic_jump = True
+
     hexcode = '34381856FDFDFDFDFDFD5B00'
-    options['sym_jump'] = True
-    exs = run_bytecode(hexcode, args, options)
+    exs = run_bytecode(hexcode)
     assert len(exs) == 1
     assert exs[0].current_opcode() == EVM.STOP
 
 
-def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args, options):
+def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args):
     hexcode = '600100'
     abi = setup_abi
-    arrlen = {}
-    setup_ex = halmos.__main__.setup(hexcode, abi, setup_name, setup_sig, setup_selector, arrlen, args, options)
+    setup_ex = halmos.__main__.setup(hexcode, abi, FunctionInfo(setup_name, setup_sig, setup_selector), args)
     assert setup_ex.st.stack == [1]
 
 
