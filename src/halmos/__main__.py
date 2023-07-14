@@ -8,7 +8,6 @@ import json
 import argparse
 import re
 import traceback
-import shutil
 
 from crytic_compile import cryticparser
 from crytic_compile import CryticCompile, InvalidCompilation
@@ -833,32 +832,17 @@ def main() -> int:
 #       print(color_warn(f'Parse error: {e}'))
 #       return 1
 
-    cmd = [
-        "forge",
-        "build",
-        '--extra-output',
-        'storageLayout',
-        'metadata'
+    forge_cmd = [
+        'forge', 'build', # shutil.which('forge')
+        '--root', args.root,
+        '--extra-output', 'storageLayout', 'metadata'
     ]
 
-    with subprocess.Popen(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        cwd=args.root,
-        executable=shutil.which(cmd[0]),
-    ) as process:
+    forge_exitcode = subprocess.run(forge_cmd).returncode
 
-        stdout_bytes, stderr_bytes = process.communicate()
-        stdout, stderr = (
-            stdout_bytes.decode(errors="backslashreplace"),
-            stderr_bytes.decode(errors="backslashreplace"),
-        )  # convert bytestrings to unicode strings
-
-    #   print(stdout)
-        if stderr:
-            print(color_warn(f'Parse error: {stderr}'))
-            return 1
+    if forge_exitcode:
+        print(color_warn(f'build failed: {forge_cmd}'))
+        return 1
 
     src_ids = {} # compiler version -> id -> abspath
 
