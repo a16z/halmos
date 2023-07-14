@@ -60,6 +60,11 @@ def parse_args(args=None) -> argparse.Namespace:
     group_debug.add_argument('--print-setup-states', action='store_true', help='print setup execution states')
     group_debug.add_argument('--print-full-model', action='store_true', help='print full counterexample model')
 
+    # build options
+    group_build = parser.add_argument_group("Build options")
+
+    group_build.add_argument('--forge-build-out', metavar='DIRECTORY_NAME', default='out', help='forge build artifacts directory name (default: %(default)s)')
+
     # smt solver options
     group_solver = parser.add_argument_group("Solver options")
 
@@ -760,6 +765,49 @@ def mk_arrlen(args: argparse.Namespace) -> Dict[str, int]:
     return arrlen
 
 
+def parse_build_out(args: argparse.Namespace) -> Dict:
+    result = {} # compiler version -> source filename -> contract name -> (json, type)
+
+    out_path = os.path.join(args.root, args.forge_build_out)
+    if not os.path.exists(out_path): raise ValueError('not exist', out_path)
+
+    for sol_dirname in os.listdir(out_path): # for each source filename
+        if not sol_dirname.endswith('.sol'): continue
+
+        sol_path = os.path.join(out_path, sol_dirname)
+        if not os.path.isdir(sol_path): continue
+
+        for json_filename in os.listdir(sol_path): # for each contract name
+            if not json_filename.endswith('.json'): continue
+            if json_filename.startswith('.'): continue
+
+            json_path = os.path.join(sol_path, json_filename)
+            with open(json_path, encoding='utf8') as f:
+                json_out = json.load(f)
+
+            compiler_version = json_out['metadata']['compiler']['version']
+            if compiler_version not in result:
+                result[compiler_version] = {}
+            if sol_dirname not in result[compiler_version]:
+                result[compiler_version][sol_dirname] = {}
+            contract_map = result[compiler_version][sol_dirname]
+
+            contract_name = json_filename.split('.')[0] # cut off compiler version number as well
+
+            contract_type = None
+            for node in json_out['ast']['nodes']:
+                if node['nodeType'] == 'ContractDefinition' and node['name'] == contract_name:
+                    abstract = 'abstract ' if node.get('abstract') else ''
+                    contract_type = abstract + node['contractKind']
+                    break
+            if contract_type is None: raise ValueError('no contract type', contract_name)
+
+            if contract_name in contract_map: raise ValueError('duplicate contract names in the same file', contract_name, sol_dirname)
+            contract_map[contract_name] = (json_out, contract_type)
+
+    return result
+
+
 def main() -> int:
     main_start = timer()
 
@@ -791,61 +839,24 @@ def main() -> int:
     # compile
     #
 
-    forge_cmd = [
-        'forge', 'build', # shutil.which('forge')
+    build_cmd = [
+        'forge', # shutil.which('forge')
+        'build',
         '--root', args.root,
         '--extra-output', 'storageLayout', 'metadata'
     ]
 
-    forge_exitcode = subprocess.run(forge_cmd).returncode
+    # run forge without capturing stdout/stderr
+    build_exitcode = subprocess.run(build_cmd).returncode
 
-    if forge_exitcode:
-        print(color_warn(f'build failed: {forge_cmd}'))
+    if build_exitcode:
+        print(color_warn(f'build failed: {build_cmd}'))
         return 1
 
-    src_ids = {} # compiler version -> id -> abspath
-
-    contract_json = {} # compiler version -> filename -> contract name -> (json, type)
-
-    out_path = os.path.join(args.root, 'out')
-    for sol_dirname in os.listdir(out_path):
-        if sol_dirname.endswith('.sol'):
-            sol_path = os.path.join(out_path, sol_dirname)
-            if os.path.isdir(sol_path):
-                for json_filename in os.listdir(sol_path):
-                #   print(sol_dirname, json_filename)
-                    if json_filename.startswith('.'): continue
-                    if not json_filename.endswith('.json'): continue
-
-                    json_path = os.path.join(sol_path, json_filename)
-                    with open(json_path, encoding='utf8') as f:
-                        json_out = json.load(f)
-
-                    compiler_version = json_out['metadata']['compiler']['version']
-                    if compiler_version not in src_ids:
-                        src_ids[compiler_version] = {}
-                    _src_ids = src_ids[compiler_version]
-                    if compiler_version not in contract_json:
-                        contract_json[compiler_version] = {}
-                    if sol_dirname not in contract_json[compiler_version]:
-                        contract_json[compiler_version][sol_dirname] = {}
-                    _contract_json = contract_json[compiler_version][sol_dirname]
-
-                    src_id = json_out['id']
-                    abspath = json_out['ast']['absolutePath']
-                    if src_id in _src_ids and _src_ids[src_id] != abspath: raise ValueError(src_id, _src_ids[src_id], abspath)
-                    _src_ids[src_id] = abspath
-
-                    contract_name = json_filename.split('.')[0]
-
-                    for node in json_out['ast']['nodes']:
-                        if node['nodeType'] == 'ContractDefinition' and node['name'] == contract_name:
-                            abstract = 'abstract ' if node.get('abstract') else ''
-                            contract_type = abstract + node['contractKind']
-                            break
-
-                    if contract_name in _contract_json: raise ValueError(contract_name)
-                    _contract_json[contract_name] = (json_out, contract_type)
+    try:
+        build_out = parse_build_out(args)
+    except Error as err:
+        print(color_warn(f'build output parsing failed: {err}'))
 
     main_mid = timer()
 
@@ -857,55 +868,25 @@ def main() -> int:
     total_failed = 0
     total_found = 0
 
-#   for compilation_id, compilation_unit in cryticCompile.compilation_units.items():
+    for compiler_version in sorted(build_out):
+        build_out_map = build_out[compiler_version]
+        for filename in sorted(build_out_map):
+            for contract_name in sorted(build_out_map[filename]):
+                if args.contract and args.contract != contract_name: continue
 
-#       for filename in sorted(compilation_unit.filenames):
-#           contracts_names = compilation_unit.filename_to_contracts[filename]
-#           source_unit = compilation_unit.source_units[filename]
-
-#           if args.contract:
-#               if args.contract not in contracts_names: continue
-#               contracts = [args.contract]
-#           else:
-#               contracts = sorted(contracts_names)
-
-#           for contract in contracts:
-#               contract_start = timer()
-
-#               hexcode = source_unit.bytecodes_runtime[contract]
-#               abi = source_unit.abis[contract]
-#               methodIdentifiers = source_unit.hashes(contract)
-
-#               funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
-#               total_found += len(funsigs)
-
-#               if funsigs:
-#                   num_passed = 0
-#                   num_failed = 0
-#                   print(f'\nRunning {len(funsigs)} tests for {filename.short}:{contract}')
-
-    for compiler_version in sorted(contract_json):
-        contract_json_compiler = contract_json[compiler_version]
-        for filename in sorted(contract_json_compiler):
-            for cname in sorted(contract_json_compiler[filename]):
-
-                if args.contract and args.contract != cname: continue
-
-                (out, contract_type) = contract_json_compiler[filename][cname]
-
+                (contract_json, contract_type) = build_out_map[filename][contract_name]
                 if contract_type != 'contract': continue
 
-                contract_start = timer()
-
-                hexcode = out['deployedBytecode']['object']
-                abi = out['abi']
-                methodIdentifiers = out['methodIdentifiers']
+                hexcode = contract_json['deployedBytecode']['object']
+                abi = contract_json['abi']
+                methodIdentifiers = contract_json['methodIdentifiers']
 
                 funsigs = [funsig for funsig in methodIdentifiers if funsig.startswith(args.function)]
 
                 if funsigs:
                     total_found += len(funsigs)
-                    print(f"\nRunning {len(funsigs)} tests for {out['ast']['absolutePath']}:{cname}")
+                    print(f"\nRunning {len(funsigs)} tests for {contract_json['ast']['absolutePath']}:{contract_name}")
+                    contract_start = timer()
 
                     run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers)
                     enable_parallel = args.test_parallel and len(funsigs) > 1
