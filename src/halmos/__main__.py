@@ -766,7 +766,7 @@ def parse_build_out(args: argparse.Namespace) -> Dict:
     result = {} # compiler version -> source filename -> contract name -> (json, type)
 
     out_path = os.path.join(args.root, args.forge_build_out)
-    if not os.path.exists(out_path): raise FileNotFoundError(f'{out_path} does not exist')
+    if not os.path.exists(out_path): raise FileNotFoundError(f'the build output directory `{out_path}` does not exist')
 
     for sol_dirname in os.listdir(out_path): # for each source filename
         if not sol_dirname.endswith('.sol'): continue
