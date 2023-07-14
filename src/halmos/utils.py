@@ -6,17 +6,20 @@ from typing import Dict, Tuple
 
 from z3 import *
 
+
 def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
-    if x.size() % 8 != 0: raise ValueError(x, x.size())
-    return x.as_long().to_bytes(x.size() // 8, 'big')
+    if x.size() % 8 != 0:
+        raise ValueError(x, x.size())
+    return x.as_long().to_bytes(x.size() // 8, "big")
+
 
 def hexify(x):
     if isinstance(x, str):
-        return re.sub(r'\b(\d+)\b', lambda match: hex(int(match.group(1))), x)
+        return re.sub(r"\b(\d+)\b", lambda match: hex(int(match.group(1))), x)
     elif isinstance(x, int):
         return hex(x)
     elif isinstance(x, bytes):
-        return '0x' + x.hex()
+        return "0x" + x.hex()
     elif is_bv_value(x):
         # preserving bitsize could be confusing due to some bv values given as strings; need refactoring to fix properly
         # return hexify(x.as_long().to_bytes((x.size() + 7) // 8, 'big')) # bitsize may not be a multiple of 8
@@ -24,587 +27,602 @@ def hexify(x):
     else:
         return hexify(str(x))
 
+
 def assert_address(x: BitVecRef) -> None:
-    if x.size() != 160: raise ValueError(x)
+    if x.size() != 160:
+        raise ValueError(x)
     pass
+
 
 def assert_uint256(x: BitVecRef) -> None:
-    if x.size() != 256: raise ValueError(x)
+    if x.size() != 256:
+        raise ValueError(x)
     pass
 
+
 def con_addr(n: int) -> BitVecRef:
-    if n >= 2**160: raise ValueError(n)
+    if n >= 2**160:
+        raise ValueError(n)
     return BitVecVal(n, 160)
 
+
 def color_good(text: str) -> str:
-    return '\033[32m' + text + '\033[0m'
+    return "\033[32m" + text + "\033[0m"
+
 
 def color_warn(text: str) -> str:
-    return '\033[31m' + text + '\033[0m'
+    return "\033[31m" + text + "\033[0m"
+
 
 class EVM:
-    STOP           = 0x00
-    ADD            = 0x01
-    MUL            = 0x02
-    SUB            = 0x03
-    DIV            = 0x04
-    SDIV           = 0x05
-    MOD            = 0x06
-    SMOD           = 0x07
-    ADDMOD         = 0x08
-    MULMOD         = 0x09
-    EXP            = 0x0a
-    SIGNEXTEND     = 0x0b
-    LT             = 0x10
-    GT             = 0x11
-    SLT            = 0x12
-    SGT            = 0x13
-    EQ             = 0x14
-    ISZERO         = 0x15
-    AND            = 0x16
-    OR             = 0x17
-    XOR            = 0x18
-    NOT            = 0x19
-    BYTE           = 0x1a
-    SHL            = 0x1b
-    SHR            = 0x1c
-    SAR            = 0x1d
-    SHA3           = 0x20
-    ADDRESS        = 0x30
-    BALANCE        = 0x31
-    ORIGIN         = 0x32
-    CALLER         = 0x33
-    CALLVALUE      = 0x34
-    CALLDATALOAD   = 0x35
-    CALLDATASIZE   = 0x36
-    CALLDATACOPY   = 0x37
-    CODESIZE       = 0x38
-    CODECOPY       = 0x39
-    GASPRICE       = 0x3a
-    EXTCODESIZE    = 0x3b
-    EXTCODECOPY    = 0x3c
-    RETURNDATASIZE = 0x3d
-    RETURNDATACOPY = 0x3e
-    EXTCODEHASH    = 0x3f
-    BLOCKHASH      = 0x40
-    COINBASE       = 0x41
-    TIMESTAMP      = 0x42
-    NUMBER         = 0x43
-    DIFFICULTY     = 0x44
-    GASLIMIT       = 0x45
-    CHAINID        = 0x46
-    SELFBALANCE    = 0x47
-    BASEFEE        = 0x48
-    POP            = 0x50
-    MLOAD          = 0x51
-    MSTORE         = 0x52
-    MSTORE8        = 0x53
-    SLOAD          = 0x54
-    SSTORE         = 0x55
-    JUMP           = 0x56
-    JUMPI          = 0x57
-    PC             = 0x58
-    MSIZE          = 0x59
-    GAS            = 0x5a
-    JUMPDEST       = 0x5b
-    PUSH0          = 0x5f
-    PUSH1          = 0x60
-    PUSH2          = 0x61
-    PUSH3          = 0x62
-    PUSH4          = 0x63
-    PUSH5          = 0x64
-    PUSH6          = 0x65
-    PUSH7          = 0x66
-    PUSH8          = 0x67
-    PUSH9          = 0x68
-    PUSH10         = 0x69
-    PUSH11         = 0x6a
-    PUSH12         = 0x6b
-    PUSH13         = 0x6c
-    PUSH14         = 0x6d
-    PUSH15         = 0x6e
-    PUSH16         = 0x6f
-    PUSH17         = 0x70
-    PUSH18         = 0x71
-    PUSH19         = 0x72
-    PUSH20         = 0x73
-    PUSH21         = 0x74
-    PUSH22         = 0x75
-    PUSH23         = 0x76
-    PUSH24         = 0x77
-    PUSH25         = 0x78
-    PUSH26         = 0x79
-    PUSH27         = 0x7a
-    PUSH28         = 0x7b
-    PUSH29         = 0x7c
-    PUSH30         = 0x7d
-    PUSH31         = 0x7e
-    PUSH32         = 0x7f
-    DUP1           = 0x80
-    DUP2           = 0x81
-    DUP3           = 0x82
-    DUP4           = 0x83
-    DUP5           = 0x84
-    DUP6           = 0x85
-    DUP7           = 0x86
-    DUP8           = 0x87
-    DUP9           = 0x88
-    DUP10          = 0x89
-    DUP11          = 0x8a
-    DUP12          = 0x8b
-    DUP13          = 0x8c
-    DUP14          = 0x8d
-    DUP15          = 0x8e
-    DUP16          = 0x8f
-    SWAP1          = 0x90
-    SWAP2          = 0x91
-    SWAP3          = 0x92
-    SWAP4          = 0x93
-    SWAP5          = 0x94
-    SWAP6          = 0x95
-    SWAP7          = 0x96
-    SWAP8          = 0x97
-    SWAP9          = 0x98
-    SWAP10         = 0x99
-    SWAP11         = 0x9a
-    SWAP12         = 0x9b
-    SWAP13         = 0x9c
-    SWAP14         = 0x9d
-    SWAP15         = 0x9e
-    SWAP16         = 0x9f
-    LOG0           = 0xa0
-    LOG1           = 0xa1
-    LOG2           = 0xa2
-    LOG3           = 0xa3
-    LOG4           = 0xa4
-    CREATE         = 0xf0
-    CALL           = 0xf1
-    CALLCODE       = 0xf2
-    RETURN         = 0xf3
-    DELEGATECALL   = 0xf4
-    CREATE2        = 0xf5
-    STATICCALL     = 0xfa
-    REVERT         = 0xfd
-    INVALID        = 0xfe
-    SELFDESTRUCT   = 0xff
+    STOP = 0x00
+    ADD = 0x01
+    MUL = 0x02
+    SUB = 0x03
+    DIV = 0x04
+    SDIV = 0x05
+    MOD = 0x06
+    SMOD = 0x07
+    ADDMOD = 0x08
+    MULMOD = 0x09
+    EXP = 0x0A
+    SIGNEXTEND = 0x0B
+    LT = 0x10
+    GT = 0x11
+    SLT = 0x12
+    SGT = 0x13
+    EQ = 0x14
+    ISZERO = 0x15
+    AND = 0x16
+    OR = 0x17
+    XOR = 0x18
+    NOT = 0x19
+    BYTE = 0x1A
+    SHL = 0x1B
+    SHR = 0x1C
+    SAR = 0x1D
+    SHA3 = 0x20
+    ADDRESS = 0x30
+    BALANCE = 0x31
+    ORIGIN = 0x32
+    CALLER = 0x33
+    CALLVALUE = 0x34
+    CALLDATALOAD = 0x35
+    CALLDATASIZE = 0x36
+    CALLDATACOPY = 0x37
+    CODESIZE = 0x38
+    CODECOPY = 0x39
+    GASPRICE = 0x3A
+    EXTCODESIZE = 0x3B
+    EXTCODECOPY = 0x3C
+    RETURNDATASIZE = 0x3D
+    RETURNDATACOPY = 0x3E
+    EXTCODEHASH = 0x3F
+    BLOCKHASH = 0x40
+    COINBASE = 0x41
+    TIMESTAMP = 0x42
+    NUMBER = 0x43
+    DIFFICULTY = 0x44
+    GASLIMIT = 0x45
+    CHAINID = 0x46
+    SELFBALANCE = 0x47
+    BASEFEE = 0x48
+    POP = 0x50
+    MLOAD = 0x51
+    MSTORE = 0x52
+    MSTORE8 = 0x53
+    SLOAD = 0x54
+    SSTORE = 0x55
+    JUMP = 0x56
+    JUMPI = 0x57
+    PC = 0x58
+    MSIZE = 0x59
+    GAS = 0x5A
+    JUMPDEST = 0x5B
+    PUSH0 = 0x5F
+    PUSH1 = 0x60
+    PUSH2 = 0x61
+    PUSH3 = 0x62
+    PUSH4 = 0x63
+    PUSH5 = 0x64
+    PUSH6 = 0x65
+    PUSH7 = 0x66
+    PUSH8 = 0x67
+    PUSH9 = 0x68
+    PUSH10 = 0x69
+    PUSH11 = 0x6A
+    PUSH12 = 0x6B
+    PUSH13 = 0x6C
+    PUSH14 = 0x6D
+    PUSH15 = 0x6E
+    PUSH16 = 0x6F
+    PUSH17 = 0x70
+    PUSH18 = 0x71
+    PUSH19 = 0x72
+    PUSH20 = 0x73
+    PUSH21 = 0x74
+    PUSH22 = 0x75
+    PUSH23 = 0x76
+    PUSH24 = 0x77
+    PUSH25 = 0x78
+    PUSH26 = 0x79
+    PUSH27 = 0x7A
+    PUSH28 = 0x7B
+    PUSH29 = 0x7C
+    PUSH30 = 0x7D
+    PUSH31 = 0x7E
+    PUSH32 = 0x7F
+    DUP1 = 0x80
+    DUP2 = 0x81
+    DUP3 = 0x82
+    DUP4 = 0x83
+    DUP5 = 0x84
+    DUP6 = 0x85
+    DUP7 = 0x86
+    DUP8 = 0x87
+    DUP9 = 0x88
+    DUP10 = 0x89
+    DUP11 = 0x8A
+    DUP12 = 0x8B
+    DUP13 = 0x8C
+    DUP14 = 0x8D
+    DUP15 = 0x8E
+    DUP16 = 0x8F
+    SWAP1 = 0x90
+    SWAP2 = 0x91
+    SWAP3 = 0x92
+    SWAP4 = 0x93
+    SWAP5 = 0x94
+    SWAP6 = 0x95
+    SWAP7 = 0x96
+    SWAP8 = 0x97
+    SWAP9 = 0x98
+    SWAP10 = 0x99
+    SWAP11 = 0x9A
+    SWAP12 = 0x9B
+    SWAP13 = 0x9C
+    SWAP14 = 0x9D
+    SWAP15 = 0x9E
+    SWAP16 = 0x9F
+    LOG0 = 0xA0
+    LOG1 = 0xA1
+    LOG2 = 0xA2
+    LOG3 = 0xA3
+    LOG4 = 0xA4
+    CREATE = 0xF0
+    CALL = 0xF1
+    CALLCODE = 0xF2
+    RETURN = 0xF3
+    DELEGATECALL = 0xF4
+    CREATE2 = 0xF5
+    STATICCALL = 0xFA
+    REVERT = 0xFD
+    INVALID = 0xFE
+    SELFDESTRUCT = 0xFF
+
 
 str_opcode: Dict[int, str] = {
-    EVM.STOP           : 'STOP',
-    EVM.ADD            : 'ADD',
-    EVM.MUL            : 'MUL',
-    EVM.SUB            : 'SUB',
-    EVM.DIV            : 'DIV',
-    EVM.SDIV           : 'SDIV',
-    EVM.MOD            : 'MOD',
-    EVM.SMOD           : 'SMOD',
-    EVM.ADDMOD         : 'ADDMOD',
-    EVM.MULMOD         : 'MULMOD',
-    EVM.EXP            : 'EXP',
-    EVM.SIGNEXTEND     : 'SIGNEXTEND',
-    EVM.LT             : 'LT',
-    EVM.GT             : 'GT',
-    EVM.SLT            : 'SLT',
-    EVM.SGT            : 'SGT',
-    EVM.EQ             : 'EQ',
-    EVM.ISZERO         : 'ISZERO',
-    EVM.AND            : 'AND',
-    EVM.OR             : 'OR',
-    EVM.XOR            : 'XOR',
-    EVM.NOT            : 'NOT',
-    EVM.BYTE           : 'BYTE',
-    EVM.SHL            : 'SHL',
-    EVM.SHR            : 'SHR',
-    EVM.SAR            : 'SAR',
-    EVM.SHA3           : 'SHA3',
-    EVM.ADDRESS        : 'ADDRESS',
-    EVM.BALANCE        : 'BALANCE',
-    EVM.ORIGIN         : 'ORIGIN',
-    EVM.CALLER         : 'CALLER',
-    EVM.CALLVALUE      : 'CALLVALUE',
-    EVM.CALLDATALOAD   : 'CALLDATALOAD',
-    EVM.CALLDATASIZE   : 'CALLDATASIZE',
-    EVM.CALLDATACOPY   : 'CALLDATACOPY',
-    EVM.CODESIZE       : 'CODESIZE',
-    EVM.CODECOPY       : 'CODECOPY',
-    EVM.GASPRICE       : 'GASPRICE',
-    EVM.EXTCODESIZE    : 'EXTCODESIZE',
-    EVM.EXTCODECOPY    : 'EXTCODECOPY',
-    EVM.RETURNDATASIZE : 'RETURNDATASIZE',
-    EVM.RETURNDATACOPY : 'RETURNDATACOPY',
-    EVM.EXTCODEHASH    : 'EXTCODEHASH',
-    EVM.BLOCKHASH      : 'BLOCKHASH',
-    EVM.COINBASE       : 'COINBASE',
-    EVM.TIMESTAMP      : 'TIMESTAMP',
-    EVM.NUMBER         : 'NUMBER',
-    EVM.DIFFICULTY     : 'DIFFICULTY',
-    EVM.GASLIMIT       : 'GASLIMIT',
-    EVM.CHAINID        : 'CHAINID',
-    EVM.SELFBALANCE    : 'SELFBALANCE',
-    EVM.BASEFEE        : 'BASEFEE',
-    EVM.POP            : 'POP',
-    EVM.MLOAD          : 'MLOAD',
-    EVM.MSTORE         : 'MSTORE',
-    EVM.MSTORE8        : 'MSTORE8',
-    EVM.SLOAD          : 'SLOAD',
-    EVM.SSTORE         : 'SSTORE',
-    EVM.JUMP           : 'JUMP',
-    EVM.JUMPI          : 'JUMPI',
-    EVM.PC             : 'PC',
-    EVM.MSIZE          : 'MSIZE',
-    EVM.GAS            : 'GAS',
-    EVM.JUMPDEST       : 'JUMPDEST',
-    EVM.PUSH0          : 'PUSH0',
-    EVM.PUSH1          : 'PUSH1',
-    EVM.PUSH2          : 'PUSH2',
-    EVM.PUSH3          : 'PUSH3',
-    EVM.PUSH4          : 'PUSH4',
-    EVM.PUSH5          : 'PUSH5',
-    EVM.PUSH6          : 'PUSH6',
-    EVM.PUSH7          : 'PUSH7',
-    EVM.PUSH8          : 'PUSH8',
-    EVM.PUSH9          : 'PUSH9',
-    EVM.PUSH10         : 'PUSH10',
-    EVM.PUSH11         : 'PUSH11',
-    EVM.PUSH12         : 'PUSH12',
-    EVM.PUSH13         : 'PUSH13',
-    EVM.PUSH14         : 'PUSH14',
-    EVM.PUSH15         : 'PUSH15',
-    EVM.PUSH16         : 'PUSH16',
-    EVM.PUSH17         : 'PUSH17',
-    EVM.PUSH18         : 'PUSH18',
-    EVM.PUSH19         : 'PUSH19',
-    EVM.PUSH20         : 'PUSH20',
-    EVM.PUSH21         : 'PUSH21',
-    EVM.PUSH22         : 'PUSH22',
-    EVM.PUSH23         : 'PUSH23',
-    EVM.PUSH24         : 'PUSH24',
-    EVM.PUSH25         : 'PUSH25',
-    EVM.PUSH26         : 'PUSH26',
-    EVM.PUSH27         : 'PUSH27',
-    EVM.PUSH28         : 'PUSH28',
-    EVM.PUSH29         : 'PUSH29',
-    EVM.PUSH30         : 'PUSH30',
-    EVM.PUSH31         : 'PUSH31',
-    EVM.PUSH32         : 'PUSH32',
-    EVM.DUP1           : 'DUP1',
-    EVM.DUP2           : 'DUP2',
-    EVM.DUP3           : 'DUP3',
-    EVM.DUP4           : 'DUP4',
-    EVM.DUP5           : 'DUP5',
-    EVM.DUP6           : 'DUP6',
-    EVM.DUP7           : 'DUP7',
-    EVM.DUP8           : 'DUP8',
-    EVM.DUP9           : 'DUP9',
-    EVM.DUP10          : 'DUP10',
-    EVM.DUP11          : 'DUP11',
-    EVM.DUP12          : 'DUP12',
-    EVM.DUP13          : 'DUP13',
-    EVM.DUP14          : 'DUP14',
-    EVM.DUP15          : 'DUP15',
-    EVM.DUP16          : 'DUP16',
-    EVM.SWAP1          : 'SWAP1',
-    EVM.SWAP2          : 'SWAP2',
-    EVM.SWAP3          : 'SWAP3',
-    EVM.SWAP4          : 'SWAP4',
-    EVM.SWAP5          : 'SWAP5',
-    EVM.SWAP6          : 'SWAP6',
-    EVM.SWAP7          : 'SWAP7',
-    EVM.SWAP8          : 'SWAP8',
-    EVM.SWAP9          : 'SWAP9',
-    EVM.SWAP10         : 'SWAP10',
-    EVM.SWAP11         : 'SWAP11',
-    EVM.SWAP12         : 'SWAP12',
-    EVM.SWAP13         : 'SWAP13',
-    EVM.SWAP14         : 'SWAP14',
-    EVM.SWAP15         : 'SWAP15',
-    EVM.SWAP16         : 'SWAP16',
-    EVM.LOG0           : 'LOG0',
-    EVM.LOG1           : 'LOG1',
-    EVM.LOG2           : 'LOG2',
-    EVM.LOG3           : 'LOG3',
-    EVM.LOG4           : 'LOG4',
-    EVM.CREATE         : 'CREATE',
-    EVM.CALL           : 'CALL',
-    EVM.CALLCODE       : 'CALLCODE',
-    EVM.RETURN         : 'RETURN',
-    EVM.DELEGATECALL   : 'DELEGATECALL',
-    EVM.CREATE2        : 'CREATE2',
-    EVM.STATICCALL     : 'STATICCALL',
-    EVM.REVERT         : 'REVERT',
-    EVM.INVALID        : 'INVALID',
-    EVM.SELFDESTRUCT   : 'SELFDESTRUCT',
+    EVM.STOP: "STOP",
+    EVM.ADD: "ADD",
+    EVM.MUL: "MUL",
+    EVM.SUB: "SUB",
+    EVM.DIV: "DIV",
+    EVM.SDIV: "SDIV",
+    EVM.MOD: "MOD",
+    EVM.SMOD: "SMOD",
+    EVM.ADDMOD: "ADDMOD",
+    EVM.MULMOD: "MULMOD",
+    EVM.EXP: "EXP",
+    EVM.SIGNEXTEND: "SIGNEXTEND",
+    EVM.LT: "LT",
+    EVM.GT: "GT",
+    EVM.SLT: "SLT",
+    EVM.SGT: "SGT",
+    EVM.EQ: "EQ",
+    EVM.ISZERO: "ISZERO",
+    EVM.AND: "AND",
+    EVM.OR: "OR",
+    EVM.XOR: "XOR",
+    EVM.NOT: "NOT",
+    EVM.BYTE: "BYTE",
+    EVM.SHL: "SHL",
+    EVM.SHR: "SHR",
+    EVM.SAR: "SAR",
+    EVM.SHA3: "SHA3",
+    EVM.ADDRESS: "ADDRESS",
+    EVM.BALANCE: "BALANCE",
+    EVM.ORIGIN: "ORIGIN",
+    EVM.CALLER: "CALLER",
+    EVM.CALLVALUE: "CALLVALUE",
+    EVM.CALLDATALOAD: "CALLDATALOAD",
+    EVM.CALLDATASIZE: "CALLDATASIZE",
+    EVM.CALLDATACOPY: "CALLDATACOPY",
+    EVM.CODESIZE: "CODESIZE",
+    EVM.CODECOPY: "CODECOPY",
+    EVM.GASPRICE: "GASPRICE",
+    EVM.EXTCODESIZE: "EXTCODESIZE",
+    EVM.EXTCODECOPY: "EXTCODECOPY",
+    EVM.RETURNDATASIZE: "RETURNDATASIZE",
+    EVM.RETURNDATACOPY: "RETURNDATACOPY",
+    EVM.EXTCODEHASH: "EXTCODEHASH",
+    EVM.BLOCKHASH: "BLOCKHASH",
+    EVM.COINBASE: "COINBASE",
+    EVM.TIMESTAMP: "TIMESTAMP",
+    EVM.NUMBER: "NUMBER",
+    EVM.DIFFICULTY: "DIFFICULTY",
+    EVM.GASLIMIT: "GASLIMIT",
+    EVM.CHAINID: "CHAINID",
+    EVM.SELFBALANCE: "SELFBALANCE",
+    EVM.BASEFEE: "BASEFEE",
+    EVM.POP: "POP",
+    EVM.MLOAD: "MLOAD",
+    EVM.MSTORE: "MSTORE",
+    EVM.MSTORE8: "MSTORE8",
+    EVM.SLOAD: "SLOAD",
+    EVM.SSTORE: "SSTORE",
+    EVM.JUMP: "JUMP",
+    EVM.JUMPI: "JUMPI",
+    EVM.PC: "PC",
+    EVM.MSIZE: "MSIZE",
+    EVM.GAS: "GAS",
+    EVM.JUMPDEST: "JUMPDEST",
+    EVM.PUSH0: "PUSH0",
+    EVM.PUSH1: "PUSH1",
+    EVM.PUSH2: "PUSH2",
+    EVM.PUSH3: "PUSH3",
+    EVM.PUSH4: "PUSH4",
+    EVM.PUSH5: "PUSH5",
+    EVM.PUSH6: "PUSH6",
+    EVM.PUSH7: "PUSH7",
+    EVM.PUSH8: "PUSH8",
+    EVM.PUSH9: "PUSH9",
+    EVM.PUSH10: "PUSH10",
+    EVM.PUSH11: "PUSH11",
+    EVM.PUSH12: "PUSH12",
+    EVM.PUSH13: "PUSH13",
+    EVM.PUSH14: "PUSH14",
+    EVM.PUSH15: "PUSH15",
+    EVM.PUSH16: "PUSH16",
+    EVM.PUSH17: "PUSH17",
+    EVM.PUSH18: "PUSH18",
+    EVM.PUSH19: "PUSH19",
+    EVM.PUSH20: "PUSH20",
+    EVM.PUSH21: "PUSH21",
+    EVM.PUSH22: "PUSH22",
+    EVM.PUSH23: "PUSH23",
+    EVM.PUSH24: "PUSH24",
+    EVM.PUSH25: "PUSH25",
+    EVM.PUSH26: "PUSH26",
+    EVM.PUSH27: "PUSH27",
+    EVM.PUSH28: "PUSH28",
+    EVM.PUSH29: "PUSH29",
+    EVM.PUSH30: "PUSH30",
+    EVM.PUSH31: "PUSH31",
+    EVM.PUSH32: "PUSH32",
+    EVM.DUP1: "DUP1",
+    EVM.DUP2: "DUP2",
+    EVM.DUP3: "DUP3",
+    EVM.DUP4: "DUP4",
+    EVM.DUP5: "DUP5",
+    EVM.DUP6: "DUP6",
+    EVM.DUP7: "DUP7",
+    EVM.DUP8: "DUP8",
+    EVM.DUP9: "DUP9",
+    EVM.DUP10: "DUP10",
+    EVM.DUP11: "DUP11",
+    EVM.DUP12: "DUP12",
+    EVM.DUP13: "DUP13",
+    EVM.DUP14: "DUP14",
+    EVM.DUP15: "DUP15",
+    EVM.DUP16: "DUP16",
+    EVM.SWAP1: "SWAP1",
+    EVM.SWAP2: "SWAP2",
+    EVM.SWAP3: "SWAP3",
+    EVM.SWAP4: "SWAP4",
+    EVM.SWAP5: "SWAP5",
+    EVM.SWAP6: "SWAP6",
+    EVM.SWAP7: "SWAP7",
+    EVM.SWAP8: "SWAP8",
+    EVM.SWAP9: "SWAP9",
+    EVM.SWAP10: "SWAP10",
+    EVM.SWAP11: "SWAP11",
+    EVM.SWAP12: "SWAP12",
+    EVM.SWAP13: "SWAP13",
+    EVM.SWAP14: "SWAP14",
+    EVM.SWAP15: "SWAP15",
+    EVM.SWAP16: "SWAP16",
+    EVM.LOG0: "LOG0",
+    EVM.LOG1: "LOG1",
+    EVM.LOG2: "LOG2",
+    EVM.LOG3: "LOG3",
+    EVM.LOG4: "LOG4",
+    EVM.CREATE: "CREATE",
+    EVM.CALL: "CALL",
+    EVM.CALLCODE: "CALLCODE",
+    EVM.RETURN: "RETURN",
+    EVM.DELEGATECALL: "DELEGATECALL",
+    EVM.CREATE2: "CREATE2",
+    EVM.STATICCALL: "STATICCALL",
+    EVM.REVERT: "REVERT",
+    EVM.INVALID: "INVALID",
+    EVM.SELFDESTRUCT: "SELFDESTRUCT",
 }
+
 
 def restore_precomputed_hashes(x: int) -> Tuple[int, int]:
     (preimage, offset) = sha3_inv_offset.get(x >> 16, (None, None))
-    if preimage is None: return (None, None)
-    delta = (x & 0xffff) - offset
-    if delta < 0: return (None, None)
-    return (preimage, delta) # x == hash(preimage) + delta
+    if preimage is None:
+        return (None, None)
+    delta = (x & 0xFFFF) - offset
+    if delta < 0:
+        return (None, None)
+    return (preimage, delta)  # x == hash(preimage) + delta
+
 
 def mk_sha3_inv_offset(m: Dict[int, int]) -> Dict[int, Tuple[int, int]]:
     m2 = {}
-    for (k, v) in m.items():
-        m2[k >> 16] = (v, k & 0xffff)
+    for k, v in m.items():
+        m2[k >> 16] = (v, k & 0xFFFF)
     return m2
 
-sha3_inv: Dict[int, int] = { # sha3(x) -> x
-    0x290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563 : 0,
-    0xb10e2d527612073b26eecdfd717e6a320cf44b4afac2b0732d9fcbe2b7fa0cf6 : 1,
-    0x405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace : 2,
-    0xc2575a0e9e593c00f959f8c92f12db2869c3395a3b0502d05e2516446f71f85b : 3,
-    0x8a35acfbc15ff81a39ae7d344fd709f28e8600b4aa8c65c6b64bfe7fe36bd19b : 4,
-    0x036b6384b5eca791c62761152d0c79bb0604c104a5fb6f4eb0703f3154bb3db0 : 5,
-    0xf652222313e28459528d920b65115c16c04f3efc82aaedc97be59f3f377c0d3f : 6,
-    0xa66cc928b5edb82af9bd49922954155ab7b0942694bea4ce44661d9a8736c688 : 7,
-    0xf3f7a9fe364faab93b216da50a3214154f22a0a2b415b23a84c8169e8b636ee3 : 8,
-    0x6e1540171b6c0c960b71a7020d9f60077f6af931a8bbf590da0223dacf75c7af : 9,
-    0xc65a7bb8d6351c1cf70c95a316cc6a92839c986682d98bc35f958f4883f9d2a8 : 10,
-    0x0175b7a638427703f0dbe7bb9bbf987a2551717b34e79f33b5b1008d1fa01db9 : 11,
-    0xdf6966c971051c3d54ec59162606531493a51404a002842f56009d7e5cf4a8c7 : 12,
-    0xd7b6990105719101dabeb77144f2a3385c8033acd3af97e9423a695e81ad1eb5 : 13,
-    0xbb7b4a454dc3493923482f07822329ed19e8244eff582cc204f8554c3620c3fd : 14,
-    0x8d1108e10bcb7c27dddfc02ed9d693a074039d026cf4ea4240b40f7d581ac802 : 15,
-    0x1b6847dc741a1b0cd08d278845f9d819d87b734759afb55fe2de5cb82a9ae672 : 16,
-    0x31ecc21a745e3968a04e9570e4425bc18fa8019c68028196b546d1669c200c68 : 17,
-    0xbb8a6a4669ba250d26cd7a459eca9d215f8307e33aebe50379bc5a3617ec3444 : 18,
-    0x66de8ffda797e3de9c05e8fc57b3bf0ec28a930d40b0d285d93c06501cf6a090 : 19,
-    0xce6d7b5282bd9a3661ae061feed1dbda4e52ab073b1f9285be6e155d9c38d4ec : 20,
-    0x55f448fdea98c4d29eb340757ef0a66cd03dbb9538908a6a81d96026b71ec475 : 21,
-    0xd833147d7dc355ba459fc788f669e58cfaf9dc25ddcd0702e87d69c7b5124289 : 22,
-    0xc624b66cc0138b8fabc209247f72d758e1cf3343756d543badbf24212bed8c15 : 23,
-    0xb13d2d76d1f4b7be834882e410b3e3a8afaf69f83600ae24db354391d2378d2e : 24,
-    0x944998273e477b495144fb8794c914197f3ccb46be2900f4698fd0ef743c9695 : 25,
-    0x057c384a7d1c54f3a1b2e5e67b2617b8224fdfd1ea7234eea573a6ff665ff63e : 26,
-    0x3ad8aa4f87544323a9d1e5dd902f40c356527a7955687113db5f9a85ad579dc1 : 27,
-    0x0e4562a10381dec21b205ed72637e6b1b523bdd0e4d4d50af5cd23dd4500a211 : 28,
-    0x6d4407e7be21f808e6509aa9fa9143369579dd7d760fe20a2c09680fc146134f : 29,
-    0x50bb669a95c7b50b7e8a6f09454034b2b14cf2b85c730dca9a539ca82cb6e350 : 30,
-    0xa03837a25210ee280c2113ff4b77ca23440b19d4866cca721c801278fd08d807 : 31,
-    0xc97bfaf2f8ee708c303a06d134f5ecd8389ae0432af62dc132a24118292866bb : 32,
-    0x3a6357012c1a3ae0a17d304c9920310382d968ebcc4b1771f41c6b304205b570 : 33,
-    0x61035b26e3e9eee00e0d72fd1ee8ddca6894550dca6916ea2ac6baa90d11e510 : 34,
-    0xd57b2b5166478fd4318d2acc6cc2c704584312bdd8781b32d5d06abda57f4230 : 35,
-    0x7cd332d19b93bcabe3cce7ca0c18a052f57e5fd03b4758a09f30f5ddc4b22ec4 : 36,
-    0x401968ff42a154441da5f6c4c935ac46b8671f0e062baaa62a7545ba53bb6e4c : 37,
-    0x744a2cf8fd7008e3d53b67916e73460df9fa5214e3ef23dd4259ca09493a3594 : 38,
-    0x98a476f1687bc3d60a2da2adbcba2c46958e61fa2fb4042cd7bc5816a710195b : 39,
-    0xe16da923a2d88192e5070f37b4571d58682c0d66212ec634d495f33de3f77ab5 : 40,
-    0xcb7c14ce178f56e2e8d86ab33ebc0ae081ba8556a00cd122038841867181caac : 41,
-    0xbeced09521047d05b8960b7e7bcc1d1292cf3e4b2a6b63f48335cbde5f7545d2 : 42,
-    0x11c44e4875b74d31ff9fd779bf2566af7bd15b87fc985d01f5094b89e3669e4f : 43,
-    0x7416c943b4a09859521022fd2e90eac0dd9026dad28fa317782a135f28a86091 : 44,
-    0x4a2cc91ee622da3bc833a54c37ffcb6f3ec23b7793efc5eaf5e71b7b406c5c06 : 45,
-    0x37fa166cbdbfbb1561ccd9ea985ec0218b5e68502e230525f544285b2bdf3d7e : 46,
-    0xa813484aef6fb598f9f753daf162068ff39ccea4075cb95e1a30f86995b5b7ee : 47,
-    0x6ff97a59c90d62cc7236ba3a37cd85351bf564556780cf8c1157a220f31f0cbb : 48,
-    0xc54045fa7c6ec765e825df7f9e9bf9dec12c5cef146f93a5eee56772ee647fbc : 49,
-    0x11df491316f14931039edfd4f8964c9a443b862f02d4c7611d18c2bc4e6ff697 : 50,
-    0x82a75bdeeae8604d839476ae9efd8b0e15aa447e21bfd7f41283bb54e22c9a82 : 51,
-    0x46bddb1178e94d7f2892ff5f366840eb658911794f2c3a44c450aa2c505186c1 : 52,
-    0xcfa4bec1d3298408bb5afcfcd9c430549c5b31f8aa5c5848151c0a55f473c34d : 53,
-    0x4a11f94e20a93c79f6ec743a1954ec4fc2c08429ae2122118bf234b2185c81b8 : 54,
-    0x42a7b7dd785cd69714a189dffb3fd7d7174edc9ece837694ce50f7078f7c31ae : 55,
-    0x38395c5dceade9603479b177b68959049485df8aa97b39f3533039af5f456199 : 56,
-    0xdc16fef70f8d5ddbc01ee3d903d1e69c18a3c7be080eb86a81e0578814ee58d3 : 57,
-    0xa2999d817b6757290b50e8ecf3fa939673403dd35c97de392fdb343b4015ce9e : 58,
-    0xbbe3212124853f8b0084a66a2d057c2966e251e132af3691db153ab65f0d1a4d : 59,
-    0xc6bb06cb7f92603de181bf256cd16846b93b752a170ff24824098b31aa008a7e : 60,
-    0xece66cfdbd22e3f37d348a3d8e19074452862cd65fd4b9a11f0336d1ac6d1dc3 : 61,
-    0x8d800d6614d35eed73733ee453164a3b48076eb3138f466adeeb9dec7bb31f70 : 62,
-    0xc03004e3ce0784bf68186394306849f9b7b1200073105cd9aeb554a1802b58fd : 63,
-    0x352feee0eea125f11f791c1b77524172e9bc20f1b719b6cef0fc24f64db8e15e : 64,
-    0x7c9785e8241615bc80415d89775984a1337d15dc1bf4ce50f41988b2a2b336a7 : 65,
-    0x38dfe4635b27babeca8be38d3b448cb5161a639b899a14825ba9c8d7892eb8c3 : 66,
-    0x9690ad99d6ce244efa8a0f6c2d04036d3b33a9474db32a71b71135c695102793 : 67,
-    0x9b22d3d61959b4d3528b1d8ba932c96fbe302b36a1aad1d95cab54f9e0a135ea : 68,
-    0xa80a8fcc11760162f08bb091d2c9389d07f2b73d0e996161dfac6f1043b5fc0b : 69,
-    0x128667f541fed74a8429f9d592c26c2c6a4beb9ae5ead9912c98b2595c842310 : 70,
-    0xc43c1e24e1884c4e28a16bbd9506f60b5ca9f18fc90635e729d3cfe13abcf001 : 71,
-    0x15040156076f78057c0a886f6dbac29221fa3c2646adbc8effedab98152ff32b : 72,
-    0x37e472f504e93744df80d87316862f9a8fd41a7bc266c723bf77df7866d75f55 : 73,
-    0xfcc5ba1a98fc477b8948a04d08c6f4a76181fe75021370ab5e6abd22b1792a2a : 74,
-    0x17b0af156a929edf60c351f3df2d53ed643fdd750aef9eda90dc7c8759a104a8 : 75,
-    0x42859d4f253f4d4a28ee9a59f9c9683a9404da2c5d329c733ab84f150db798a8 : 76,
-    0x1b524e1c8b5382bb913d0a2aae8ad83bb92a45fcb47761fa4a12f5b6316c2b20 : 77,
-    0x9b65e484ce3d961a557081a44c6c68a0a27eca0b88fce820bdd99c3dc223dcc7 : 78,
-    0xa2e8f972dc9f7d0b76177bb8be102e6bec069ee42c61080745e8825470e80c6c : 79,
-    0x5529612556959ef813dbe8d0ed29336ab75e80a9b7855030760b2917b01e568a : 80,
-    0x994a4b4eddb300691ee19901712848b1114bad8a1a4ae195e5abe0ec38021b94 : 81,
-    0xa9144a5e7efd259b8b0d55467f4696ed47ec83317d61501b76366dbcca65ce73 : 82,
-    0x4c83efb3982afbd500ab7c66d02b996df5fdc3d20660e61600390aad6d5f7f1e : 83,
-    0xf0d642dbc7517672e217238a2f008f4f8cdad0586d8ce5113e9e09dcc6860619 : 84,
-    0x71beda120aafdd3bb922b360a066d10b7ce81d7ac2ad9874daac46e2282f6b45 : 85,
-    0xea7419f5ae821e7204864e6a0871433ba612011908963bb42a64f42d65ad2f72 : 86,
-    0xe8e5595d268aaa85b36c3557e9d96c14a4fffaee9f45bcae0c407968a7109630 : 87,
-    0x657000d47e971dcfb21375bcfa3496f47a2a2f0f12c8aeb78a008ace6ae55ca5 : 88,
-    0xd73956b9e00d8f8bc5e44f7184df1387cdd652e7726b8ccda3db4859e02f31bf : 89,
-    0xe8c3abd4193a84ec8a3fff3eeb3ecbcbd0979e0c977ac1dee06c6e01a60aca1b : 90,
-    0xfcebc02dd307dc58cd01b156d63c6948b8f3422055fac1d836349b01722e9c52 : 91,
-    0xec0b854938343f85eb39a6648b9e449c2e4aee4dc9b4e96ab592f9f497d05138 : 92,
-    0x2619ec68b255542e3da68c054bfe0d7d0f27b7fdbefc8bbccdd23188fc71fe7f : 93,
-    0x34d3c319f536deb74ed8f1f3205d9aefef7487c819e77d3351630820dbff1118 : 94,
-    0xcc7ee599e5d59fee88c83157bd897847c5911dc7d317b3175e0b085198349973 : 95,
-    0x41c7ae758795765c6664a5d39bf63841c71ff191e9189522bad8ebff5d4eca98 : 96,
-    0xf0ecb75dd1820844c57b6762233d4e26853b3a7b8157bbd9f41f280a0f1cee9b : 97,
-    0xb912c5eb6319a4a6a83580b9611610bedb31614179330261bfd87a41347cae1c : 98,
-    0xd86d8a3f7c82c89ed8e04140017aa108a0a1469249f92c8f022b9dbafa87b883 : 99,
-    0x26700e13983fefbd9cf16da2ed70fa5c6798ac55062a4803121a869731e308d2 : 100,
-    0x8ff97419363ffd7000167f130ef7168fbea05faf9251824ca5043f113cc6a7c7 : 101,
-    0x46501879b8ca8525e8c2fd519e2fbfcfa2ebea26501294aa02cbfcfb12e94354 : 102,
-    0x9787eeb91fe3101235e4a76063c7023ecb40f923f97916639c598592fa30d6ae : 103,
-    0xa2153420d844928b4421650203c77babc8b33d7f2e7b450e2966db0c22097753 : 104,
-    0x7fb4302e8e91f9110a6554c2c0a24601252c2a42c2220ca988efcfe399914308 : 105,
-    0x116fea137db6e131133e7f2bab296045d8f41cc5607279db17b218cab0929a51 : 106,
-    0xbd43cb8ece8cd1863bcd6082d65c5b0d25665b1ce17980f0da43c0ed545f98b4 : 107,
-    0x2b4a51ab505fc96a0952efda2ba61bcd3078d4c02c39a186ec16f21883fbe016 : 108,
-    0x5006b838207c6a9ae9b84d68f467dd4bb5c305fbfb6b04eab8faaabeec1e18d8 : 109,
-    0x9930d9ff0dee0ef5ca2f7710ea66b8f84dd0f5f5351ecffe72b952cd9db7142a : 110,
-    0x39f2babe526038520877fc7c33d81accf578af4a06c5fa6b0d038cae36e12711 : 111,
-    0x8f6b23ffa15f0465e3176e15ca644cf24f86dc1312fe715484e3c4aead5eb78b : 112,
-    0xa1fcd19bfe8c32a61095b6bfbb2664842857e148fcbb5188386c8cd40348d5b6 : 113,
-    0xdffbd64cc7c1a7eb27984335d9416d51137a03d3fabec7141025c62663253fe1 : 114,
-    0xf79bde9ddd17963ebce6f7d021d60de7c2bd0db944d23c900c0c0e775f530052 : 115,
-    0x19a0b39aa25ac793b5f6e9a0534364cc0b3fd1ea9b651e79c7f50a59d48ef813 : 116,
-    0x9a8d93986a7b9e6294572ea6736696119c195c1a9f5eae642d3c5fcd44e49dea : 117,
-    0xb5732705f5241370a28908c2fe1303cb223f03b90d857fd0573f003f79fefed4 : 118,
-    0x7901cb5addcae2d210a531c604a76a660d77039093bac314de0816a16392aff1 : 119,
-    0x8dc6fb69531d98d70dc0420e638d2dfd04e09e1ec783ede9aac77da9c5a0dac4 : 120,
-    0x957bbdc7fad0dec56e7c96af4a3ab63aa9daf934a52ffce891945b7fb622d791 : 121,
-    0xf0440771a29e57e18c66727944770b82cc77924aef333c927ce6bdd2cdb3ae03 : 122,
-    0x5569044719a1ec3b04d0afa9e7a5310c7c0473331d13dc9fafe143b2c4e8148a : 123,
-    0x9222cbf5d0ddc505a6f2f04716e22c226cee16a955fef88c618922096dae2fd0 : 124,
-    0xa913c8ac5320dae1c4a00ff23343947ed0fdf88d251e9bd2a5519d3d6162d222 : 125,
-    0x0f2ada1f2dbae48ae468fe0cdb7bcda7d0cffee8545442e682273ba01a6203a7 : 126,
-    0x66925e85f1a4743fd8d60ba595ed74887b7caf321dd83b21e04d77c115383408 : 127,
-    0x59f3fb058c6bba7a4e76396639fc4dd21bd59163db798899cf56cef48b3c9ec9 : 128,
-    0x76fce494794d92ac286b20d6126fc49ecb9cca2fa94b5c726f6ec1109b891414 : 129,
-    0xb2244e644cfe16f72b654fbc48ff0fecec8fc59649ca8625094bebd9bd2e4035 : 130,
-    0x1397b88f412a83a7f1c0d834c533e486ff1f24f42a31819e91b624931060a863 : 131,
-    0x50250e93f8c73d2c1be015ec28e8cd2feb871efa71e955ad24477aafb09484fa : 132,
-    0xdbdaec72d84124d8c7c57ae448f5a4e3eedb34dba437fdcbe6d26496b68afe87 : 133,
-    0x46b7ea84944250856a716737059479854246a026d947c13d5a0929bc8c1bc81d : 134,
-    0x171ab08901be24769dbebedbdf7e0245486fbc64ab975cd431a39533032d5415 : 135,
-    0x7ef464cf5a521d70c933977510816a0355b91a50eca2778837fb82da8448ecf6 : 136,
-    0x5bfa74c743914028161ae645d300d90bbdc659f169ca1469ec86b4960f7266cb : 137,
-    0x834355d35cbfbd33b2397e201af04b52bdd40b9b51275f279ea47e93547b631e : 138,
-    0x7b6bb1e9d1b017ff82945596cf3cfb1a6cee971c1ebb16f2c6bd23c2d642728e : 139,
-    0x5f2f2dca1d951c7429b52007f396328c64c25e226c1867318158f7f2cbdd40a9 : 140,
-    0x37a1be2a88dadcd0e6062f54ddcc01a03360ba61ca7784a744e757488bf8ceb2 : 141,
-    0x8edd81ff20324ea0cfe70c700ff4e9db7580d269b423d9f61470b370819cbd17 : 142,
-    0x337f7913db22d91ef425f82102bc8075ef67e23a2be359965ea316e78e1eff3f : 143,
-    0x60b1e32550f9d5f25f9dd040e7a106b15d8eb282dd6b3e1914c73d8066896412 : 144,
-    0xcdae184edd6bf71c1fb62d6e6682fdb2032455c0e50143742135fbbe809bd793 : 145,
-    0x6e452848784197f00927d379e3db9e69a5131d2269f862bfcd05a0b38f6abf7f : 146,
-    0x28da5ca8143bfa5e9f642e58e5e87bef0a2eb0c00bcd4efdd01050293f5fac91 : 147,
-    0x7047a3cc0a76edcee45792ca71527c753f6167484f14b94c4a3bd2997516725c : 148,
-    0x947035e97d0f7e1937f791bc189f60c984ceaaa7a8494fc67f9f8f4de8ccf2c6 : 149,
-    0x6aa7ec8ac2a999a90ce6c78668dffe4e487e2576a97ca366ec81ecb335af90d0 : 150,
-    0x354a83ed9988f79f6038d4c7a7dadbad8af32f4ad6df893e0e5807a1b1944ff9 : 151,
-    0x2237a976fa961f5921fd19f2b03c925c725d77b20ce8f790c19709c03de4d814 : 152,
-    0x72a152ddfb8e864297c917af52ea6c1c68aead0fee1a62673fcc7e0c94979d00 : 153,
-    0x44da158ba27f9252712a74ff6a55c5d531f69609f1f6e7f17c4443a8e2089be4 : 154,
-    0xbba9db4cdbea0a37c207bbb83e20f828cd4441c49891101dc94fd20dc8efc349 : 155,
-    0xaf85b9071dfafeac1409d3f1d19bafc9bc7c37974cde8df0ee6168f0086e539c : 156,
-    0xd26e832454299e9fabb89e0e5fffdc046d4e14431bc1bf607ffb2e8a1ddecf7b : 157,
-    0xcfe2a20ff701a1f3e14f63bd70d6c6bc6fba8172ec6d5a505cdab3927c0a9de6 : 158,
-    0x0bc14066c33013fe88f66e314e4cf150b0b2d4d6451a1a51dbbd1c27cd11de28 : 159,
-    0x78fdc8d422c49ced035a9edf18d00d3c6a8d81df210f3e5e448e045e77b41e88 : 160,
-    0xaadc37b8ba5645e62f4546802db221593a94729ccbfc5a97d01365a88f649878 : 161,
-    0xaaf4f58de99300cfadc4585755f376d5fa747d5bc561d5bd9d710de1f91bf42d : 162,
-    0x60859188cffe297f44dde29f2d2865634621f26215049caeb304ccba566a8b17 : 163,
-    0xe434dc35da084cf8d7e8186688ea2dacb53db7003d427af3abf351bd9d0a4e8d : 164,
-    0xb29a2b3b6f2ff1b765777a231725941da5072cc4fcc30ac4a2ce09706e8ddeff : 165,
-    0x2da56674729343acc9933752c8c469a244252915242eb6d4c02d11ddd69164a1 : 166,
-    0xb68792697ed876af8b4858b316f5b54d81f6861191ad2950c1fde6c3dc7b3dea : 167,
-    0xbee89403b5bf0e626c2f71adb366311c697013df53107181a963adc459ef4d99 : 168,
-    0xdc471888e6136f84c49e531e9c9240dc4e3fba66da9d3a49e2af6202133683e0 : 169,
-    0x550d3de95be0bd28a79c3eb4ea7f05692c60b0602e48b49461e703379b08a71a : 170,
-    0xfc377260a69a39dd786235c89f4bcd5d9639157731cac38071a0508750eb115a : 171,
-    0x0a0a1bcadd9f6a5539376fa82276e043ae3cb4499daaaf8136572ecb1f9f0d60 : 172,
-    0x0440fd76b4e685d17019b0eef836cea9994650028b99dddfb48be06fa4240aa6 : 173,
-    0xdf5d400f265039450228fa547df2bee79e6a350daa43fba4bd328bc654824c64 : 174,
-    0xdef993a65205231625280c5e3c23e44b263d0aa948fbc330055626b8ab25a5a1 : 175,
-    0x238ba8d02078544847438db7773730a25d584074eac94489bd8eb86ca267c937 : 176,
-    0x04cb44c80b6fbf8ceb1d80af688c9f7c0b2ab5bf4a964cabe37041f23b23f7a8 : 177,
-    0xbbf265bea1b905c854054a8dbe97fedcc06fa54306551423711231a4ad0610c9 : 178,
-    0x236f2840bfc5dc34b28742dd0b4c9defe8a4a5fa9592e49ceffb9ab51b7eb974 : 179,
-    0x1c5f5ac147ec2dee04d8ce29bdbebbc58f578e0e1392da66f352a62e5c09c503 : 180,
-    0x22b88d74a6b23be687aa96340c881253c2e9873c526eec7366dc5f733ada306a : 181,
-    0x3ae797ceef265e3a4f9c1978c47c759eb34a32909251dee7276db339b17b3de3 : 182,
-    0x6a79cc294e25eb1a13381e9f3361ee96c47ee7ed00bf73abadb8f9664bffd0a7 : 183,
-    0xd91d691c894f8266e3f2d5e558ad2349d6783327a752a4949bc554f514e34988 : 184,
-    0xe35848a7c6477cfe9366ae64571069fd3a5ad752a460d28c5f73d438b5e432bf : 185,
-    0xf3b9eb9e163af2088b11de0a369fb583f58f9440e0e5c70fce0c59909ecece8a : 186,
-    0x28afdd85196b637a3c64ff1f53af1ad8de145cf652297ede1b38f2cbd6a4b4bf : 187,
-    0x6f1f0041084f67ced174808484bd05851de94443d775585e9d86d4c2589dba59 : 188,
-    0xd344f074c815fded543cd5a29a47659de529cd0adb1c1fae6eda2d685d422bd8 : 189,
-    0x4082d8aa0be13ab143f55d600665a8ae7ef90ba09d57c38fa538a2604d7e9827 : 190,
-    0xb52cf138a3505dc3d3cd84a77912f4be1a33df2c3065d3e4cb37fb1d5d1b5072 : 191,
-    0x5e29e30c8ea9a89560281b90dbe96fe6f067a8acc0f164a71449bf0da7d58d7e : 192,
-    0xa4c9b5d989fa12d608052e66dc5a37a431d679e93d0ed25572f97f67460bb157 : 193,
-    0xb93edcd1e74716ac76d71e26ce3491be20745375dcd4848d8f3b91a3f785dbb1 : 194,
-    0x6d918f650e2b4a9f360977c4447e6376eb632ec1f687ba963aa9983e90086594 : 195,
-    0x2bde9b0c0857aee2cffdea6b8723eaf59894499ec278c18f020edd3c2295e424 : 196,
-    0xbacdda17ed986c07f827229709e1ded99d4da917a5e7e7ec15816eaf2cacf54c : 197,
-    0xcfc479828d8133d824a47fe26326d458b6b94134276b945404197f42411564c3 : 198,
-    0xc1d0558604082af4380f8af6e6df686f24c7438ca4f2a67c86a71ee7852601f9 : 199,
-    0xe71fac6fb785942cc6c6404a423f94f32a28ae66d69ff41494c38bfd4788b2f8 : 200,
-    0x66be4f155c5ef2ebd3772b228f2f00681e4ed5826cdb3b1943cc11ad15ad1d28 : 201,
-    0x42d72674974f694b5f5159593243114d38a5c39c89d6b62fee061ff523240ee1 : 202,
-    0xa7ce836d032b2bf62b7e2097a8e0a6d8aeb35405ad15271e96d3b0188a1d06fb : 203,
-    0x47197230e1e4b29fc0bd84d7d78966c0925452aff72a2a121538b102457e9ebe : 204,
-    0x83978b4c69c48dd978ab43fe30f077615294f938fb7f936d9eb340e51ea7db2e : 205,
-    0xd36cd1c74ef8d7326d8021b776c18fb5a5724b7f7bc93c2f42e43e10ef27d12a : 206,
-    0xacb8d954e2cfef495862221e91bd7523613cf8808827cb33edfe4904cc51bf29 : 207,
-    0xe89d44c8fd6a9bac8af33ce47f56337617d449bf7ff3956b618c646de829cbcb : 208,
-    0x695fb3134ad82c3b8022bc5464edd0bcc9424ef672b52245dcb6ab2374327ce3 : 209,
-    0xf2192e1030363415d7b4fb0406540a0060e8e2fc8982f3f32289379e11fa6546 : 210,
-    0x915c3eb987b20e1af620c1403197bf687fb7f18513b3a73fde6e78c7072c41a6 : 211,
-    0x9780e26d96b1f2a9a18ef8fc72d589dbf03ef788137b64f43897e83a91e7feec : 212,
-    0x51858de9989bf7441865ebdadbf7382c8838edbf830f5d86a9a51ac773676dd6 : 213,
-    0xe767803f8ecf1dee6bb0345811f7312cda556058b19db6389ad9ae3568643ddd : 214,
-    0x8a012a6de2943a5aa4d77acf5e695d4456760a3f1f30a5d6dc2079599187a071 : 215,
-    0x5320ad99a619a90804cd2efe3a5cf0ac1ac5c41ad9ff2c61cf699efdad771096 : 216,
-    0xcc6782fd46dd71c5f512301ab049782450b4eaf79fdac5443d93d274d3916786 : 217,
-    0xb3d6e86317c38844915b053a0c35ff2fc103b684e96cef2918ab06844eb51aaf : 218,
-    0x4c0d3471ead8ee99fbd8249e33f683e07c6cd6071fe102dd09617b2c353de430 : 219,
-    0x3162b0988d4210bff484413ed451d170a03887272177efc0b7d000f10abe9edf : 220,
-    0xac507b9f8bf86ad8bb770f71cd2b1992902ae0314d93fc0f2bb011d70e796226 : 221,
-    0xfae8130c0619f84b4b44f01b84806f04e82e536d70e05f2356977fa318aecc1a : 222,
-    0x65e3d48fa860a761b461ce1274f0d562f3db9a6a57cf04d8c90d68f5670b6aea : 223,
-    0x8b43726243eeaf8325404568abece3264b546cf9d88671f09c24c87045fccb4f : 224,
-    0x3efdd7a884ff9e18c9e5711c185aa6c5e413b68f23197997da5b1665ca978f99 : 225,
-    0x26a62d79192c78c3891f38189368673110b88734c09ed7453515def7525e07d8 : 226,
-    0x37f6a7f96b945f2f9a9127ccb4a8552fcb6938e53fe8f046db8da238398093e9 : 227,
-    0x04e4a0bb093261ee16386dadcef9e2a83913f4e1899464891421d20c1bbff74d : 228,
-    0x5625f7c930b8b40de87dc8e69145d83fd1d81c61b6c31fb7cfe69fac65b28642 : 229,
-    0xd31ddb47b5e8664717d3718acbd132396ff496fe337159c99410be8658408a27 : 230,
-    0x6cb0db1d7354dfb4a1464318006df0643cafe2002a86a29ff8560f900fef28a1 : 231,
-    0x53c8da29bfa275271df3f270296d5a7d61b57f8848c89b3f65f49e21340b7592 : 232,
-    0xea6426b4b8d70caa8ece9a88fb0a9d4a6b817bb4a43ac6fbef64cb0e589129ee : 233,
-    0x61c831beab28d67d1bb40b5ae1a11e2757fa842f031a2d0bc94a7867bc5d26c2 : 234,
-    0x0446c598f3355ed7d8a3b7e0b99f9299d15e956a97faae081a0b49d17024abd2 : 235,
-    0xe7dfac380f4a6ed3a03e62f813161eff828766fa014393558e075e9ceb77d549 : 236,
-    0x0504e0a132d2ef5ca5f2fe74fc64437205bc10f32d5f13d533bf552916a94d3f : 237,
-    0xdb444da68c84f0a9ce08609100b69b8f3d5672687e0ca13fa3c0ac9eb2bde5d2 : 238,
-    0xdd0dc620e7584674cb3dba490d2eba9e68eca0bef228ee569a4a64f6559056e9 : 239,
-    0x681483e2251cd5e2885507bb09f76bed3b99d3c377dd48396177647bfb4aafda : 240,
-    0xc29b39917e4e60f0fee5b6871b30a38e50531d76d1b0837811bd6351b34854ec : 241,
-    0x83d76afc3887c0b7edd14a1affa7554bed3345ba68ddcd2a3326c7eae97b80d8 : 242,
-    0x2f5553803273e8bb29d913cc31bab953051c59f3ba57a71cf5591563ca721405 : 243,
-    0xfc6a672327474e1387fcbce1814a1de376d8561fc138561441ac6e396089e062 : 244,
-    0x81630654dfb0fd282a37117995646cdde2cf8eefe9f3f96fdb12cfda88df6668 : 245,
-    0xddf78cfa378b5e068a248edaf3abef23ea9e62c66f86f18cc5e695cd36c9809b : 246,
-    0xe9944ebef6e5a24035a31a727e8ff6da7c372d99949c1224483b857f6401e346 : 247,
-    0x6120b123382f98f7efe66abe6a3a3445788a87e48d4e6991f37baadcac0bef95 : 248,
-    0x168c8166292b85070409830617e84bdd7e3518b38e5ac430dc35ed7d16b07a86 : 249,
-    0xd84f57f3ffa76cc18982da4353cc5991158ec5ae4f6a9109d1d7a0ae2cba77ed : 250,
-    0x3e7257b7272bb46d49cd6019b04ddee20da7c0cb13f7c1ec3391291b2ccebabc : 251,
-    0x371f36870d18f32a11fea0f144b021c8b407bb50f8e0267c711123f454b963c0 : 252,
-    0x9346ac6dd7de6b96975fec380d4d994c4c12e6a8897544f22915316cc6cca280 : 253,
-    0x54075df80ec1ae6ac9100e1fd0ebf3246c17f5c933137af392011f4c5f61513a : 254,
-    0xe08ec2af2cfc251225e1968fd6ca21e4044f129bffa95bac3503be8bdb30a367 : 255,
+
+sha3_inv: Dict[int, int] = {  # sha3(x) -> x
+    0x290DECD9548B62A8D60345A988386FC84BA6BC95484008F6362F93160EF3E563: 0,
+    0xB10E2D527612073B26EECDFD717E6A320CF44B4AFAC2B0732D9FCBE2B7FA0CF6: 1,
+    0x405787FA12A823E0F2B7631CC41B3BA8828B3321CA811111FA75CD3AA3BB5ACE: 2,
+    0xC2575A0E9E593C00F959F8C92F12DB2869C3395A3B0502D05E2516446F71F85B: 3,
+    0x8A35ACFBC15FF81A39AE7D344FD709F28E8600B4AA8C65C6B64BFE7FE36BD19B: 4,
+    0x036B6384B5ECA791C62761152D0C79BB0604C104A5FB6F4EB0703F3154BB3DB0: 5,
+    0xF652222313E28459528D920B65115C16C04F3EFC82AAEDC97BE59F3F377C0D3F: 6,
+    0xA66CC928B5EDB82AF9BD49922954155AB7B0942694BEA4CE44661D9A8736C688: 7,
+    0xF3F7A9FE364FAAB93B216DA50A3214154F22A0A2B415B23A84C8169E8B636EE3: 8,
+    0x6E1540171B6C0C960B71A7020D9F60077F6AF931A8BBF590DA0223DACF75C7AF: 9,
+    0xC65A7BB8D6351C1CF70C95A316CC6A92839C986682D98BC35F958F4883F9D2A8: 10,
+    0x0175B7A638427703F0DBE7BB9BBF987A2551717B34E79F33B5B1008D1FA01DB9: 11,
+    0xDF6966C971051C3D54EC59162606531493A51404A002842F56009D7E5CF4A8C7: 12,
+    0xD7B6990105719101DABEB77144F2A3385C8033ACD3AF97E9423A695E81AD1EB5: 13,
+    0xBB7B4A454DC3493923482F07822329ED19E8244EFF582CC204F8554C3620C3FD: 14,
+    0x8D1108E10BCB7C27DDDFC02ED9D693A074039D026CF4EA4240B40F7D581AC802: 15,
+    0x1B6847DC741A1B0CD08D278845F9D819D87B734759AFB55FE2DE5CB82A9AE672: 16,
+    0x31ECC21A745E3968A04E9570E4425BC18FA8019C68028196B546D1669C200C68: 17,
+    0xBB8A6A4669BA250D26CD7A459ECA9D215F8307E33AEBE50379BC5A3617EC3444: 18,
+    0x66DE8FFDA797E3DE9C05E8FC57B3BF0EC28A930D40B0D285D93C06501CF6A090: 19,
+    0xCE6D7B5282BD9A3661AE061FEED1DBDA4E52AB073B1F9285BE6E155D9C38D4EC: 20,
+    0x55F448FDEA98C4D29EB340757EF0A66CD03DBB9538908A6A81D96026B71EC475: 21,
+    0xD833147D7DC355BA459FC788F669E58CFAF9DC25DDCD0702E87D69C7B5124289: 22,
+    0xC624B66CC0138B8FABC209247F72D758E1CF3343756D543BADBF24212BED8C15: 23,
+    0xB13D2D76D1F4B7BE834882E410B3E3A8AFAF69F83600AE24DB354391D2378D2E: 24,
+    0x944998273E477B495144FB8794C914197F3CCB46BE2900F4698FD0EF743C9695: 25,
+    0x057C384A7D1C54F3A1B2E5E67B2617B8224FDFD1EA7234EEA573A6FF665FF63E: 26,
+    0x3AD8AA4F87544323A9D1E5DD902F40C356527A7955687113DB5F9A85AD579DC1: 27,
+    0x0E4562A10381DEC21B205ED72637E6B1B523BDD0E4D4D50AF5CD23DD4500A211: 28,
+    0x6D4407E7BE21F808E6509AA9FA9143369579DD7D760FE20A2C09680FC146134F: 29,
+    0x50BB669A95C7B50B7E8A6F09454034B2B14CF2B85C730DCA9A539CA82CB6E350: 30,
+    0xA03837A25210EE280C2113FF4B77CA23440B19D4866CCA721C801278FD08D807: 31,
+    0xC97BFAF2F8EE708C303A06D134F5ECD8389AE0432AF62DC132A24118292866BB: 32,
+    0x3A6357012C1A3AE0A17D304C9920310382D968EBCC4B1771F41C6B304205B570: 33,
+    0x61035B26E3E9EEE00E0D72FD1EE8DDCA6894550DCA6916EA2AC6BAA90D11E510: 34,
+    0xD57B2B5166478FD4318D2ACC6CC2C704584312BDD8781B32D5D06ABDA57F4230: 35,
+    0x7CD332D19B93BCABE3CCE7CA0C18A052F57E5FD03B4758A09F30F5DDC4B22EC4: 36,
+    0x401968FF42A154441DA5F6C4C935AC46B8671F0E062BAAA62A7545BA53BB6E4C: 37,
+    0x744A2CF8FD7008E3D53B67916E73460DF9FA5214E3EF23DD4259CA09493A3594: 38,
+    0x98A476F1687BC3D60A2DA2ADBCBA2C46958E61FA2FB4042CD7BC5816A710195B: 39,
+    0xE16DA923A2D88192E5070F37B4571D58682C0D66212EC634D495F33DE3F77AB5: 40,
+    0xCB7C14CE178F56E2E8D86AB33EBC0AE081BA8556A00CD122038841867181CAAC: 41,
+    0xBECED09521047D05B8960B7E7BCC1D1292CF3E4B2A6B63F48335CBDE5F7545D2: 42,
+    0x11C44E4875B74D31FF9FD779BF2566AF7BD15B87FC985D01F5094B89E3669E4F: 43,
+    0x7416C943B4A09859521022FD2E90EAC0DD9026DAD28FA317782A135F28A86091: 44,
+    0x4A2CC91EE622DA3BC833A54C37FFCB6F3EC23B7793EFC5EAF5E71B7B406C5C06: 45,
+    0x37FA166CBDBFBB1561CCD9EA985EC0218B5E68502E230525F544285B2BDF3D7E: 46,
+    0xA813484AEF6FB598F9F753DAF162068FF39CCEA4075CB95E1A30F86995B5B7EE: 47,
+    0x6FF97A59C90D62CC7236BA3A37CD85351BF564556780CF8C1157A220F31F0CBB: 48,
+    0xC54045FA7C6EC765E825DF7F9E9BF9DEC12C5CEF146F93A5EEE56772EE647FBC: 49,
+    0x11DF491316F14931039EDFD4F8964C9A443B862F02D4C7611D18C2BC4E6FF697: 50,
+    0x82A75BDEEAE8604D839476AE9EFD8B0E15AA447E21BFD7F41283BB54E22C9A82: 51,
+    0x46BDDB1178E94D7F2892FF5F366840EB658911794F2C3A44C450AA2C505186C1: 52,
+    0xCFA4BEC1D3298408BB5AFCFCD9C430549C5B31F8AA5C5848151C0A55F473C34D: 53,
+    0x4A11F94E20A93C79F6EC743A1954EC4FC2C08429AE2122118BF234B2185C81B8: 54,
+    0x42A7B7DD785CD69714A189DFFB3FD7D7174EDC9ECE837694CE50F7078F7C31AE: 55,
+    0x38395C5DCEADE9603479B177B68959049485DF8AA97B39F3533039AF5F456199: 56,
+    0xDC16FEF70F8D5DDBC01EE3D903D1E69C18A3C7BE080EB86A81E0578814EE58D3: 57,
+    0xA2999D817B6757290B50E8ECF3FA939673403DD35C97DE392FDB343B4015CE9E: 58,
+    0xBBE3212124853F8B0084A66A2D057C2966E251E132AF3691DB153AB65F0D1A4D: 59,
+    0xC6BB06CB7F92603DE181BF256CD16846B93B752A170FF24824098B31AA008A7E: 60,
+    0xECE66CFDBD22E3F37D348A3D8E19074452862CD65FD4B9A11F0336D1AC6D1DC3: 61,
+    0x8D800D6614D35EED73733EE453164A3B48076EB3138F466ADEEB9DEC7BB31F70: 62,
+    0xC03004E3CE0784BF68186394306849F9B7B1200073105CD9AEB554A1802B58FD: 63,
+    0x352FEEE0EEA125F11F791C1B77524172E9BC20F1B719B6CEF0FC24F64DB8E15E: 64,
+    0x7C9785E8241615BC80415D89775984A1337D15DC1BF4CE50F41988B2A2B336A7: 65,
+    0x38DFE4635B27BABECA8BE38D3B448CB5161A639B899A14825BA9C8D7892EB8C3: 66,
+    0x9690AD99D6CE244EFA8A0F6C2D04036D3B33A9474DB32A71B71135C695102793: 67,
+    0x9B22D3D61959B4D3528B1D8BA932C96FBE302B36A1AAD1D95CAB54F9E0A135EA: 68,
+    0xA80A8FCC11760162F08BB091D2C9389D07F2B73D0E996161DFAC6F1043B5FC0B: 69,
+    0x128667F541FED74A8429F9D592C26C2C6A4BEB9AE5EAD9912C98B2595C842310: 70,
+    0xC43C1E24E1884C4E28A16BBD9506F60B5CA9F18FC90635E729D3CFE13ABCF001: 71,
+    0x15040156076F78057C0A886F6DBAC29221FA3C2646ADBC8EFFEDAB98152FF32B: 72,
+    0x37E472F504E93744DF80D87316862F9A8FD41A7BC266C723BF77DF7866D75F55: 73,
+    0xFCC5BA1A98FC477B8948A04D08C6F4A76181FE75021370AB5E6ABD22B1792A2A: 74,
+    0x17B0AF156A929EDF60C351F3DF2D53ED643FDD750AEF9EDA90DC7C8759A104A8: 75,
+    0x42859D4F253F4D4A28EE9A59F9C9683A9404DA2C5D329C733AB84F150DB798A8: 76,
+    0x1B524E1C8B5382BB913D0A2AAE8AD83BB92A45FCB47761FA4A12F5B6316C2B20: 77,
+    0x9B65E484CE3D961A557081A44C6C68A0A27ECA0B88FCE820BDD99C3DC223DCC7: 78,
+    0xA2E8F972DC9F7D0B76177BB8BE102E6BEC069EE42C61080745E8825470E80C6C: 79,
+    0x5529612556959EF813DBE8D0ED29336AB75E80A9B7855030760B2917B01E568A: 80,
+    0x994A4B4EDDB300691EE19901712848B1114BAD8A1A4AE195E5ABE0EC38021B94: 81,
+    0xA9144A5E7EFD259B8B0D55467F4696ED47EC83317D61501B76366DBCCA65CE73: 82,
+    0x4C83EFB3982AFBD500AB7C66D02B996DF5FDC3D20660E61600390AAD6D5F7F1E: 83,
+    0xF0D642DBC7517672E217238A2F008F4F8CDAD0586D8CE5113E9E09DCC6860619: 84,
+    0x71BEDA120AAFDD3BB922B360A066D10B7CE81D7AC2AD9874DAAC46E2282F6B45: 85,
+    0xEA7419F5AE821E7204864E6A0871433BA612011908963BB42A64F42D65AD2F72: 86,
+    0xE8E5595D268AAA85B36C3557E9D96C14A4FFFAEE9F45BCAE0C407968A7109630: 87,
+    0x657000D47E971DCFB21375BCFA3496F47A2A2F0F12C8AEB78A008ACE6AE55CA5: 88,
+    0xD73956B9E00D8F8BC5E44F7184DF1387CDD652E7726B8CCDA3DB4859E02F31BF: 89,
+    0xE8C3ABD4193A84EC8A3FFF3EEB3ECBCBD0979E0C977AC1DEE06C6E01A60ACA1B: 90,
+    0xFCEBC02DD307DC58CD01B156D63C6948B8F3422055FAC1D836349B01722E9C52: 91,
+    0xEC0B854938343F85EB39A6648B9E449C2E4AEE4DC9B4E96AB592F9F497D05138: 92,
+    0x2619EC68B255542E3DA68C054BFE0D7D0F27B7FDBEFC8BBCCDD23188FC71FE7F: 93,
+    0x34D3C319F536DEB74ED8F1F3205D9AEFEF7487C819E77D3351630820DBFF1118: 94,
+    0xCC7EE599E5D59FEE88C83157BD897847C5911DC7D317B3175E0B085198349973: 95,
+    0x41C7AE758795765C6664A5D39BF63841C71FF191E9189522BAD8EBFF5D4ECA98: 96,
+    0xF0ECB75DD1820844C57B6762233D4E26853B3A7B8157BBD9F41F280A0F1CEE9B: 97,
+    0xB912C5EB6319A4A6A83580B9611610BEDB31614179330261BFD87A41347CAE1C: 98,
+    0xD86D8A3F7C82C89ED8E04140017AA108A0A1469249F92C8F022B9DBAFA87B883: 99,
+    0x26700E13983FEFBD9CF16DA2ED70FA5C6798AC55062A4803121A869731E308D2: 100,
+    0x8FF97419363FFD7000167F130EF7168FBEA05FAF9251824CA5043F113CC6A7C7: 101,
+    0x46501879B8CA8525E8C2FD519E2FBFCFA2EBEA26501294AA02CBFCFB12E94354: 102,
+    0x9787EEB91FE3101235E4A76063C7023ECB40F923F97916639C598592FA30D6AE: 103,
+    0xA2153420D844928B4421650203C77BABC8B33D7F2E7B450E2966DB0C22097753: 104,
+    0x7FB4302E8E91F9110A6554C2C0A24601252C2A42C2220CA988EFCFE399914308: 105,
+    0x116FEA137DB6E131133E7F2BAB296045D8F41CC5607279DB17B218CAB0929A51: 106,
+    0xBD43CB8ECE8CD1863BCD6082D65C5B0D25665B1CE17980F0DA43C0ED545F98B4: 107,
+    0x2B4A51AB505FC96A0952EFDA2BA61BCD3078D4C02C39A186EC16F21883FBE016: 108,
+    0x5006B838207C6A9AE9B84D68F467DD4BB5C305FBFB6B04EAB8FAAABEEC1E18D8: 109,
+    0x9930D9FF0DEE0EF5CA2F7710EA66B8F84DD0F5F5351ECFFE72B952CD9DB7142A: 110,
+    0x39F2BABE526038520877FC7C33D81ACCF578AF4A06C5FA6B0D038CAE36E12711: 111,
+    0x8F6B23FFA15F0465E3176E15CA644CF24F86DC1312FE715484E3C4AEAD5EB78B: 112,
+    0xA1FCD19BFE8C32A61095B6BFBB2664842857E148FCBB5188386C8CD40348D5B6: 113,
+    0xDFFBD64CC7C1A7EB27984335D9416D51137A03D3FABEC7141025C62663253FE1: 114,
+    0xF79BDE9DDD17963EBCE6F7D021D60DE7C2BD0DB944D23C900C0C0E775F530052: 115,
+    0x19A0B39AA25AC793B5F6E9A0534364CC0B3FD1EA9B651E79C7F50A59D48EF813: 116,
+    0x9A8D93986A7B9E6294572EA6736696119C195C1A9F5EAE642D3C5FCD44E49DEA: 117,
+    0xB5732705F5241370A28908C2FE1303CB223F03B90D857FD0573F003F79FEFED4: 118,
+    0x7901CB5ADDCAE2D210A531C604A76A660D77039093BAC314DE0816A16392AFF1: 119,
+    0x8DC6FB69531D98D70DC0420E638D2DFD04E09E1EC783EDE9AAC77DA9C5A0DAC4: 120,
+    0x957BBDC7FAD0DEC56E7C96AF4A3AB63AA9DAF934A52FFCE891945B7FB622D791: 121,
+    0xF0440771A29E57E18C66727944770B82CC77924AEF333C927CE6BDD2CDB3AE03: 122,
+    0x5569044719A1EC3B04D0AFA9E7A5310C7C0473331D13DC9FAFE143B2C4E8148A: 123,
+    0x9222CBF5D0DDC505A6F2F04716E22C226CEE16A955FEF88C618922096DAE2FD0: 124,
+    0xA913C8AC5320DAE1C4A00FF23343947ED0FDF88D251E9BD2A5519D3D6162D222: 125,
+    0x0F2ADA1F2DBAE48AE468FE0CDB7BCDA7D0CFFEE8545442E682273BA01A6203A7: 126,
+    0x66925E85F1A4743FD8D60BA595ED74887B7CAF321DD83B21E04D77C115383408: 127,
+    0x59F3FB058C6BBA7A4E76396639FC4DD21BD59163DB798899CF56CEF48B3C9EC9: 128,
+    0x76FCE494794D92AC286B20D6126FC49ECB9CCA2FA94B5C726F6EC1109B891414: 129,
+    0xB2244E644CFE16F72B654FBC48FF0FECEC8FC59649CA8625094BEBD9BD2E4035: 130,
+    0x1397B88F412A83A7F1C0D834C533E486FF1F24F42A31819E91B624931060A863: 131,
+    0x50250E93F8C73D2C1BE015EC28E8CD2FEB871EFA71E955AD24477AAFB09484FA: 132,
+    0xDBDAEC72D84124D8C7C57AE448F5A4E3EEDB34DBA437FDCBE6D26496B68AFE87: 133,
+    0x46B7EA84944250856A716737059479854246A026D947C13D5A0929BC8C1BC81D: 134,
+    0x171AB08901BE24769DBEBEDBDF7E0245486FBC64AB975CD431A39533032D5415: 135,
+    0x7EF464CF5A521D70C933977510816A0355B91A50ECA2778837FB82DA8448ECF6: 136,
+    0x5BFA74C743914028161AE645D300D90BBDC659F169CA1469EC86B4960F7266CB: 137,
+    0x834355D35CBFBD33B2397E201AF04B52BDD40B9B51275F279EA47E93547B631E: 138,
+    0x7B6BB1E9D1B017FF82945596CF3CFB1A6CEE971C1EBB16F2C6BD23C2D642728E: 139,
+    0x5F2F2DCA1D951C7429B52007F396328C64C25E226C1867318158F7F2CBDD40A9: 140,
+    0x37A1BE2A88DADCD0E6062F54DDCC01A03360BA61CA7784A744E757488BF8CEB2: 141,
+    0x8EDD81FF20324EA0CFE70C700FF4E9DB7580D269B423D9F61470B370819CBD17: 142,
+    0x337F7913DB22D91EF425F82102BC8075EF67E23A2BE359965EA316E78E1EFF3F: 143,
+    0x60B1E32550F9D5F25F9DD040E7A106B15D8EB282DD6B3E1914C73D8066896412: 144,
+    0xCDAE184EDD6BF71C1FB62D6E6682FDB2032455C0E50143742135FBBE809BD793: 145,
+    0x6E452848784197F00927D379E3DB9E69A5131D2269F862BFCD05A0B38F6ABF7F: 146,
+    0x28DA5CA8143BFA5E9F642E58E5E87BEF0A2EB0C00BCD4EFDD01050293F5FAC91: 147,
+    0x7047A3CC0A76EDCEE45792CA71527C753F6167484F14B94C4A3BD2997516725C: 148,
+    0x947035E97D0F7E1937F791BC189F60C984CEAAA7A8494FC67F9F8F4DE8CCF2C6: 149,
+    0x6AA7EC8AC2A999A90CE6C78668DFFE4E487E2576A97CA366EC81ECB335AF90D0: 150,
+    0x354A83ED9988F79F6038D4C7A7DADBAD8AF32F4AD6DF893E0E5807A1B1944FF9: 151,
+    0x2237A976FA961F5921FD19F2B03C925C725D77B20CE8F790C19709C03DE4D814: 152,
+    0x72A152DDFB8E864297C917AF52EA6C1C68AEAD0FEE1A62673FCC7E0C94979D00: 153,
+    0x44DA158BA27F9252712A74FF6A55C5D531F69609F1F6E7F17C4443A8E2089BE4: 154,
+    0xBBA9DB4CDBEA0A37C207BBB83E20F828CD4441C49891101DC94FD20DC8EFC349: 155,
+    0xAF85B9071DFAFEAC1409D3F1D19BAFC9BC7C37974CDE8DF0EE6168F0086E539C: 156,
+    0xD26E832454299E9FABB89E0E5FFFDC046D4E14431BC1BF607FFB2E8A1DDECF7B: 157,
+    0xCFE2A20FF701A1F3E14F63BD70D6C6BC6FBA8172EC6D5A505CDAB3927C0A9DE6: 158,
+    0x0BC14066C33013FE88F66E314E4CF150B0B2D4D6451A1A51DBBD1C27CD11DE28: 159,
+    0x78FDC8D422C49CED035A9EDF18D00D3C6A8D81DF210F3E5E448E045E77B41E88: 160,
+    0xAADC37B8BA5645E62F4546802DB221593A94729CCBFC5A97D01365A88F649878: 161,
+    0xAAF4F58DE99300CFADC4585755F376D5FA747D5BC561D5BD9D710DE1F91BF42D: 162,
+    0x60859188CFFE297F44DDE29F2D2865634621F26215049CAEB304CCBA566A8B17: 163,
+    0xE434DC35DA084CF8D7E8186688EA2DACB53DB7003D427AF3ABF351BD9D0A4E8D: 164,
+    0xB29A2B3B6F2FF1B765777A231725941DA5072CC4FCC30AC4A2CE09706E8DDEFF: 165,
+    0x2DA56674729343ACC9933752C8C469A244252915242EB6D4C02D11DDD69164A1: 166,
+    0xB68792697ED876AF8B4858B316F5B54D81F6861191AD2950C1FDE6C3DC7B3DEA: 167,
+    0xBEE89403B5BF0E626C2F71ADB366311C697013DF53107181A963ADC459EF4D99: 168,
+    0xDC471888E6136F84C49E531E9C9240DC4E3FBA66DA9D3A49E2AF6202133683E0: 169,
+    0x550D3DE95BE0BD28A79C3EB4EA7F05692C60B0602E48B49461E703379B08A71A: 170,
+    0xFC377260A69A39DD786235C89F4BCD5D9639157731CAC38071A0508750EB115A: 171,
+    0x0A0A1BCADD9F6A5539376FA82276E043AE3CB4499DAAAF8136572ECB1F9F0D60: 172,
+    0x0440FD76B4E685D17019B0EEF836CEA9994650028B99DDDFB48BE06FA4240AA6: 173,
+    0xDF5D400F265039450228FA547DF2BEE79E6A350DAA43FBA4BD328BC654824C64: 174,
+    0xDEF993A65205231625280C5E3C23E44B263D0AA948FBC330055626B8AB25A5A1: 175,
+    0x238BA8D02078544847438DB7773730A25D584074EAC94489BD8EB86CA267C937: 176,
+    0x04CB44C80B6FBF8CEB1D80AF688C9F7C0B2AB5BF4A964CABE37041F23B23F7A8: 177,
+    0xBBF265BEA1B905C854054A8DBE97FEDCC06FA54306551423711231A4AD0610C9: 178,
+    0x236F2840BFC5DC34B28742DD0B4C9DEFE8A4A5FA9592E49CEFFB9AB51B7EB974: 179,
+    0x1C5F5AC147EC2DEE04D8CE29BDBEBBC58F578E0E1392DA66F352A62E5C09C503: 180,
+    0x22B88D74A6B23BE687AA96340C881253C2E9873C526EEC7366DC5F733ADA306A: 181,
+    0x3AE797CEEF265E3A4F9C1978C47C759EB34A32909251DEE7276DB339B17B3DE3: 182,
+    0x6A79CC294E25EB1A13381E9F3361EE96C47EE7ED00BF73ABADB8F9664BFFD0A7: 183,
+    0xD91D691C894F8266E3F2D5E558AD2349D6783327A752A4949BC554F514E34988: 184,
+    0xE35848A7C6477CFE9366AE64571069FD3A5AD752A460D28C5F73D438B5E432BF: 185,
+    0xF3B9EB9E163AF2088B11DE0A369FB583F58F9440E0E5C70FCE0C59909ECECE8A: 186,
+    0x28AFDD85196B637A3C64FF1F53AF1AD8DE145CF652297EDE1B38F2CBD6A4B4BF: 187,
+    0x6F1F0041084F67CED174808484BD05851DE94443D775585E9D86D4C2589DBA59: 188,
+    0xD344F074C815FDED543CD5A29A47659DE529CD0ADB1C1FAE6EDA2D685D422BD8: 189,
+    0x4082D8AA0BE13AB143F55D600665A8AE7EF90BA09D57C38FA538A2604D7E9827: 190,
+    0xB52CF138A3505DC3D3CD84A77912F4BE1A33DF2C3065D3E4CB37FB1D5D1B5072: 191,
+    0x5E29E30C8EA9A89560281B90DBE96FE6F067A8ACC0F164A71449BF0DA7D58D7E: 192,
+    0xA4C9B5D989FA12D608052E66DC5A37A431D679E93D0ED25572F97F67460BB157: 193,
+    0xB93EDCD1E74716AC76D71E26CE3491BE20745375DCD4848D8F3B91A3F785DBB1: 194,
+    0x6D918F650E2B4A9F360977C4447E6376EB632EC1F687BA963AA9983E90086594: 195,
+    0x2BDE9B0C0857AEE2CFFDEA6B8723EAF59894499EC278C18F020EDD3C2295E424: 196,
+    0xBACDDA17ED986C07F827229709E1DED99D4DA917A5E7E7EC15816EAF2CACF54C: 197,
+    0xCFC479828D8133D824A47FE26326D458B6B94134276B945404197F42411564C3: 198,
+    0xC1D0558604082AF4380F8AF6E6DF686F24C7438CA4F2A67C86A71EE7852601F9: 199,
+    0xE71FAC6FB785942CC6C6404A423F94F32A28AE66D69FF41494C38BFD4788B2F8: 200,
+    0x66BE4F155C5EF2EBD3772B228F2F00681E4ED5826CDB3B1943CC11AD15AD1D28: 201,
+    0x42D72674974F694B5F5159593243114D38A5C39C89D6B62FEE061FF523240EE1: 202,
+    0xA7CE836D032B2BF62B7E2097A8E0A6D8AEB35405AD15271E96D3B0188A1D06FB: 203,
+    0x47197230E1E4B29FC0BD84D7D78966C0925452AFF72A2A121538B102457E9EBE: 204,
+    0x83978B4C69C48DD978AB43FE30F077615294F938FB7F936D9EB340E51EA7DB2E: 205,
+    0xD36CD1C74EF8D7326D8021B776C18FB5A5724B7F7BC93C2F42E43E10EF27D12A: 206,
+    0xACB8D954E2CFEF495862221E91BD7523613CF8808827CB33EDFE4904CC51BF29: 207,
+    0xE89D44C8FD6A9BAC8AF33CE47F56337617D449BF7FF3956B618C646DE829CBCB: 208,
+    0x695FB3134AD82C3B8022BC5464EDD0BCC9424EF672B52245DCB6AB2374327CE3: 209,
+    0xF2192E1030363415D7B4FB0406540A0060E8E2FC8982F3F32289379E11FA6546: 210,
+    0x915C3EB987B20E1AF620C1403197BF687FB7F18513B3A73FDE6E78C7072C41A6: 211,
+    0x9780E26D96B1F2A9A18EF8FC72D589DBF03EF788137B64F43897E83A91E7FEEC: 212,
+    0x51858DE9989BF7441865EBDADBF7382C8838EDBF830F5D86A9A51AC773676DD6: 213,
+    0xE767803F8ECF1DEE6BB0345811F7312CDA556058B19DB6389AD9AE3568643DDD: 214,
+    0x8A012A6DE2943A5AA4D77ACF5E695D4456760A3F1F30A5D6DC2079599187A071: 215,
+    0x5320AD99A619A90804CD2EFE3A5CF0AC1AC5C41AD9FF2C61CF699EFDAD771096: 216,
+    0xCC6782FD46DD71C5F512301AB049782450B4EAF79FDAC5443D93D274D3916786: 217,
+    0xB3D6E86317C38844915B053A0C35FF2FC103B684E96CEF2918AB06844EB51AAF: 218,
+    0x4C0D3471EAD8EE99FBD8249E33F683E07C6CD6071FE102DD09617B2C353DE430: 219,
+    0x3162B0988D4210BFF484413ED451D170A03887272177EFC0B7D000F10ABE9EDF: 220,
+    0xAC507B9F8BF86AD8BB770F71CD2B1992902AE0314D93FC0F2BB011D70E796226: 221,
+    0xFAE8130C0619F84B4B44F01B84806F04E82E536D70E05F2356977FA318AECC1A: 222,
+    0x65E3D48FA860A761B461CE1274F0D562F3DB9A6A57CF04D8C90D68F5670B6AEA: 223,
+    0x8B43726243EEAF8325404568ABECE3264B546CF9D88671F09C24C87045FCCB4F: 224,
+    0x3EFDD7A884FF9E18C9E5711C185AA6C5E413B68F23197997DA5B1665CA978F99: 225,
+    0x26A62D79192C78C3891F38189368673110B88734C09ED7453515DEF7525E07D8: 226,
+    0x37F6A7F96B945F2F9A9127CCB4A8552FCB6938E53FE8F046DB8DA238398093E9: 227,
+    0x04E4A0BB093261EE16386DADCEF9E2A83913F4E1899464891421D20C1BBFF74D: 228,
+    0x5625F7C930B8B40DE87DC8E69145D83FD1D81C61B6C31FB7CFE69FAC65B28642: 229,
+    0xD31DDB47B5E8664717D3718ACBD132396FF496FE337159C99410BE8658408A27: 230,
+    0x6CB0DB1D7354DFB4A1464318006DF0643CAFE2002A86A29FF8560F900FEF28A1: 231,
+    0x53C8DA29BFA275271DF3F270296D5A7D61B57F8848C89B3F65F49E21340B7592: 232,
+    0xEA6426B4B8D70CAA8ECE9A88FB0A9D4A6B817BB4A43AC6FBEF64CB0E589129EE: 233,
+    0x61C831BEAB28D67D1BB40B5AE1A11E2757FA842F031A2D0BC94A7867BC5D26C2: 234,
+    0x0446C598F3355ED7D8A3B7E0B99F9299D15E956A97FAAE081A0B49D17024ABD2: 235,
+    0xE7DFAC380F4A6ED3A03E62F813161EFF828766FA014393558E075E9CEB77D549: 236,
+    0x0504E0A132D2EF5CA5F2FE74FC64437205BC10F32D5F13D533BF552916A94D3F: 237,
+    0xDB444DA68C84F0A9CE08609100B69B8F3D5672687E0CA13FA3C0AC9EB2BDE5D2: 238,
+    0xDD0DC620E7584674CB3DBA490D2EBA9E68ECA0BEF228EE569A4A64F6559056E9: 239,
+    0x681483E2251CD5E2885507BB09F76BED3B99D3C377DD48396177647BFB4AAFDA: 240,
+    0xC29B39917E4E60F0FEE5B6871B30A38E50531D76D1B0837811BD6351B34854EC: 241,
+    0x83D76AFC3887C0B7EDD14A1AFFA7554BED3345BA68DDCD2A3326C7EAE97B80D8: 242,
+    0x2F5553803273E8BB29D913CC31BAB953051C59F3BA57A71CF5591563CA721405: 243,
+    0xFC6A672327474E1387FCBCE1814A1DE376D8561FC138561441AC6E396089E062: 244,
+    0x81630654DFB0FD282A37117995646CDDE2CF8EEFE9F3F96FDB12CFDA88DF6668: 245,
+    0xDDF78CFA378B5E068A248EDAF3ABEF23EA9E62C66F86F18CC5E695CD36C9809B: 246,
+    0xE9944EBEF6E5A24035A31A727E8FF6DA7C372D99949C1224483B857F6401E346: 247,
+    0x6120B123382F98F7EFE66ABE6A3A3445788A87E48D4E6991F37BAADCAC0BEF95: 248,
+    0x168C8166292B85070409830617E84BDD7E3518B38E5AC430DC35ED7D16B07A86: 249,
+    0xD84F57F3FFA76CC18982DA4353CC5991158EC5AE4F6A9109D1D7A0AE2CBA77ED: 250,
+    0x3E7257B7272BB46D49CD6019B04DDEE20DA7C0CB13F7C1EC3391291B2CCEBABC: 251,
+    0x371F36870D18F32A11FEA0F144B021C8B407BB50F8E0267C711123F454B963C0: 252,
+    0x9346AC6DD7DE6B96975FEC380D4D994C4C12E6A8897544F22915316CC6CCA280: 253,
+    0x54075DF80EC1AE6AC9100E1FD0EBF3246C17F5C933137AF392011F4C5F61513A: 254,
+    0xE08EC2AF2CFC251225E1968FD6CA21E4044F129BFFA95BAC3503BE8BDB30A367: 255,
 }
 
 sha3_inv_offset: Dict[int, Tuple[int, int]] = mk_sha3_inv_offset(sha3_inv)
