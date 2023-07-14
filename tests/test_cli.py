@@ -227,9 +227,7 @@ def test_decode():
       "type": "function"
     }
     """),
-    # TODO: fix crytic-compile bug
-    # 'fooStruct(((uint256,uint256),uint256),uint256)'
-    ('fooStruct(tuple,uint256)', """
+    ('fooStruct(((uint256,uint256),uint256),uint256)', """
     {
       "inputs": [
         {

@@ -109,8 +109,7 @@ def str_abi(item: Dict) -> str:
         for arg in args:
             typ = arg['type']
             if typ == 'tuple':
-            #   ret.append(str_tuple(arg['components']))
-                ret.append(typ) # crytic-compile bug
+                ret.append(str_tuple(arg['components']))
             else:
                 ret.append(typ)
         return '(' + ','.join(ret) + ')'
