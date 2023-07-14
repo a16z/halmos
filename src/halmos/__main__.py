@@ -588,7 +588,7 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
     hexcode, abi, methodIdentifiers = run_args.hexcode, run_args.abi, run_args.methodIdentifiers
 
     setup_info = extract_setup(methodIdentifiers)
-    if args.verbose >= 1:
+    if setup_info.sig and args.verbose >= 1:
         print(f'Running {setup_info.sig}')
 
     fun_infos = [FunctionInfo(funsig.split('(')[0], funsig, methodIdentifiers[funsig]) for funsig in run_args.funsigs]
@@ -605,7 +605,7 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
 
 def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
     setup_info = extract_setup(run_args.methodIdentifiers)
-    if args.verbose >= 1:
+    if setup_info.sig and args.verbose >= 1:
         print(f'Running {setup_info.sig}')
 
     try:
