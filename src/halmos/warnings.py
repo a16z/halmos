@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from .utils import color_warn
 
 logger = logging.getLogger(__name__)
+logging.basicConfig()
 
 WARNINGS_BASE_URL = 'https://github.com/a16z/halmos/wiki/warnings'
 
