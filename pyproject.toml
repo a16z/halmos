@@ -27,3 +27,6 @@ halmos = "halmos.__main__:main"
 
 [project.urls]
 "Homepage" = "https://github.com/a16z/halmos"
+
+[tool.black]
+target-versions = ["py38", "py39", "py310", "py311"]
