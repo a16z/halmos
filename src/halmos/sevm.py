@@ -31,17 +31,21 @@ Address = BitVecRef  # 160-bitvector
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 # symbolic states
-f_calldataload = Function("calldataload", BitVecSort(256), BitVecSort(256))  # index
+# calldataload(index)
+f_calldataload = Function("calldataload", BitVecSort(256), BitVecSort(256))
+# calldatasize()
 f_calldatasize = Function("calldatasize", BitVecSort(256))
-f_extcodesize = Function(
-    "extcodesize", BitVecSort(160), BitVecSort(256)
-)  # target address
-f_extcodehash = Function(
-    "extcodehash", BitVecSort(160), BitVecSort(256)
-)  # target address
-f_blockhash = Function("blockhash", BitVecSort(256), BitVecSort(256))  # block number
-f_gas = Function("gas", BitVecSort(256), BitVecSort(256))  # cnt
+# extcodesize(target address)
+f_extcodesize = Function("extcodesize", BitVecSort(160), BitVecSort(256))
+# extcodehash(target address)
+f_extcodehash = Function("extcodehash", BitVecSort(160), BitVecSort(256))
+# blockhash(block number)
+f_blockhash = Function("blockhash", BitVecSort(256), BitVecSort(256))
+# gas(cnt)
+f_gas = Function("gas", BitVecSort(256), BitVecSort(256))
+# gasprice()
 f_gasprice = Function("gasprice", BitVecSort(256))
+# origin()
 f_origin = Function("origin", BitVecSort(160))
 
 # uninterpreted arithmetic
@@ -380,10 +384,8 @@ class State:
     def __str__(self) -> str:
         return "".join(
             [
-                "Stack: ",
-                str(self.stack),
-                "\n",
-                #   self.str_memory(),
+                f"Stack: {str(self.stack)}\n",
+                # self.str_memory(),
             ]
         )
 
@@ -392,15 +394,8 @@ class State:
         ret: str = "Memory:"
         size: int = len(self.memory)
         while idx < size:
-            ret = (
-                ret
-                + "\n"
-                + "- "
-                + str(hex(idx))
-                + ": "
-                + str(self.memory[idx : min(idx + 32, size)])
-            )
-            idx = idx + 32
+            ret += f"\n- {hex(idx)}: {self.memory[idx : min(idx + 32, size)]}"
+            idx += 32
         return ret + "\n"
 
     def push(self, v: Word) -> None:
@@ -693,60 +688,41 @@ class Exec:  # an execution path
         return hexify(
             "".join(
                 [
-                    "PC: ",
-                    str(self.this),
-                    " ",
-                    str(self.pc),
-                    " ",
-                    mnemonic(self.current_opcode()),
-                    "\n",
+                    f"PC: {self.this} {self.pc} {mnemonic(self.current_opcode())}\n",
                     str(self.st),
-                    "Balance: ",
-                    str(self.balance),
-                    "\n",
-                    "Storage:\n",
+                    f"Balance: {self.balance}\n",
+                    f"Storage:\n",
                     "".join(
                         map(
-                            lambda x: "- "
-                            + str(x)
-                            + ": "
-                            + str(self.storage[x])
-                            + "\n",
+                            lambda x: f"- {x}: {self.storage[x]}\n",
                             self.storage,
                         )
                     ),
-                    #   'Solver:\n'         , self.str_solver(), '\n',
-                    "Path:\n",
-                    self.str_path(),
-                    "Output: ",
-                    self.output.hex()
-                    if isinstance(self.output, bytes)
-                    else str(self.output),
-                    "\n",
-                    "Log: ",
-                    str(self.log),
-                    "\n",
-                    #   'Opcodes:\n'        , self.str_cnts(),
-                    #   'Memsize: '         , str(len(self.st.memory)), '\n',
-                    "Balance updates:\n",
+                    # f"Solver:\n{self.str_solver()}\n",
+                    f"Path:\n{self.str_path()}",
+                    f"Output: {self.output.hex() if isinstance(self.output, bytes) else self.output}\n",
+                    f"Log: {self.log}\n",
+                    # f"Opcodes:\n{self.str_cnts()}",
+                    # f"Memsize: {len(self.st.memory)}\n",
+                    f"Balance updates:\n",
                     "".join(
                         map(
-                            lambda x: "- " + str(x) + "\n",
+                            lambda x: f"- {x}\n",
                             sorted(self.balances.items(), key=lambda x: str(x[0])),
                         )
                     ),
-                    "Storage updates:\n",
+                    f"Storage updates:\n",
                     "".join(
                         map(
-                            lambda x: "- " + str(x) + "\n",
+                            lambda x: f"- {x}\n",
                             sorted(self.storages.items(), key=lambda x: str(x[0])),
                         )
                     ),
-                    "SHA3 hashes:\n",
-                    "".join(map(lambda x: "- " + str(x) + "\n", self.sha3s)),
-                    "External calls:\n",
-                    "".join(map(lambda x: "- " + str(x) + "\n", self.calls)),
-                    #   'Calldata: '        , str(self.calldata), '\n',
+                    f"SHA3 hashes:\n",
+                    "".join(map(lambda x: f"- {x}\n", self.sha3s)),
+                    f"External calls:\n",
+                    "".join(map(lambda x: f"- {x}\n", self.calls)),
+                    # f"Calldata: {self.calldata}\n",
                 ]
             )
         )
@@ -774,20 +750,17 @@ class Exec:  # an execution path
                     return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat:  # key == key0
                     return val0
-        elif not self.symbolic and re.search(
-            r"^storage_.+_00$", str(array)
-        ):  # empty array
-            return con(
-                0
-            )  # note: simplifying empty array access might have a negative impact on solver performance
+        # empty array
+        elif not self.symbolic and re.search(r"^storage_.+_00$", str(array)):
+            # note: simplifying empty array access might have a negative impact on solver performance
+            return con(0)
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
         assert_address(addr)
         value = self.select(self.balance, addr, self.balances)
-        self.solver.add(
-            ULT(value, con(2**96))
-        )  # practical assumption on the max balance per account
+        # practical assumption on the max balance per account
+        self.solver.add(ULT(value, con(2**96)))
         return value
 
     def balance_update(self, addr: Word, value: Word):
@@ -918,9 +891,8 @@ class Exec:  # an execution path
                 map(self.decode_storage_loc, args), key=lambda x: len(x), reverse=True
             )
             if len(args[1]) > 1:
-                raise ValueError(
-                    loc
-                )  # only args[0]'s length >= 1, the others must be 1
+                # only args[0]'s length >= 1, the others must be 1
+                raise ValueError(loc)
             return args[0][0:-1] + (
                 reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),
             )
@@ -947,9 +919,8 @@ class Exec:  # an execution path
         sha3 = f_sha3(data)
         sha3_var = BitVec(f"sha3_var_{len(self.sha3s):>02}", 256)
         self.solver.add(sha3_var == sha3)
-        self.solver.add(
-            ULE(sha3_var, con(2**256 - 2**64))
-        )  # assume hash values are sufficiently smaller than the uint max
+        # assume hash values are sufficiently smaller than the uint max
+        self.solver.add(ULE(sha3_var, con(2**256 - 2**64)))
         self.assume_sha3_distinct(sha3_var, sha3)
         if size == 64 or size == 32:  # for storage hashed location
             self.st.push(sha3)
@@ -959,7 +930,7 @@ class Exec:  # an execution path
     def assume_sha3_distinct(self, sha3_var, sha3) -> None:
         for v, s in self.sha3s:
             if s.decl().name() == sha3.decl().name():  # same size
-                #   self.solver.add(Implies(sha3_var == v, sha3.arg(0) == s.arg(0)))
+                # self.solver.add(Implies(sha3_var == v, sha3.arg(0) == s.arg(0)))
                 self.solver.add(Implies(sha3.arg(0) != s.arg(0), sha3_var != v))
             else:
                 self.solver.add(sha3_var != v)
@@ -1114,7 +1085,7 @@ class SEVM:
     def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_mod[x.size()](x, y)
         ex.solver.add(ULE(term, y))  # (x % y) <= y
-        #   ex.solver.add(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
+        # ex.solver.add(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
         return term
 
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
@@ -1235,9 +1206,10 @@ class SEVM:
         w2 = b2i(w2)
         w3 = b2i(w3)
         if op == EVM.ADDMOD:
+            # to avoid add overflow; and to be a multiple of 8-bit
             r1 = self.arith(
                 ex, EVM.ADD, simplify(ZeroExt(8, w1)), simplify(ZeroExt(8, w2))
-            )  # to avoid add overflow; and to be a multiple of 8-bit
+            )
             r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(8, w3)))
             if r1.size() != 264:
                 raise ValueError(r1)
@@ -1245,9 +1217,10 @@ class SEVM:
                 raise ValueError(r2)
             return Extract(255, 0, r2)
         elif op == EVM.MULMOD:
+            # to avoid mul overflow
             r1 = self.arith(
                 ex, EVM.MUL, simplify(ZeroExt(256, w1)), simplify(ZeroExt(256, w2))
-            )  # to avoid mul overflow
+            )
             r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(256, w3)))
             if r1.size() != 512:
                 raise ValueError(r1)
@@ -1275,13 +1248,11 @@ class SEVM:
         else:
             fund = ex.st.pop()
         arg_loc: int = ex.st.mloc()
-        arg_size: int = int_of(
-            ex.st.pop(), "symbolic CALL input data size"
-        )  # size (in bytes)
+        # size (in bytes)
+        arg_size: int = int_of(ex.st.pop(), "symbolic CALL input data size")
         ret_loc: int = ex.st.mloc()
-        ret_size: int = int_of(
-            ex.st.pop(), "symbolic CALL return data size"
-        )  # size (in bytes)
+        # size (in bytes)
+        ret_size: int = int_of(ex.st.pop(), "symbolic CALL return data size")
 
         if not arg_size >= 0:
             raise ValueError(arg_size)
@@ -1392,21 +1363,21 @@ class SEVM:
                 arg = wload(ex.st.memory, arg_loc, arg_size)
                 f_call = Function(
                     "call_" + str(arg_size * 8),
-                    BitVecSort(256),
-                    BitVecSort(256),
-                    BitVecSort(160),
-                    BitVecSort(256),
-                    BitVecSort(arg_size * 8),
+                    BitVecSort(256),  # cnt
+                    BitVecSort(256),  # gas
+                    BitVecSort(160),  # to
+                    BitVecSort(256),  # value
+                    BitVecSort(arg_size * 8),  # args
                     BitVecSort(256),
                 )
                 exit_code = f_call(con(call_id), gas, to, fund, arg)
             else:
                 f_call = Function(
                     "call_" + str(arg_size * 8),
-                    BitVecSort(256),
-                    BitVecSort(256),
-                    BitVecSort(160),
-                    BitVecSort(256),
+                    BitVecSort(256),  # cnt
+                    BitVecSort(256),  # gas
+                    BitVecSort(160),  # to
+                    BitVecSort(256),  # value
                     BitVecSort(256),
                 )
                 exit_code = f_call(con(call_id), gas, to, fund)
@@ -1415,9 +1386,8 @@ class SEVM:
             ex.st.push(exit_code_var)
 
             ret = None
-            if (
-                ret_size > 0
-            ):  # TODO: handle inconsistent return sizes for unknown functions
+            # TODO: handle inconsistent return sizes for unknown functions
+            if ret_size > 0:
                 f_ret = Function(
                     "ret_" + str(ret_size * 8),
                     BitVecSort(256),
@@ -1507,9 +1477,8 @@ class SEVM:
             if eq(to, hevm_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
                 # vm.fail()
-                if (
-                    arg == hevm_cheat_code.fail_payload
-                ):  # BitVecVal(hevm_cheat_code.fail_payload, 800)
+                # BitVecVal(hevm_cheat_code.fail_payload, 800)
+                if arg == hevm_cheat_code.fail_payload:
                     ex.failed = True
                     out.append(ex)
                     return
@@ -1703,7 +1672,7 @@ class SEVM:
                 if funsig == console.log_uint:
                     print(extract_bytes(arg, 4, 32))
 
-                #   elif funsig == console.log_string:
+                # elif funsig == console.log_string:
 
                 else:
                     # TODO: support other console functions
@@ -1762,9 +1731,8 @@ class SEVM:
         caller = ex.prank.lookup(ex.this, new_addr)
 
         # transfer value
-        ex.solver.add(
-            UGE(ex.balance_of(caller), value)
-        )  # assume balance is enough; otherwise ignore this path
+        # assume balance is enough; otherwise ignore this path
+        ex.solver.add(UGE(ex.balance_of(caller), value))
         if not (is_bv_value(value) and value.as_long() == 0):
             ex.balance_update(
                 caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value)
@@ -1871,12 +1839,14 @@ class SEVM:
         follow_true = False
         follow_false = False
 
-        if potential_true and potential_false:  # for loop unrolling
+        if potential_true and potential_false:
+            # for loop unrolling
             follow_true = visited[True] < self.options["max_loop"]
             follow_false = visited[False] < self.options["max_loop"]
             if not (follow_true and follow_false):
                 bounded_loops.append(jid)
-        else:  # for constant-bounded loops
+        else:
+            # for constant-bounded loops
             follow_true = potential_true
             follow_false = potential_false
 
@@ -2021,10 +1991,10 @@ class SEVM:
                 if self.options.get("log"):
                     if opcode == EVM.JUMPI:
                         steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
-                    #   elif opcode == EVM.CALL:
-                    #       steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
+                    # elif opcode == EVM.CALL:
+                    #     steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
                     else:
-                        #   steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
+                        # steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
                         steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
                 if self.options.get("print_steps"):
@@ -2147,11 +2117,6 @@ class SEVM:
                                 ]
                             )
                         )
-                    #   try:
-                    #       offset: int = int(str(ex.st.pop()))
-                    #       ex.st.push(Concat(ex.calldata[offset:offset+32]))
-                    #   except:
-                    #       ex.st.push(f_calldataload(ex.st.pop()))
                 elif opcode == EVM.CALLDATASIZE:
                     if ex.calldata is None:
                         ex.st.push(f_calldatasize())
@@ -2234,9 +2199,8 @@ class SEVM:
 
                 elif opcode == EVM.MSIZE:
                     size: int = len(ex.st.memory)
-                    size = (
-                        (size + 31) // 32
-                    ) * 32  # round up to the next multiple of 32
+                    # round up to the next multiple of 32
+                    size = ((size + 31) // 32) * 32
                     ex.st.push(con(size))
 
                 elif opcode == EVM.SLOAD:
@@ -2249,9 +2213,8 @@ class SEVM:
                 elif opcode == EVM.RETURNDATACOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
-                    size: int = int_of(
-                        ex.st.pop(), "symbolic RETURNDATACOPY size"
-                    )  # size (in bytes)
+                    # size (in bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
                     wstore_partial(
                         ex.st.memory, loc, offset, size, ex.output, ex.returndatasize()
                     )
@@ -2259,9 +2222,8 @@ class SEVM:
                 elif opcode == EVM.CALLDATACOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
-                    size: int = int_of(
-                        ex.st.pop(), "symbolic CALLDATACOPY size"
-                    )  # size (in bytes)
+                    # size (in bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
                     if size > 0:
                         if ex.calldata is None:
                             f_calldatacopy = Function(
@@ -2279,7 +2241,8 @@ class SEVM:
                                     size,
                                     ex.calldata[offset : offset + size],
                                 )
-                            elif offset == len(ex.calldata):  # copy zero bytes
+                            elif offset == len(ex.calldata):
+                                # copy zero bytes
                                 wstore_bytes(
                                     ex.st.memory,
                                     loc,
@@ -2292,9 +2255,8 @@ class SEVM:
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic CODECOPY offset")
-                    size: int = int_of(
-                        ex.st.pop(), "symbolic CODECOPY size"
-                    )  # size (in bytes)
+                    # size (in bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic CODECOPY size")
                     wextend(ex.st.memory, loc, size)
 
                     codeslice = ex.code[ex.this][offset : offset + size]
@@ -2325,9 +2287,8 @@ class SEVM:
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     num_keys: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
-                    size: int = int_of(
-                        ex.st.pop(), "symbolic LOG data size"
-                    )  # size (in bytes)
+                    # size (in bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic LOG data size")
                     keys = []
                     for _ in range(num_keys):
                         keys.append(ex.st.pop())
@@ -2341,9 +2302,8 @@ class SEVM:
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     if is_concrete(insn.operand):
                         val = int_of(insn.operand)
-                        if (
-                            opcode == EVM.PUSH32 and val in sha3_inv
-                        ):  # restore precomputed hashes
+                        if opcode == EVM.PUSH32 and val in sha3_inv:
+                            # restore precomputed hashes
                             ex.sha3_data(con(sha3_inv[val]), 32)
                         else:
                             ex.st.push(con(val))
@@ -2390,24 +2350,24 @@ class SEVM:
         caller,
         this,
         #
-        #   pc,
-        #   st,
-        #   jumpis,
-        #   output,
+        # pc,
+        # st,
+        # jumpis,
+        # output,
         symbolic,
-        #   prank,
+        # prank,
         #
         solver,
-        #   path,
+        # path,
         #
-        #   log,
-        #   cnts,
-        #   sha3s,
-        #   storages,
-        #   balances,
-        #   calls,
-        #   failed,
-        #   error,
+        # log,
+        # cnts,
+        # sha3s,
+        # storages,
+        # balances,
+        # calls,
+        # failed,
+        # error,
     ) -> Exec:
         return Exec(
             code=code,

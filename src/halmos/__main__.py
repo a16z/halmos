@@ -24,9 +24,8 @@ TEST_FAILED = 128
 args: argparse.Namespace
 
 
-if hasattr(
-    sys, "set_int_max_str_digits"
-):  # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
+# Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
+if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)
 
 
@@ -274,13 +273,11 @@ def mk_calldata(
         param_name = param["name"]
         param_type = param["type"]
         if param_type == "tuple":
-            raise NotImplementedError(
-                f"Not supported parameter type: {param_type}"
-            )  # TODO: support struct types
+            # TODO: support struct types
+            raise NotImplementedError(f"Not supported parameter type: {param_type}")
         elif param_type == "bytes" or param_type == "string":
-            tba.append(
-                (4 + offset, param)
-            )  # wstore(cd, 4+offset, 32, BitVecVal(<?offset?>, 256))
+            # wstore(cd, 4+offset, 32, BitVecVal(<?offset?>, 256))
+            tba.append((4 + offset, param))
             offset += 32
         elif param_type.endswith("[]"):
             raise NotImplementedError(f"Not supported dynamic arrays: {param_type}")
@@ -377,9 +374,8 @@ def mk_this() -> Address:
 
 
 def mk_solver(args: argparse.Namespace):
-    solver = SolverFor(
-        "QF_AUFBV"
-    )  # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
+    # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
+    solver = SolverFor("QF_AUFBV")
     solver.set(timeout=args.solver_timeout_branching)
     return solver
 
@@ -756,7 +752,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
             fn_args.args,
         )
     except Exception as err:
-        print(f'{color_warn("[SKIP]")} {fn_args.fun_info.sig}')
+        print(f"{color_warn('[SKIP]')} {fn_args.fun_info.sig}")
         print(color_warn(f"{type(err).__name__}: {err}"))
         if args.debug:
             traceback.print_exc()
@@ -846,7 +842,7 @@ def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
         try:
             exitcode = run(setup_ex, run_args.abi, fun_info, args)
         except Exception as err:
-            print(f'{color_warn("[SKIP]")} {funsig}')
+            print(f"{color_warn('[SKIP]')} {funsig}")
             print(color_warn(f"{type(err).__name__}: {err}"))
             if args.debug:
                 traceback.print_exc()
@@ -899,7 +895,7 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
         if args.verbose >= 1:
             print(f"  Checking again with a fresh solver")
         sol2 = SolverFor("QF_AUFBV", ctx=Context())
-        #   sol2.set(timeout=args.solver_timeout_assertion)
+        # sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.to_smt2())
         res = sol2.check()
         if res == sat:
@@ -913,9 +909,9 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
             print(f"    z3 -model {fname} >{fname}.out")
         query = ex.solver.to_smt2()
         # replace uninterpreted abstraction with actual symbols for assertion solving
-        query = re.sub(
-            r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query
-        )  # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))` as bvudiv is undefined when y = 0; also similarly for evm_bvurem
+        # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
+        #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
+        query = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
         with open(fname, "w") as f:
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)
@@ -986,15 +982,10 @@ def str_model(model, args: argparse.Namespace) -> str:
         return False
 
     select_model = filter(select, model) if not args.print_full_model else model
-    return (
-        "["
-        + ",".join(
-            sorted(
-                map(lambda decl: f"\n    {decl} = {hexify(model[decl])}", select_model)
-            )
-        )
-        + "]"
+    result = ",".join(
+        sorted(map(lambda decl: f"\n    {decl} = {hexify(model[decl])}", select_model))
     )
+    return f"[{result}]"
 
 
 def mk_options(args: argparse.Namespace) -> Dict:
@@ -1072,9 +1063,8 @@ def parse_build_out(args: argparse.Namespace) -> Dict:
                 result[compiler_version][sol_dirname] = {}
             contract_map = result[compiler_version][sol_dirname]
 
-            contract_name = json_filename.split(".")[
-                0
-            ]  # cut off compiler version number as well
+            # cut off compiler version number as well
+            contract_name = json_filename.split(".")[0]
 
             contract_type = None
             for node in json_out["ast"]["nodes"]:
