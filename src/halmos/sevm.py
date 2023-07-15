@@ -31,17 +31,21 @@ Address = BitVecRef  # 160-bitvector
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 # symbolic states
-f_calldataload = Function("calldataload", BitVecSort(256), BitVecSort(256))  # index
+# calldataload(index)
+f_calldataload = Function("calldataload", BitVecSort(256), BitVecSort(256))
+# calldatasize()
 f_calldatasize = Function("calldatasize", BitVecSort(256))
-f_extcodesize = Function(
-    "extcodesize", BitVecSort(160), BitVecSort(256)
-)  # target address
-f_extcodehash = Function(
-    "extcodehash", BitVecSort(160), BitVecSort(256)
-)  # target address
-f_blockhash = Function("blockhash", BitVecSort(256), BitVecSort(256))  # block number
-f_gas = Function("gas", BitVecSort(256), BitVecSort(256))  # cnt
+# extcodesize(target address)
+f_extcodesize = Function("extcodesize", BitVecSort(160), BitVecSort(256))
+# extcodehash(target address)
+f_extcodehash = Function("extcodehash", BitVecSort(160), BitVecSort(256))
+# blockhash(block number)
+f_blockhash = Function("blockhash", BitVecSort(256), BitVecSort(256))
+# gas(cnt)
+f_gas = Function("gas", BitVecSort(256), BitVecSort(256))
+# gasprice()
 f_gasprice = Function("gasprice", BitVecSort(256))
+# origin()
 f_origin = Function("origin", BitVecSort(160))
 
 # uninterpreted arithmetic
@@ -774,20 +778,17 @@ class Exec:  # an execution path
                     return self.select(base, key, arrays)
                 if self.check(key != key0) == unsat:  # key == key0
                     return val0
-        elif not self.symbolic and re.search(
-            r"^storage_.+_00$", str(array)
-        ):  # empty array
-            return con(
-                0
-            )  # note: simplifying empty array access might have a negative impact on solver performance
+        # empty array
+        elif not self.symbolic and re.search(r"^storage_.+_00$", str(array)):
+            # note: simplifying empty array access might have a negative impact on solver performance
+            return con(0)
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
         assert_address(addr)
         value = self.select(self.balance, addr, self.balances)
-        self.solver.add(
-            ULT(value, con(2**96))
-        )  # practical assumption on the max balance per account
+        # practical assumption on the max balance per account
+        self.solver.add(ULT(value, con(2**96)))
         return value
 
     def balance_update(self, addr: Word, value: Word):
@@ -918,9 +919,8 @@ class Exec:  # an execution path
                 map(self.decode_storage_loc, args), key=lambda x: len(x), reverse=True
             )
             if len(args[1]) > 1:
-                raise ValueError(
-                    loc
-                )  # only args[0]'s length >= 1, the others must be 1
+                # only args[0]'s length >= 1, the others must be 1
+                raise ValueError(loc)
             return args[0][0:-1] + (
                 reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),
             )
@@ -947,9 +947,8 @@ class Exec:  # an execution path
         sha3 = f_sha3(data)
         sha3_var = BitVec(f"sha3_var_{len(self.sha3s):>02}", 256)
         self.solver.add(sha3_var == sha3)
-        self.solver.add(
-            ULE(sha3_var, con(2**256 - 2**64))
-        )  # assume hash values are sufficiently smaller than the uint max
+        # assume hash values are sufficiently smaller than the uint max
+        self.solver.add(ULE(sha3_var, con(2**256 - 2**64)))
         self.assume_sha3_distinct(sha3_var, sha3)
         if size == 64 or size == 32:  # for storage hashed location
             self.st.push(sha3)
@@ -1235,9 +1234,10 @@ class SEVM:
         w2 = b2i(w2)
         w3 = b2i(w3)
         if op == EVM.ADDMOD:
+            # to avoid add overflow; and to be a multiple of 8-bit
             r1 = self.arith(
                 ex, EVM.ADD, simplify(ZeroExt(8, w1)), simplify(ZeroExt(8, w2))
-            )  # to avoid add overflow; and to be a multiple of 8-bit
+            )
             r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(8, w3)))
             if r1.size() != 264:
                 raise ValueError(r1)
@@ -1245,9 +1245,10 @@ class SEVM:
                 raise ValueError(r2)
             return Extract(255, 0, r2)
         elif op == EVM.MULMOD:
+            # to avoid mul overflow
             r1 = self.arith(
                 ex, EVM.MUL, simplify(ZeroExt(256, w1)), simplify(ZeroExt(256, w2))
-            )  # to avoid mul overflow
+            )
             r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(256, w3)))
             if r1.size() != 512:
                 raise ValueError(r1)
@@ -1275,13 +1276,11 @@ class SEVM:
         else:
             fund = ex.st.pop()
         arg_loc: int = ex.st.mloc()
-        arg_size: int = int_of(
-            ex.st.pop(), "symbolic CALL input data size"
-        )  # size (in bytes)
+        # size (in bytes)
+        arg_size: int = int_of(ex.st.pop(), "symbolic CALL input data size")
         ret_loc: int = ex.st.mloc()
-        ret_size: int = int_of(
-            ex.st.pop(), "symbolic CALL return data size"
-        )  # size (in bytes)
+        # size (in bytes)
+        ret_size: int = int_of(ex.st.pop(), "symbolic CALL return data size")
 
         if not arg_size >= 0:
             raise ValueError(arg_size)
@@ -1415,9 +1414,8 @@ class SEVM:
             ex.st.push(exit_code_var)
 
             ret = None
-            if (
-                ret_size > 0
-            ):  # TODO: handle inconsistent return sizes for unknown functions
+            # TODO: handle inconsistent return sizes for unknown functions
+            if ret_size > 0:
                 f_ret = Function(
                     "ret_" + str(ret_size * 8),
                     BitVecSort(256),
@@ -1507,9 +1505,8 @@ class SEVM:
             if eq(to, hevm_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
                 # vm.fail()
-                if (
-                    arg == hevm_cheat_code.fail_payload
-                ):  # BitVecVal(hevm_cheat_code.fail_payload, 800)
+                # BitVecVal(hevm_cheat_code.fail_payload, 800)
+                if arg == hevm_cheat_code.fail_payload:
                     ex.failed = True
                     out.append(ex)
                     return
@@ -1762,9 +1759,8 @@ class SEVM:
         caller = ex.prank.lookup(ex.this, new_addr)
 
         # transfer value
-        ex.solver.add(
-            UGE(ex.balance_of(caller), value)
-        )  # assume balance is enough; otherwise ignore this path
+        # assume balance is enough; otherwise ignore this path
+        ex.solver.add(UGE(ex.balance_of(caller), value))
         if not (is_bv_value(value) and value.as_long() == 0):
             ex.balance_update(
                 caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value)
@@ -2249,9 +2245,8 @@ class SEVM:
                 elif opcode == EVM.RETURNDATACOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
-                    size: int = int_of(
-                        ex.st.pop(), "symbolic RETURNDATACOPY size"
-                    )  # size (in bytes)
+                    # size (in bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
                     wstore_partial(
                         ex.st.memory, loc, offset, size, ex.output, ex.returndatasize()
                     )
@@ -2259,9 +2254,8 @@ class SEVM:
                 elif opcode == EVM.CALLDATACOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
-                    size: int = int_of(
-                        ex.st.pop(), "symbolic CALLDATACOPY size"
-                    )  # size (in bytes)
+                    # size (in bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
                     if size > 0:
                         if ex.calldata is None:
                             f_calldatacopy = Function(
@@ -2292,9 +2286,8 @@ class SEVM:
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic CODECOPY offset")
-                    size: int = int_of(
-                        ex.st.pop(), "symbolic CODECOPY size"
-                    )  # size (in bytes)
+                    # size (in bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic CODECOPY size")
                     wextend(ex.st.memory, loc, size)
 
                     codeslice = ex.code[ex.this][offset : offset + size]
@@ -2325,9 +2318,8 @@ class SEVM:
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     num_keys: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
-                    size: int = int_of(
-                        ex.st.pop(), "symbolic LOG data size"
-                    )  # size (in bytes)
+                    # size (in bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic LOG data size")
                     keys = []
                     for _ in range(num_keys):
                         keys.append(ex.st.pop())
@@ -2341,9 +2333,8 @@ class SEVM:
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     if is_concrete(insn.operand):
                         val = int_of(insn.operand)
-                        if (
-                            opcode == EVM.PUSH32 and val in sha3_inv
-                        ):  # restore precomputed hashes
+                        if opcode == EVM.PUSH32 and val in sha3_inv:
+                            # restore precomputed hashes
                             ex.sha3_data(con(sha3_inv[val]), 32)
                         else:
                             ex.st.push(con(val))
