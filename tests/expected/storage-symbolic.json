@@ -1,0 +1,100 @@
+{
+    "test/Storage.t.sol:StorageTest": [
+        {
+            "name": "checkAddArr1(uint256)",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                4,
+                1,
+                0
+            ],
+            "time": [
+                0.022341417003190145,
+                0.022330749983666465,
+                1.066701952368021e-05
+            ],
+            "num_bounded_loops": 0
+        },
+        {
+            "name": "checkAddArr2(uint256,uint256)",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                5,
+                1,
+                0
+            ],
+            "time": [
+                0.07018687500385568,
+                0.07016733300406486,
+                1.95419997908175e-05
+            ],
+            "num_bounded_loops": 0
+        },
+        {
+            "name": "checkAddMap1Arr1(uint256,uint256)",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                4,
+                1,
+                0
+            ],
+            "time": [
+                0.028902583988383412,
+                0.02889408401097171,
+                8.499977411702275e-06
+            ],
+            "num_bounded_loops": 0
+        },
+        {
+            "name": "checkSetMap1(uint256,uint256)",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                2,
+                1,
+                0
+            ],
+            "time": [
+                0.006448500003898516,
+                0.006442875019274652,
+                5.624984623864293e-06
+            ],
+            "num_bounded_loops": 0
+        },
+        {
+            "name": "checkSetMap2(uint256,uint256,uint256)",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                2,
+                1,
+                0
+            ],
+            "time": [
+                0.008583459013607353,
+                0.008578334003686905,
+                5.125009920448065e-06
+            ],
+            "num_bounded_loops": 0
+        },
+        {
+            "name": "checkSetMap3(uint256,uint256,uint256,uint256)",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                2,
+                1,
+                0
+            ],
+            "time": [
+                0.0095768750179559,
+                0.009572500013746321,
+                4.375004209578037e-06
+            ],
+            "num_bounded_loops": 0
+        }
+    ]
+}

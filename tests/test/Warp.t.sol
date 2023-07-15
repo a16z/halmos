@@ -28,39 +28,39 @@ contract WarpTest is Test {
         vm.warp(time);
     }
 
-    function testWarp(uint time) public {
+    function checkWarp(uint time) public {
         vm.warp(time);
         assert(block.timestamp == time);
     }
 
-    function testWarpInternal(uint time) public {
+    function checkWarpInternal(uint time) public {
         warp(time);
         assert(block.timestamp == time);
     }
 
-    function testWarpExternal(uint time) public {
+    function checkWarpExternal(uint time) public {
         ext.warp(time);
         assert(block.timestamp == time);
     }
 
-    function testWarpExternalSelf(uint time) public {
+    function checkWarpExternalSelf(uint time) public {
         this.warp(time);
         assert(block.timestamp == time);
     }
 
-    function testWarpNew(uint time) public {
+    function checkWarpNew(uint time) public {
         c = new C(time);
         assert(block.timestamp == time);
     }
 
-    function testWarpReset(uint time1, uint time2) public {
+    function checkWarpReset(uint time1, uint time2) public {
         vm.warp(time1);
         assert(block.timestamp == time1);
         vm.warp(time2);
         assert(block.timestamp == time2);
     }
 
-    function testWarpSetUp() public {
+    function checkWarpSetUp() public view {
         assert(block.timestamp == 1000);
     }
 }

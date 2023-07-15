@@ -29,7 +29,7 @@ abstract contract SymTest {
 }
 
 contract HalmosCheatCodeTest is SymTest {
-    function testSymbolicUint() public {
+    function checkSymbolicUint() public {
         uint x = svm.createUint(256, 'x');
         uint y = svm.createUint(160, 'y');
         uint z = svm.createUint(8, 'z');
@@ -38,7 +38,7 @@ contract HalmosCheatCodeTest is SymTest {
         assert(0 <= z && z <= type(uint8).max);
     }
 
-    function testSymbolicBytes() public {
+    function checkSymbolicBytes() public {
         bytes memory data = svm.createBytes(2, 'data');
         uint x = uint(uint8(data[0]));
         uint y = uint(uint8(data[1]));
@@ -46,35 +46,43 @@ contract HalmosCheatCodeTest is SymTest {
         assert(0 <= y && y <= type(uint8).max);
     }
 
-    function testSymbolicUint256() public {
+    function checkSymbolicUint256() public {
         uint x = svm.createUint256('x');
         assert(0 <= x && x <= type(uint256).max);
     }
 
-    function testSymbolicBytes32() public {
+    function checkSymbolicBytes32() public {
         bytes32 x = svm.createBytes32('x');
         assert(0 <= uint(x) && uint(x) <= type(uint256).max);
         uint y; assembly { y := x }
         assert(0 <= y && y <= type(uint256).max);
     }
 
-    function testSymbolicAddress() public {
+    function checkSymbolicAddress() public {
         address x = svm.createAddress('x');
         uint y; assembly { y := x }
         assert(0 <= y && y <= type(uint160).max);
     }
 
-    function testSymbolicBool() public {
+    function checkSymbolicBool() public {
         bool x = svm.createBool('x');
         uint y; assembly { y := x }
         assert(y == 0 || y == 1);
     }
 
-    function testSymbolLabel() public returns (uint256) {
+    function checkSymbolLabel() public returns (uint256) {
         uint x = svm.createUint256('');
         uint y = svm.createUint256(' ');
         uint z = svm.createUint256(' a ');
         uint w = svm.createUint256(' a b ');
         return x + y + z + w;
     }
+
+    function checkFailUnknownCheatcode() public {
+        Dummy(address(svm)).foo(); // expected to fail with unknown cheatcode
+    }
+}
+
+interface Dummy {
+    function foo() external;
 }

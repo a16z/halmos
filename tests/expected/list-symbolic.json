@@ -1,0 +1,52 @@
+{
+    "test/List.t.sol:ListTest": [
+        {
+            "name": "checkAdd(uint256)",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                4,
+                1,
+                0
+            ],
+            "time": [
+                0.054170040995813906,
+                0.0343787909951061,
+                0.019791250000707805
+            ],
+            "num_bounded_loops": 0
+        },
+        {
+            "name": "checkRemove()",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                3,
+                1,
+                0
+            ],
+            "time": [
+                0.06059570799698122,
+                0.019172542000887915,
+                0.0414231659960933
+            ],
+            "num_bounded_loops": 0
+        },
+        {
+            "name": "checkSet(uint256,uint256)",
+            "exitcode": 0,
+            "num_models": 0,
+            "num_paths": [
+                2,
+                1,
+                0
+            ],
+            "time": [
+                0.014601791015593335,
+                0.01459545799298212,
+                6.333022611215711e-06
+            ],
+            "num_bounded_loops": 0
+        }
+    ]
+}

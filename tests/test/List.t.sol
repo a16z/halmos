@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
+// NOTE: required options: --symbolic-storage
+
 import "forge-std/Test.sol";
 import "../src/List.sol";
 
 contract ListTest is Test, List {
-    function testAdd(uint x) public {
+    function checkAdd(uint x) public {
         uint oldSize = arr.length;
         vm.assume(oldSize < type(uint).max);
         add(x);
@@ -15,7 +17,7 @@ contract ListTest is Test, List {
         assert(arr[newSize-1] == x);
     }
 
-    function testRemove() public {
+    function checkRemove() public {
         uint oldSize = arr.length;
         vm.assume(oldSize > 0);
         remove();
@@ -24,7 +26,7 @@ contract ListTest is Test, List {
         assert(oldSize == newSize + 1);
     }
 
-    function testSet(uint i, uint x) public {
+    function checkSet(uint i, uint x) public {
         vm.assume(i < arr.length);
         set(i, x);
         assert(arr[i] == x);
@@ -39,7 +41,7 @@ contract ListTestTest is Test {
         list.add(1);
     }
 
-    function testAdd(uint x) public {
+    function checkAdd(uint x) public {
         uint oldSize = list.size();
         vm.assume(oldSize < type(uint).max);
         list.add(x);
@@ -49,7 +51,7 @@ contract ListTestTest is Test {
         assert(list.arr(newSize-1) == x);
     }
 
-    function testRemove() public {
+    function checkRemove() public {
         uint oldSize = list.size();
         vm.assume(oldSize > 0);
         list.remove();
@@ -58,7 +60,7 @@ contract ListTestTest is Test {
         assert(oldSize == newSize + 1);
     }
 
-    function testSet(uint i, uint x) public {
+    function checkSet(uint i, uint x) public {
         vm.assume(i < list.size());
         list.set(i, x);
         assert(list.arr(i) == x);

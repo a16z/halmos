@@ -7,9 +7,8 @@ contract StructTest {
         uint y;
     }
 
-    /* TODO: support struct parameter
-    function testStruct(Point memory p) public {
+    // TODO: support struct parameter
+    function checkStruct(Point memory) public pure {
         assert(true);
     }
-    */
 }

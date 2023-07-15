@@ -5,13 +5,13 @@ import "forge-std/Test.sol";
 import "../src/Const.sol";
 
 contract ConstTest is Const {
-    function testConst() public pure {
+    function checkConst() public pure {
         assert(const == 11);
     }
 }
 
 contract ConstTestTest is Const, Test {
-    function testConst() public {
+    function checkConst() public {
         assertEq(const, 11);
     }
 }

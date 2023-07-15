@@ -15,7 +15,7 @@ contract SetupTest is Test {
         }
     }
 
-    function testTrue() public {
+    function checkTrue() public {
         assertEq(users[0], address(bytes20(keccak256("test"))));
         assertEq(users[1], address(uint160(users[0]) + 1));
         assertEq(users[2], address(0));

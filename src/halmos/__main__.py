@@ -9,7 +9,7 @@ import argparse
 import re
 import traceback
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from timeit import default_timer as timer
 from importlib import metadata
 
@@ -100,6 +100,9 @@ def parse_args(args=None) -> argparse.Namespace:
     group_debug.add_argument("--debug", action="store_true", help="run in debug mode")
     group_debug.add_argument(
         "--log", metavar="LOG_FILE_PATH", help="log every execution steps in JSON"
+    )
+    group_debug.add_argument(
+        "--json", metavar="JSON_FILE_PATH", help="output test results in JSON"
     )
     group_debug.add_argument(
         "--print-steps", action="store_true", help="print every execution steps"
@@ -532,12 +535,22 @@ class ModelWithContext:
     result: CheckSatResult
 
 
+@dataclass(frozen=True)
+class TestResult:
+    name: str  # test function name
+    exitcode: int  # 0: passed, 1: failed, 2: setup failed, ...
+    num_models: int = None
+    num_paths: Tuple[int, int, int] = None  # number of paths: [total, success, blocked]
+    time: Tuple[int, int, int] = None  # time: [total, paths, models]
+    num_bounded_loops: int = None  # number of incomplete loops
+
+
 def run(
     setup_ex: Exec,
     abi: List,
     fun_info: FunctionInfo,
     args: argparse.Namespace,
-) -> int:
+) -> TestResult:
     funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
     if args.verbose >= 1:
         print(f"Executing {funname}")
@@ -654,9 +667,10 @@ def run(
     passed = no_counterexample and normal > 0 and len(stuck) == 0
     passfail = color_good("[PASS]") if passed else color_warn("[FAIL]")
 
-    time_info = f"{end - start:0.2f}s"
+    time_total, time_paths, time_models = end - start, mid - start, end - mid
+    time_info = f"{time_total:0.2f}s"
     if args.statistics:
-        time_info += f" (paths: {mid - start:0.2f}s, models: {end - mid:0.2f}s)"
+        time_info += f" (paths: {time_paths:0.2f}s, models: {time_models:0.2f}s)"
 
     # print result
     print(
@@ -713,8 +727,14 @@ def run(
         with open(args.log, "w") as json_file:
             json.dump(steps, json_file)
 
-    # exitcode
-    return 0 if passed else 1
+    return TestResult(
+        funsig,
+        0 if passed else 1,  # exitcode
+        sum(m.result == sat for m in models),
+        (len(exs), normal, len(stuck)),
+        (time_total, time_paths, time_models),
+        len(bounded_loops),
+    )
 
 
 @dataclass(frozen=True)
@@ -726,7 +746,7 @@ class SetupAndRunSingleArgs:
     args: argparse.Namespace
 
 
-def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
+def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
     try:
         setup_ex = setup(
             fn_args.hexcode,
@@ -742,10 +762,10 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
         )
         if args.debug:
             traceback.print_exc()
-        return SETUP_FAILED
+        return []
 
     try:
-        exitcode = run(
+        test_result = run(
             setup_ex,
             fn_args.abi,
             fn_args.fun_info,
@@ -756,9 +776,9 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
         print(color_warn(f"{type(err).__name__}: {err}"))
         if args.debug:
             traceback.print_exc()
-        return TEST_FAILED
+        return [TestResult(fn_args.fun_info.sig, 2)]
 
-    return exitcode
+    return [test_result]
 
 
 def extract_setup(methodIdentifiers: Dict[str, str]) -> FunctionInfo:
@@ -790,7 +810,7 @@ class RunArgs:
     methodIdentifiers: Dict[str, str]
 
 
-def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
+def run_parallel(run_args: RunArgs) -> Tuple[int, int, List[TestResult]]:
     hexcode, abi, methodIdentifiers = (
         run_args.hexcode,
         run_args.abi,
@@ -811,15 +831,16 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int]:
     ]
 
     # dispatch to the shared process pool
-    exitcodes = list(process_pool.map(setup_and_run_single, single_run_args))
+    test_results = list(process_pool.map(setup_and_run_single, single_run_args))
+    test_results = sum(test_results, [])  # flatten lists
 
-    num_passed = exitcodes.count(0)
-    num_failed = len(exitcodes) - num_passed
+    num_passed = sum(r.exitcode == 0 for r in test_results)
+    num_failed = len(test_results) - num_passed
 
-    return num_passed, num_failed
+    return num_passed, num_failed, test_results
 
 
-def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
+def run_sequential(run_args: RunArgs) -> Tuple[int, int, List[TestResult]]:
     setup_info = extract_setup(run_args.methodIdentifiers)
     if setup_info.sig and args.verbose >= 1:
         print(f"Running {setup_info.sig}")
@@ -832,28 +853,32 @@ def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
         )
         if args.debug:
             traceback.print_exc()
-        return (0, 0)
+        return (0, 0, [])
 
     num_passed, num_failed = 0, 0
+    test_results = []
     for funsig in run_args.funsigs:
         fun_info = FunctionInfo(
             funsig.split("(")[0], funsig, run_args.methodIdentifiers[funsig]
         )
         try:
-            exitcode = run(setup_ex, run_args.abi, fun_info, args)
+            test_result = run(setup_ex, run_args.abi, fun_info, args)
         except Exception as err:
             print(f"{color_warn('[SKIP]')} {funsig}")
             print(color_warn(f"{type(err).__name__}: {err}"))
             if args.debug:
                 traceback.print_exc()
             num_failed += 1
+            test_results.append(TestResult(funsig, 2))
             continue
-        if exitcode == 0:
+
+        test_results.append(test_result)
+        if test_result.exitcode == 0:
             num_passed += 1
         else:
             num_failed += 1
 
-    return (num_passed, num_failed)
+    return (num_passed, num_failed, test_results)
 
 
 @dataclass(frozen=True)
@@ -1089,7 +1114,7 @@ def parse_build_out(args: argparse.Namespace) -> Dict:
     return result
 
 
-def main() -> int:
+def main(argv=None, test_results_map=None) -> int:
     main_start = timer()
 
     #
@@ -1105,7 +1130,7 @@ def main() -> int:
     #
 
     global args
-    args = parse_args()
+    args = parse_args(argv)
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")
@@ -1153,6 +1178,9 @@ def main() -> int:
     total_failed = 0
     total_found = 0
 
+    if args.json and test_results_map is None:
+        test_results_map = {}
+
     for compiler_version in sorted(build_out):
         build_out_map = build_out[compiler_version]
         for filename in sorted(build_out_map):
@@ -1176,14 +1204,15 @@ def main() -> int:
 
                 if funsigs:
                     total_found += len(funsigs)
-                    print(
-                        f"\nRunning {len(funsigs)} tests for {contract_json['ast']['absolutePath']}:{contract_name}"
+                    contract_path = (
+                        f"{contract_json['ast']['absolutePath']}:{contract_name}"
                     )
+                    print(f"\nRunning {len(funsigs)} tests for {contract_path}")
                     contract_start = timer()
 
                     run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers)
                     enable_parallel = args.test_parallel and len(funsigs) > 1
-                    num_passed, num_failed = (
+                    num_passed, num_failed, test_results = (
                         run_parallel(run_args)
                         if enable_parallel
                         else run_sequential(run_args)
@@ -1195,7 +1224,18 @@ def main() -> int:
                     total_passed += num_passed
                     total_failed += num_failed
 
+                    if test_results_map is not None:
+                        if contract_path in test_results_map:
+                            raise ValueError("already exists", contract_path)
+                        test_results_map[contract_path] = list(
+                            map(asdict, test_results)
+                        )
+
     main_end = timer()
+
+    if args.json:
+        with open(args.json, "w") as json_file:
+            json.dump(test_results_map, json_file)
 
     if args.statistics:
         print(

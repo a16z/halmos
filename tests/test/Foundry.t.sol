@@ -7,18 +7,18 @@ import "forge-std/StdCheats.sol";
 import "../src/Counter.sol";
 
 contract FoundryTest is Test {
-    /* TODO: support testFail prefix
-    function testFail() public {
+    /* TODO: support checkFail prefix
+    function checkFail() public {
         assertTrue(false);
     }
     */
 
-    function testAssume(uint x) public {
+    function checkAssume(uint x) public {
         vm.assume(x < 10);
         assertLt(x, 100);
     }
 
-    function testGetCode(uint x) public {
+    function checkGetCode(uint x) public {
         Counter counter = Counter(deployCode("./out/Counter.sol/Counter.json"));
         counter.set(x);
         assertEq(counter.cnt(), x);
@@ -28,7 +28,7 @@ contract FoundryTest is Test {
         assertEq(counter2.cnt(), x);
     }
 
-    function testEtchConcrete() public {
+    function checkEtchConcrete() public {
         vm.etch(address(0x42), hex"60425f526001601ff3");
         (bool success, bytes memory retval) = address(0x42).call("");
 
@@ -37,7 +37,7 @@ contract FoundryTest is Test {
         assertEq(uint256(uint8(retval[0])), 0x42);
     }
 
-    function testEtchOverwrite() public {
+    function checkEtchOverwrite() public {
         vm.etch(address(0x42), hex"60425f526001601ff3");
         (, bytes memory retval) = address(0x42).call("");
 
@@ -52,7 +52,7 @@ contract FoundryTest is Test {
     }
 
     /// @notice etching to a symbolic address is not supported
-    // function testEtchSymbolicAddr(address who) public {
+    // function checkEtchSymbolicAddr(address who) public {
     //     vm.etch(who, hex"60425f526001601ff3");
     //     (bool success, bytes memory retval) = who.call("");
 
@@ -62,7 +62,7 @@ contract FoundryTest is Test {
     // }
 
     /// @notice etching symbolic code is not supported
-    // function testEtchFullSymbolic(address who, bytes memory code) public {
+    // function checkEtchFullSymbolic(address who, bytes memory code) public {
     //     vm.etch(who, code);
     //     assertEq(code, who.code);
     // }
