@@ -91,7 +91,7 @@ gh repo fork a16z/halmos
 
 # create and activate a virtual environment
 
-python3.10 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 
 # install the dependencies
