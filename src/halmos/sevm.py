@@ -384,10 +384,8 @@ class State:
     def __str__(self) -> str:
         return "".join(
             [
-                "Stack: ",
-                str(self.stack),
-                "\n",
-                #   self.str_memory(),
+                f"Stack: {str(self.stack)}\n",
+                # self.str_memory(),
             ]
         )
 
@@ -396,15 +394,8 @@ class State:
         ret: str = "Memory:"
         size: int = len(self.memory)
         while idx < size:
-            ret = (
-                ret
-                + "\n"
-                + "- "
-                + str(hex(idx))
-                + ": "
-                + str(self.memory[idx : min(idx + 32, size)])
-            )
-            idx = idx + 32
+            ret += f"\n- {hex(idx)}: {self.memory[idx : min(idx + 32, size)]}"
+            idx += 32
         return ret + "\n"
 
     def push(self, v: Word) -> None:
@@ -697,60 +688,41 @@ class Exec:  # an execution path
         return hexify(
             "".join(
                 [
-                    "PC: ",
-                    str(self.this),
-                    " ",
-                    str(self.pc),
-                    " ",
-                    mnemonic(self.current_opcode()),
-                    "\n",
+                    f"PC: {self.this} {self.pc} {mnemonic(self.current_opcode())}\n",
                     str(self.st),
-                    "Balance: ",
-                    str(self.balance),
-                    "\n",
-                    "Storage:\n",
+                    f"Balance: {self.balance}\n",
+                    f"Storage:\n",
                     "".join(
                         map(
-                            lambda x: "- "
-                            + str(x)
-                            + ": "
-                            + str(self.storage[x])
-                            + "\n",
+                            lambda x: f"- {x}: {self.storage[x]}\n",
                             self.storage,
                         )
                     ),
-                    #   'Solver:\n'         , self.str_solver(), '\n',
-                    "Path:\n",
-                    self.str_path(),
-                    "Output: ",
-                    self.output.hex()
-                    if isinstance(self.output, bytes)
-                    else str(self.output),
-                    "\n",
-                    "Log: ",
-                    str(self.log),
-                    "\n",
-                    #   'Opcodes:\n'        , self.str_cnts(),
-                    #   'Memsize: '         , str(len(self.st.memory)), '\n',
-                    "Balance updates:\n",
+                    # f"Solver:\n{self.str_solver()}\n",
+                    f"Path:\n{self.str_path()}",
+                    f"Output: {self.output.hex() if isinstance(self.output, bytes) else self.output}\n",
+                    f"Log: {self.log}\n",
+                    # f"Opcodes:\n{self.str_cnts()}",
+                    # f"Memsize: {len(self.st.memory)}\n",
+                    f"Balance updates:\n",
                     "".join(
                         map(
-                            lambda x: "- " + str(x) + "\n",
+                            lambda x: f"- {x}\n",
                             sorted(self.balances.items(), key=lambda x: str(x[0])),
                         )
                     ),
-                    "Storage updates:\n",
+                    f"Storage updates:\n",
                     "".join(
                         map(
-                            lambda x: "- " + str(x) + "\n",
+                            lambda x: f"- {x}\n",
                             sorted(self.storages.items(), key=lambda x: str(x[0])),
                         )
                     ),
-                    "SHA3 hashes:\n",
-                    "".join(map(lambda x: "- " + str(x) + "\n", self.sha3s)),
-                    "External calls:\n",
-                    "".join(map(lambda x: "- " + str(x) + "\n", self.calls)),
-                    #   'Calldata: '        , str(self.calldata), '\n',
+                    f"SHA3 hashes:\n",
+                    "".join(map(lambda x: f"- {x}\n", self.sha3s)),
+                    f"External calls:\n",
+                    "".join(map(lambda x: f"- {x}\n", self.calls)),
+                    # f"Calldata: {self.calldata}\n",
                 ]
             )
         )
@@ -958,7 +930,7 @@ class Exec:  # an execution path
     def assume_sha3_distinct(self, sha3_var, sha3) -> None:
         for v, s in self.sha3s:
             if s.decl().name() == sha3.decl().name():  # same size
-                #   self.solver.add(Implies(sha3_var == v, sha3.arg(0) == s.arg(0)))
+                # self.solver.add(Implies(sha3_var == v, sha3.arg(0) == s.arg(0)))
                 self.solver.add(Implies(sha3.arg(0) != s.arg(0), sha3_var != v))
             else:
                 self.solver.add(sha3_var != v)
@@ -1113,7 +1085,7 @@ class SEVM:
     def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_mod[x.size()](x, y)
         ex.solver.add(ULE(term, y))  # (x % y) <= y
-        #   ex.solver.add(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
+        # ex.solver.add(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
         return term
 
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
@@ -1391,21 +1363,21 @@ class SEVM:
                 arg = wload(ex.st.memory, arg_loc, arg_size)
                 f_call = Function(
                     "call_" + str(arg_size * 8),
-                    BitVecSort(256),
-                    BitVecSort(256),
-                    BitVecSort(160),
-                    BitVecSort(256),
-                    BitVecSort(arg_size * 8),
+                    BitVecSort(256),  # cnt
+                    BitVecSort(256),  # gas
+                    BitVecSort(160),  # to
+                    BitVecSort(256),  # value
+                    BitVecSort(arg_size * 8),  # args
                     BitVecSort(256),
                 )
                 exit_code = f_call(con(call_id), gas, to, fund, arg)
             else:
                 f_call = Function(
                     "call_" + str(arg_size * 8),
-                    BitVecSort(256),
-                    BitVecSort(256),
-                    BitVecSort(160),
-                    BitVecSort(256),
+                    BitVecSort(256),  # cnt
+                    BitVecSort(256),  # gas
+                    BitVecSort(160),  # to
+                    BitVecSort(256),  # value
                     BitVecSort(256),
                 )
                 exit_code = f_call(con(call_id), gas, to, fund)
@@ -1700,7 +1672,7 @@ class SEVM:
                 if funsig == console.log_uint:
                     print(extract_bytes(arg, 4, 32))
 
-                #   elif funsig == console.log_string:
+                # elif funsig == console.log_string:
 
                 else:
                     # TODO: support other console functions
@@ -1867,12 +1839,14 @@ class SEVM:
         follow_true = False
         follow_false = False
 
-        if potential_true and potential_false:  # for loop unrolling
+        if potential_true and potential_false:
+            # for loop unrolling
             follow_true = visited[True] < self.options["max_loop"]
             follow_false = visited[False] < self.options["max_loop"]
             if not (follow_true and follow_false):
                 bounded_loops.append(jid)
-        else:  # for constant-bounded loops
+        else:
+            # for constant-bounded loops
             follow_true = potential_true
             follow_false = potential_false
 
@@ -2017,10 +1991,10 @@ class SEVM:
                 if self.options.get("log"):
                     if opcode == EVM.JUMPI:
                         steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
-                    #   elif opcode == EVM.CALL:
-                    #       steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
+                    # elif opcode == EVM.CALL:
+                    #     steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
                     else:
-                        #   steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
+                        # steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
                         steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
                 if self.options.get("print_steps"):
@@ -2143,11 +2117,6 @@ class SEVM:
                                 ]
                             )
                         )
-                    #   try:
-                    #       offset: int = int(str(ex.st.pop()))
-                    #       ex.st.push(Concat(ex.calldata[offset:offset+32]))
-                    #   except:
-                    #       ex.st.push(f_calldataload(ex.st.pop()))
                 elif opcode == EVM.CALLDATASIZE:
                     if ex.calldata is None:
                         ex.st.push(f_calldatasize())
@@ -2230,9 +2199,8 @@ class SEVM:
 
                 elif opcode == EVM.MSIZE:
                     size: int = len(ex.st.memory)
-                    size = (
-                        (size + 31) // 32
-                    ) * 32  # round up to the next multiple of 32
+                    # round up to the next multiple of 32
+                    size = ((size + 31) // 32) * 32
                     ex.st.push(con(size))
 
                 elif opcode == EVM.SLOAD:
@@ -2273,7 +2241,8 @@ class SEVM:
                                     size,
                                     ex.calldata[offset : offset + size],
                                 )
-                            elif offset == len(ex.calldata):  # copy zero bytes
+                            elif offset == len(ex.calldata):
+                                # copy zero bytes
                                 wstore_bytes(
                                     ex.st.memory,
                                     loc,
@@ -2381,24 +2350,24 @@ class SEVM:
         caller,
         this,
         #
-        #   pc,
-        #   st,
-        #   jumpis,
-        #   output,
+        # pc,
+        # st,
+        # jumpis,
+        # output,
         symbolic,
-        #   prank,
+        # prank,
         #
         solver,
-        #   path,
+        # path,
         #
-        #   log,
-        #   cnts,
-        #   sha3s,
-        #   storages,
-        #   balances,
-        #   calls,
-        #   failed,
-        #   error,
+        # log,
+        # cnts,
+        # sha3s,
+        # storages,
+        # balances,
+        # calls,
+        # failed,
+        # error,
     ) -> Exec:
         return Exec(
             code=code,

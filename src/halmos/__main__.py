@@ -752,7 +752,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> int:
             fn_args.args,
         )
     except Exception as err:
-        print(f'{color_warn("[SKIP]")} {fn_args.fun_info.sig}')
+        print(f"{color_warn('[SKIP]')} {fn_args.fun_info.sig}")
         print(color_warn(f"{type(err).__name__}: {err}"))
         if args.debug:
             traceback.print_exc()
@@ -842,7 +842,7 @@ def run_sequential(run_args: RunArgs) -> Tuple[int, int]:
         try:
             exitcode = run(setup_ex, run_args.abi, fun_info, args)
         except Exception as err:
-            print(f'{color_warn("[SKIP]")} {funsig}')
+            print(f"{color_warn('[SKIP]')} {funsig}")
             print(color_warn(f"{type(err).__name__}: {err}"))
             if args.debug:
                 traceback.print_exc()
@@ -895,7 +895,7 @@ def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
         if args.verbose >= 1:
             print(f"  Checking again with a fresh solver")
         sol2 = SolverFor("QF_AUFBV", ctx=Context())
-        #   sol2.set(timeout=args.solver_timeout_assertion)
+        # sol2.set(timeout=args.solver_timeout_assertion)
         sol2.from_string(ex.solver.to_smt2())
         res = sol2.check()
         if res == sat:
@@ -982,15 +982,8 @@ def str_model(model, args: argparse.Namespace) -> str:
         return False
 
     select_model = filter(select, model) if not args.print_full_model else model
-    return (
-        "["
-        + ",".join(
-            sorted(
-                map(lambda decl: f"\n    {decl} = {hexify(model[decl])}", select_model)
-            )
-        )
-        + "]"
-    )
+    str_decl = lambda decl: f"\n    {decl} = {hexify(model[decl])}"
+    return f"[{','.join(sorted(map(str_decl, select_model)))}]"
 
 
 def mk_options(args: argparse.Namespace) -> Dict:
@@ -1068,9 +1061,8 @@ def parse_build_out(args: argparse.Namespace) -> Dict:
                 result[compiler_version][sol_dirname] = {}
             contract_map = result[compiler_version][sol_dirname]
 
-            contract_name = json_filename.split(".")[
-                0
-            ]  # cut off compiler version number as well
+            # cut off compiler version number as well
+            contract_name = json_filename.split(".")[0]
 
             contract_type = None
             for node in json_out["ast"]["nodes"]:
