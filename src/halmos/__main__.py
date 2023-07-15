@@ -982,8 +982,10 @@ def str_model(model, args: argparse.Namespace) -> str:
         return False
 
     select_model = filter(select, model) if not args.print_full_model else model
-    str_decl = lambda decl: f"\n    {decl} = {hexify(model[decl])}"
-    return f"[{','.join(sorted(map(str_decl, select_model)))}]"
+    result = ",".join(
+        sorted(map(lambda decl: f"\n    {decl} = {hexify(model[decl])}", select_model))
+    )
+    return f"[{result}]"
 
 
 def mk_options(args: argparse.Namespace) -> Dict:
