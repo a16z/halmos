@@ -1406,24 +1406,6 @@
             "num_bounded_loops": 0
         }
     ],
-    "test/SrcMap.t.sol:SrcMapTest": [
-        {
-            "name": "checkIf(uint256)",
-            "exitcode": 1,
-            "num_models": 1,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.008314832986798137,
-                0.008048832998611033,
-                0.00026599998818710446
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
     "test/Storage.t.sol:StorageTest": [
         {
             "name": "checkAddArr1(uint256)",
