@@ -13,6 +13,10 @@ jobs:
     strategy:
       matrix:
         parallel: ["", "--test-parallel", "--solver-parallel", "--test-parallel --solver-parallel"]
+        include:
+          - repo: "morpho-org/morpho-data-structures"
+            dir: "morpho-data-structures"
+            cmd: "halmos --function testProve --loop 4 --symbolic-storage --solver-timeout-assertion 60000"
 
     steps:
       - name: Checkout
@@ -24,8 +28,8 @@ jobs:
       - name: Checkout external repo
         uses: actions/checkout@v3
         with:
-          repository: morpho-org/morpho-data-structures
-          path: morpho-data-structures
+          repository: ${{ matrix.repo }}
+          path: ${{ matrix.dir }}
           submodules: recursive
 
       - name: Install Foundry
@@ -44,5 +48,5 @@ jobs:
         working-directory: ./halmos
 
       - name: Test external repo
-        run: halmos --function testProve --loop 4 --symbolic-storage --solver-timeout-assertion 60000 ${{ matrix.parallel }}
-        working-directory: ./morpho-data-structures
+        run: ${{ matrix.cmd }} ${{ matrix.parallel }}
+        working-directory: ${{ matrix.dir }}
