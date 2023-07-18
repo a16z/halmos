@@ -1114,7 +1114,11 @@ def parse_build_out(args: argparse.Namespace) -> Dict:
                     )
                 contract_map[contract_name] = (json_out, contract_type)
             except Exception as err:
-                print(color_warn(f"skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"))
+                print(
+                    color_warn(
+                        f"skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
+                    )
+                )
                 if args.debug:
                     traceback.print_exc()
                 continue
