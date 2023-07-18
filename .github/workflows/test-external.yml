@@ -19,7 +19,7 @@ jobs:
             branch: ""
           - repo: "a16z/cicada"
             dir: "cicada"
-            cmd: "halmos -v -st --contract LibUint1024Test --function testProve --loop 256 --test-parallel --solver-parallel --solver-timeout-assertion 200000"
+            cmd: "halmos -v -st --contract LibUint1024Test --function testProve --loop 256 --test-parallel --solver-parallel --solver-timeout-assertion 300000"
             branch: "test/halmos"
           - repo: "a16z/cicada"
             dir: "cicada"
@@ -28,7 +28,7 @@ jobs:
           - repo: "farcasterxyz/contracts"
             dir: "farcaster-contracts"
             cmd: "halmos -v -st --test-parallel --solver-parallel --solver-timeout-assertion 60000"
-            branch: "halmos/symtest"
+            branch: "test/halmos"
 
     steps:
       - name: Checkout
