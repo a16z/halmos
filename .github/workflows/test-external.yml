@@ -1,0 +1,48 @@
+name: Test external projects
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        parallel: ["", "--test-parallel", "--solver-parallel", "--test-parallel --solver-parallel"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          path: halmos
+          submodules: recursive
+
+      - name: Checkout external repo
+        uses: actions/checkout@v3
+        with:
+          repository: morpho-org/morpho-data-structures
+          path: morpho-data-structures
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip
+
+      - name: Install Halmos
+        run: python -m pip install -e .
+        working-directory: ./halmos
+
+      - name: Test external repo
+        run: halmos --function testProve --loop 4 --symbolic-storage --solver-timeout-assertion 60000 ${{ matrix.parallel }}
+        working-directory: ./morpho-data-structures
