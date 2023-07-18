@@ -2,6 +2,7 @@ import pytest
 import json
 
 from typing import Dict
+from dataclasses import asdict
 
 from halmos.__main__ import main
 
@@ -45,8 +46,10 @@ from halmos.__main__ import main
     ],
 )
 def test_main(cmd, expected_path, parallel_options):
-    test_results_map = {}
-    main(cmd + parallel_options, test_results_map)
+    test_results_map = main(cmd + parallel_options)[1]
+    test_results_map = {
+        c: [asdict(r) for r in test_results_map[c]] for c in test_results_map
+    }
     with open(expected_path, encoding="utf8") as f:
         expected = json.load(f)
     assert_eq(expected, test_results_map)

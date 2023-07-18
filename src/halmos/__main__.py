@@ -102,7 +102,7 @@ def parse_args(args=None) -> argparse.Namespace:
         "--log", metavar="LOG_FILE_PATH", help="log every execution steps in JSON"
     )
     group_debug.add_argument(
-        "--json", metavar="JSON_FILE_PATH", help="output test results in JSON"
+        "--json-output", metavar="JSON_FILE_PATH", help="output test results in JSON"
     )
     group_debug.add_argument(
         "--print-steps", action="store_true", help="print every execution steps"
@@ -810,7 +810,7 @@ class RunArgs:
     methodIdentifiers: Dict[str, str]
 
 
-def run_parallel(run_args: RunArgs) -> Tuple[int, int, List[TestResult]]:
+def run_parallel(run_args: RunArgs) -> List[TestResult]:
     hexcode, abi, methodIdentifiers = (
         run_args.hexcode,
         run_args.abi,
@@ -834,13 +834,10 @@ def run_parallel(run_args: RunArgs) -> Tuple[int, int, List[TestResult]]:
     test_results = list(process_pool.map(setup_and_run_single, single_run_args))
     test_results = sum(test_results, [])  # flatten lists
 
-    num_passed = sum(r.exitcode == 0 for r in test_results)
-    num_failed = len(test_results) - num_passed
-
-    return num_passed, num_failed, test_results
+    return test_results
 
 
-def run_sequential(run_args: RunArgs) -> Tuple[int, int, List[TestResult]]:
+def run_sequential(run_args: RunArgs) -> List[TestResult]:
     setup_info = extract_setup(run_args.methodIdentifiers)
     if setup_info.sig and args.verbose >= 1:
         print(f"Running {setup_info.sig}")
@@ -853,9 +850,8 @@ def run_sequential(run_args: RunArgs) -> Tuple[int, int, List[TestResult]]:
         )
         if args.debug:
             traceback.print_exc()
-        return (0, 0, [])
+        return []
 
-    num_passed, num_failed = 0, 0
     test_results = []
     for funsig in run_args.funsigs:
         fun_info = FunctionInfo(
@@ -868,17 +864,12 @@ def run_sequential(run_args: RunArgs) -> Tuple[int, int, List[TestResult]]:
             print(color_warn(f"{type(err).__name__}: {err}"))
             if args.debug:
                 traceback.print_exc()
-            num_failed += 1
             test_results.append(TestResult(funsig, 2))
             continue
 
         test_results.append(test_result)
-        if test_result.exitcode == 0:
-            num_passed += 1
-        else:
-            num_failed += 1
 
-    return (num_passed, num_failed, test_results)
+    return test_results
 
 
 @dataclass(frozen=True)
@@ -1114,7 +1105,15 @@ def parse_build_out(args: argparse.Namespace) -> Dict:
     return result
 
 
-def main(argv=None, test_results_map=None) -> int:
+def main(argv=None) -> Tuple[int, Dict]:
+    """Run Halmos.
+
+    Args:
+        argv: alternative list of commandline arguments.
+
+    Returns:
+        (int, Dict): exitcode and test results.
+    """
     main_start = timer()
 
     #
@@ -1134,12 +1133,12 @@ def main(argv=None, test_results_map=None) -> int:
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")
-        return 0
+        return (0, None)
 
     # quick bytecode execution mode
     if args.bytecode is not None:
         run_bytecode(args.bytecode)
-        return 0
+        return (0, None)
 
     #
     # compile
@@ -1160,13 +1159,13 @@ def main(argv=None, test_results_map=None) -> int:
 
     if build_exitcode:
         print(color_warn(f"build failed: {build_cmd}"))
-        return 1
+        return (1, None)
 
     try:
         build_out = parse_build_out(args)
     except Exception as err:
         print(color_warn(f"build output parsing failed: {err}"))
-        return 1
+        return (1, None)
 
     main_mid = timer()
 
@@ -1178,8 +1177,7 @@ def main(argv=None, test_results_map=None) -> int:
     total_failed = 0
     total_found = 0
 
-    if args.json and test_results_map is None:
-        test_results_map = {}
+    test_results_map = {}
 
     for compiler_version in sorted(build_out):
         build_out_map = build_out[compiler_version]
@@ -1212,11 +1210,14 @@ def main(argv=None, test_results_map=None) -> int:
 
                     run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers)
                     enable_parallel = args.test_parallel and len(funsigs) > 1
-                    num_passed, num_failed, test_results = (
+                    test_results = (
                         run_parallel(run_args)
                         if enable_parallel
                         else run_sequential(run_args)
                     )
+
+                    num_passed = sum(r.exitcode == 0 for r in test_results)
+                    num_failed = len(test_results) - num_passed
 
                     print(
                         f"Symbolic test result: {num_passed} passed; {num_failed} failed; time: {timer() - contract_start:0.2f}s"
@@ -1224,18 +1225,18 @@ def main(argv=None, test_results_map=None) -> int:
                     total_passed += num_passed
                     total_failed += num_failed
 
-                    if test_results_map is not None:
-                        if contract_path in test_results_map:
-                            raise ValueError("already exists", contract_path)
-                        test_results_map[contract_path] = list(
-                            map(asdict, test_results)
-                        )
+                    if contract_path in test_results_map:
+                        raise ValueError("already exists", contract_path)
+                    test_results_map[contract_path] = test_results
 
     main_end = timer()
 
-    if args.json:
-        with open(args.json, "w") as json_file:
-            json.dump(test_results_map, json_file)
+    if args.json_output:
+        with open(args.json_output, "w") as json_file:
+            json.dump(
+                {c: [asdict(r) for r in test_results_map[c]] for c in test_results_map},
+                json_file,
+            )
 
     if args.statistics:
         print(
@@ -1247,14 +1248,12 @@ def main(argv=None, test_results_map=None) -> int:
         if args.contract is not None:
             error_msg += f" in {args.contract}"
         print(color_warn(error_msg))
-        return 1
+        return (1, None)
 
-    # exitcode
-    if total_failed == 0:
-        return 0
-    else:
-        return 1
+    exitcode = 0 if total_failed == 0 else 1
+
+    return (exitcode, test_results_map)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main()[0])
