@@ -1,244 +1,127 @@
 {
-    "test/Counter.t.sol:CounterTest": [
-        {
-            "name": "checkDiv1(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                2,
-                0
-            ],
-            "time": [
-                0.009959374991012737,
-                0.009951167012332007,
-                8.207978680729866e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkDiv2(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                2,
-                0
-            ],
-            "time": [
-                0.00888091602246277,
-                0.008866500022122636,
-                1.4416000340133905e-05
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkFoo(uint256,uint256,uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                47,
-                16,
-                0
-            ],
-            "time": [
-                0.21995554098975845,
-                0.21987691600224935,
-                7.862498750910163e-05
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkInc()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                4,
-                1,
-                0
-            ],
-            "time": [
-                0.027028792013879865,
-                0.01539937499910593,
-                0.011629417014773935
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkIncBy(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                2,
-                0
-            ],
-            "time": [
-                0.016327749995980412,
-                0.01632145798066631,
-                6.292015314102173e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkIncOpt()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                4,
-                1,
-                0
-            ],
-            "time": [
-                0.025245500000892207,
-                0.013565540983108804,
-                0.011679959017783403
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkLoopConst()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                5,
-                1,
-                0
-            ],
-            "time": [
-                0.030433334002736956,
-                0.02264291699975729,
-                0.007790417002979666
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkLoopConstIf()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                77,
-                16,
-                0
-            ],
-            "time": [
-                1.538891167001566,
-                0.6547999999893364,
-                0.8840911670122296
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkLoopDoWhile(uint8)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                20,
-                5,
-                0
-            ],
-            "time": [
-                0.14874658299959265,
-                0.09308420799789019,
-                0.05566237500170246
-            ],
-            "num_bounded_loops": 1
-        },
-        {
-            "name": "checkLoopFor(uint8)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                19,
-                5,
-                0
-            ],
-            "time": [
-                0.1373970830172766,
-                0.08692545801750384,
-                0.05047162499977276
-            ],
-            "num_bounded_loops": 1
-        },
-        {
-            "name": "checkLoopWhile(uint8)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                19,
-                5,
-                0
-            ],
-            "time": [
-                0.1446185829991009,
-                0.08712587499758229,
-                0.05749270800151862
-            ],
-            "num_bounded_loops": 1
-        },
-        {
-            "name": "checkMulDiv(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                5,
-                4,
-                0
-            ],
-            "time": [
-                0.07496475000516511,
-                0.07495608300087042,
-                8.66700429469347e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSet(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.00604049998219125,
-                0.006035083992173895,
-                5.415990017354488e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSetString(uint256,string,uint256,string,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                4,
-                1,
-                0
-            ],
-            "time": [
-                0.03229575001751073,
-                0.03228700000909157,
-                8.750008419156075e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSetSum(uint248,uint248)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                5,
-                1,
-                0
-            ],
-            "time": [
-                0.023321624990785494,
-                0.02331225000671111,
-                9.374984074383974e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ]
+    "exitcode": 0,
+    "test_results": {
+        "test/Counter.t.sol:CounterTest": [
+            {
+                "name": "checkDiv1(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkDiv2(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkFoo(uint256,uint256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkInc()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkIncBy(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkIncOpt()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopConst()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopConstIf()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopDoWhile(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopFor(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopWhile(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkMulDiv(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSet(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSetString(uint256,string,uint256,string,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSetSum(uint248,uint248)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
 }

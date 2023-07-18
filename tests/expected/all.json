@@ -1,1753 +1,924 @@
 {
-    "test/Invalid.t.sol:OldCompilerTest": [
-        {
-            "name": "checkAssert(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.006792041007429361,
-                0.006783832999644801,
-                8.208007784560323e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkMyAssert(uint256)",
-            "exitcode": 1,
-            "num_models": 1,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.007092082989402115,
-                0.006427499989513308,
-                0.0006645829998888075
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Arith.t.sol:ArithTest": [
-        {
-            "name": "checkExp(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.007170666998717934,
-                0.0071627919969614595,
-                7.875001756474376e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkMod(uint256,uint256,address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.01046979200327769,
-                0.010462334001203999,
-                7.458002073690295e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/AssertTest.sol:CTest": [
-        {
-            "name": "checkBar()",
-            "exitcode": 1,
-            "num_models": 1,
-            "num_paths": [
-                2,
-                0,
-                0
-            ],
-            "time": [
-                0.10647333299857564,
-                0.10532550001516938,
-                0.0011478329834062606
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkFoo()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.02516283400473185,
-                0.025157959025818855,
-                4.8749789129942656e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Block.t.sol:BlockCheatCodeTest": [
-        {
-            "name": "checkChainId(uint64)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.012892416008980945,
-                0.012884875002782792,
-                7.5410061981529e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkCoinbase(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.012101457978133112,
-                0.012094707984942943,
-                6.749993190169334e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkDifficulty(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.009351707994937897,
-                0.009346916020149365,
-                4.791974788531661e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkFee(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.008611708995886147,
-                0.008606417017290369,
-                5.291978595778346e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkRoll(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.008901083987439051,
-                0.008895249979104847,
-                5.8340083342045546e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkWarp(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.00978820800082758,
-                0.0097822499810718,
-                5.958019755780697e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Byte.t.sol:ByteTest": [
-        {
-            "name": "checkByte(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                6,
-                2,
-                0
-            ],
-            "time": [
-                0.10002066701417789,
-                0.05631445799372159,
-                0.0437062090204563
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Byte.t.sol:SymbolicByteTest": [
-        {
-            "name": "checkSymbolicByteIndex(uint8,uint8)",
-            "exitcode": 1,
-            "num_models": 2,
-            "num_paths": [
-                6,
-                1,
-                0
-            ],
-            "time": [
-                0.028774250007700175,
-                0.02722508300212212,
-                0.001549167005578056
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Console.t.sol:ConsoleTest": [
-        {
-            "name": "checkLog()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.010688374983146787,
-                0.01068245799979195,
-                5.916983354836702e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Const.t.sol:ConstTest": [
-        {
-            "name": "checkConst()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.003543416998581961,
-                0.0035386669915169477,
-                4.750007065013051e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Const.t.sol:ConstTestTest": [
-        {
-            "name": "checkConst()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.00376158399740234,
-                0.003757500002393499,
-                4.083995008841157e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Counter.t.sol:CounterTest": [
-        {
-            "name": "checkDiv1(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                2,
-                0
-            ],
-            "time": [
-                0.008028250013012439,
-                0.008022708003409207,
-                5.542009603232145e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkDiv2(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                2,
-                0
-            ],
-            "time": [
-                0.008344333997229114,
-                0.008339084015460685,
-                5.249981768429279e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkFoo(uint256,uint256,uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                17,
-                16,
-                0
-            ],
-            "time": [
-                0.0931020829884801,
-                0.09307670799898915,
-                2.5374989490956068e-05
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkInc()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.007204166991868988,
-                0.007199874991783872,
-                4.292000085115433e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkIncBy(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.006024375004926696,
-                0.006020500004524365,
-                3.875000402331352e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkIncOpt()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.00583899999037385,
-                0.005834999989019707,
-                4.0000013541430235e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkLoopConst()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.009400084003573284,
-                0.009396250010468066,
-                3.8339931052178144e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkLoopConstIf()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.02649008299340494,
-                0.026484457979677245,
-                5.62501372769475e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkLoopDoWhile(uint8)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                6,
-                4,
-                0
-            ],
-            "time": [
-                0.023103666986571625,
-                0.023094042000593618,
-                9.624985978007317e-06
-            ],
-            "num_bounded_loops": 1
-        },
-        {
-            "name": "checkLoopFor(uint8)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                5,
-                3,
-                0
-            ],
-            "time": [
-                0.018659833003766835,
-                0.01864958298392594,
-                1.025001984089613e-05
-            ],
-            "num_bounded_loops": 1
-        },
-        {
-            "name": "checkLoopWhile(uint8)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                5,
-                3,
-                0
-            ],
-            "time": [
-                0.018609833990922198,
-                0.018600874987896532,
-                8.95900302566588e-06
-            ],
-            "num_bounded_loops": 1
-        },
-        {
-            "name": "checkMulDiv(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                5,
-                4,
-                0
-            ],
-            "time": [
-                0.07291600000462495,
-                0.0729067079955712,
-                9.292009053751826e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSet(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.005909416999202222,
-                0.005904332996578887,
-                5.084002623334527e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSetString(uint256,string,uint256,string,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.02962820799439214,
-                0.029622333007864654,
-                5.874986527487636e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSetSum(uint248,uint248)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                5,
-                1,
-                0
-            ],
-            "time": [
-                0.024045666999882087,
-                0.024035166978137568,
-                1.0500021744519472e-05
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Create.t.sol:CreateTest": [
-        {
-            "name": "checkConst()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.016407249990152195,
-                0.016401541011873633,
-                5.7089782785624266e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkImmutable()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.015087000007042661,
-                0.015082625002833083,
-                4.375004209578037e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkInitialized()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.014679749991046265,
-                0.014675749989692122,
-                4.0000013541430235e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSet(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.030553457996575162,
-                0.03054887501639314,
-                4.582980182021856e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Deal.t.sol:DealTest": [
-        {
-            "name": "checkDeal1(address,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.013186916999984533,
-                0.013181042013457045,
-                5.874986527487636e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkDeal2(address,uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.016927541990298778,
-                0.0169214999768883,
-                6.04201341047883e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkDealNew()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.016635584004689008,
-                0.016630625003017485,
-                4.959001671522856e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Foundry.t.sol:FoundryTest": [
-        {
-            "name": "checkAssume(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.009323125006631017,
-                0.009317625022958964,
-                5.499983672052622e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkEtchConcrete()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.016670041979523376,
-                0.01666495797690004,
-                5.084002623334527e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkEtchOverwrite()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.02786154198111035,
-                0.027856041997438297,
-                5.499983672052622e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkGetCode(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.46927079098531976,
-                0.4692655830003787,
-                5.207984941080213e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Getter.t.sol:GetterTest": [
-        {
-            "name": "checkGetter(uint256)",
-            "exitcode": 1,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                0,
-                1
-            ],
-            "time": [
-                0.006775084009859711,
-                0.006768666993593797,
-                6.417016265913844e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/HalmosCheatCode.t.sol:HalmosCheatCodeTest": [
-        {
-            "name": "checkFailUnknownCheatcode()",
-            "exitcode": 1,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                0,
-                1
-            ],
-            "time": [
-                0.0063777079922147095,
-                0.006372917006956413,
-                4.790985258296132e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSymbolLabel()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                5,
-                1,
-                0
-            ],
-            "time": [
-                0.051910667010815814,
-                0.05190024999319576,
-                1.0417017620056868e-05
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSymbolicAddress()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.011195333005161956,
-                0.011190958000952378,
-                4.375004209578037e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSymbolicBool()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                2,
-                0
-            ],
-            "time": [
-                0.012926708004670218,
-                0.012920708017190918,
-                5.999987479299307e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSymbolicBytes()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.02052141699823551,
-                0.02051549998577684,
-                5.917012458667159e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSymbolicBytes32()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.00990520798950456,
-                0.009900542005198076,
-                4.665984306484461e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSymbolicUint()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.024763166991760954,
-                0.02475808298913762,
-                5.084002623334527e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSymbolicUint256()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.010339250002289191,
-                0.010333915997762233,
-                5.3340045269578695e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Library.t.sol:LibraryTest": [
-        {
-            "name": "checkAdd(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.004304542002500966,
-                0.004299583000829443,
-                4.959001671522856e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/LibraryLinking.t.sol:LibTest": [],
-    "test/LibraryLinking.t.sol:LibTest2": [
-        {
-            "name": "checkBar()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.0032639590208418667,
-                0.0032595000229775906,
-                4.458997864276171e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/List.t.sol:ListTest": [
-        {
-            "name": "checkAdd(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.01591579199885018,
-                0.015911082999082282,
-                4.708999767899513e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkRemove()",
-            "exitcode": 1,
-            "num_models": 0,
-            "num_paths": [
-                1,
-                0,
-                0
-            ],
-            "time": [
-                0.007327958010137081,
-                0.007324333011638373,
-                3.6249984987080097e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSet(uint256,uint256)",
-            "exitcode": 1,
-            "num_models": 0,
-            "num_paths": [
-                1,
-                0,
-                0
-            ],
-            "time": [
-                0.00863666701479815,
-                0.00863216700963676,
-                4.5000051613897085e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/List.t.sol:ListTestTest": [
-        {
-            "name": "checkAdd(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.08320020799874328,
-                0.08319529198342934,
-                4.91601531393826e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkRemove()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.054968792013823986,
-                0.054963958013104275,
-                4.8340007197111845e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSet(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.06289233299321495,
-                0.06288745798519813,
-                4.875008016824722e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Math.t.sol:MathTest": [
-        {
-            "name": "checkAvg(uint256,uint256)",
-            "exitcode": 1,
-            "num_models": 1,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.07157470801030286,
-                0.01126283299527131,
-                0.060311875015031546
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Opcode.t.sol:OpcodeTest": [
-        {
-            "name": "checkPush0()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.02399954100837931,
-                0.02399524999782443,
-                4.291010554879904e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "check_SIGNEXTEND(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                33,
-                32,
-                0
-            ],
-            "time": [
-                0.28771620901534334,
-                0.28766833400004543,
-                4.787501529790461e-05
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Prank.t.sol:PrankSetUpTest": [
-        {
-            "name": "checkPrank(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.040319375024409965,
-                0.04031275000306778,
-                6.62502134218812e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Prank.t.sol:PrankTest": [
-        {
-            "name": "checkPrank(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.061628583003766835,
-                0.061621666012797505,
-                6.916990969330072e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkPrankExternal(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.05262120798579417,
-                0.05261449998943135,
-                6.707996362820268e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkPrankExternalSelf(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.05366733399569057,
-                0.0536605000088457,
-                6.833986844867468e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkPrankInternal(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.03688741699443199,
-                0.03687945901765488,
-                7.957976777106524e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkPrankNew(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.04577312499168329,
-                0.04576516701490618,
-                7.957976777106524e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkPrankReset1(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.03653045801911503,
-                0.03652370799682103,
-                6.750022293999791e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkPrankReset2(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.03804066698648967,
-                0.03803404199425131,
-                6.624992238357663e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkStartPrank(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.1221603750018403,
-                0.12215379098779522,
-                6.584014045074582e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkStopPrank1(address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.04132283298531547,
-                0.041314665984828025,
-                8.167000487446785e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkStopPrank2()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.031720458006020635,
-                0.03171566600212827,
-                4.792003892362118e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Revert.t.sol:CTest": [
-        {
-            "name": "checkRevert1(uint256)",
-            "exitcode": 1,
-            "num_models": 1,
-            "num_paths": [
-                3,
-                0,
-                0
-            ],
-            "time": [
-                0.04121337499236688,
-                0.0408095839957241,
-                0.0004037909966427833
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkRevert2(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.03911733301356435,
-                0.039110417012125254,
-                6.9160014390945435e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Send.t.sol:SendTest": [
-        {
-            "name": "checkSend(address,uint256,address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                8,
-                1,
-                0
-            ],
-            "time": [
-                0.03954100000555627,
-                0.03952391701750457,
-                1.7082988051697612e-05
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSendSelf(address,uint256,address)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                8,
-                1,
-                0
-            ],
-            "time": [
-                0.03625720800482668,
-                0.036242500005755574,
-                1.4707999071106315e-05
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Setup.t.sol:SetupTest": [
-        {
-            "name": "checkTrue()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.04295708300196566,
-                0.04295220799394883,
-                4.875008016824722e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/SetupPlus.t.sol:SetupPlusTest": [
-        {
-            "name": "checkSetup()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.034146124991821125,
-                0.03414112501195632,
-                4.999979864805937e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/SetupPlus.t.sol:SetupPlusTestB": [
-        {
-            "name": "checkSetup()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.049622124992311,
-                0.049617707991274074,
-                4.417001036927104e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/SetupSymbolic.t.sol:SetupSymbolicTest": [
-        {
-            "name": "checkFoo()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.003194707998773083,
-                0.0031905829964671284,
-                4.125002305954695e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/SignExtend.t.sol:SignExtendTest": [
-        {
-            "name": "checkSignExtend(int16)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                4,
-                1,
-                0
-            ],
-            "time": [
-                0.061022916983347386,
-                0.06101416700403206,
-                8.749979315325618e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Solver.t.sol:SolverTest": [
-        {
-            "name": "checkFoo(uint256,uint256)",
-            "exitcode": 1,
-            "num_models": 1,
-            "num_paths": [
-                9,
-                4,
-                0
-            ],
-            "time": [
-                1.0501290000102017,
-                0.04364512499887496,
-                1.0064838750113267
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Storage.t.sol:StorageTest": [
-        {
-            "name": "checkAddArr1(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.010458083997946233,
-                0.010453750001033768,
-                4.3339969124644995e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkAddArr2(uint256,uint256)",
-            "exitcode": 1,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                0,
-                0
-            ],
-            "time": [
-                0.006222666008397937,
-                0.0062180410022847354,
-                4.62500611320138e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkAddMap1Arr1(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.017453957989346236,
-                0.01744825000059791,
-                5.707988748326898e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSetMap1(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.006097791017964482,
-                0.006093916017562151,
-                3.875000402331352e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSetMap2(uint256,uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.008013749989913777,
-                0.008009665994904935,
-                4.083995008841157e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkSetMap3(uint256,uint256,uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.009471625002333894,
-                0.00946745800320059,
-                4.1669991333037615e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Store.t.sol:StoreTest": [
-        {
-            "name": "checkStoreArray(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                3,
-                1,
-                0
-            ],
-            "time": [
-                0.0750039579870645,
-                0.07499720799387433,
-                6.749993190169334e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkStoreMapping(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.045630125008756295,
-                0.04562462499598041,
-                5.5000127758830786e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkStoreScalar(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.02935466601047665,
-                0.029350249998969957,
-                4.416011506691575e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Struct.t.sol:StructTest": [
-        {
-            "name": "checkStruct((uint256,uint256))",
-            "exitcode": 2,
-            "num_models": null,
-            "num_paths": null,
-            "time": null,
-            "num_bounded_loops": null
-        }
-    ],
-    "test/TestConstructor.t.sol:TestConstructorTest": [
-        {
-            "name": "checkValue()",
-            "exitcode": 1,
-            "num_models": 1,
-            "num_paths": [
-                2,
-                0,
-                0
-            ],
-            "time": [
-                0.005449541989946738,
-                0.005120167013956234,
-                0.000329374975990504
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/UnsupportedOpcode.t.sol:X": [
-        {
-            "name": "checkFoo()",
-            "exitcode": 1,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                0,
-                1
-            ],
-            "time": [
-                0.00361879201955162,
-                0.0036138340074103326,
-                4.958012141287327e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/UnsupportedOpcode.t.sol:Y": [
-        {
-            "name": "checkFoo()",
-            "exitcode": 1,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                0,
-                1
-            ],
-            "time": [
-                0.010356249986216426,
-                0.010351292003178969,
-                4.95798303745687e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/UnsupportedOpcode.t.sol:Z": [
-        {
-            "name": "checkFoo()",
-            "exitcode": 1,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                0,
-                1
-            ],
-            "time": [
-                0.021697415999369696,
-                0.02169258298818022,
-                4.8330111894756556e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ],
-    "test/Warp.t.sol:WarpTest": [
-        {
-            "name": "checkWarp(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.011706249992130324,
-                0.011701832991093397,
-                4.417001036927104e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkWarpExternal(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.028597750002518296,
-                0.028592999995453283,
-                4.750007065013051e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkWarpExternalSelf(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.03017012498457916,
-                0.030165417003445327,
-                4.7079811338335276e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkWarpInternal(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.013198832981288433,
-                0.013193124992540106,
-                5.707988748326898e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkWarpNew(uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.03445437498157844,
-                0.03444954098085873,
-                4.8340007197111845e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkWarpReset(uint256,uint256)",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.017815165978390723,
-                0.017809415992815048,
-                5.749985575675964e-06
-            ],
-            "num_bounded_loops": 0
-        },
-        {
-            "name": "checkWarpSetUp()",
-            "exitcode": 0,
-            "num_models": 0,
-            "num_paths": [
-                2,
-                1,
-                0
-            ],
-            "time": [
-                0.007120875001419336,
-                0.007116541994037107,
-                4.3330073822289705e-06
-            ],
-            "num_bounded_loops": 0
-        }
-    ]
+    "exitcode": 1,
+    "test_results": {
+        "test/Invalid.t.sol:OldCompilerTest": [
+            {
+                "name": "checkAssert(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkMyAssert(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Arith.t.sol:ArithTest": [
+            {
+                "name": "checkExp(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkMod(uint256,uint256,address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/AssertTest.sol:CTest": [
+            {
+                "name": "checkBar()",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkFoo()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Block.t.sol:BlockCheatCodeTest": [
+            {
+                "name": "checkChainId(uint64)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkCoinbase(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkDifficulty(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkFee(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkRoll(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkWarp(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Byte.t.sol:ByteTest": [
+            {
+                "name": "checkByte(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Byte.t.sol:SymbolicByteTest": [
+            {
+                "name": "checkSymbolicByteIndex(uint8,uint8)",
+                "exitcode": 1,
+                "num_models": 2,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Console.t.sol:ConsoleTest": [
+            {
+                "name": "checkLog()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Const.t.sol:ConstTest": [
+            {
+                "name": "checkConst()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Const.t.sol:ConstTestTest": [
+            {
+                "name": "checkConst()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Counter.t.sol:CounterTest": [
+            {
+                "name": "checkDiv1(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkDiv2(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkFoo(uint256,uint256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkInc()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkIncBy(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkIncOpt()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopConst()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopConstIf()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopDoWhile(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopFor(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoopWhile(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkMulDiv(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSet(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSetString(uint256,string,uint256,string,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSetSum(uint248,uint248)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Create.t.sol:CreateTest": [
+            {
+                "name": "checkConst()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkImmutable()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkInitialized()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSet(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Deal.t.sol:DealTest": [
+            {
+                "name": "checkDeal1(address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkDeal2(address,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkDealNew()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Foundry.t.sol:FoundryTest": [
+            {
+                "name": "checkAssume(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkEtchConcrete()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkEtchOverwrite()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkGetCode(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Getter.t.sol:GetterTest": [
+            {
+                "name": "checkGetter(uint256)",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/HalmosCheatCode.t.sol:HalmosCheatCodeTest": [
+            {
+                "name": "checkFailUnknownCheatcode()",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSymbolLabel()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSymbolicAddress()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSymbolicBool()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSymbolicBytes()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSymbolicBytes32()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSymbolicUint()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSymbolicUint256()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Library.t.sol:LibraryTest": [
+            {
+                "name": "checkAdd(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/LibraryLinking.t.sol:LibTest": [],
+        "test/LibraryLinking.t.sol:LibTest2": [
+            {
+                "name": "checkBar()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/List.t.sol:ListTest": [
+            {
+                "name": "checkAdd(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkRemove()",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSet(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/List.t.sol:ListTestTest": [
+            {
+                "name": "checkAdd(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkRemove()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSet(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Math.t.sol:MathTest": [
+            {
+                "name": "checkAvg(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Opcode.t.sol:OpcodeTest": [
+            {
+                "name": "checkPush0()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_SIGNEXTEND(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Prank.t.sol:PrankSetUpTest": [
+            {
+                "name": "checkPrank(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Prank.t.sol:PrankTest": [
+            {
+                "name": "checkPrank(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkPrankExternal(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkPrankExternalSelf(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkPrankInternal(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkPrankNew(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkPrankReset1(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkPrankReset2(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkStartPrank(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkStopPrank1(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkStopPrank2()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Revert.t.sol:CTest": [
+            {
+                "name": "checkRevert1(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkRevert2(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Send.t.sol:SendTest": [
+            {
+                "name": "checkSend(address,uint256,address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSendSelf(address,uint256,address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Setup.t.sol:SetupTest": [
+            {
+                "name": "checkTrue()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SetupPlus.t.sol:SetupPlusTest": [
+            {
+                "name": "checkSetup()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SetupPlus.t.sol:SetupPlusTestB": [
+            {
+                "name": "checkSetup()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SetupSymbolic.t.sol:SetupSymbolicTest": [
+            {
+                "name": "checkFoo()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SignExtend.t.sol:SignExtendTest": [
+            {
+                "name": "checkSignExtend(int16)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Solver.t.sol:SolverTest": [
+            {
+                "name": "checkFoo(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Storage.t.sol:StorageTest": [
+            {
+                "name": "checkAddArr1(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkAddArr2(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkAddMap1Arr1(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSetMap1(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSetMap2(uint256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkSetMap3(uint256,uint256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Store.t.sol:StoreTest": [
+            {
+                "name": "checkStoreArray(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkStoreMapping(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkStoreScalar(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Struct.t.sol:StructTest": [
+            {
+                "name": "checkStruct((uint256,uint256))",
+                "exitcode": 2,
+                "num_models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/TestConstructor.t.sol:TestConstructorTest": [
+            {
+                "name": "checkValue()",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/UnsupportedOpcode.t.sol:X": [
+            {
+                "name": "checkFoo()",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/UnsupportedOpcode.t.sol:Y": [
+            {
+                "name": "checkFoo()",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/UnsupportedOpcode.t.sol:Z": [
+            {
+                "name": "checkFoo()",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Warp.t.sol:WarpTest": [
+            {
+                "name": "checkWarp(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkWarpExternal(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkWarpExternalSelf(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkWarpInternal(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkWarpNew(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkWarpReset(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkWarpSetUp()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
 }

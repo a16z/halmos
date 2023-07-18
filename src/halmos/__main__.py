@@ -105,6 +105,9 @@ def parse_args(args=None) -> argparse.Namespace:
         "--json-output", metavar="JSON_FILE_PATH", help="output test results in JSON"
     )
     group_debug.add_argument(
+        "--extended-json-output", action="store_true", help="include more information in test results"
+    )
+    group_debug.add_argument(
         "--print-steps", action="store_true", help="print every execution steps"
     )
     group_debug.add_argument(
@@ -727,14 +730,20 @@ def run(
         with open(args.log, "w") as json_file:
             json.dump(steps, json_file)
 
-    return TestResult(
-        funsig,
-        0 if passed else 1,  # exitcode
-        sum(m.result == sat for m in models),
-        (len(exs), normal, len(stuck)),
-        (time_total, time_paths, time_models),
-        len(bounded_loops),
-    )
+    # return test result
+    exitcode = 0 if passed else 1
+    num_counterexamples = sum(m.result == sat for m in models)
+    if args.extended_json_output:
+        return TestResult(
+            funsig,
+            exitcode,
+            num_counterexamples,
+            (len(exs), normal, len(stuck)),
+            (time_total, time_paths, time_models),
+            len(bounded_loops),
+        )
+    else:
+        return TestResult(funsig, exitcode, num_counterexamples)
 
 
 @dataclass(frozen=True)
@@ -1105,15 +1114,14 @@ def parse_build_out(args: argparse.Namespace) -> Dict:
     return result
 
 
-def main(argv=None) -> Tuple[int, Dict]:
-    """Run Halmos.
+@dataclass(frozen=True)
+class MainResult:
+    exitcode: int
+    # contract path -> list of test results
+    test_results: Dict[str, List[TestResult]] = None
 
-    Args:
-        argv: alternative list of commandline arguments.
 
-    Returns:
-        (int, Dict): exitcode and test results.
-    """
+def _main(argv=None) -> MainResult:
     main_start = timer()
 
     #
@@ -1133,12 +1141,12 @@ def main(argv=None) -> Tuple[int, Dict]:
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")
-        return (0, None)
+        return MainResult(0)
 
     # quick bytecode execution mode
     if args.bytecode is not None:
         run_bytecode(args.bytecode)
-        return (0, None)
+        return MainResult(0)
 
     #
     # compile
@@ -1159,13 +1167,13 @@ def main(argv=None) -> Tuple[int, Dict]:
 
     if build_exitcode:
         print(color_warn(f"build failed: {build_cmd}"))
-        return (1, None)
+        return MainResult(1)
 
     try:
         build_out = parse_build_out(args)
     except Exception as err:
         print(color_warn(f"build output parsing failed: {err}"))
-        return (1, None)
+        return MainResult(1)
 
     main_mid = timer()
 
@@ -1231,13 +1239,6 @@ def main(argv=None) -> Tuple[int, Dict]:
 
     main_end = timer()
 
-    if args.json_output:
-        with open(args.json_output, "w") as json_file:
-            json.dump(
-                {c: [asdict(r) for r in test_results_map[c]] for c in test_results_map},
-                json_file,
-            )
-
     if args.statistics:
         print(
             f"\n[time] total: {main_end - main_start:0.2f}s (build: {main_mid - main_start:0.2f}s, tests: {main_end - main_mid:0.2f}s)"
@@ -1248,12 +1249,21 @@ def main(argv=None) -> Tuple[int, Dict]:
         if args.contract is not None:
             error_msg += f" in {args.contract}"
         print(color_warn(error_msg))
-        return (1, None)
+        return MainResult(1)
 
     exitcode = 0 if total_failed == 0 else 1
+    result = MainResult(exitcode, test_results_map)
 
-    return (exitcode, test_results_map)
+    if args.json_output:
+        with open(args.json_output, "w") as json_file:
+            json.dump(asdict(result), json_file, indent=4)
+
+    return result
+
+
+def main() -> int:
+    return _main().exitcode
 
 
 if __name__ == "__main__":
-    sys.exit(main()[0])
+    sys.exit(main())
