@@ -1047,44 +1047,54 @@ def parse_build_out(args: argparse.Namespace) -> Dict:
             continue
 
         for json_filename in os.listdir(sol_path):  # for each contract name
-            if not json_filename.endswith(".json"):
-                continue
-            if json_filename.startswith("."):
-                continue
+            try:
+                if not json_filename.endswith(".json"):
+                    continue
+                if json_filename.startswith("."):
+                    continue
 
-            json_path = os.path.join(sol_path, json_filename)
-            with open(json_path, encoding="utf8") as f:
-                json_out = json.load(f)
+                json_path = os.path.join(sol_path, json_filename)
+                with open(json_path, encoding="utf8") as f:
+                    json_out = json.load(f)
 
-            compiler_version = json_out["metadata"]["compiler"]["version"]
-            if compiler_version not in result:
-                result[compiler_version] = {}
-            if sol_dirname not in result[compiler_version]:
-                result[compiler_version][sol_dirname] = {}
-            contract_map = result[compiler_version][sol_dirname]
+                compiler_version = json_out["metadata"]["compiler"]["version"]
+                if compiler_version not in result:
+                    result[compiler_version] = {}
+                if sol_dirname not in result[compiler_version]:
+                    result[compiler_version][sol_dirname] = {}
+                contract_map = result[compiler_version][sol_dirname]
 
-            # cut off compiler version number as well
-            contract_name = json_filename.split(".")[0]
+                # cut off compiler version number as well
+                contract_name = json_filename.split(".")[0]
 
-            contract_type = None
-            for node in json_out["ast"]["nodes"]:
-                if (
-                    node["nodeType"] == "ContractDefinition"
-                    and node["name"] == contract_name
-                ):
-                    abstract = "abstract " if node.get("abstract") else ""
-                    contract_type = abstract + node["contractKind"]
-                    break
-            if contract_type is None:
-                raise ValueError("no contract type", contract_name)
+                contract_type = None
+                for node in json_out["ast"]["nodes"]:
+                    if (
+                        node["nodeType"] == "ContractDefinition"
+                        and node["name"] == contract_name
+                    ):
+                        abstract = "abstract " if node.get("abstract") else ""
+                        contract_type = abstract + node["contractKind"]
+                        break
+                if contract_type is None:
+                    raise ValueError("no contract type", contract_name)
 
-            if contract_name in contract_map:
-                raise ValueError(
-                    "duplicate contract names in the same file",
-                    contract_name,
-                    sol_dirname,
+                if contract_name in contract_map:
+                    raise ValueError(
+                        "duplicate contract names in the same file",
+                        contract_name,
+                        sol_dirname,
+                    )
+                contract_map[contract_name] = (json_out, contract_type)
+            except Exception as err:
+                print(
+                    color_warn(
+                        f"skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
+                    )
                 )
-            contract_map[contract_name] = (json_out, contract_type)
+                if args.debug:
+                    traceback.print_exc()
+                continue
 
     return result
 
@@ -1140,7 +1150,9 @@ def main() -> int:
     try:
         build_out = parse_build_out(args)
     except Exception as err:
-        print(color_warn(f"build output parsing failed: {err}"))
+        print(color_warn(f"build output parsing failed: {type(err).__name__}: {err}"))
+        if args.debug:
+            traceback.print_exc()
         return 1
 
     main_mid = timer()
