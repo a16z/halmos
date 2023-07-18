@@ -69,7 +69,7 @@ from halmos.__main__ import _main
     ],
 )
 def test_main(cmd, expected_path, parallel_options):
-    actual = asdict(_main(cmd + parallel_options))
+    actual = asdict(_main(["-v", "-st"] + cmd + parallel_options))
     with open(expected_path, encoding="utf8") as f:
         expected = json.load(f)
     assert expected["exitcode"] == actual["exitcode"]
