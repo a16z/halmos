@@ -640,6 +640,16 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Proxy.t.sol:ProxyTest": [
+            {
+                "name": "checkFoo(uint256)",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Revert.t.sol:CTest": [
             {
                 "name": "checkRevert1(uint256)",
