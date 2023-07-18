@@ -1,0 +1,55 @@
+{
+    "exitcode": 1,
+    "test_results": {
+        "test/Example.t.sol:ExampleTest": [
+            {
+                "name": "testIsPowerOfTwo(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "testIsPowerOfTwo(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "testIsPowerOfTwoEq(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "testTotalPriceBuggy(uint96,uint32)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "testTotalPriceFixed(uint96,uint32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "testTotalPriceFixedEqualsToConservative(uint96,uint32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
+}

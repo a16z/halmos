@@ -34,6 +34,10 @@ from halmos.__main__ import _main
             ["--root", "tests", "--contract", "StorageTest", "--symbolic-storage"],
             "tests/expected/storage-symbolic.json",
         ),
+        (
+            ["--root", "examples", "--loop", "256", "--solver-fresh", "--function", "test"],
+            "tests/expected/examples.json",
+        ),
     ],
 )
 @pytest.mark.parametrize(
