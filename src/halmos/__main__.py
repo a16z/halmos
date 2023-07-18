@@ -105,7 +105,9 @@ def parse_args(args=None) -> argparse.Namespace:
         "--json-output", metavar="JSON_FILE_PATH", help="output test results in JSON"
     )
     group_debug.add_argument(
-        "--extended-json-output", action="store_true", help="include more information in test results"
+        "--extended-json-output",
+        action="store_true",
+        help="include more information in test results",
     )
     group_debug.add_argument(
         "--print-steps", action="store_true", help="print every execution steps"
