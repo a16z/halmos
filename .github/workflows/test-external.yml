@@ -25,6 +25,10 @@ jobs:
             dir: "cicada"
             cmd: "halmos -v -st --contract LibPrimeTest --function testProve --loop 256 --test-parallel"
             branch: "test/halmos"
+          - repo: "farcasterxyz/contracts"
+            dir: "farcaster-contracts"
+            cmd: "halmos -v -st --test-parallel --solver-parallel --solver-timeout-assertion 60000"
+            branch: "halmos/symtest"
 
     steps:
       - name: Checkout
