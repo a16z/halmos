@@ -1,0 +1,64 @@
+name: Test external projects
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    strategy:
+      matrix:
+        include:
+          - repo: "morpho-org/morpho-data-structures"
+            dir: "morpho-data-structures"
+            cmd: "halmos --function testProve --loop 4 --symbolic-storage --test-parallel --solver-parallel --solver-timeout-assertion 60000"
+            branch: ""
+          - repo: "a16z/cicada"
+            dir: "cicada"
+            cmd: "halmos -v -st --contract LibUint1024Test --function testProve --loop 256 --test-parallel --solver-parallel --solver-timeout-assertion 1000000"
+            branch: "test/halmos"
+          - repo: "a16z/cicada"
+            dir: "cicada"
+            cmd: "halmos -v -st --contract LibPrimeTest --function testProve --loop 256 --test-parallel"
+            branch: "test/halmos"
+          - repo: "farcasterxyz/contracts"
+            dir: "farcaster-contracts"
+            cmd: "halmos -v -st --test-parallel --solver-parallel --solver-timeout-assertion 60000"
+            branch: "test/halmos"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          path: halmos
+          submodules: recursive
+
+      - name: Checkout external repo
+        uses: actions/checkout@v3
+        with:
+          repository: ${{ matrix.repo }}
+          path: ${{ matrix.dir }}
+          ref: ${{ matrix.branch }}
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip
+
+      - name: Install Halmos
+        run: python -m pip install -e ./halmos
+
+      - name: Test external repo
+        run: ${{ matrix.cmd }}
+        working-directory: ${{ matrix.dir }}

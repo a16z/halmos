@@ -3,7 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 contract SendTest {
 
-    function testSend(address payable receiver, uint amount, address others) public {
+    function checkSend(address payable receiver, uint amount, address others) public {
         require(others != address(this) && others != receiver);
 
         require(address(this) != receiver);
@@ -26,7 +26,7 @@ contract SendTest {
         }
     }
 
-    function testSendSelf(address payable receiver, uint amount, address others) public {
+    function checkSendSelf(address payable receiver, uint amount, address others) public {
         require(others != address(this) && others != receiver);
 
         require(address(this) == receiver);

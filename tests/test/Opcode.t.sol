@@ -13,23 +13,23 @@ library Opcode {
 
 contract OpcodeTest is Test {
 
-    function test_SIGNEXTEND(uint value) public {
-        _test_SIGNEXTEND(0, value);
-        _test_SIGNEXTEND(1, value);
-        _test_SIGNEXTEND(2, value);
-        _test_SIGNEXTEND(30, value);
-        _test_SIGNEXTEND(31, value);
-        _test_SIGNEXTEND(32, value);
-        _test_SIGNEXTEND(33, value);
+    function check_SIGNEXTEND(uint value) public {
+        _check_SIGNEXTEND(0, value);
+        _check_SIGNEXTEND(1, value);
+        _check_SIGNEXTEND(2, value);
+        _check_SIGNEXTEND(30, value);
+        _check_SIGNEXTEND(31, value);
+        _check_SIGNEXTEND(32, value);
+        _check_SIGNEXTEND(33, value);
     }
 
     /* TODO: support symbolic size
-    function test_SIGNEXTEND(uint size, uint value) public {
-        _test_SIGNEXTEND(size, value);
+    function check_SIGNEXTEND(uint size, uint value) public {
+        _check_SIGNEXTEND(size, value);
     }
     */
 
-    function _test_SIGNEXTEND(uint size, uint value) public {
+    function _check_SIGNEXTEND(uint size, uint value) public {
         uint result1 = Opcode.SIGNEXTEND(size, value);
         uint result2;
         if (size > 31) {
@@ -46,7 +46,7 @@ contract OpcodeTest is Test {
         assertEq(result1, result2);
     }
 
-    function testPush0() public {
+    function checkPush0() public {
         // target bytecode is 0x365f5f37365ff3
         //  36 CALLDATASIZE
         //  5F PUSH0

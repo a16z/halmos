@@ -1,0 +1,15 @@
+{
+    "exitcode": 0,
+    "test_results": {
+        "test/Reset.t.sol:ResetTest": [
+            {
+                "name": "checkFoo()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
+}
