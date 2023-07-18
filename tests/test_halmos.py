@@ -35,7 +35,15 @@ from halmos.__main__ import _main
             "tests/expected/storage-symbolic.json",
         ),
         (
-            ["--root", "examples", "--loop", "256", "--solver-fresh", "--function", "test"],
+            [
+                "--root",
+                "examples",
+                "--loop",
+                "256",
+                "--solver-fresh",
+                "--function",
+                "test",
+            ],
             "tests/expected/examples.json",
         ),
     ],
