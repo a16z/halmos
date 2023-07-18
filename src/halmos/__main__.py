@@ -1261,9 +1261,11 @@ def _main(argv=None) -> MainResult:
     return result
 
 
+# entrypoint for the `halmos` script
 def main() -> int:
     return _main().exitcode
 
 
+# entrypoint for `python -m halmos`
 if __name__ == "__main__":
     sys.exit(main())
