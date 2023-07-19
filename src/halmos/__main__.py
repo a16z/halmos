@@ -1134,7 +1134,7 @@ class MainResult:
     test_results: Dict[str, List[TestResult]] = None
 
 
-def _main(argv=None) -> MainResult:
+def _main(args=None) -> MainResult:
     main_start = timer()
 
     #
@@ -1149,7 +1149,7 @@ def _main(argv=None) -> MainResult:
     # command line arguments
     #
 
-    args = parse_args(argv)
+    args = parse_args(args)
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")
