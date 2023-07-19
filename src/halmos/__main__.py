@@ -28,6 +28,10 @@ args: argparse.Namespace
 if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)
 
+# sometimes defaults to cp1252 on Windows, which can cause UnicodeEncodeError
+if sys.stdout.encoding != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
+
 
 def parse_args(args=None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
