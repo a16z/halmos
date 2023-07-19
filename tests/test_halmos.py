@@ -77,7 +77,7 @@ def test_main(cmd, expected_path, parallel_options):
 
 
 def assert_eq(m1: Dict, m2: Dict) -> int:
-    assert m1.keys() == m2.keys()
+    assert list(m1.keys()) == list(m2.keys())
     for c in m1:
         l1 = sorted(m1[c], key=lambda x: x["name"])
         l2 = sorted(m2[c], key=lambda x: x["name"])
