@@ -7,6 +7,9 @@ import "forge-std/Test.sol";
 import "../src/List.sol";
 
 contract ListTest is Test, List {
+    /// @custom:halmos --symbolic-storage
+    function setUp() public { }
+
     function checkAdd(uint x) public {
         uint oldSize = arr.length;
         vm.assume(oldSize < type(uint).max);
@@ -36,6 +39,7 @@ contract ListTest is Test, List {
 contract ListTestTest is Test {
     List list;
 
+    /// @custom:halmos --symbolic-storage
     function setUp() public {
         list = new List();
         list.add(1);

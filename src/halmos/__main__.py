@@ -31,7 +31,7 @@ if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 
 
-def parse_args(args=None) -> argparse.Namespace:
+def mk_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="halmos", epilog="For more information, see https://github.com/a16z/halmos"
     )
@@ -231,6 +231,11 @@ def parse_args(args=None) -> argparse.Namespace:
         help="print potentially invalid counterexamples",
     )
 
+    return parser
+
+
+def parse_args(args=None) -> argparse.Namespace:
+    parser = mk_parser()
     return parser.parse_args(args)
 
 
@@ -756,6 +761,7 @@ class SetupAndRunSingleArgs:
     abi: List
     setup_info: FunctionInfo
     fun_info: FunctionInfo
+    setup_args: argparse.Namespace
     args: argparse.Namespace
 
 
@@ -766,7 +772,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.hexcode,
             fn_args.abi,
             fn_args.setup_info,
-            fn_args.args,
+            fn_args.setup_args,
         )
     except Exception as err:
         print(
@@ -824,6 +830,7 @@ class RunArgs:
     methodIdentifiers: Dict[str, str]
 
     args: argparse.Namespace
+    contract_json: Dict
 
 
 def run_parallel(run_args: RunArgs) -> List[TestResult]:
@@ -838,12 +845,13 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     if setup_info.sig and args.verbose >= 1:
         print(f"Running {setup_info.sig}")
 
+    setup_args = extend_args(args, setup_info.sig, run_args.contract_json)
     fun_infos = [
         FunctionInfo(funsig.split("(")[0], funsig, methodIdentifiers[funsig])
         for funsig in run_args.funsigs
     ]
     single_run_args = [
-        SetupAndRunSingleArgs(hexcode, abi, setup_info, fun_info, args)
+        SetupAndRunSingleArgs(hexcode, abi, setup_info, fun_info, setup_args, extend_args(setup_args, fun_info.sig, run_args.contract_json))
         for fun_info in fun_infos
     ]
 
@@ -861,7 +869,8 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
         print(f"Running {setup_info.sig}")
 
     try:
-        setup_ex = setup(run_args.hexcode, run_args.abi, setup_info, args)
+        setup_args = extend_args(args, setup_info.sig, run_args.contract_json)
+        setup_ex = setup(run_args.hexcode, run_args.abi, setup_info, setup_args)
     except Exception as err:
         print(
             color_warn(f"Error: {setup_info.sig} failed: {type(err).__name__}: {err}")
@@ -876,7 +885,8 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             funsig.split("(")[0], funsig, run_args.methodIdentifiers[funsig]
         )
         try:
-            test_result = run(setup_ex, run_args.abi, fun_info, args)
+            extended_args = extend_args(setup_args, funsig, run_args.contract_json)
+            test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
         except Exception as err:
             print(f"{color_warn('[SKIP]')} {funsig}")
             print(color_warn(f"{type(err).__name__}: {err}"))
@@ -888,6 +898,16 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
         test_results.append(test_result)
 
     return test_results
+
+
+def extend_args(args: argparse.Namespace, funsig: str, contract_json: Dict) -> argparse.Namespace:
+    try:
+        additional_options = contract_json["metadata"]["output"]["devdoc"]["methods"][funsig]["custom:halmos"]
+        new_args = deepcopy(args)
+        mk_parser().parse_args(additional_options.split(), new_args)
+        return new_args
+    except Exception as err:
+        return args
 
 
 @dataclass(frozen=True)
@@ -1230,7 +1250,7 @@ def _main(args=None) -> MainResult:
                     print(f"\nRunning {len(funsigs)} tests for {contract_path}")
                     contract_start = timer()
 
-                    run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers, args)
+                    run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers, args, contract_json)
                     enable_parallel = args.test_parallel and len(funsigs) > 1
                     test_results = (
                         run_parallel(run_args)

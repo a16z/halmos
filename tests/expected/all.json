@@ -479,7 +479,7 @@
             },
             {
                 "name": "checkRemove()",
-                "exitcode": 1,
+                "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
                 "time": null,
@@ -487,7 +487,7 @@
             },
             {
                 "name": "checkSet(uint256,uint256)",
-                "exitcode": 1,
+                "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
                 "time": null,
@@ -653,8 +653,8 @@
         "test/Reset.t.sol:ResetTest": [
             {
                 "name": "checkFoo()",
-                "exitcode": 1,
-                "num_models": 1,
+                "exitcode": 0,
+                "num_models": 0,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -767,7 +767,7 @@
             },
             {
                 "name": "checkAddArr2(uint256,uint256)",
-                "exitcode": 1,
+                "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
                 "time": null,

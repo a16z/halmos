@@ -7,6 +7,9 @@ import "forge-std/Test.sol";
 import "../src/Storage.sol";
 
 contract StorageTest is Storage {
+    /// @custom:halmos --symbolic-storage
+    function setUp() public { }
+
     function checkSetMap1(uint k, uint v) public {
         setMap1(k, v);
         assert(map1[k] == v);
