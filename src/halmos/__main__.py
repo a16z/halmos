@@ -1006,7 +1006,7 @@ def str_model(model, args: argparse.Namespace) -> str:
 
     select_model = filter(select, model) if not args.print_full_model else model
     formatted = [f"\n    {decl} = {hexify(model[decl])}" for decl in select_model]
-    return "".join(sorted(formatted))
+    return "".join(sorted(formatted)) if formatted else "∅"
 
 
 def mk_options(args: argparse.Namespace) -> Dict:
