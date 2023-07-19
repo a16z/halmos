@@ -21,8 +21,6 @@ from .warnings import *
 SETUP_FAILED = 127
 TEST_FAILED = 128
 
-args: argparse.Namespace
-
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -392,7 +390,7 @@ def mk_solver(args: argparse.Namespace):
     return solver
 
 
-def run_bytecode(hexcode: str) -> List[Exec]:
+def run_bytecode(hexcode: str, args: argparse.Namespace) -> List[Exec]:
     contract = Contract.from_hexcode(hexcode)
 
     storage = {}
@@ -762,6 +760,7 @@ class SetupAndRunSingleArgs:
 
 
 def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
+    args = fn_args.args
     try:
         setup_ex = setup(
             fn_args.hexcode,
@@ -824,8 +823,11 @@ class RunArgs:
     abi: List
     methodIdentifiers: Dict[str, str]
 
+    args: argparse.Namespace
+
 
 def run_parallel(run_args: RunArgs) -> List[TestResult]:
+    args = run_args.args
     hexcode, abi, methodIdentifiers = (
         run_args.hexcode,
         run_args.abi,
@@ -853,6 +855,7 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
 
 
 def run_sequential(run_args: RunArgs) -> List[TestResult]:
+    args = run_args.args
     setup_info = extract_setup(run_args.methodIdentifiers)
     if setup_info.sig and args.verbose >= 1:
         print(f"Running {setup_info.sig}")
@@ -1146,7 +1149,6 @@ def _main(argv=None) -> MainResult:
     # command line arguments
     #
 
-    global args
     args = parse_args(argv)
 
     if args.version:
@@ -1155,7 +1157,7 @@ def _main(argv=None) -> MainResult:
 
     # quick bytecode execution mode
     if args.bytecode is not None:
-        run_bytecode(args.bytecode)
+        run_bytecode(args.bytecode, args)
         return MainResult(0)
 
     #
@@ -1228,7 +1230,7 @@ def _main(argv=None) -> MainResult:
                     print(f"\nRunning {len(funsigs)} tests for {contract_path}")
                     contract_start = timer()
 
-                    run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers)
+                    run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers, args)
                     enable_parallel = args.test_parallel and len(funsigs) > 1
                     test_results = (
                         run_parallel(run_args)
