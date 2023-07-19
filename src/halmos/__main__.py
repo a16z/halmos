@@ -1002,17 +1002,11 @@ def is_valid_model(model) -> bool:
 def str_model(model, args: argparse.Namespace) -> str:
     def select(var):
         name = str(var)
-        if name.startswith("p_"):
-            return True
-        if name.startswith("halmos_"):
-            return True
-        return False
+        return name.startswith("p_") or name.startswith("halmos_")
 
     select_model = filter(select, model) if not args.print_full_model else model
-    result = ",".join(
-        sorted(map(lambda decl: f"\n    {decl} = {hexify(model[decl])}", select_model))
-    )
-    return f"[{result}]"
+    formatted = [f"\n    {decl} = {hexify(model[decl])}" for decl in select_model]
+    return "".join(sorted(formatted))
 
 
 def mk_options(args: argparse.Namespace) -> Dict:
