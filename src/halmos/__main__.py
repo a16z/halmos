@@ -666,7 +666,9 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
     setup_info = extract_setup(run_args.methodIdentifiers)
 
     try:
-        setup_args = extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json))
+        setup_args = extend_args(
+            args, parse_devdoc(setup_info.sig, run_args.contract_json)
+        )
         setup_ex = setup(run_args.hexcode, run_args.abi, setup_info, setup_args)
     except Exception as err:
         print(
@@ -682,7 +684,9 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             funsig.split("(")[0], funsig, run_args.methodIdentifiers[funsig]
         )
         try:
-            extended_args = extend_args(setup_args, parse_devdoc(funsig, run_args.contract_json))
+            extended_args = extend_args(
+                setup_args, parse_devdoc(funsig, run_args.contract_json)
+            )
             test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
         except Exception as err:
             print(f"{color_warn('[SKIP]')} {funsig}")
@@ -1047,7 +1051,9 @@ def _main(_args=None) -> MainResult:
                 if args.contract and args.contract != contract_name:
                     continue
 
-                (contract_json, contract_type, natspec) = build_out_map[filename][contract_name]
+                (contract_json, contract_type, natspec) = build_out_map[filename][
+                    contract_name
+                ]
                 if contract_type != "contract":
                     continue
 
@@ -1069,10 +1075,17 @@ def _main(_args=None) -> MainResult:
                     print(f"\nRunning {len(funsigs)} tests for {contract_path}")
                     contract_start = timer()
 
-                    contract_args = extend_args(args, parse_natspec(natspec)) if natspec else args
+                    contract_args = (
+                        extend_args(args, parse_natspec(natspec)) if natspec else args
+                    )
 
                     run_args = RunArgs(
-                        funsigs, hexcode, abi, methodIdentifiers, contract_args, contract_json
+                        funsigs,
+                        hexcode,
+                        abi,
+                        methodIdentifiers,
+                        contract_args,
+                        contract_json,
                     )
                     enable_parallel = args.test_parallel and len(funsigs) > 1
                     test_results = (
