@@ -3,9 +3,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../src/Example.sol";
 
+/// @custom:halmos --solver-fresh
 contract ExampleTest is Example {
-    /// @custom:halmos --solver-fresh
-    function setUp() public { }
 
     function testTotalPriceBuggy(uint96 price, uint32 quantity) public pure {
         uint128 total = totalPriceBuggy(price, quantity);

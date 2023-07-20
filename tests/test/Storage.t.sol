@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-// NOTE: required options: --symbolic-storage
-
 import "forge-std/Test.sol";
 import "../src/Storage.sol";
 
+/// @custom:halmos --symbolic-storage
 contract StorageTest is Storage {
-    /// @custom:halmos --symbolic-storage
-    function setUp() public { }
-
     function checkSetMap1(uint k, uint v) public {
         setMap1(k, v);
         assert(map1[k] == v);

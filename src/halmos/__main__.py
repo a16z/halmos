@@ -19,7 +19,7 @@ from .utils import color_good, color_warn, hexify
 from .warnings import *
 from .parser import mk_arg_parser
 
-arg_parser: argparse.ArgumentParser = mk_arg_parser()
+arg_parser = mk_arg_parser()
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -268,6 +268,9 @@ def setup(
         setup_info.selector,
     )
     if setup_sig:
+        if args.verbose >= 1:
+            print(f"Running {setup_sig}")
+
         wstore(setup_ex.calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
         dyn_param_size = []  # TODO: propagate to run
         mk_calldata(abi, setup_info, setup_ex.calldata, dyn_param_size, args)
@@ -633,10 +636,8 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     )
 
     setup_info = extract_setup(methodIdentifiers)
-    if setup_info.sig and args.verbose >= 1:
-        print(f"Running {setup_info.sig}")
 
-    setup_args = extend_args(args, setup_info.sig, run_args.contract_json)
+    setup_args = extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json))
     fun_infos = [
         FunctionInfo(funsig.split("(")[0], funsig, methodIdentifiers[funsig])
         for funsig in run_args.funsigs
@@ -648,7 +649,7 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
             setup_info,
             fun_info,
             setup_args,
-            extend_args(setup_args, fun_info.sig, run_args.contract_json),
+            extend_args(setup_args, parse_devdoc(fun_info.sig, run_args.contract_json)),
         )
         for fun_info in fun_infos
     ]
@@ -663,11 +664,9 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
 def run_sequential(run_args: RunArgs) -> List[TestResult]:
     args = run_args.args
     setup_info = extract_setup(run_args.methodIdentifiers)
-    if setup_info.sig and args.verbose >= 1:
-        print(f"Running {setup_info.sig}")
 
     try:
-        setup_args = extend_args(args, setup_info.sig, run_args.contract_json)
+        setup_args = extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json))
         setup_ex = setup(run_args.hexcode, run_args.abi, setup_info, setup_args)
     except Exception as err:
         print(
@@ -683,7 +682,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             funsig.split("(")[0], funsig, run_args.methodIdentifiers[funsig]
         )
         try:
-            extended_args = extend_args(setup_args, funsig, run_args.contract_json)
+            extended_args = extend_args(setup_args, parse_devdoc(funsig, run_args.contract_json))
             test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
         except Exception as err:
             print(f"{color_warn('[SKIP]')} {funsig}")
@@ -698,15 +697,12 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
     return test_results
 
 
-def extend_args(args: Namespace, funsig: str, contract_json: Dict) -> Namespace:
-    try:
-        more_options = contract_json["metadata"]["output"]["devdoc"]["methods"][funsig][
-            "custom:halmos"
-        ]
+def extend_args(args: Namespace, more_opts: str) -> Namespace:
+    if more_opts:
         new_args = deepcopy(args)
-        arg_parser.parse_args(more_options.split(), new_args)
+        arg_parser.parse_args(more_opts.split(), new_args)
         return new_args
-    except Exception as err:
+    else:
         return args
 
 
@@ -923,6 +919,7 @@ def parse_build_out(args: Namespace) -> Dict:
                     ):
                         abstract = "abstract " if node.get("abstract") else ""
                         contract_type = abstract + node["contractKind"]
+                        natspec = node.get("documentation")
                         break
                 if contract_type is None:
                     raise ValueError("no contract type", contract_name)
@@ -933,7 +930,7 @@ def parse_build_out(args: Namespace) -> Dict:
                         contract_name,
                         sol_dirname,
                     )
-                contract_map[contract_name] = (json_out, contract_type)
+                contract_map[contract_name] = (json_out, contract_type, natspec)
             except Exception as err:
                 print(
                     color_warn(
@@ -945,6 +942,28 @@ def parse_build_out(args: Namespace) -> Dict:
                 continue
 
     return result
+
+
+def parse_devdoc(funsig: str, contract_json: Dict) -> str:
+    try:
+        return contract_json["metadata"]["output"]["devdoc"]["methods"][funsig][
+            "custom:halmos"
+        ]
+    except Exception as err:
+        return None
+
+
+def parse_natspec(natspec: Dict) -> str:
+    isHalmosTag = False
+    result = ""
+    for item in re.split(r"(@[\S]+)", natspec.get("text", "")):
+        if item == "@custom:halmos":
+            isHalmosTag = True
+        elif re.match(r"^@\S", item):
+            isHalmosTag = False
+        elif isHalmosTag:
+            result += item
+    return result.strip()
 
 
 @dataclass(frozen=True)
@@ -1028,7 +1047,7 @@ def _main(_args=None) -> MainResult:
                 if args.contract and args.contract != contract_name:
                     continue
 
-                (contract_json, contract_type) = build_out_map[filename][contract_name]
+                (contract_json, contract_type, natspec) = build_out_map[filename][contract_name]
                 if contract_type != "contract":
                     continue
 
@@ -1050,8 +1069,10 @@ def _main(_args=None) -> MainResult:
                     print(f"\nRunning {len(funsigs)} tests for {contract_path}")
                     contract_start = timer()
 
+                    contract_args = extend_args(args, parse_natspec(natspec)) if natspec else args
+
                     run_args = RunArgs(
-                        funsigs, hexcode, abi, methodIdentifiers, args, contract_json
+                        funsigs, hexcode, abi, methodIdentifiers, contract_args, contract_json
                     )
                     enable_parallel = args.test_parallel and len(funsigs) > 1
                     test_results = (
