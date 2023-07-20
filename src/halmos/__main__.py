@@ -5,10 +5,10 @@ import sys
 import subprocess
 import uuid
 import json
-import argparse
 import re
 import traceback
 
+from argparse import Namespace
 from dataclasses import dataclass, asdict
 from timeit import default_timer as timer
 from importlib import metadata
@@ -17,10 +17,9 @@ from .pools import thread_pool, process_pool
 from .sevm import *
 from .utils import color_good, color_warn, hexify
 from .warnings import *
+from .parser import mk_arg_parser
 
-SETUP_FAILED = 127
-TEST_FAILED = 128
-
+arg_parser: argparse.ArgumentParser = mk_arg_parser()
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -29,214 +28,6 @@ if hasattr(sys, "set_int_max_str_digits"):
 # sometimes defaults to cp1252 on Windows, which can cause UnicodeEncodeError
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
-
-
-def mk_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="halmos", epilog="For more information, see https://github.com/a16z/halmos"
-    )
-
-    parser.add_argument(
-        "--root",
-        metavar="DIRECTORY",
-        default=os.getcwd(),
-        help="source root directory (default: current directory)",
-    )
-    parser.add_argument(
-        "--contract",
-        metavar="CONTRACT_NAME",
-        help="run tests in the given contract only",
-    )
-    parser.add_argument(
-        "--function",
-        metavar="FUNCTION_NAME_PREFIX",
-        default="check",
-        help="run tests matching the given prefix only (default: %(default)s)",
-    )
-
-    parser.add_argument(
-        "--loop",
-        metavar="MAX_BOUND",
-        type=int,
-        default=2,
-        help="set loop unrolling bounds (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--width", metavar="MAX_WIDTH", type=int, help="set the max number of paths"
-    )
-    parser.add_argument(
-        "--depth", metavar="MAX_DEPTH", type=int, help="set the max path length"
-    )
-    parser.add_argument(
-        "--array-lengths",
-        metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
-        help="set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)",
-    )
-
-    parser.add_argument(
-        "--symbolic-storage",
-        action="store_true",
-        help="set default storage values to symbolic",
-    )
-    parser.add_argument(
-        "--symbolic-msg-sender", action="store_true", help="set msg.sender symbolic"
-    )
-
-    parser.add_argument(
-        "--version", action="store_true", help="print the version number"
-    )
-
-    # debugging options
-    group_debug = parser.add_argument_group("Debugging options")
-
-    group_debug.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help="increase verbosity levels: -v, -vv, -vvv, ...",
-    )
-    group_debug.add_argument(
-        "-st", "--statistics", action="store_true", help="print statistics"
-    )
-    group_debug.add_argument("--debug", action="store_true", help="run in debug mode")
-    group_debug.add_argument(
-        "--log", metavar="LOG_FILE_PATH", help="log every execution steps in JSON"
-    )
-    group_debug.add_argument(
-        "--json-output", metavar="JSON_FILE_PATH", help="output test results in JSON"
-    )
-    group_debug.add_argument(
-        "--extended-json-output",
-        action="store_true",
-        help="include more information in test results",
-    )
-    group_debug.add_argument(
-        "--print-steps", action="store_true", help="print every execution steps"
-    )
-    group_debug.add_argument(
-        "--print-states", action="store_true", help="print all final execution states"
-    )
-    group_debug.add_argument(
-        "--print-failed-states",
-        action="store_true",
-        help="print failed execution states",
-    )
-    group_debug.add_argument(
-        "--print-blocked-states",
-        action="store_true",
-        help="print blocked execution states",
-    )
-    group_debug.add_argument(
-        "--print-setup-states", action="store_true", help="print setup execution states"
-    )
-    group_debug.add_argument(
-        "--print-full-model",
-        action="store_true",
-        help="print full counterexample model",
-    )
-
-    # build options
-    group_build = parser.add_argument_group("Build options")
-
-    group_build.add_argument(
-        "--forge-build-out",
-        metavar="DIRECTORY_NAME",
-        default="out",
-        help="forge build artifacts directory name (default: %(default)s)",
-    )
-
-    # smt solver options
-    group_solver = parser.add_argument_group("Solver options")
-
-    group_solver.add_argument(
-        "--no-smt-add", action="store_true", help="do not interpret `+`"
-    )
-    group_solver.add_argument(
-        "--no-smt-sub", action="store_true", help="do not interpret `-`"
-    )
-    group_solver.add_argument(
-        "--no-smt-mul", action="store_true", help="do not interpret `*`"
-    )
-    group_solver.add_argument("--smt-div", action="store_true", help="interpret `/`")
-    group_solver.add_argument("--smt-mod", action="store_true", help="interpret `mod`")
-    group_solver.add_argument(
-        "--smt-div-by-const", action="store_true", help="interpret division by constant"
-    )
-    group_solver.add_argument(
-        "--smt-mod-by-const", action="store_true", help="interpret constant modulo"
-    )
-    group_solver.add_argument(
-        "--smt-exp-by-const",
-        metavar="N",
-        type=int,
-        default=2,
-        help="interpret constant power up to N (default: %(default)s)",
-    )
-
-    group_solver.add_argument(
-        "--solver-timeout-branching",
-        metavar="TIMEOUT",
-        type=int,
-        default=1,
-        help="set timeout (in milliseconds) for solving branching conditions (default: %(default)s)",
-    )
-    group_solver.add_argument(
-        "--solver-timeout-assertion",
-        metavar="TIMEOUT",
-        type=int,
-        default=1000,
-        help="set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)",
-    )
-    group_solver.add_argument(
-        "--solver-fresh",
-        action="store_true",
-        help="run an extra solver with a fresh state for unknown",
-    )
-    group_solver.add_argument(
-        "--solver-subprocess",
-        action="store_true",
-        help="run an extra solver in subprocess for unknown",
-    )
-    group_solver.add_argument(
-        "--solver-parallel",
-        action="store_true",
-        help="run assertion solvers in parallel",
-    )
-
-    # internal options
-    group_internal = parser.add_argument_group("Internal options")
-
-    group_internal.add_argument(
-        "--bytecode", metavar="HEX_STRING", help="execute the given bytecode"
-    )
-    group_internal.add_argument(
-        "--reset-bytecode",
-        metavar="ADDR1=CODE1,ADDR2=CODE2,...",
-        help="reset the bytecode of given addresses after setUp()",
-    )
-    group_internal.add_argument(
-        "--test-parallel", action="store_true", help="run tests in parallel"
-    )
-
-    # experimental options
-    group_experimental = parser.add_argument_group("Experimental options")
-
-    group_experimental.add_argument(
-        "--symbolic-jump", action="store_true", help="support symbolic jump destination"
-    )
-    group_experimental.add_argument(
-        "--print-potential-counterexample",
-        action="store_true",
-        help="print potentially invalid counterexamples",
-    )
-
-    return parser
-
-
-def parse_args(args=None) -> argparse.Namespace:
-    parser = mk_parser()
-    return parser.parse_args(args)
 
 
 @dataclass(frozen=True)
@@ -279,7 +70,7 @@ def mk_calldata(
     fun_info: FunctionInfo,
     cd: List,
     dyn_param_size: List[str],
-    args: argparse.Namespace,
+    args: Namespace,
 ) -> None:
     item = find_abi(abi, fun_info)
     tba = []
@@ -377,7 +168,7 @@ def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
 
-def mk_caller(args: argparse.Namespace) -> Address:
+def mk_caller(args: Namespace) -> Address:
     if args.symbolic_msg_sender:
         return mk_addr("msg_sender")
     else:
@@ -388,14 +179,14 @@ def mk_this() -> Address:
     return con_addr(magic_address + 1)
 
 
-def mk_solver(args: argparse.Namespace):
+def mk_solver(args: Namespace):
     # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor("QF_AUFBV")
     solver.set(timeout=args.solver_timeout_branching)
     return solver
 
 
-def run_bytecode(hexcode: str, args: argparse.Namespace) -> List[Exec]:
+def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
     contract = Contract.from_hexcode(hexcode)
 
     storage = {}
@@ -444,7 +235,7 @@ def setup(
     hexcode: str,
     abi: List,
     setup_info: FunctionInfo,
-    args: argparse.Namespace,
+    args: Namespace,
 ) -> Exec:
     setup_start = timer()
 
@@ -561,7 +352,7 @@ def run(
     setup_ex: Exec,
     abi: List,
     fun_info: FunctionInfo,
-    args: argparse.Namespace,
+    args: Namespace,
 ) -> TestResult:
     funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
     if args.verbose >= 1:
@@ -761,8 +552,8 @@ class SetupAndRunSingleArgs:
     abi: List
     setup_info: FunctionInfo
     fun_info: FunctionInfo
-    setup_args: argparse.Namespace
-    args: argparse.Namespace
+    setup_args: Namespace
+    args: Namespace
 
 
 def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
@@ -829,7 +620,7 @@ class RunArgs:
     abi: List
     methodIdentifiers: Dict[str, str]
 
-    args: argparse.Namespace
+    args: Namespace
     contract_json: Dict
 
 
@@ -900,11 +691,11 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
     return test_results
 
 
-def extend_args(args: argparse.Namespace, funsig: str, contract_json: Dict) -> argparse.Namespace:
+def extend_args(args: Namespace, funsig: str, contract_json: Dict) -> Namespace:
     try:
-        additional_options = contract_json["metadata"]["output"]["devdoc"]["methods"][funsig]["custom:halmos"]
+        more_options = contract_json["metadata"]["output"]["devdoc"]["methods"][funsig]["custom:halmos"]
         new_args = deepcopy(args)
-        mk_parser().parse_args(additional_options.split(), new_args)
+        arg_parser.parse_args(more_options.split(), new_args)
         return new_args
     except Exception as err:
         return args
@@ -912,7 +703,7 @@ def extend_args(args: argparse.Namespace, funsig: str, contract_json: Dict) -> a
 
 @dataclass(frozen=True)
 class GenModelArgs:
-    args: argparse.Namespace
+    args: Namespace
     idx: int
     sexpr: str
 
@@ -934,7 +725,7 @@ def is_unknown(result: CheckSatResult, model: Model) -> bool:
     return result == unknown or (result == sat and not is_valid_model(model))
 
 
-def gen_model(args: argparse.Namespace, idx: int, ex: Exec) -> ModelWithContext:
+def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
     if args.verbose >= 1:
         print(f"Checking path condition (path id: {idx+1})")
 
@@ -990,7 +781,7 @@ def package_result(
     model: UnionType[Model, str],
     idx: int,
     result: CheckSatResult,
-    args: argparse.Namespace,
+    args: Namespace,
 ) -> ModelWithContext:
     if result == unsat:
         if args.verbose >= 1:
@@ -1026,7 +817,7 @@ def is_valid_model(model) -> bool:
     return True
 
 
-def str_model(model, args: argparse.Namespace) -> str:
+def str_model(model, args: Namespace) -> str:
     def select(var):
         name = str(var)
         return name.startswith("p_") or name.startswith("halmos_")
@@ -1036,7 +827,7 @@ def str_model(model, args: argparse.Namespace) -> str:
     return "".join(sorted(formatted)) if formatted else "∅"
 
 
-def mk_options(args: argparse.Namespace) -> Dict:
+def mk_options(args: Namespace) -> Dict:
     options = {
         "target": args.root,
         "verbose": args.verbose,
@@ -1067,7 +858,7 @@ def mk_options(args: argparse.Namespace) -> Dict:
     return options
 
 
-def mk_arrlen(args: argparse.Namespace) -> Dict[str, int]:
+def mk_arrlen(args: Namespace) -> Dict[str, int]:
     arrlen = {}
     if args.array_lengths:
         for assign in [x.split("=") for x in args.array_lengths.split(",")]:
@@ -1077,7 +868,7 @@ def mk_arrlen(args: argparse.Namespace) -> Dict[str, int]:
     return arrlen
 
 
-def parse_build_out(args: argparse.Namespace) -> Dict:
+def parse_build_out(args: Namespace) -> Dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
     out_path = os.path.join(args.root, args.forge_build_out)
@@ -1154,7 +945,7 @@ class MainResult:
     test_results: Dict[str, List[TestResult]] = None
 
 
-def _main(args=None) -> MainResult:
+def _main(_args=None) -> MainResult:
     main_start = timer()
 
     #
@@ -1169,7 +960,7 @@ def _main(args=None) -> MainResult:
     # command line arguments
     #
 
-    args = parse_args(args)
+    args = arg_parser.parse_args(_args)
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")
