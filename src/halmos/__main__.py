@@ -957,9 +957,24 @@ def parse_devdoc(funsig: str, contract_json: Dict) -> str:
 
 
 def parse_natspec(natspec: Dict) -> str:
+    # This parsing scheme is designed to handle:
+    #
+    # - multiline tags:
+    #   /// @custom:halmos --x
+    #   ///                --y
+    #
+    # - multiple tags:
+    #   /// @custom:halmos --x
+    #   /// @custom:halmos --y
+    #
+    # - tags that start in the middle of line:
+    #   /// blah blah @custom:halmos --x
+    #   /// --y
+    #
+    # In all the above examples, this scheme returns "--x (whitespaces) --y"
     isHalmosTag = False
     result = ""
-    for item in re.split(r"(@[\S]+)", natspec.get("text", "")):
+    for item in re.split(r"(@\S+)", natspec.get("text", "")):
         if item == "@custom:halmos":
             isHalmosTag = True
         elif re.match(r"^@\S", item):
