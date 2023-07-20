@@ -642,7 +642,14 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
         for funsig in run_args.funsigs
     ]
     single_run_args = [
-        SetupAndRunSingleArgs(hexcode, abi, setup_info, fun_info, setup_args, extend_args(setup_args, fun_info.sig, run_args.contract_json))
+        SetupAndRunSingleArgs(
+            hexcode,
+            abi,
+            setup_info,
+            fun_info,
+            setup_args,
+            extend_args(setup_args, fun_info.sig, run_args.contract_json),
+        )
         for fun_info in fun_infos
     ]
 
@@ -693,7 +700,9 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
 
 def extend_args(args: Namespace, funsig: str, contract_json: Dict) -> Namespace:
     try:
-        more_options = contract_json["metadata"]["output"]["devdoc"]["methods"][funsig]["custom:halmos"]
+        more_options = contract_json["metadata"]["output"]["devdoc"]["methods"][funsig][
+            "custom:halmos"
+        ]
         new_args = deepcopy(args)
         arg_parser.parse_args(more_options.split(), new_args)
         return new_args
@@ -1041,7 +1050,9 @@ def _main(_args=None) -> MainResult:
                     print(f"\nRunning {len(funsigs)} tests for {contract_path}")
                     contract_start = timer()
 
-                    run_args = RunArgs(funsigs, hexcode, abi, methodIdentifiers, args, contract_json)
+                    run_args = RunArgs(
+                        funsigs, hexcode, abi, methodIdentifiers, args, contract_json
+                    )
                     enable_parallel = args.test_parallel and len(funsigs) > 1
                     test_results = (
                         run_parallel(run_args)

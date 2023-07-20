@@ -3,6 +3,7 @@
 import os
 import argparse
 
+
 def mk_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="halmos", epilog="For more information, see https://github.com/a16z/halmos"
