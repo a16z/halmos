@@ -637,7 +637,6 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
 
     setup_info = extract_setup(methodIdentifiers)
 
-    setup_args = extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json))
     fun_infos = [
         FunctionInfo(funsig.split("(")[0], funsig, methodIdentifiers[funsig])
         for funsig in run_args.funsigs
@@ -648,8 +647,8 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
             abi,
             setup_info,
             fun_info,
-            setup_args,
-            extend_args(setup_args, parse_devdoc(fun_info.sig, run_args.contract_json)),
+            extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json)),
+            extend_args(args, parse_devdoc(fun_info.sig, run_args.contract_json)),
         )
         for fun_info in fun_infos
     ]
@@ -685,7 +684,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
         )
         try:
             extended_args = extend_args(
-                setup_args, parse_devdoc(funsig, run_args.contract_json)
+                args, parse_devdoc(funsig, run_args.contract_json)
             )
             test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
         except Exception as err:

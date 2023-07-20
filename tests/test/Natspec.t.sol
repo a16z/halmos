@@ -40,11 +40,11 @@ contract NatspecTestSetup {
         l = new Loop();
     }
 
-    function checkLoop3(uint n) public view {
-        assert(l.iter(n) <= 3); // pass // inherited from setup
+    function checkLoop2(uint n) public view {
+        assert(l.iter(n) <= 2); // pass // default
     }
-    function checkLoop3Fail(uint n) public view {
-        assert(l.iter(n) <= 2); // fail // inherited from setup
+    function checkLoop2Fail(uint n) public view {
+        assert(l.iter(n) <= 1); // fail // default
     }
 }
 

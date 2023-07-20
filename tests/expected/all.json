@@ -636,7 +636,7 @@
         ],
         "test/Natspec.t.sol:NatspecTestSetup": [
             {
-                "name": "checkLoop3(uint256)",
+                "name": "checkLoop2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -644,7 +644,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop3Fail(uint256)",
+                "name": "checkLoop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
