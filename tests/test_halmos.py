@@ -17,45 +17,11 @@ from halmos.__main__ import _main
         (
             [
                 "--root",
-                "tests",
-                "--contract",
-                "CounterTest",
-                "--loop",
-                "4",
-                "--symbolic-storage",
-            ],
-            "tests/expected/counter-symbolic.json",
-        ),
-        (
-            ["--root", "tests", "--contract", "ListTest", "--symbolic-storage"],
-            "tests/expected/list-symbolic.json",
-        ),
-        (
-            ["--root", "tests", "--contract", "StorageTest", "--symbolic-storage"],
-            "tests/expected/storage-symbolic.json",
-        ),
-        (
-            [
-                "--root",
                 "examples",
-                "--loop",
-                "256",
-                "--solver-fresh",
                 "--function",
                 "test",
             ],
             "tests/expected/examples.json",
-        ),
-        (
-            [
-                "--root",
-                "tests",
-                "--contract",
-                "ResetTest",
-                "--reset-bytecode",
-                "0xaaaa0002=0x6080604052348015600f57600080fd5b506004361060285760003560e01c8063c298557814602d575b600080fd5b600260405190815260200160405180910390f3fea2646970667358221220c2880ecd3d663c2d8a036163ee7c5d65b9a7d1749e1132fd8ff89646c6621d5764736f6c63430008130033",
-            ],
-            "tests/expected/reset.json",
         ),
     ],
 )

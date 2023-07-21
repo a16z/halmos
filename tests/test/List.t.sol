@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-// NOTE: required options: --symbolic-storage
-
 import "forge-std/Test.sol";
 import "../src/List.sol";
 
+/// @custom:halmos --symbolic-storage
 contract ListTest is Test, List {
     function checkAdd(uint x) public {
         uint oldSize = arr.length;
@@ -33,6 +32,7 @@ contract ListTest is Test, List {
     }
 }
 
+/// @custom:halmos --symbolic-storage
 contract ListTestTest is Test {
     List list;
 

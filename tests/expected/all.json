@@ -479,7 +479,7 @@
             },
             {
                 "name": "checkRemove()",
-                "exitcode": 1,
+                "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
                 "time": null,
@@ -487,7 +487,7 @@
             },
             {
                 "name": "checkSet(uint256,uint256)",
-                "exitcode": 1,
+                "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
                 "time": null,
@@ -523,6 +523,128 @@
         "test/Math.t.sol:MathTest": [
             {
                 "name": "checkAvg(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Natspec.t.sol:NatspecTestContract": [
+            {
+                "name": "checkLoop3(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop3Fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Natspec.t.sol:NatspecTestFunction": [
+            {
+                "name": "checkLoop2(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop2Fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop3(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop3Fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Natspec.t.sol:NatspecTestNone": [
+            {
+                "name": "checkLoop2(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop2Fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Natspec.t.sol:NatspecTestOverwrite": [
+            {
+                "name": "checkLoop3(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop3Fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop4(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop4Fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Natspec.t.sol:NatspecTestSetup": [
+            {
+                "name": "checkLoop2(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkLoop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -653,8 +775,8 @@
         "test/Reset.t.sol:ResetTest": [
             {
                 "name": "checkFoo()",
-                "exitcode": 1,
-                "num_models": 1,
+                "exitcode": 0,
+                "num_models": 0,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -767,7 +889,7 @@
             },
             {
                 "name": "checkAddArr2(uint256,uint256)",
-                "exitcode": 1,
+                "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
                 "time": null,

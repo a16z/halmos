@@ -114,7 +114,7 @@ def test_run_bytecode(args):
     args.symbolic_jump = True
 
     hexcode = "34381856FDFDFDFDFDFD5B00"
-    exs = run_bytecode(hexcode)
+    exs = run_bytecode(hexcode, args)
     assert len(exs) == 1
     assert exs[0].current_opcode() == EVM.STOP
 

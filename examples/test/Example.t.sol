@@ -3,6 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../src/Example.sol";
 
+/// @custom:halmos --solver-fresh
 contract ExampleTest is Example {
 
     function testTotalPriceBuggy(uint96 price, uint32 quantity) public pure {
@@ -27,6 +28,7 @@ contract ExampleTest is Example {
         assert(result1 == result2);
     }
 
+    /// @custom:halmos --loop 256
     function testIsPowerOfTwo(uint256 x) public pure {
         bool result1 = isPowerOfTwo(x);
         bool result2 = false;
@@ -39,6 +41,7 @@ contract ExampleTest is Example {
         assert(result1 == result2);
     }
 
+    /// @custom:halmos --loop 256
     function testIsPowerOfTwoEq(uint x) public pure {
         bool result1 = isPowerOfTwo(x);
         bool result2 = isPowerOfTwoIter(x);

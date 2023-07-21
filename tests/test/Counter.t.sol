@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-// NOTE: required options: --loop 4 --symbolic-storage
-
 import "../src/Counter.sol";
 
+/// @custom:halmos --loop 4 --symbolic-storage
 contract CounterTest is Counter {
     function checkSet(uint n) public {
         set(n);

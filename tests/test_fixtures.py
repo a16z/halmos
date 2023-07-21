@@ -2,13 +2,13 @@ import pytest
 
 from halmos.sevm import SEVM
 
-from halmos.__main__ import parse_args, mk_options
+from halmos.__main__ import arg_parser, mk_options
 import halmos.__main__
 
 
 @pytest.fixture
 def args():
-    args = parse_args([])
+    args = arg_parser.parse_args([])
 
     # set the global args for the main module
     halmos.__main__.args = args
