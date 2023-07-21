@@ -952,7 +952,7 @@ def parse_devdoc(funsig: str, contract_json: Dict) -> str:
         return contract_json["metadata"]["output"]["devdoc"]["methods"][funsig][
             "custom:halmos"
         ]
-    except Exception as err:
+    except KeyError as err:
         return None
 
 
