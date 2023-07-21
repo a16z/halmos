@@ -15,13 +15,20 @@ from halmos.__main__ import _main
             "tests/expected/all.json",
         ),
         (
-            [
-                "--root",
-                "examples",
-                "--function",
-                "test",
-            ],
-            "tests/expected/examples.json",
+            ["--root", "examples/toy", "--function", "test"],
+            "tests/expected/toy.json",
+        ),
+        (
+            ["--root", "examples/tokens/ERC20"],
+            "tests/expected/erc20.json",
+        ),
+        (
+            ["--root", "examples/tokens/ERC721"],
+            "tests/expected/erc721.json",
+        ),
+        (
+            ["--root", "examples/tokens/dei"],
+            "tests/expected/dei.json",
         ),
     ],
 )
