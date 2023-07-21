@@ -690,6 +690,14 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "checkPrankConstructor(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "checkPrankExternal(address)",
                 "exitcode": 0,
                 "num_models": 0,
