@@ -471,6 +471,8 @@ def run(
 
     no_counterexample = all(m.model is None for m in models)
     passed = no_counterexample and normal > 0 and len(stuck) == 0
+    if args.error_unknown:
+        passed = passed and all(m.result == unsat for m in models)
     passfail = color_good("[PASS]") if passed else color_warn("[FAIL]")
 
     time_total, time_paths, time_models = end - start, mid - start, end - mid
