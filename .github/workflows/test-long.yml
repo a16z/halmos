@@ -39,4 +39,4 @@ jobs:
         run: pip install -e .
 
       - name: Run pytest
-        run: pytest -v -s tests/test_halmos.py -k "${{ matrix.testname }} and test-parallel-solver-parallel"
+        run: pytest -v tests/test_halmos.py -k "${{ matrix.testname }} and test-parallel-solver-parallel"

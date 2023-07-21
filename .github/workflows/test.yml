@@ -41,4 +41,4 @@ jobs:
         run: pip install -e .
 
       - name: Run pytest
-        run: pytest -v -s -k "not long"
+        run: pytest -v -k "not long"
