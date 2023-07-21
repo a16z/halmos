@@ -974,6 +974,16 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Token.t.sol:TokenTest": [
+            {
+                "name": "checkBalanceInvariant()",
+                "exitcode": 1,
+                "num_models": 2,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/UnsupportedOpcode.t.sol:X": [
             {
                 "name": "checkFoo()",
