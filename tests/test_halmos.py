@@ -31,6 +31,13 @@ from halmos.__main__ import _main
             "tests/expected/dei.json",
         ),
     ],
+    ids=(
+        "tests",
+        "examples/toy",
+        "long:examples/tokens/ERC20",
+        "long:examples/tokens/ERC721",
+        "long:examples/tokens/dei",
+    ),
 )
 @pytest.mark.parametrize(
     "parallel_options",
@@ -40,6 +47,12 @@ from halmos.__main__ import _main
         ["--solver-parallel"],
         ["--test-parallel", "--solver-parallel"],
     ],
+    ids=(
+        "sequential",
+        "test-parallel",
+        "solver-parallel",
+        "test-parallel-solver-parallel",
+    ),
 )
 def test_main(cmd, expected_path, parallel_options):
     common_options = ["-v", "-st", "--error-unknown"]

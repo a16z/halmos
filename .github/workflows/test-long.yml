@@ -8,16 +8,14 @@ on:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
 
     strategy:
       matrix:
-        os: ["macos-latest", "ubuntu-latest", "windows-latest"]
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.8.13", "3.9.13", "3.10.6"]
-        exclude:
-          # python 3.8.13 is not available in windows-2022
-          - os: "windows-latest"
-            python-version: "3.8.13"
+        include:
+        - testname: "examples/tokens/ERC20"
+        - testname: "examples/tokens/ERC721"
+        - testname: "examples/tokens/dei"
 
     steps:
       - uses: actions/checkout@v3
@@ -27,10 +25,10 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -41,4 +39,4 @@ jobs:
         run: pip install -e .
 
       - name: Run pytest
-        run: pytest -v -s -k "not long"
+        run: pytest -v -s tests/test_halmos.py -k "${{ matrix.testname }} and test-parallel-solver-parallel"
