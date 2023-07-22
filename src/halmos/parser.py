@@ -23,7 +23,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--function",
         metavar="FUNCTION_NAME_PREFIX",
-        default="check",
+        default="check_",
         help="run tests matching the given prefix only (default: %(default)s)",
     )
 
