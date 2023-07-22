@@ -1,5 +1,5 @@
 {
-    "exitcode": 0,
+    "exitcode": 1,
     "test_results": {
         "test/DEIStablecoin.t.sol:DEIStablecoinTest": [
             {
