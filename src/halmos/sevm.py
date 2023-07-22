@@ -1752,7 +1752,7 @@ class SEVM:
                 #
                 calldata=[],
                 callvalue=value,
-                caller=ex.this,
+                caller=caller,
                 this=new_addr,
                 #
                 pc=0,
