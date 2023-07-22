@@ -29,7 +29,7 @@
         ],
         "test/OpenZeppelinERC20.t.sol:OpenZeppelinERC20Test": [
             {
-                "name": "checkNoBackdoor(bytes4)",
+                "name": "checkNoBackdoor(bytes4,address,address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -55,7 +55,7 @@
         ],
         "test/SolmateERC20.t.sol:SolmateERC20Test": [
             {
-                "name": "checkNoBackdoor(bytes4)",
+                "name": "checkNoBackdoor(bytes4,address,address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
