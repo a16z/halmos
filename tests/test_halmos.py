@@ -6,6 +6,8 @@ from dataclasses import asdict
 
 from halmos.__main__ import _main
 
+from test_fixtures import halmos_options
+
 
 @pytest.mark.parametrize(
     "cmd, expected_path",
@@ -39,24 +41,8 @@ from halmos.__main__ import _main
         "long:examples/tokens/dei",
     ),
 )
-@pytest.mark.parametrize(
-    "parallel_options",
-    [
-        [],
-        ["--test-parallel"],
-        ["--solver-parallel"],
-        ["--test-parallel", "--solver-parallel"],
-    ],
-    ids=(
-        "sequential",
-        "test-parallel",
-        "solver-parallel",
-        "test-parallel-solver-parallel",
-    ),
-)
-def test_main(cmd, expected_path, parallel_options):
-    common_options = ["-v", "-st", "--error-unknown"]
-    actual = asdict(_main(cmd + common_options + parallel_options))
+def test_main(cmd, expected_path, halmos_options):
+    actual = asdict(_main(cmd + halmos_options.split()))
     with open(expected_path, encoding="utf8") as f:
         expected = json.load(f)
     assert expected["exitcode"] == actual["exitcode"]

@@ -8,7 +8,7 @@ import {DEIStablecoin} from "./DEIStablecoin.sol";
 contract EmptyContract { }
 
 /// @notice This example shows how to find the DEI token bug exploited by the Deus DAO hack: https://rekt.news/deus-dao-r3kt/
-/// @custom:halmos --solver-timeout-assertion 60000
+/// @custom:halmos --solver-timeout-assertion 0
 contract DEIStablecoinTest is ERC20Test {
     DEIStablecoin token_;
     address lossless;

@@ -24,3 +24,8 @@ def options(args):
 @pytest.fixture
 def sevm(options):
     return SEVM(options)
+
+
+@pytest.fixture
+def halmos_options(request):
+    return request.config.getoption("--halmos-options")

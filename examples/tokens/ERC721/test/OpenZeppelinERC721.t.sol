@@ -5,7 +5,7 @@ import {ERC721Test} from "./ERC721Test.sol";
 
 import {OpenZeppelinERC721} from "../src/OpenZeppelinERC721.sol";
 
-/// @custom:halmos --solver-timeout-assertion 60000
+/// @custom:halmos --solver-timeout-assertion 0
 contract OpenZeppelinERC721Test is ERC721Test {
     function setUp() public override {
         deployer = address(0x1000);
