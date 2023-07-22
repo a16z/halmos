@@ -14,6 +14,7 @@ jobs:
       matrix:
         os: ["macos-latest", "ubuntu-latest", "windows-latest"]
         python-version: ["3.8", "3.9", "3.10", "3.11", "3.8.13", "3.9.13", "3.10.6"]
+        parallel: ["", "--test-parallel", "--solver-parallel", "--test-parallel --solver-parallel"]
         exclude:
           # python 3.8.13 is not available in windows-2022
           - os: "windows-latest"
@@ -41,4 +42,4 @@ jobs:
         run: pip install -e .
 
       - name: Run pytest
-        run: pytest -v -s
+        run: pytest -v -k "not long" --halmos-options="-v -st --error-unknown ${{ matrix.parallel }} --solver-timeout-assertion 0"

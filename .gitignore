@@ -19,5 +19,5 @@ env/
 venv/
 
 # Foundry build files
-*/cache/
-*/out/
+cache/
+out/

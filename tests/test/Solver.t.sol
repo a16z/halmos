@@ -3,8 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 // from https://github.com/a16z/halmos/issues/57
 
-// NOTE: required options: --print-potential-counterexample
-
+/// @custom:halmos --print-potential-counterexample --solver-timeout-assertion 10000
 contract SolverTest {
 
     function foo(uint x) public pure returns (uint) {

@@ -4,7 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 import {Test} from "forge-std/Test.sol";
 
-/// @custom:halmos --solver-timeout-assertion 60000
+/// @custom:halmos --solver-timeout-assertion 0
 contract TokenTest is SymTest, Test {
     Token token;
 

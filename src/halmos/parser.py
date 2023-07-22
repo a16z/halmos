@@ -108,6 +108,11 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print full counterexample model",
     )
+    group_debug.add_argument(
+        "--error-unknown",
+        action="store_true",
+        help="turn unknown counterexample warnings to errors",
+    )
 
     # build options
     group_build = parser.add_argument_group("Build options")
