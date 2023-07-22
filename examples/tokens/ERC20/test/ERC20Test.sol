@@ -86,7 +86,7 @@ abstract contract ERC20Test is SymTest, Test {
             assert(IERC20(token).balanceOf(to) >= oldBalanceTo);
             assert(IERC20(token).balanceOf(to) == oldBalanceTo + amount);
 
-            assert(oldAllowance >= amount); // ensure allownace was enough
+            assert(oldAllowance >= amount); // ensure allowance was enough
             assert(oldAllowance == type(uint256).max || IERC20(token).allowance(from, caller) == oldAllowance - amount); // allowance decreases if not max
         } else {
             assert(IERC20(token).balanceOf(from) == oldBalanceFrom);
