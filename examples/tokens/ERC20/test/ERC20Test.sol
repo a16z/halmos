@@ -15,29 +15,25 @@ abstract contract ERC20Test is SymTest, Test {
 
     function setUp() public virtual;
 
-    function checkNoBackdoor(bytes4 selector) public virtual {
+    function _checkNoBackdoor(bytes4 selector, bytes memory args, address caller, address other) public virtual {
         // consider two arbitrary distinct accounts
-        address caller = svm.createAddress('caller');
-        address other = svm.createAddress('other');
         vm.assume(other != caller);
 
-        // assume the caller hasn't been granted any approvals
-        for (uint i = 0; i < holders.length; i++) {
-            vm.assume(IERC20(token).allowance(holders[i], caller) == 0);
-        }
-
         // record their current balances
-        uint256 oldBalanceCaller = IERC20(token).balanceOf(caller);
         uint256 oldBalanceOther = IERC20(token).balanceOf(other);
+
+        uint256 oldAllowance = IERC20(token).allowance(other, caller);
 
         // consider an arbitrary function call to the token from the caller
         vm.prank(caller);
-        bytes memory args = svm.createBytes(1024, 'args');
         address(token).call(abi.encodePacked(selector, args));
 
-        // ensure that the caller cannot spend other' tokens
-        assert(IERC20(token).balanceOf(caller) <= oldBalanceCaller);
-        assert(IERC20(token).balanceOf(other) >= oldBalanceOther);
+        uint256 newBalanceOther = IERC20(token).balanceOf(other);
+
+        // ensure that the caller cannot spend other' tokens without approvals
+        if (newBalanceOther < oldBalanceOther) {
+            assert(oldAllowance >= oldBalanceOther - newBalanceOther);
+        }
     }
 
     function checkTransfer(address sender, address receiver, address other, uint256 amount) public virtual {
