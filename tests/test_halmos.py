@@ -6,6 +6,8 @@ from dataclasses import asdict
 
 from halmos.__main__ import _main
 
+from test_fixtures import halmos_options
+
 
 @pytest.mark.parametrize(
     "cmd, expected_path",
@@ -15,27 +17,27 @@ from halmos.__main__ import _main
             "tests/expected/all.json",
         ),
         (
-            [
-                "--root",
-                "examples",
-                "--function",
-                "test",
-            ],
-            "tests/expected/examples.json",
+            ["--root", "examples/toy", "--function", "test"],
+            "tests/expected/toy.json",
+        ),
+        (
+            ["--root", "examples/tokens/ERC20"],
+            "tests/expected/erc20.json",
+        ),
+        (
+            ["--root", "examples/tokens/ERC721"],
+            "tests/expected/erc721.json",
         ),
     ],
+    ids=(
+        "tests",
+        "examples/toy",
+        "long:examples/tokens/ERC20",
+        "long:examples/tokens/ERC721",
+    ),
 )
-@pytest.mark.parametrize(
-    "parallel_options",
-    [
-        [],
-        ["--test-parallel"],
-        ["--solver-parallel"],
-        ["--test-parallel", "--solver-parallel"],
-    ],
-)
-def test_main(cmd, expected_path, parallel_options):
-    actual = asdict(_main(["-v", "-st"] + cmd + parallel_options))
+def test_main(cmd, expected_path, halmos_options):
+    actual = asdict(_main(cmd + halmos_options.split()))
     with open(expected_path, encoding="utf8") as f:
         expected = json.load(f)
     assert expected["exitcode"] == actual["exitcode"]
@@ -48,12 +50,7 @@ def assert_eq(m1: Dict, m2: Dict) -> int:
         l1 = sorted(m1[c], key=lambda x: x["name"])
         l2 = sorted(m2[c], key=lambda x: x["name"])
         assert len(l1) == len(l2)
-        assert all(eq_test_result(r1, r2) for r1, r2 in zip(l1, l2))
-
-
-def eq_test_result(r1: Dict, r2: Dict) -> bool:
-    return (
-        r1["name"] == r2["name"]
-        and r1["exitcode"] == r2["exitcode"]
-        and r1["num_models"] == r2["num_models"]
-    )
+        for r1, r2 in zip(l1, l2):
+            assert r1["name"] == r2["name"]
+            assert r1["exitcode"] == r2["exitcode"]
+            assert r1["num_models"] == r2["num_models"]

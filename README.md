@@ -43,7 +43,7 @@ $ halmos --help
 
 ## Examples
 
-Given a contract, [Example.sol](examples/src/Example.sol):
+Given a contract, [Example.sol](examples/toy/src/Example.sol):
 ```solidity
 contract Example {
     function totalPriceBuggy(uint96 price, uint32 quantity) public pure returns (uint128) {
@@ -54,7 +54,7 @@ contract Example {
 }
 ```
 
-You write some **property-based tests** (in Solidity), [Example.t.sol](examples/test/Example.t.sol):
+You write some **property-based tests** (in Solidity), [Example.t.sol](examples/toy/test/Example.t.sol):
 ```solidity
 contract ExampleTest is Example {
     function testTotalPriceBuggy(uint96 price, uint32 quantity) public pure {

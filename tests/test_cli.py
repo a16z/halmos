@@ -362,6 +362,16 @@ def test_decode():
     """,
         ),
     ],
+    ids=(
+        "fooInt(uint256)",
+        "fooInt8(uint8)",
+        "fooIntAddress(uint256,address)",
+        "fooIntInt(uint256,uint256)",
+        "fooStruct(((uint256,uint256),uint256),uint256)",
+        "fooDynArr(uint256[])",
+        "fooFixArr(uint256[3])",
+        "fooBytes(bytes)",
+    ),
 )
 def test_str_abi(sig, abi):
     assert sig == str_abi(json.loads(abi))

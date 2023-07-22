@@ -1,0 +1,83 @@
+{
+    "exitcode": 1,
+    "test_results": {
+        "test/DEIStablecoin.t.sol:DEIStablecoinTest": [
+            {
+                "name": "checkNoBackdoor(bytes4,address,address)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkTransfer(address,address,address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkTransferFrom(address,address,address,address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/OpenZeppelinERC20.t.sol:OpenZeppelinERC20Test": [
+            {
+                "name": "checkNoBackdoor(bytes4,address,address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkTransfer(address,address,address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkTransferFrom(address,address,address,address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SolmateERC20.t.sol:SolmateERC20Test": [
+            {
+                "name": "checkNoBackdoor(bytes4,address,address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkTransfer(address,address,address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "checkTransferFrom(address,address,address,address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
+}

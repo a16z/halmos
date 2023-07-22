@@ -1,9 +1,12 @@
 [submodule "tests/lib/forge-std"]
 	path = tests/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std
-[submodule "tests/lib/openzeppelin-contracts"]
-	path = tests/lib/openzeppelin-contracts
-	url = https://github.com/OpenZeppelin/openzeppelin-contracts.git
 [submodule "tests/lib/halmos-cheatcodes"]
 	path = tests/lib/halmos-cheatcodes
 	url = https://github.com/a16z/halmos-cheatcodes
+[submodule "tests/lib/openzeppelin-contracts"]
+	path = tests/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "tests/lib/solmate"]
+	path = tests/lib/solmate
+	url = https://github.com/transmissions11/solmate
