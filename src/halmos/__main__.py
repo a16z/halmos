@@ -884,7 +884,7 @@ def parse_build_out(args: Namespace) -> Dict:
     out_path = os.path.join(args.root, args.forge_build_out)
     if not os.path.exists(out_path):
         raise FileNotFoundError(
-            f"the build output directory `{out_path}` does not exist"
+            f"The build output directory `{out_path}` does not exist"
         )
 
     for sol_dirname in os.listdir(out_path):  # for each source filename
@@ -939,7 +939,7 @@ def parse_build_out(args: Namespace) -> Dict:
             except Exception as err:
                 print(
                     color_warn(
-                        f"skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
+                        f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
                     )
                 )
                 if args.debug:
@@ -1037,13 +1037,13 @@ def _main(_args=None) -> MainResult:
     build_exitcode = subprocess.run(build_cmd).returncode
 
     if build_exitcode:
-        print(color_warn(f"build failed: {build_cmd}"))
+        print(color_warn(f"Build failed: {build_cmd}"))
         return MainResult(1)
 
     try:
         build_out = parse_build_out(args)
     except Exception as err:
-        print(color_warn(f"build output parsing failed: {type(err).__name__}: {err}"))
+        print(color_warn(f"Build output parsing failed: {type(err).__name__}: {err}"))
         if args.debug:
             traceback.print_exc()
         return MainResult(1)
