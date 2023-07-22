@@ -140,14 +140,14 @@ contract PrankTest is Test {
         assert(target.caller() == address(this));
     }
 
-    function checkPrankConstructor(address user) public {
+    function check_prank_Constructor(address user) public {
         vm.prank(user);
         ConstructorRecorder recorder = new ConstructorRecorder();
         assert(recorder.caller() == user);
     }
 
     // TODO: uncomment when we add CREATE2 support
-    // function checkPrankConstructorCreate2(address user, bytes32 salt) public {
+    // function check_prank_ConstructorCreate2(address user, bytes32 salt) public {
     //     vm.prank(user);
     //     ConstructorRecorder recorder = new ConstructorRecorder{salt:salt}();
     //     assert(recorder.caller() == user);
