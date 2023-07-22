@@ -18,7 +18,7 @@ contract ByteTest {
         return uint(uint8(bytes1(b[i]))); // TODO: Not supported: MLOAD symbolic memory offset: 160 + p_i_uint256
     }
 
-    function checkByte(uint i, uint x) pure public {
+    function check_byte(uint i, uint x) pure public {
         uint r1 = byte1(i, x);
         uint r2 = byte2(i, x);
     //  uint r3 = byte3(i, x); // not supported
@@ -28,7 +28,7 @@ contract ByteTest {
 }
 
 contract SymbolicByteTest {
-    function checkSymbolicByteIndex(uint8 x, uint8 i) public pure returns (uint r) {
+    function check_SymbolicByteIndex(uint8 x, uint8 i) public pure returns (uint r) {
         if (x > 10) assert(false); // expected to fail
         assembly {
             r := byte(i, x)

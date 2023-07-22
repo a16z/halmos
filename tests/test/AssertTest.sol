@@ -20,11 +20,11 @@ contract CTest is Test {
         c = new C();
     }
 
-    function checkFoo() public {
+    function check_foo() public {
         address(c).call(abi.encodeWithSelector(C.foo.selector, bytes(""))); // pass
     }
 
-    function checkBar() public {
+    function check_bar() public {
         address(c).call(abi.encodeWithSelector(C.bar.selector, bytes(""))); // fail
     }
 }

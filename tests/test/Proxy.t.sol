@@ -20,7 +20,7 @@ contract ProxyTest is Test {
         c = C(address(new ERC1967Proxy(address(cImpl), "")));
     }
 
-    function checkFoo(uint x) public {
+    function check_foo(uint x) public {
         c.foo(x);
         assert(c.num() == x); // currently unsupported // TODO: support DELEGATECALL
         assert(cImpl.num() == 0);

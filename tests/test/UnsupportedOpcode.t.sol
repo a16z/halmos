@@ -8,7 +8,7 @@ contract X {
         }
     }
 
-    function checkFoo() public {
+    function check_foo() public {
         foo(); // unsupported error
     }
 }
@@ -20,7 +20,7 @@ contract Y {
         x = new X();
     }
 
-    function checkFoo() public {
+    function check_foo() public {
         x.foo(); // unsupported error
     }
 }
@@ -33,7 +33,7 @@ contract Z {
         y.setUp();
     }
 
-    function checkFoo() public {
-        y.checkFoo(); // unsupported error
+    function check_foo() public {
+        y.check_foo(); // unsupported error
     }
 }

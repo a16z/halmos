@@ -19,7 +19,7 @@ contract TokenTest is SymTest, Test {
         }
     }
 
-    function checkBalanceInvariant() public {
+    function check_BalanceInvariant() public {
         // consider two arbitrary distinct accounts
         address caller = svm.createAddress('caller');
         address others = svm.createAddress('others');

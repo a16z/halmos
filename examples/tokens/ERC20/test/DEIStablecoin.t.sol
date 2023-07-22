@@ -41,7 +41,7 @@ contract DEIStablecoinTest is ERC20Test {
         }
     }
 
-    function checkNoBackdoor(bytes4 selector, address caller, address other) public {
+    function check_NoBackdoor(bytes4 selector, address caller, address other) public {
         bytes memory args;
         if (selector == token_.acceptRecoveryAdminOwnership.selector) {
             args = abi.encode(svm.createBytes(32, 'data'));

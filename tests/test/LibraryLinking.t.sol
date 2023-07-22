@@ -7,13 +7,13 @@ library Lib {
 }
 
 contract LibTest {
-    function checkFoo() public pure {
+    function check_foo() public pure {
         assert(Lib.foo() == 1); // library linking placeholder error
     }
 }
 
 contract LibTest2 {
-    function checkBar() public pure {
+    function check_bar() public pure {
         assert(Lib.bar() == 2); // this is fine because internal library functions are inlined
     }
 }

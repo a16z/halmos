@@ -3,7 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../src/Example.sol";
 
-/// @custom:halmos --solver-fresh
+/// @custom:halmos --solver-timeout-assertion 0
 contract ExampleTest is Example {
 
     function testTotalPriceBuggy(uint96 price, uint32 quantity) public pure {

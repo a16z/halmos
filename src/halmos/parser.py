@@ -23,7 +23,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--function",
         metavar="FUNCTION_NAME_PREFIX",
-        default="check",
+        default="check_",
         help="run tests matching the given prefix only (default: %(default)s)",
     )
 
@@ -157,14 +157,14 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         metavar="TIMEOUT",
         type=int,
         default=1,
-        help="set timeout (in milliseconds) for solving branching conditions (default: %(default)s)",
+        help="set timeout (in milliseconds) for solving branching conditions; 0 means no timeout (default: %(default)s)",
     )
     group_solver.add_argument(
         "--solver-timeout-assertion",
         metavar="TIMEOUT",
         type=int,
         default=1000,
-        help="set timeout (in milliseconds) for solving assertion violation conditions (default: %(default)s)",
+        help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout (default: %(default)s)",
     )
     group_solver.add_argument(
         "--solver-fresh",

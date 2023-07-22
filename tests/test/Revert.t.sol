@@ -24,14 +24,14 @@ contract CTest {
         c = new C();
     }
 
-    function checkRevert1(uint256 x) public {
+    function check_Revert1(uint256 x) public {
         require(x != 0);
         (bool result, ) = address(c).call(abi.encodeWithSignature("set1(uint256)", x));
         assert(!result);
         assert(c.num() != x); // fail // TODO: fix reverting semantics
     }
 
-    function checkRevert2(uint256 x) public {
+    function check_Revert2(uint256 x) public {
         require(x != 0);
         (bool result, ) = address(c).call(abi.encodeWithSignature("set2(uint256)", x));
         assert(!result);

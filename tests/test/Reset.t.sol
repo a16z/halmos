@@ -15,7 +15,7 @@ contract ResetTest {
         c = new C();
     }
 
-    function checkFoo() public view {
+    function check_foo() public view {
         assert(c.foo() == 2); // for testing --reset-bytecode option
     }
 

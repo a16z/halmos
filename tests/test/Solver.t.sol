@@ -12,7 +12,7 @@ contract SolverTest {
         else return x;
     }
 
-    function checkFoo(uint a, uint b) public pure {
+    function check_foo(uint a, uint b) public pure {
         if(b > a) {
             assert(foo(b) > foo(a));
         }

@@ -46,7 +46,7 @@ contract OpcodeTest is Test {
         assertEq(result1, result2);
     }
 
-    function checkPush0() public {
+    function check_PUSH0() public {
         // target bytecode is 0x365f5f37365ff3
         //  36 CALLDATASIZE
         //  5F PUSH0

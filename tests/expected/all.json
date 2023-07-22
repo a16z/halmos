@@ -3,7 +3,7 @@
     "test_results": {
         "test/Invalid.t.sol:OldCompilerTest": [
             {
-                "name": "checkAssert(uint256)",
+                "name": "check_assert(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -11,7 +11,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkMyAssert(uint256)",
+                "name": "check_myAssert(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -21,7 +21,7 @@
         ],
         "test/Arith.t.sol:ArithTest": [
             {
-                "name": "checkExp(uint256)",
+                "name": "check_Exp(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -29,7 +29,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkMod(uint256,uint256,address)",
+                "name": "check_Mod(uint256,uint256,address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -39,7 +39,7 @@
         ],
         "test/AssertTest.sol:CTest": [
             {
-                "name": "checkBar()",
+                "name": "check_bar()",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -47,7 +47,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkFoo()",
+                "name": "check_foo()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -57,7 +57,7 @@
         ],
         "test/Block.t.sol:BlockCheatCodeTest": [
             {
-                "name": "checkChainId(uint64)",
+                "name": "check_chainId(uint64)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -65,7 +65,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkCoinbase(address)",
+                "name": "check_coinbase(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -73,7 +73,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkDifficulty(uint256)",
+                "name": "check_difficulty(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -81,7 +81,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkFee(uint256)",
+                "name": "check_fee(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -89,7 +89,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkRoll(uint256)",
+                "name": "check_roll(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -97,7 +97,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkWarp(uint256)",
+                "name": "check_warp(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -107,7 +107,7 @@
         ],
         "test/Byte.t.sol:ByteTest": [
             {
-                "name": "checkByte(uint256,uint256)",
+                "name": "check_byte(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -117,7 +117,7 @@
         ],
         "test/Byte.t.sol:SymbolicByteTest": [
             {
-                "name": "checkSymbolicByteIndex(uint8,uint8)",
+                "name": "check_SymbolicByteIndex(uint8,uint8)",
                 "exitcode": 1,
                 "num_models": 2,
                 "num_paths": null,
@@ -127,7 +127,7 @@
         ],
         "test/Console.t.sol:ConsoleTest": [
             {
-                "name": "checkLog()",
+                "name": "check_log()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -137,7 +137,7 @@
         ],
         "test/Const.t.sol:ConstTest": [
             {
-                "name": "checkConst()",
+                "name": "check_Const()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -147,7 +147,7 @@
         ],
         "test/Const.t.sol:ConstTestTest": [
             {
-                "name": "checkConst()",
+                "name": "check_Const()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -157,7 +157,7 @@
         ],
         "test/Counter.t.sol:CounterTest": [
             {
-                "name": "checkDiv1(uint256,uint256)",
+                "name": "check_div_1(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -165,7 +165,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkDiv2(uint256,uint256)",
+                "name": "check_div_2(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -173,7 +173,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkFoo(uint256,uint256,uint256,uint256)",
+                "name": "check_foo(uint256,uint256,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -181,7 +181,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkInc()",
+                "name": "check_inc()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -189,7 +189,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkIncBy(uint256)",
+                "name": "check_incBy(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -197,7 +197,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkIncOpt()",
+                "name": "check_incOpt()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -205,7 +205,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoopConst()",
+                "name": "check_loopConst()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -213,7 +213,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoopConstIf()",
+                "name": "check_loopConstIf()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -221,7 +221,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoopDoWhile(uint8)",
+                "name": "check_loopDoWhile(uint8)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -229,7 +229,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoopFor(uint8)",
+                "name": "check_loopFor(uint8)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -237,7 +237,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoopWhile(uint8)",
+                "name": "check_loopWhile(uint8)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -245,7 +245,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkMulDiv(uint256,uint256)",
+                "name": "check_mulDiv(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -253,7 +253,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSet(uint256)",
+                "name": "check_set(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -261,7 +261,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSetString(uint256,string,uint256,string,uint256)",
+                "name": "check_setString(uint256,string,uint256,string,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -269,7 +269,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSetSum(uint248,uint248)",
+                "name": "check_setSum(uint248,uint248)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -279,7 +279,7 @@
         ],
         "test/Create.t.sol:CreateTest": [
             {
-                "name": "checkConst()",
+                "name": "check_const()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -287,7 +287,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkImmutable()",
+                "name": "check_immutable()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -295,7 +295,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkInitialized()",
+                "name": "check_initialized()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -303,7 +303,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSet(uint256)",
+                "name": "check_set(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -313,7 +313,7 @@
         ],
         "test/Deal.t.sol:DealTest": [
             {
-                "name": "checkDeal1(address,uint256)",
+                "name": "check_deal_1(address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -321,7 +321,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkDeal2(address,uint256,uint256)",
+                "name": "check_deal_2(address,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -329,7 +329,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkDealNew()",
+                "name": "check_deal_new()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -339,7 +339,7 @@
         ],
         "test/Foundry.t.sol:FoundryTest": [
             {
-                "name": "checkAssume(uint256)",
+                "name": "check_assume(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -347,7 +347,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkEtchConcrete()",
+                "name": "check_deployCode(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -355,7 +355,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkEtchOverwrite()",
+                "name": "check_etch_Concrete()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -363,7 +363,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkGetCode(uint256)",
+                "name": "check_etch_Overwrite()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -373,7 +373,7 @@
         ],
         "test/Getter.t.sol:GetterTest": [
             {
-                "name": "checkGetter(uint256)",
+                "name": "check_Getter(uint256)",
                 "exitcode": 1,
                 "num_models": 0,
                 "num_paths": null,
@@ -383,7 +383,7 @@
         ],
         "test/HalmosCheatCode.t.sol:HalmosCheatCodeTest": [
             {
-                "name": "checkFailUnknownCheatcode()",
+                "name": "check_FailUnknownCheatcode()",
                 "exitcode": 1,
                 "num_models": 0,
                 "num_paths": null,
@@ -391,7 +391,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSymbolLabel()",
+                "name": "check_SymbolLabel()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -399,7 +399,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSymbolicAddress()",
+                "name": "check_createAddress()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -407,7 +407,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSymbolicBool()",
+                "name": "check_createBool()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -415,7 +415,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSymbolicBytes()",
+                "name": "check_createBytes()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -423,7 +423,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSymbolicBytes32()",
+                "name": "check_createBytes32()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -431,7 +431,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSymbolicUint()",
+                "name": "check_createUint()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -439,7 +439,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSymbolicUint256()",
+                "name": "check_createUint256()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -449,7 +449,7 @@
         ],
         "test/Library.t.sol:LibraryTest": [
             {
-                "name": "checkAdd(uint256,uint256)",
+                "name": "check_add(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -460,7 +460,7 @@
         "test/LibraryLinking.t.sol:LibTest": [],
         "test/LibraryLinking.t.sol:LibTest2": [
             {
-                "name": "checkBar()",
+                "name": "check_bar()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -470,7 +470,7 @@
         ],
         "test/List.t.sol:ListTest": [
             {
-                "name": "checkAdd(uint256)",
+                "name": "check_add(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -478,7 +478,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkRemove()",
+                "name": "check_remove()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -486,7 +486,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSet(uint256,uint256)",
+                "name": "check_set(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -496,7 +496,7 @@
         ],
         "test/List.t.sol:ListTestTest": [
             {
-                "name": "checkAdd(uint256)",
+                "name": "check_add(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -504,7 +504,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkRemove()",
+                "name": "check_remove()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -512,7 +512,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSet(uint256,uint256)",
+                "name": "check_set(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -522,7 +522,7 @@
         ],
         "test/Math.t.sol:MathTest": [
             {
-                "name": "checkAvg(uint256,uint256)",
+                "name": "check_Avg(uint256,uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -532,7 +532,7 @@
         ],
         "test/Natspec.t.sol:NatspecTestContract": [
             {
-                "name": "checkLoop3(uint256)",
+                "name": "check_Loop3(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -540,7 +540,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop3Fail(uint256)",
+                "name": "check_Loop3Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -550,7 +550,7 @@
         ],
         "test/Natspec.t.sol:NatspecTestFunction": [
             {
-                "name": "checkLoop2(uint256)",
+                "name": "check_Loop2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -558,7 +558,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop2Fail(uint256)",
+                "name": "check_Loop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -566,7 +566,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop3(uint256)",
+                "name": "check_Loop3(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -574,7 +574,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop3Fail(uint256)",
+                "name": "check_Loop3Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -584,7 +584,7 @@
         ],
         "test/Natspec.t.sol:NatspecTestNone": [
             {
-                "name": "checkLoop2(uint256)",
+                "name": "check_Loop2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -592,7 +592,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop2Fail(uint256)",
+                "name": "check_Loop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -602,7 +602,7 @@
         ],
         "test/Natspec.t.sol:NatspecTestOverwrite": [
             {
-                "name": "checkLoop3(uint256)",
+                "name": "check_Loop3(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -610,7 +610,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop3Fail(uint256)",
+                "name": "check_Loop3Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -618,7 +618,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop4(uint256)",
+                "name": "check_Loop4(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -626,7 +626,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop4Fail(uint256)",
+                "name": "check_Loop4Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -636,7 +636,7 @@
         ],
         "test/Natspec.t.sol:NatspecTestSetup": [
             {
-                "name": "checkLoop2(uint256)",
+                "name": "check_Loop2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -644,7 +644,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkLoop2Fail(uint256)",
+                "name": "check_Loop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -654,7 +654,7 @@
         ],
         "test/Opcode.t.sol:OpcodeTest": [
             {
-                "name": "checkPush0()",
+                "name": "check_PUSH0()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -672,7 +672,7 @@
         ],
         "test/Prank.t.sol:PrankSetUpTest": [
             {
-                "name": "checkPrank(address)",
+                "name": "check_prank(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -682,7 +682,7 @@
         ],
         "test/Prank.t.sol:PrankTest": [
             {
-                "name": "checkPrank(address)",
+                "name": "check_prank(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -690,7 +690,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkPrankConstructor(address)",
+                "name": "check_prank_Constructor(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -698,7 +698,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkPrankExternal(address)",
+                "name": "check_prank_External(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -706,7 +706,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkPrankExternalSelf(address)",
+                "name": "check_prank_ExternalSelf(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -714,7 +714,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkPrankInternal(address)",
+                "name": "check_prank_Internal(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -722,7 +722,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkPrankNew(address)",
+                "name": "check_prank_New(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -730,7 +730,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkPrankReset1(address)",
+                "name": "check_prank_Reset1(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -738,7 +738,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkPrankReset2(address)",
+                "name": "check_prank_Reset2(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -746,7 +746,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkStartPrank(address)",
+                "name": "check_startPrank(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -754,7 +754,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkStopPrank1(address)",
+                "name": "check_stopPrank_1(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -762,7 +762,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkStopPrank2()",
+                "name": "check_stopPrank_2()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -772,7 +772,7 @@
         ],
         "test/Proxy.t.sol:ProxyTest": [
             {
-                "name": "checkFoo(uint256)",
+                "name": "check_foo(uint256)",
                 "exitcode": 1,
                 "num_models": 0,
                 "num_paths": null,
@@ -782,7 +782,7 @@
         ],
         "test/Reset.t.sol:ResetTest": [
             {
-                "name": "checkFoo()",
+                "name": "check_foo()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -792,7 +792,7 @@
         ],
         "test/Revert.t.sol:CTest": [
             {
-                "name": "checkRevert1(uint256)",
+                "name": "check_Revert1(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -800,7 +800,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkRevert2(uint256)",
+                "name": "check_Revert2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -810,7 +810,7 @@
         ],
         "test/Send.t.sol:SendTest": [
             {
-                "name": "checkSend(address,uint256,address)",
+                "name": "check_Send(address,uint256,address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -818,7 +818,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSendSelf(address,uint256,address)",
+                "name": "check_SendSelf(address,uint256,address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -828,7 +828,7 @@
         ],
         "test/Setup.t.sol:SetupTest": [
             {
-                "name": "checkTrue()",
+                "name": "check_True()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -838,7 +838,7 @@
         ],
         "test/SetupPlus.t.sol:SetupPlusTest": [
             {
-                "name": "checkSetup()",
+                "name": "check_Setup()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -848,7 +848,7 @@
         ],
         "test/SetupPlus.t.sol:SetupPlusTestB": [
             {
-                "name": "checkSetup()",
+                "name": "check_Setup()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -858,7 +858,7 @@
         ],
         "test/SetupSymbolic.t.sol:SetupSymbolicTest": [
             {
-                "name": "checkFoo()",
+                "name": "check_True()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -868,7 +868,7 @@
         ],
         "test/SignExtend.t.sol:SignExtendTest": [
             {
-                "name": "checkSignExtend(int16)",
+                "name": "check_SIGNEXTEND(int16)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -878,7 +878,7 @@
         ],
         "test/Solver.t.sol:SolverTest": [
             {
-                "name": "checkFoo(uint256,uint256)",
+                "name": "check_foo(uint256,uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -888,7 +888,7 @@
         ],
         "test/Storage.t.sol:StorageTest": [
             {
-                "name": "checkAddArr1(uint256)",
+                "name": "check_addArr1(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -896,7 +896,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkAddArr2(uint256,uint256)",
+                "name": "check_addArr2(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -904,7 +904,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkAddMap1Arr1(uint256,uint256)",
+                "name": "check_addMap1Arr1(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -912,7 +912,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSetMap1(uint256,uint256)",
+                "name": "check_setMap1(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -920,7 +920,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSetMap2(uint256,uint256,uint256)",
+                "name": "check_setMap2(uint256,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -928,7 +928,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkSetMap3(uint256,uint256,uint256,uint256)",
+                "name": "check_setMap3(uint256,uint256,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -938,7 +938,7 @@
         ],
         "test/Store.t.sol:StoreTest": [
             {
-                "name": "checkStoreArray(uint256,uint256)",
+                "name": "check_store_Array(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -946,7 +946,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkStoreMapping(uint256,uint256)",
+                "name": "check_store_Mapping(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -954,7 +954,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkStoreScalar(uint256)",
+                "name": "check_store_Scalar(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -964,7 +964,7 @@
         ],
         "test/Struct.t.sol:StructTest": [
             {
-                "name": "checkStruct((uint256,uint256))",
+                "name": "check_Struct((uint256,uint256))",
                 "exitcode": 2,
                 "num_models": null,
                 "num_paths": null,
@@ -974,7 +974,7 @@
         ],
         "test/TestConstructor.t.sol:TestConstructorTest": [
             {
-                "name": "checkValue()",
+                "name": "check_value()",
                 "exitcode": 1,
                 "num_models": 1,
                 "num_paths": null,
@@ -984,7 +984,7 @@
         ],
         "test/Token.t.sol:TokenTest": [
             {
-                "name": "checkBalanceInvariant()",
+                "name": "check_BalanceInvariant()",
                 "exitcode": 1,
                 "num_models": 2,
                 "num_paths": null,
@@ -994,7 +994,7 @@
         ],
         "test/UnsupportedOpcode.t.sol:X": [
             {
-                "name": "checkFoo()",
+                "name": "check_foo()",
                 "exitcode": 1,
                 "num_models": 0,
                 "num_paths": null,
@@ -1004,7 +1004,7 @@
         ],
         "test/UnsupportedOpcode.t.sol:Y": [
             {
-                "name": "checkFoo()",
+                "name": "check_foo()",
                 "exitcode": 1,
                 "num_models": 0,
                 "num_paths": null,
@@ -1014,7 +1014,7 @@
         ],
         "test/UnsupportedOpcode.t.sol:Z": [
             {
-                "name": "checkFoo()",
+                "name": "check_foo()",
                 "exitcode": 1,
                 "num_models": 0,
                 "num_paths": null,
@@ -1024,7 +1024,7 @@
         ],
         "test/Warp.t.sol:WarpTest": [
             {
-                "name": "checkWarp(uint256)",
+                "name": "check_warp(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -1032,7 +1032,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkWarpExternal(uint256)",
+                "name": "check_warp_External(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -1040,7 +1040,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkWarpExternalSelf(uint256)",
+                "name": "check_warp_ExternalSelf(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -1048,7 +1048,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkWarpInternal(uint256)",
+                "name": "check_warp_Internal(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -1056,7 +1056,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkWarpNew(uint256)",
+                "name": "check_warp_New(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -1064,7 +1064,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkWarpReset(uint256,uint256)",
+                "name": "check_warp_Reset(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -1072,7 +1072,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkWarpSetUp()",
+                "name": "check_warp_SetUp()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,

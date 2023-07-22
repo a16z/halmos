@@ -34,7 +34,7 @@ contract SetupPlusTest {
         a = new A(x, x);
     }
 
-    function checkSetup() public view {
+    function check_Setup() public view {
         assert(a.x() > 10);
         assert(a.y() > 100);
     }
@@ -87,7 +87,7 @@ contract SetupPlusTestB {
         mk();
     }
 
-    function checkSetup() public view {
+    function check_Setup() public view {
         assert(b.x1() == init[0]);
         assert(b.y1() == init[1]);
         assert(b.x2() == init[2]);

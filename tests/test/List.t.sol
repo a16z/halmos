@@ -6,7 +6,7 @@ import "../src/List.sol";
 
 /// @custom:halmos --symbolic-storage
 contract ListTest is Test, List {
-    function checkAdd(uint x) public {
+    function check_add(uint x) public {
         uint oldSize = arr.length;
         vm.assume(oldSize < type(uint).max);
         add(x);
@@ -16,7 +16,7 @@ contract ListTest is Test, List {
         assert(arr[newSize-1] == x);
     }
 
-    function checkRemove() public {
+    function check_remove() public {
         uint oldSize = arr.length;
         vm.assume(oldSize > 0);
         remove();
@@ -25,7 +25,7 @@ contract ListTest is Test, List {
         assert(oldSize == newSize + 1);
     }
 
-    function checkSet(uint i, uint x) public {
+    function check_set(uint i, uint x) public {
         vm.assume(i < arr.length);
         set(i, x);
         assert(arr[i] == x);
@@ -41,7 +41,7 @@ contract ListTestTest is Test {
         list.add(1);
     }
 
-    function checkAdd(uint x) public {
+    function check_add(uint x) public {
         uint oldSize = list.size();
         vm.assume(oldSize < type(uint).max);
         list.add(x);
@@ -51,7 +51,7 @@ contract ListTestTest is Test {
         assert(list.arr(newSize-1) == x);
     }
 
-    function checkRemove() public {
+    function check_remove() public {
         uint oldSize = list.size();
         vm.assume(oldSize > 0);
         list.remove();
@@ -60,7 +60,7 @@ contract ListTestTest is Test {
         assert(oldSize == newSize + 1);
     }
 
-    function checkSet(uint i, uint x) public {
+    function check_set(uint i, uint x) public {
         vm.assume(i < list.size());
         list.set(i, x);
         assert(list.arr(i) == x);
