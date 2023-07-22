@@ -17,6 +17,14 @@ contract Target {
     }
 }
 
+contract ConstructorRecorder {
+    address public caller;
+
+    constructor() {
+        caller = msg.sender;
+    }
+}
+
 contract Ext is Test {
     function prank(address user) public {
         vm.prank(user);
@@ -131,4 +139,17 @@ contract PrankTest is Test {
         target.recordCaller();
         assert(target.caller() == address(this));
     }
+
+    function checkPrankConstructor(address user) public {
+        vm.prank(user);
+        ConstructorRecorder recorder = new ConstructorRecorder();
+        assert(recorder.caller() == user);
+    }
+
+    // TODO: uncomment when we add CREATE2 support
+    // function checkPrankConstructorCreate2(address user, bytes32 salt) public {
+    //     vm.prank(user);
+    //     ConstructorRecorder recorder = new ConstructorRecorder{salt:salt}();
+    //     assert(recorder.caller() == user);
+    // }
 }
