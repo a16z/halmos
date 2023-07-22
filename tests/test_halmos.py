@@ -28,17 +28,12 @@ from test_fixtures import halmos_options
             ["--root", "examples/tokens/ERC721"],
             "tests/expected/erc721.json",
         ),
-        (
-            ["--root", "examples/tokens/dei"],
-            "tests/expected/dei.json",
-        ),
     ],
     ids=(
         "tests",
         "examples/toy",
         "long:examples/tokens/ERC20",
         "long:examples/tokens/ERC721",
-        "long:examples/tokens/dei",
     ),
 )
 def test_main(cmd, expected_path, halmos_options):

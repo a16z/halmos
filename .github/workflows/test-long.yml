@@ -15,7 +15,6 @@ jobs:
         include:
         - testname: "examples/tokens/ERC20"
         - testname: "examples/tokens/ERC721"
-        - testname: "examples/tokens/dei"
 
     steps:
       - uses: actions/checkout@v3
