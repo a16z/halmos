@@ -8,10 +8,10 @@ contract NatspecTestNone {
         l = new Loop();
     }
 
-    function checkLoop2(uint n) public view {
+    function check_Loop2(uint n) public view {
         assert(l.iter(n) <= 2); // pass // default
     }
-    function checkLoop2Fail(uint n) public view {
+    function check_Loop2Fail(uint n) public view {
         assert(l.iter(n) <= 1); // fail // default
     }
 }
@@ -24,10 +24,10 @@ contract NatspecTestContract {
         l = new Loop();
     }
 
-    function checkLoop3(uint n) public view {
+    function check_Loop3(uint n) public view {
         assert(l.iter(n) <= 3); // pass // inherited from contract
     }
-    function checkLoop3Fail(uint n) public view {
+    function check_Loop3Fail(uint n) public view {
         assert(l.iter(n) <= 2); // fail // inherited from contract
     }
 }
@@ -40,10 +40,10 @@ contract NatspecTestSetup {
         l = new Loop();
     }
 
-    function checkLoop2(uint n) public view {
+    function check_Loop2(uint n) public view {
         assert(l.iter(n) <= 2); // pass // default
     }
-    function checkLoop2Fail(uint n) public view {
+    function check_Loop2Fail(uint n) public view {
         assert(l.iter(n) <= 1); // fail // default
     }
 }
@@ -56,18 +56,18 @@ contract NatspecTestFunction {
     }
 
     /// @custom:halmos --loop 3
-    function checkLoop3(uint n) public view {
+    function check_Loop3(uint n) public view {
         assert(l.iter(n) <= 3); // pass
     }
     /// @custom:halmos --loop 3
-    function checkLoop3Fail(uint n) public view {
+    function check_Loop3Fail(uint n) public view {
         assert(l.iter(n) <= 2); // fail
     }
 
-    function checkLoop2(uint n) public view {
+    function check_Loop2(uint n) public view {
         assert(l.iter(n) <= 2); // pass // default
     }
-    function checkLoop2Fail(uint n) public view {
+    function check_Loop2Fail(uint n) public view {
         assert(l.iter(n) <= 1); // fail // default
     }
 }
@@ -80,19 +80,19 @@ contract NatspecTestOverwrite {
         l = new Loop();
     }
 
-    function checkLoop4(uint n) public view {
+    function check_Loop4(uint n) public view {
         assert(l.iter(n) <= 4); // pass // inherited from contract
     }
-    function checkLoop4Fail(uint n) public view {
+    function check_Loop4Fail(uint n) public view {
         assert(l.iter(n) <= 3); // fail // inherited from contract
     }
 
     /// @custom:halmos --loop 3
-    function checkLoop3(uint n) public view {
+    function check_Loop3(uint n) public view {
         assert(l.iter(n) <= 3); // pass // overwrite
     }
     /// @custom:halmos --loop 3
-    function checkLoop3Fail(uint n) public view {
+    function check_Loop3Fail(uint n) public view {
         assert(l.iter(n) <= 2); // fail // overwrite
     }
 }

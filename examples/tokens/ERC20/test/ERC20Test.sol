@@ -26,7 +26,8 @@ abstract contract ERC20Test is SymTest, Test {
 
         // consider an arbitrary function call to the token from the caller
         vm.prank(caller);
-        address(token).call(abi.encodePacked(selector, args));
+        (bool success,) = address(token).call(abi.encodePacked(selector, args));
+        vm.assume(success);
 
         uint256 newBalanceOther = IERC20(token).balanceOf(other);
 
@@ -36,7 +37,7 @@ abstract contract ERC20Test is SymTest, Test {
         }
     }
 
-    function checkTransfer(address sender, address receiver, address other, uint256 amount) public virtual {
+    function check_transfer(address sender, address receiver, address other, uint256 amount) public virtual {
         // consider other that are neither sender or receiver
         require(other != sender);
         require(other != receiver);
@@ -63,7 +64,7 @@ abstract contract ERC20Test is SymTest, Test {
         assert(IERC20(token).balanceOf(other) == oldBalanceOther);
     }
 
-    function checkTransferFrom(address caller, address from, address to, address other, uint256 amount) public virtual {
+    function check_transferFrom(address caller, address from, address to, address other, uint256 amount) public virtual {
         require(other != from);
         require(other != to);
 

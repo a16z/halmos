@@ -6,7 +6,7 @@ contract SetupSymbolicTest {
         if (x > 0) return; // generate multiple setup output states
     }
 
-    function checkFoo() public pure {
+    function check_True() public pure {
         assert(true); // ensure setUp succeeds
     }
 }

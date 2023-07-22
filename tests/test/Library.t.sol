@@ -14,7 +14,7 @@ library Math {
 }
 
 contract LibraryTest {
-    function checkAdd(uint x, uint y) public pure {
+    function check_add(uint x, uint y) public pure {
         unchecked {
             assert(Math._add(x,y) == x+y);
             /* TODO: support public library functions (library linking)

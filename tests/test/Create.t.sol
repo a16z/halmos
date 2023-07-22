@@ -12,25 +12,25 @@ contract CreateTest is Test {
     }
 
     /* TODO: support checkFail prefix
-    function checkFailSetUp() public {
+    function checkFail_setUp() public {
         assertEq(create.value(), 0);
     }
     */
 
-    function checkSet(uint x) public {
+    function check_set(uint x) public {
         create.set(x);
         assertEq(create.value(), x);
     }
 
-    function checkImmutable() public {
+    function check_immutable() public {
         assertEq(create.halmos(), 0x220E);
     }
 
-    function checkInitialized() public {
+    function check_initialized() public {
         assertEq(create.initialized(), 7);
     }
 
-    function checkConst() public {
+    function check_const() public {
         assertEq(create.const(), 11);
     }
 }

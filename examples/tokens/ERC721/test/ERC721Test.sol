@@ -14,7 +14,7 @@ abstract contract ERC721Test is SymTest, Test {
 
     function setUp() public virtual;
 
-    function checkNoBackdoor(bytes4 selector) public virtual {
+    function check_NoBackdoor(bytes4 selector) public virtual {
         // consider caller and other that are distinct
         address caller = svm.createAddress('caller');
         address other = svm.createAddress('other');
@@ -34,12 +34,14 @@ abstract contract ERC721Test is SymTest, Test {
 
         // consider an arbitrary function call to the token from the caller
         vm.prank(caller);
+        bool success;
         if (uint32(selector) == 0xb88d4fde) { // TODO: support parameters of type bytes or dynamic arrays
-            address(token).call(abi.encodeWithSelector(selector, svm.createAddress('from'), svm.createAddress('to'), svm.createUint256('tokenId'), svm.createBytes(96, 'data')));
+            (success,) = address(token).call(abi.encodeWithSelector(selector, svm.createAddress('from'), svm.createAddress('to'), svm.createUint256('tokenId'), svm.createBytes(96, 'data')));
         } else {
             bytes memory args = svm.createBytes(1024, 'args');
-            address(token).call(abi.encodePacked(selector, args));
+            (success,) = address(token).call(abi.encodePacked(selector, args));
         }
+        vm.assume(success);
 
         // ensure that the caller cannot spend other's tokens
         assert(IERC721(token).balanceOf(caller) <= oldBalanceCaller);
@@ -51,7 +53,7 @@ abstract contract ERC721Test is SymTest, Test {
         return (spender == owner || IERC721(token).isApprovedForAll(owner, spender) || IERC721(token).getApproved(tokenId) == spender);
     }
 
-    function checkTransferFrom(address caller, address from, address to, address other, uint256 tokenId, uint256 otherTokenId) public virtual {
+    function check_transferFrom(address caller, address from, address to, address other, uint256 tokenId, uint256 otherTokenId) public virtual {
         // consider other address
         require(other != from);
         require(other != to);

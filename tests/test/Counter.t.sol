@@ -5,19 +5,19 @@ import "../src/Counter.sol";
 
 /// @custom:halmos --loop 4 --symbolic-storage
 contract CounterTest is Counter {
-    function checkSet(uint n) public {
+    function check_set(uint n) public {
         set(n);
         assert(cnt == n);
     }
 
-    function checkInc() public {
+    function check_inc() public {
         uint oldCnt = cnt;
         inc();
         assert(cnt > oldCnt);
         assert(cnt == oldCnt + 1);
     }
 
-    function checkIncOpt() public {
+    function check_incOpt() public {
         uint oldCnt = cnt;
         require(cnt < type(uint).max);
         incOpt();
@@ -25,7 +25,7 @@ contract CounterTest is Counter {
         assert(cnt == oldCnt + 1);
     }
 
-    function checkIncBy(uint n) public {
+    function check_incBy(uint n) public {
         uint oldCnt = cnt;
         incBy(n);
         assert(cnt < oldCnt || cnt == oldCnt + n); // cnt >= oldCnt ==> cnt == oldCnt + n
@@ -37,7 +37,7 @@ contract CounterTest is Counter {
         assert(cnt >= oldCnt);
         assert(cnt == oldCnt + n);
     }
-    function checkLoopFor(uint8 k) public {
+    function check_loopFor(uint8 k) public {
         specLoopFor(k);
     }
 
@@ -47,7 +47,7 @@ contract CounterTest is Counter {
         assert(cnt >= oldCnt);
         assert(cnt == oldCnt + n);
     }
-    function checkLoopWhile(uint8 k) public {
+    function check_loopWhile(uint8 k) public {
         specLoopWhile(k);
     }
 
@@ -58,18 +58,18 @@ contract CounterTest is Counter {
         if (n == 0) assert(cnt == oldCnt + 1);
         else assert(cnt == oldCnt + n);
     }
-    function checkLoopDoWhile(uint8 k) public {
+    function check_loopDoWhile(uint8 k) public {
         specLoopDoWhile(k);
     }
 
-    function checkLoopConst() public {
+    function check_loopConst() public {
         uint oldCnt = cnt;
         loopConst();
         assert(cnt >= oldCnt);
         assert(cnt == oldCnt + 2);
     }
 
-    function checkLoopConstIf() public {
+    function check_loopConstIf() public {
         uint oldCnt = cnt;
         loopConstIf();
         assert(cnt >= oldCnt);
@@ -80,36 +80,36 @@ contract CounterTest is Counter {
         setSum(arr);
         assert(cnt == arr[0] + arr[1]);
     }
-    function checkSetSum(uint248 a, uint248 b) public {
+    function check_setSum(uint248 a, uint248 b) public {
         specSetSum([uint(a), b]);
     }
 
-    function checkSetString(uint, string memory s, uint, string memory r, uint) public {
+    function check_setString(uint, string memory s, uint, string memory r, uint) public {
         uint oldCnt = cnt;
         setString(s);
         setString(r);
         assert(cnt == oldCnt + bytes(s).length + bytes(r).length);
     }
 
-    function checkFoo(uint a, uint b, uint c, uint d) public {
+    function check_foo(uint a, uint b, uint c, uint d) public {
         uint oldCnt = cnt;
         foo(a, b, c, d);
         assert(cnt == oldCnt + 4);
     }
 
-    function checkDiv1(uint x, uint y) public pure {
+    function check_div_1(uint x, uint y) public pure {
         if (y > 0) {
             assert(x / y <= x);
         }
     }
 
-    function checkDiv2(uint x, uint y) public pure {
+    function check_div_2(uint x, uint y) public pure {
         if (y > 0) {
             assert(x / y == x / y);
         }
     }
 
-    function checkMulDiv(uint x, uint y) public pure {
+    function check_mulDiv(uint x, uint y) public pure {
         unchecked {
             if (x > 0 && y > 0) {
                 uint z = x * y;

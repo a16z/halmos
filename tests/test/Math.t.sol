@@ -2,7 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 contract MathTest {
-    function checkAvg(uint a, uint b) public pure {
+    function check_Avg(uint a, uint b) public pure {
         unchecked {
             uint r1 = (a & b) + (a ^ b) / 2;
             uint r2 = (a + b) / 2;

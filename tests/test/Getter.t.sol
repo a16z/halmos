@@ -7,7 +7,7 @@ contract GetterTest {
     uint256[3] v;
     uint w;
 
-    function checkGetter(uint256 i) public view {
+    function check_Getter(uint256 i) public view {
         assert(v[i] >= 0); // unsupported static storage arrays
     }
 }

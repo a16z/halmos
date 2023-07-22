@@ -5,7 +5,7 @@ contract TestConstructorTest {
 
     uint public value = 1;
 
-    function checkValue() public view {
+    function check_value() public view {
         assert(value == 1); // fail // TODO: consider test contract constructor
     }
 

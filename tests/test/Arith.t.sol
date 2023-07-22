@@ -9,7 +9,7 @@ contract ArithTest {
         }
     }
 
-    function checkMod(uint x, uint y, address addr) public pure {
+    function check_Mod(uint x, uint y, address addr) public pure {
         unchecked {
             assert(unchecked_mod(x, 0) == 0); // compiler rejects `x % 0`
             assert(x % 1 == 0);
@@ -24,7 +24,7 @@ contract ArithTest {
         }
     }
 
-    function checkExp(uint x) public pure {
+    function check_Exp(uint x) public pure {
         unchecked {
             assert(x ** 0 == 1); // 0 ** 0 == 1
             assert(x ** 1 == x);

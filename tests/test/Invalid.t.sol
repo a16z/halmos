@@ -3,12 +3,12 @@ pragma solidity ^0.5.2;
 
 contract OldCompilerTest {
 
-    function checkAssert(uint x) public pure {
+    function check_assert(uint x) public pure {
         if (x == 0) return;
         assert(false); // old compiler versions don't revert with panic; instead, they run invalid opcode, which halmos ignores, resulting in no error here.
     }
 
-    function checkMyAssert(uint x) public pure {
+    function check_myAssert(uint x) public pure {
         if (x == 0) return;
         myAssert(false); // you can use your own assertion that panic-reverts if assertion fails, when using halmos for old version code.
     }

@@ -32,7 +32,7 @@ contract OpenZeppelinERC20Test is ERC20Test {
         }
     }
 
-    function checkNoBackdoor(bytes4 selector, address caller, address other) public {
+    function check_NoBackdoor(bytes4 selector, address caller, address other) public {
         bytes memory args = svm.createBytes(1024, 'data');
         _checkNoBackdoor(selector, args, caller, other);
     }

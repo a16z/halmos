@@ -27,7 +27,7 @@ jobs:
             branch: ""
           - repo: "farcasterxyz/contracts"
             dir: "farcaster-contracts"
-            cmd: "halmos"
+            cmd: "halmos --function check"
             branch: "test/halmos"
 
     steps:

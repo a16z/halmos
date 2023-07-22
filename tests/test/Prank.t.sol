@@ -31,7 +31,7 @@ contract PrankSetUpTest is Test {
         vm.prank(address(target)); // prank is reset after setUp()
     }
 
-    function checkPrank(address user) public {
+    function check_prank(address user) public {
         vm.prank(user);
         target.recordCaller();
         assert(target.caller() == user);
@@ -52,7 +52,7 @@ contract PrankTest is Test {
         vm.prank(user);
     }
 
-    function checkPrank(address user) public {
+    function check_prank(address user) public {
         vm.prank(user);
         target.recordCaller();
         assert(target.caller() == user);
@@ -61,7 +61,7 @@ contract PrankTest is Test {
         assert(target.caller() == address(this));
     }
 
-    function checkStartPrank(address user) public {
+    function check_startPrank(address user) public {
         vm.startPrank(user);
 
         target.recordCaller();
@@ -79,25 +79,25 @@ contract PrankTest is Test {
         assert(target.caller() == address(this));
     }
 
-    function checkPrankInternal(address user) public {
+    function check_prank_Internal(address user) public {
         prank(user); // indirect prank
         target.recordCaller();
         assert(target.caller() == user);
     }
 
-    function checkPrankExternal(address user) public {
+    function check_prank_External(address user) public {
         ext.prank(user); // prank isn't propagated beyond the vm boundry
         target.recordCaller();
         assert(target.caller() == address(this));
     }
 
-    function checkPrankExternalSelf(address user) public {
+    function check_prank_ExternalSelf(address user) public {
         this.prank(user); // prank isn't propagated beyond the vm boundry
         target.recordCaller();
         assert(target.caller() == address(this));
     }
 
-    function checkPrankNew(address user) public {
+    function check_prank_New(address user) public {
         vm.prank(user);
         dummy = new Dummy(); // contract creation also consumes prank
         vm.prank(user);
@@ -105,28 +105,28 @@ contract PrankTest is Test {
         assert(target.caller() == user);
     }
 
-    function checkPrankReset1(address user) public {
+    function check_prank_Reset1(address user) public {
     //  vm.prank(address(target)); // overwriting active prank is not allowed
         vm.prank(user);
         target.recordCaller();
         assert(target.caller() == user);
     }
 
-    function checkPrankReset2(address user) public {
+    function check_prank_Reset2(address user) public {
     //  vm.prank(address(target)); // overwriting active prank is not allowed
         vm.startPrank(user);
         target.recordCaller();
         assert(target.caller() == user);
     }
 
-    function checkStopPrank1(address user) public {
+    function check_stopPrank_1(address user) public {
         vm.prank(user);
         vm.stopPrank(); // stopPrank can be used to disable both startPrank() and prank()
         target.recordCaller();
         assert(target.caller() == address(this));
     }
 
-    function checkStopPrank2() public {
+    function check_stopPrank_2() public {
         vm.stopPrank(); // stopPrank is allowed even when no active prank exists!
         target.recordCaller();
         assert(target.caller() == address(this));

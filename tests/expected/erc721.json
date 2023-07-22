@@ -3,7 +3,7 @@
     "test_results": {
         "test/OpenZeppelinERC721.t.sol:OpenZeppelinERC721Test": [
             {
-                "name": "checkNoBackdoor(bytes4)",
+                "name": "check_NoBackdoor(bytes4)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -11,7 +11,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkTransferFrom(address,address,address,address,uint256,uint256)",
+                "name": "check_transferFrom(address,address,address,address,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -21,7 +21,7 @@
         ],
         "test/SolmateERC721.t.sol:SolmateERC721Test": [
             {
-                "name": "checkNoBackdoor(bytes4)",
+                "name": "check_NoBackdoor(bytes4)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -29,7 +29,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "checkTransferFrom(address,address,address,address,uint256,uint256)",
+                "name": "check_transferFrom(address,address,address,address,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,

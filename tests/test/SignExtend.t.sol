@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 import "../src/SignExtend.sol";
 
 contract SignExtendTest is SignExtend {
-    function checkSignExtend(int16 _x) public pure {
+    function check_SIGNEXTEND(int16 _x) public pure {
         int16 x = changeMySign(_x);
         assert(x == -_x);
     }
