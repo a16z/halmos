@@ -28,7 +28,7 @@ contract CTest {
         require(x != 0);
         (bool result, ) = address(c).call(abi.encodeWithSignature("set1(uint256)", x));
         assert(!result);
-        assert(c.num() != x); // fail // TODO: fix reverting semantics
+        assert(c.num() != x);
     }
 
     function check_Revert2(uint256 x) public {
