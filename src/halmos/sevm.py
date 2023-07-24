@@ -1097,7 +1097,7 @@ class SEVM:
             if is_bv_value(w1) and is_bv_value(w2):
                 return w1 + w2
             else:
-                return mk_add(w1, w2)
+                return self.mk_add(w1, w2)
         elif op == EVM.SUB:
             if self.options.get("sub"):
                 return w1 - w2
@@ -1117,7 +1117,7 @@ class SEVM:
                 elif is_power_of_two(i1):
                     return w2 << int(math.log(i1, 2))
                 else:
-                    return mk_mul(w1, w2)
+                    return self.mk_mul(w1, w2)
             elif is_bv_value(w2):
                 i2: int = int(str(w2))  # must be concrete
                 if i2 == 0:
@@ -1125,9 +1125,9 @@ class SEVM:
                 elif is_power_of_two(i2):
                     return w1 << int(math.log(i2, 2))
                 else:
-                    return mk_mul(w1, w2)
+                    return self.mk_mul(w1, w2)
             else:
-                return mk_mul(w1, w2)
+                return self.mk_mul(w1, w2)
         elif op == EVM.DIV:
             div_for_overflow_check = self.div_xy_y(w1, w2)
             if div_for_overflow_check is not None:  # xy/x or xy/y
