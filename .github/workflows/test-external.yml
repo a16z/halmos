@@ -29,6 +29,10 @@ jobs:
             dir: "farcaster-contracts"
             cmd: "halmos --function check"
             branch: "test/halmos"
+          - repo: "zobront/halmos-solady"
+            dir: "halmos-solady"
+            cmd: "halmos --function testCheck"
+            branch: ""
 
     steps:
       - name: Checkout
