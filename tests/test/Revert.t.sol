@@ -5,6 +5,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "forge-std/Test.sol";
 
+contract A { }
+
 contract C {
     uint256 public num;
 
@@ -20,6 +22,11 @@ contract C {
 
     function deposit(bool paused) public payable {
         if (paused) revert("paused");
+    }
+
+    function create() public {
+        A a = new A();
+        revert(string(abi.encode(a)));
     }
 }
 
@@ -58,6 +65,21 @@ contract CTest is Test {
             assert(paused);
             assert(address(this).balance == amount);
             assert(address(c).balance == 0);
+        }
+    }
+
+    function codesize(address x) internal view returns (uint256 size) {
+        assembly { size := extcodesize(x) }
+    }
+
+    function check_RevertCode(address x) public {
+        uint256 oldSize = codesize(x);
+        try c.create() {
+        } catch Error(string memory s) {
+            address a = abi.decode(bytes(s), (address));
+            uint256 size = codesize(a);
+            vm.assume(a == x);
+            assert(size == oldSize);
         }
     }
 }
