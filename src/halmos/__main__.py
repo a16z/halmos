@@ -223,7 +223,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
                 f"Final opcode: {mnemonic(opcode)} | Return data: {ex.output} | Input example: {model_with_context.model}"
             )
         else:
-            print(color_warn(f"Not supported: {mnemonic(opcode)} {ex.error}"))
+            warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")
         if args.print_states:
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
@@ -511,7 +511,7 @@ def run(
             print(ex)
 
     for opcode, idx, ex in stuck:
-        print(color_warn(f"Not supported: {mnemonic(opcode)}: {ex.error}"))
+        warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")
         if args.print_blocked_states:
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
