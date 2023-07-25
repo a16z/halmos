@@ -13,7 +13,7 @@ authors = [
 ]
 maintainers = [
     { name="Daejun Park" },
-    { name="karmacoma" },
+    { name="karmacoma <karma@coma.lol>" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
