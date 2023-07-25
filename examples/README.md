@@ -11,6 +11,7 @@
 - [Morpho Data Structures] ([TestProveLogarithmicBuckets]): verifying Morpho's complex data structure.
 - [Cicada] ([LibPrimeTest], [LibUint1024Test]): verifying Cicada's big (1024-bit) number arithmetic library.
 - [Farcaster] ([IdRegistrySymTest], [KeyRegistrySymTest]): verifying the state machine invariants of Farcaster onchain registry contracts.
+- [Solady Verification]: verifying the fixed-point math library of Solady.
 
 [Morpho Data Structures]: <https://github.com/morpho-org/morpho-data-structures>
 [TestProveLogarithmicBuckets]: <https://github.com/morpho-org/morpho-data-structures/blob/7f40c102e6bb852746d0d3c2f97ac3f39dae3c9c/test/TestLogarithmicBuckets.t.sol#L121-L182>
@@ -22,6 +23,8 @@
 [Farcaster]: <https://github.com/farcasterxyz/contracts>
 [IdRegistrySymTest]: <https://github.com/farcasterxyz/contracts/blob/e56b5765ca28a7df149fb434315df0188a6ab14a/test/IdRegistry/IdRegistry.st.sol>
 [KeyRegistrySymTest]: <https://github.com/farcasterxyz/contracts/blob/e56b5765ca28a7df149fb434315df0188a6ab14a/test/KeyRegistry/KeyRegistry.st.sol>
+
+[Solady Verification]: <https://github.com/zobront/halmos-solady>
 
 ## Disclaimer
 
