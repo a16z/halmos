@@ -1261,6 +1261,11 @@ class SEVM:
 
         caller = ex.prank.lookup(ex.this, to)
 
+        orig_code = ex.code.copy()
+        orig_storage = deepcopy(ex.storage)
+        orig_balance = deepcopy(ex.balance)
+        orig_log = deepcopy(ex.log)
+
         if not (is_bv_value(fund) and fund.as_long() == 0):
             ex.balance_update(
                 caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), fund)
@@ -1346,6 +1351,12 @@ class SEVM:
                         new_ex.st.push(con(1))
                     else:
                         new_ex.st.push(con(0))
+
+                        # revert network states
+                        new_ex.code = orig_code
+                        new_ex.storage = orig_storage
+                        new_ex.balance = orig_balance
+                        new_ex.log = orig_log
 
                     # add to worklist even if it reverted during the external call
                     new_ex.next_pc()

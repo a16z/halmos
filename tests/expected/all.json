@@ -793,14 +793,30 @@
         "test/Revert.t.sol:CTest": [
             {
                 "name": "check_Revert1(uint256)",
-                "exitcode": 1,
-                "num_models": 1,
+                "exitcode": 0,
+                "num_models": 0,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
             },
             {
                 "name": "check_Revert2(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_RevertBalance(bool,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_RevertCode(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
