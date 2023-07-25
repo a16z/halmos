@@ -9,7 +9,11 @@ name = "halmos"
 description = "Halmos: Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode"
 readme = "README.md"
 authors = [
+    { name="a16z crypto" },
+]
+maintainers = [
     { name="Daejun Park" },
+    { name="karmacoma", email="karma@coma.lol" },
 ]
 classifiers = [
     "Programming Language :: Python :: 3",
