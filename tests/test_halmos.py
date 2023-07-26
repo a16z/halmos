@@ -44,6 +44,22 @@ def test_main(cmd, expected_path, halmos_options):
     assert_eq(expected["test_results"], actual["test_results"])
 
 
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        ["--root", "tests", "--contract", "SetupFailTest"],
+        ["--root", "tests", "--contract", "LibTest"],
+    ],
+    ids=(
+        "SetupFailTest",
+        "LibTest",
+    ),
+)
+def test_main_fail(cmd, halmos_options):
+    actual = asdict(_main(cmd + halmos_options.split()))
+    assert actual["exitcode"] != 0
+
+
 def assert_eq(m1: Dict, m2: Dict) -> int:
     assert list(m1.keys()) == list(m2.keys())
     for c in m1:

@@ -842,6 +842,7 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Setup.t.sol:SetupFailTest": [],
         "test/Setup.t.sol:SetupTest": [
             {
                 "name": "check_True()",

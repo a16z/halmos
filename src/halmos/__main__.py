@@ -1111,7 +1111,7 @@ def _main(_args=None) -> MainResult:
                     )
 
                     num_passed = sum(r.exitcode == 0 for r in test_results)
-                    num_failed = len(test_results) - num_passed
+                    num_failed = len(funsigs) - num_passed
 
                     print(
                         f"Symbolic test result: {num_passed} passed; {num_failed} failed; time: {timer() - contract_start:0.2f}s"

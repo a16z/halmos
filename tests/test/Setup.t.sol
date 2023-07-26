@@ -21,3 +21,17 @@ contract SetupTest is Test {
         assertEq(users[2], address(0));
     }
 }
+
+contract SetupFailTest {
+    function setUp() public {
+        revert();
+    }
+
+    function check_setUp_Fail1() public {
+        assert(true);
+    }
+
+    function check_setUp_Fail2() public {
+        assert(true);
+    }
+}
