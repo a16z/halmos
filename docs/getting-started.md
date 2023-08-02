@@ -187,7 +187,16 @@ Like fuzz tests, any input combinations that don't satisfy the `assume()` condit
 
 - You need to be careful not to exclude valid inputs by setting too strong input conditions.
 
-- In symbolic tests, avoid using `bound()` as it tends to perform poorly. Instead, use `vm.assume()` which is more efficient and easier to read and write.
+- In symbolic tests, avoid using `bound()` as it tends to perform poorly. Instead, use `vm.assume()` which is more efficient and enhances readability:
+  ```solidity
+  uint256 tokenId = svm.createUint256("tokenId");
+
+  // ❌ don't do this
+  tokenId = bound(tokenId, 1, MAX_TOKEN_ID);
+
+  // ✅ do this
+  vm.assume(1 <= tokenId && tokenId <= MAX_TOKEN_ID);
+  ```
 
 ### 2.3 Call target contracts
 
@@ -207,6 +216,9 @@ token.transfer(receiver, amount);
   (bool success,) = address(token).call(
       abi.encodeWithSelector(token.transfer.selector, receiver, amount)
   );
+  if (!success) {
+      // check conditions for transfer failure
+  }
   ```
 
 ### 2.4 Check output states
