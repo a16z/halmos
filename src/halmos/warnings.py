@@ -20,6 +20,8 @@ class ErrorCode:
 
 COUNTEREXAMPLE_INVALID = ErrorCode("counterexample-invalid")
 COUNTEREXAMPLE_UNKNOWN = ErrorCode("counterexample-unknown")
+INTERNAL_ERROR = ErrorCode("internal-error")
+UNSUPPORTED_OPCODE = ErrorCode("unsupported-opcode")
 
 LOOP_BOUND = ErrorCode("loop-bound")
 

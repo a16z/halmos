@@ -22,6 +22,7 @@ from .utils import (
     hexify,
 )
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
+from .warnings import warn, UNSUPPORTED_OPCODE
 
 Word = Any  # z3 expression (including constants)
 Byte = Any  # z3 expression (including constants)
@@ -916,26 +917,37 @@ class Exec:  # an execution path
         f_sha3 = Function(
             "sha3_" + str(size * 8), BitVecSort(size * 8), BitVecSort(256)
         )
-        sha3 = f_sha3(data)
-        sha3_var = BitVec(f"sha3_var_{len(self.sha3s):>02}", 256)
-        self.solver.add(sha3_var == sha3)
+        sha3_expr = f_sha3(data)
+        sha3_output = BitVec(f"sha3_output_{len(self.sha3s):>02}", 256)
+        self.solver.add(sha3_output == sha3_expr)
         # assume hash values are sufficiently smaller than the uint max
-        self.solver.add(ULE(sha3_var, con(2**256 - 2**64)))
-        self.assume_sha3_distinct(sha3_var, sha3)
+        self.solver.add(ULE(sha3_output, con(2**256 - 2**64)))
+        self.assume_sha3_distinct(sha3_output, sha3_expr)
         if size == 64 or size == 32:  # for storage hashed location
-            self.st.push(sha3)
+            self.st.push(sha3_expr)
         else:
-            self.st.push(sha3_var)
+            self.st.push(sha3_output)
 
-    def assume_sha3_distinct(self, sha3_var, sha3) -> None:
-        for v, s in self.sha3s:
-            if s.decl().name() == sha3.decl().name():  # same size
-                # self.solver.add(Implies(sha3_var == v, sha3.arg(0) == s.arg(0)))
-                self.solver.add(Implies(sha3.arg(0) != s.arg(0), sha3_var != v))
+    def assume_sha3_distinct(self, sha3_output, sha3_expr) -> None:
+        # we expect sha3_expr to be `sha3_<input-bitsize>(input_expr)`
+        sha3_decl_name = sha3_expr.decl().name()
+
+        for prev_sha3_output, prev_sha3_expr in self.sha3s:
+            if prev_sha3_expr.decl().name() == sha3_decl_name:
+                # inputs have the same size: assume different inputs
+                # lead to different outputs
+                self.solver.add(
+                    Implies(
+                        sha3_expr.arg(0) != prev_sha3_expr.arg(0),
+                        sha3_output != prev_sha3_output,
+                    )
+                )
             else:
-                self.solver.add(sha3_var != v)
-        self.solver.add(sha3_var != con(0))
-        self.sha3s.append((sha3_var, sha3))
+                # inputs have different sizes: assume the outputs are different
+                self.solver.add(sha3_output != prev_sha3_output)
+
+        self.solver.add(sha3_output != con(0))
+        self.sha3s.append((sha3_output, sha3_expr))
 
     def new_gas_id(self) -> int:
         self.cnts["fresh"]["gas"] += 1
@@ -2329,6 +2341,10 @@ class SEVM:
                     ex.st.swap(opcode - EVM.SWAP1 + 1)
 
                 else:
+                    warn(
+                        UNSUPPORTED_OPCODE,
+                        f"Unsupported opcode {hex(opcode)} ({str_opcode.get(opcode, '?')})",
+                    )
                     out.append(ex)
                     continue
 
