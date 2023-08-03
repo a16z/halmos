@@ -22,6 +22,7 @@ from .utils import (
     hexify,
 )
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
+from .warnings import warn, UNSUPPORTED_OPCODE
 
 Word = Any  # z3 expression (including constants)
 Byte = Any  # z3 expression (including constants)
@@ -2329,6 +2330,10 @@ class SEVM:
                     ex.st.swap(opcode - EVM.SWAP1 + 1)
 
                 else:
+                    warn(
+                        UNSUPPORTED_OPCODE,
+                        f"Unsupported opcode {hex(opcode)} ({str_opcode.get(opcode, '?')})",
+                    )
                     out.append(ex)
                     continue
 
