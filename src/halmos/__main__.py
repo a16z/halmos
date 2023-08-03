@@ -231,23 +231,18 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
     return exs
 
 
-def setup(
+def deploy_test(
     hexcode: str,
-    abi: List,
-    setup_info: FunctionInfo,
+    sevm: SEVM,
     args: Namespace,
 ) -> Exec:
-    setup_start = timer()
-
+    # test contract creation bytecode
     contract = Contract.from_hexcode(hexcode)
 
     solver = mk_solver(args)
     this = mk_this()
-    options = mk_options(args)
 
-    sevm = SEVM(options)
-
-    setup_ex = sevm.mk_exec(
+    ex = sevm.mk_exec(
         code={this: contract},
         storage={this: {}},
         balance=mk_balance(),
@@ -259,6 +254,43 @@ def setup(
         symbolic=False,
         solver=solver,
     )
+
+    # create test contract
+    (exs, _, _) = sevm.run(ex)
+
+    # sanity check
+    if len(exs) != 1:
+        raise ValueError(f"constructor: # of paths: {len(exs)}")
+    ex = exs[0]
+    if ex.failed:
+        raise ValueError(f"constructor: failed: {ex.error}")
+    if ex.current_opcode() not in [EVM.STOP, EVM.RETURN]:
+        raise ValueError(f"constructor: failed: {ex.current_opcode()}: {ex.error}")
+
+    # deployed bytecode
+    ex.code[this] = Contract(ex.output)
+
+    # reset vm state
+    ex.pc = 0
+    ex.st = State()
+    ex.jumpis = {}
+    ex.output = None
+    ex.prank = Prank()
+
+    return ex
+
+
+def setup(
+    hexcode: str,
+    abi: List,
+    setup_info: FunctionInfo,
+    args: Namespace,
+) -> Exec:
+    setup_start = timer()
+
+    sevm = SEVM(mk_options(args))
+
+    setup_ex = deploy_test(hexcode, sevm, args)
 
     setup_mid = timer()
 
@@ -1073,7 +1105,7 @@ def _main(_args=None) -> MainResult:
                 if contract_type != "contract":
                     continue
 
-                hexcode = contract_json["deployedBytecode"]["object"]
+                hexcode = contract_json["bytecode"]["object"]
                 abi = contract_json["abi"]
                 methodIdentifiers = contract_json["methodIdentifiers"]
 
