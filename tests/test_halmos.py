@@ -65,8 +65,8 @@ def assert_eq(m1: Dict, m2: Dict) -> int:
     for c in m1:
         l1 = sorted(m1[c], key=lambda x: x["name"])
         l2 = sorted(m2[c], key=lambda x: x["name"])
-        assert len(l1) == len(l2)
+        assert len(l1) == len(l2), c
         for r1, r2 in zip(l1, l2):
             assert r1["name"] == r2["name"]
-            assert r1["exitcode"] == r2["exitcode"]
-            assert r1["num_models"] == r2["num_models"]
+            assert r1["exitcode"] == r2["exitcode"], f"{c} {r1['name']}"
+            assert r1["num_models"] == r2["num_models"], f"{c} {r1['name']}"

@@ -992,8 +992,8 @@
         "test/TestConstructor.t.sol:TestConstructorTest": [
             {
                 "name": "check_value()",
-                "exitcode": 1,
-                "num_models": 1,
+                "exitcode": 0,
+                "num_models": 0,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null

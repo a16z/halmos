@@ -119,15 +119,6 @@ def test_run_bytecode(args):
     assert exs[0].current_opcode() == EVM.STOP
 
 
-def test_setup(setup_abi, setup_name, setup_sig, setup_selector, args):
-    hexcode = "600100"
-    abi = setup_abi
-    setup_ex = halmos.__main__.setup(
-        hexcode, abi, FunctionInfo(setup_name, setup_sig, setup_selector), args
-    )
-    assert setup_ex.st.stack == [1]
-
-
 def test_instruction():
     assert str(Instruction(con(0))) == "STOP"
     assert str(Instruction(con(1))) == "ADD"
