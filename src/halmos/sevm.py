@@ -607,6 +607,7 @@ class Exec:  # an execution path
     caller: Address  # msg.sender
     this: Address  # current account address
     # vm state
+    pgm: Contract
     pc: int
     st: State  # stack and memory
     jumpis: Dict[str, Dict[bool, int]]  # for loop detection
@@ -638,6 +639,7 @@ class Exec:  # an execution path
         self.caller = kwargs["caller"]
         self.this = kwargs["this"]
         #
+        self.pgm = kwargs["pgm"]
         self.pc = kwargs["pc"]
         self.st = kwargs["st"]
         self.jumpis = kwargs["jumpis"]
@@ -661,10 +663,10 @@ class Exec:  # an execution path
         assert_address(self.this)
 
     def current_opcode(self) -> UnionType[int, BitVecRef]:
-        return unbox_int(self.code[self.this][self.pc])
+        return unbox_int(self.pgm[self.pc])
 
     def current_instruction(self) -> Instruction:
-        return self.code[self.this].decode_instruction(self.pc)
+        return self.pgm.decode_instruction(self.pc)
 
     def str_cnts(self) -> str:
         return "".join(
@@ -729,7 +731,7 @@ class Exec:  # an execution path
         )
 
     def next_pc(self) -> None:
-        self.pc = self.code[self.this].next_pc(self.pc)
+        self.pc = self.pgm.next_pc(self.pc)
 
     def check(self, cond: Any) -> Any:
         self.solver.push()
@@ -974,7 +976,7 @@ class Exec:  # an execution path
         if pc < 0:
             raise ValueError(pc)
 
-        opcode = unbox_int(self.code[self.this][pc])
+        opcode = unbox_int(self.pgm[pc])
         return opcode == EVM.JUMPDEST
 
     def jumpi_id(self) -> str:
@@ -1255,7 +1257,7 @@ class SEVM:
 
         to = uint160(ex.st.pop())
 
-        if op == EVM.STATICCALL:
+        if op == EVM.STATICCALL or op == EVM.DELEGATECALL:
             fund = con(0)
         else:
             fund = ex.st.pop()
@@ -1278,7 +1280,8 @@ class SEVM:
         orig_balance = deepcopy(ex.balance)
         orig_log = deepcopy(ex.log)
 
-        if not (is_bv_value(fund) and fund.as_long() == 0):
+        if op == EVM.CALL and not (is_bv_value(fund) and fund.as_long() == 0):
+            # no balance update for CALLCODE which transfers to itself
             ex.balance_update(
                 caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), fund)
             )
@@ -1301,10 +1304,11 @@ class SEVM:
                     block=ex.block,
                     #
                     calldata=calldata,
-                    callvalue=fund,
-                    caller=caller,
-                    this=to,
+                    callvalue=fund if op != EVM.DELEGATECALL else ex.callvalue,
+                    caller=caller if op != EVM.DELEGATECALL else ex.caller,
+                    this=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
                     #
+                    pgm=ex.code[to],
                     pc=0,
                     st=State(),
                     jumpis={},
@@ -1339,6 +1343,7 @@ class SEVM:
                 new_ex.this = ex.this
 
                 # restore vm state
+                new_ex.pgm = ex.pgm
                 new_ex.pc = ex.pc
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
@@ -1743,11 +1748,14 @@ class SEVM:
         # new account address
         new_addr = ex.new_address()
 
+        if new_addr in ex.code:
+            raise ValueError(f"existing address: {new_addr}")
+
         for addr in ex.code:
             ex.solver.add(new_addr != addr)  # ensure new address is fresh
 
         # setup new account
-        ex.code[new_addr] = create_code  # existing code must be empty
+        ex.code[new_addr] = Contract(b'')  # existing code must be empty
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # lookup prank
@@ -1778,6 +1786,7 @@ class SEVM:
                 caller=caller,
                 this=new_addr,
                 #
+                pgm=create_code,
                 pc=0,
                 st=State(),
                 jumpis={},
@@ -1819,6 +1828,7 @@ class SEVM:
                 new_ex.this = ex.this
 
                 # restore vm state
+                new_ex.pgm = ex.pgm
                 new_ex.pc = ex.pc
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
@@ -1917,7 +1927,7 @@ class SEVM:
 
         # otherwise, create a new execution for feasible targets
         elif self.options["sym_jump"]:
-            for target in ex.code[ex.this].valid_jump_destinations():
+            for target in ex.pgm.valid_jump_destinations():
                 target_reachable = simplify(dst == target)
                 if ex.check(target_reachable) != unsat:  # jump
                     if self.options.get("debug"):
@@ -1946,6 +1956,7 @@ class SEVM:
             caller=ex.caller,
             this=ex.this,
             #
+            pgm=ex.pgm,
             pc=target,
             st=deepcopy(ex.st),
             jumpis=deepcopy(ex.jumpis),
@@ -2168,7 +2179,7 @@ class SEVM:
                 elif opcode == EVM.EXTCODEHASH:
                     ex.st.push(f_extcodehash(ex.st.pop()))
                 elif opcode == EVM.CODESIZE:
-                    ex.st.push(con(len(ex.code[ex.this])))
+                    ex.st.push(con(len(ex.pgm)))
                 elif opcode == EVM.GAS:
                     ex.st.push(f_gas(con(ex.new_gas_id())))
                 elif opcode == EVM.GASPRICE:
@@ -2200,7 +2211,7 @@ class SEVM:
                 elif opcode == EVM.SELFBALANCE:
                     ex.st.push(ex.balance_of(ex.this))
 
-                elif opcode == EVM.CALL or opcode == EVM.STATICCALL:
+                elif opcode in [EVM.CALL, EVM.CALLCODE, EVM.DELEGATECALL, EVM.STATICCALL]:
                     self.call(ex, opcode, stack, step_id, out, bounded_loops)
                     continue
 
@@ -2282,7 +2293,7 @@ class SEVM:
                     size: int = int_of(ex.st.pop(), "symbolic CODECOPY size")
                     wextend(ex.st.memory, loc, size)
 
-                    codeslice = ex.code[ex.this][offset : offset + size]
+                    codeslice = ex.pgm[offset : offset + size]
                     ex.st.memory[loc : loc + size] = iter_bytes(codeslice)
 
                 elif opcode == EVM.BYTE:
@@ -2377,6 +2388,7 @@ class SEVM:
         caller,
         this,
         #
+        pgm,
         # pc,
         # st,
         # jumpis,
@@ -2408,6 +2420,7 @@ class SEVM:
             caller=caller,
             this=this,
             #
+            pgm=pgm,
             pc=0,
             st=State(),
             jumpis={},

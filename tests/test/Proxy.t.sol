@@ -6,8 +6,9 @@ import {ERC1967Proxy} from "openzeppelin-contracts/contracts/proxy/ERC1967/ERC19
 
 contract C {
     uint public num;
-    function foo(uint x) public {
+    function foo(uint x) public payable returns (address, uint, address) {
         num = x;
+        return (msg.sender, msg.value, address(this));
     }
 }
 
@@ -20,9 +21,15 @@ contract ProxyTest is Test {
         c = C(address(new ERC1967Proxy(address(cImpl), "")));
     }
 
-    function check_foo(uint x) public {
-        c.foo(x);
-        assert(c.num() == x); // currently unsupported // TODO: support DELEGATECALL
+    function check_foo(uint x, uint fund, address caller) public {
+        vm.deal(caller, fund);
+        vm.prank(caller);
+        (address msg_sender, uint msg_value, address target) = c.foo{ value: fund }(x);
+        assert(msg_sender == caller);
+        assert(msg_value == fund);
+        assert(target == address(c));
+
+        assert(c.num() == x);
         assert(cImpl.num() == 0);
     }
 }
