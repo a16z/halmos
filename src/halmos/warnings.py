@@ -22,6 +22,7 @@ COUNTEREXAMPLE_INVALID = ErrorCode("counterexample-invalid")
 COUNTEREXAMPLE_UNKNOWN = ErrorCode("counterexample-unknown")
 INTERNAL_ERROR = ErrorCode("internal-error")
 UNSUPPORTED_OPCODE = ErrorCode("unsupported-opcode")
+LIBRARY_PLACEHOLDER = ErrorCode("library-placeholder")
 
 LOOP_BOUND = ErrorCode("loop-bound")
 

@@ -22,7 +22,7 @@ from .utils import (
     hexify,
 )
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
-from .warnings import warn, UNSUPPORTED_OPCODE
+from .warnings import warn, UNSUPPORTED_OPCODE, LIBRARY_PLACEHOLDER
 
 Word = Any  # z3 expression (including constants)
 Byte = Any  # z3 expression (including constants)
@@ -501,7 +501,13 @@ class Contract:
         if hexcode.startswith("0x"):
             hexcode = hexcode[2:]
 
-        return Contract(bytes.fromhex(hexcode))
+        if "__" in hexcode:
+            warn(LIBRARY_PLACEHOLDER, f"contract hexcode contains library placeholder")
+
+        try:
+            return Contract(bytes.fromhex(hexcode))
+        except ValueError as e:
+            raise ValueError(f"{e} (hexcode={hexcode})")
 
     def decode_instruction(self, pc: int) -> Instruction:
         opcode = int_of(self[pc])
