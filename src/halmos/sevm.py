@@ -1761,7 +1761,7 @@ class SEVM:
             ex.solver.add(new_addr != addr)  # ensure new address is fresh
 
         # setup new account
-        ex.code[new_addr] = Contract(b'')  # existing code must be empty
+        ex.code[new_addr] = Contract(b"")  # existing code must be empty
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # lookup prank
@@ -2217,7 +2217,12 @@ class SEVM:
                 elif opcode == EVM.SELFBALANCE:
                     ex.st.push(ex.balance_of(ex.this))
 
-                elif opcode in [EVM.CALL, EVM.CALLCODE, EVM.DELEGATECALL, EVM.STATICCALL]:
+                elif opcode in [
+                    EVM.CALL,
+                    EVM.CALLCODE,
+                    EVM.DELEGATECALL,
+                    EVM.STATICCALL,
+                ]:
                     self.call(ex, opcode, stack, step_id, out, bounded_loops)
                     continue
 

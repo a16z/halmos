@@ -244,7 +244,7 @@ def deploy_test(
     this = mk_this()
 
     ex = sevm.mk_exec(
-        code={this: Contract(b'')},
+        code={this: Contract(b"")},
         storage={this: {}},
         balance=mk_balance(),
         block=mk_block(),
