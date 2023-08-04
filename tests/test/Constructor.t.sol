@@ -25,8 +25,8 @@ contract ConstructorTest {
     }
 
     function check_constructor() public {
-        assert(c.codesize_() > 0);
-        assert(c.extcodesize_() == 0);
+        assert(c.codesize_() > 0); // contract creation bytecode size
+        assert(c.extcodesize_() == 0); // code is not yet deposited in the network state during constructor()
     }
 
     function check_setCodesize() public {
@@ -34,10 +34,10 @@ contract ConstructorTest {
 
         c.setCodesize();
 
-        assert(c.codesize_() > 0);
-        assert(c.extcodesize_() > 0);
+        assert(c.codesize_() > 0); // deployed bytecode size
+        assert(c.extcodesize_() > 0); // deployed bytecode size
         assert(c.codesize_() == c.extcodesize_());
 
-        assert(c.codesize_() < creation_codesize);
+        assert(c.codesize_() < creation_codesize); // deployed bytecode is smaller than creation bytecode
     }
 }
