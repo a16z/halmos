@@ -210,6 +210,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         callvalue=callvalue,
         caller=caller,
         this=this,
+        pgm=contract,
         symbolic=args.symbolic_storage,
         solver=solver,
     )
@@ -237,13 +238,13 @@ def deploy_test(
     args: Namespace,
 ) -> Exec:
     # test contract creation bytecode
-    contract = Contract.from_hexcode(hexcode)
+    creation_bytecode = Contract.from_hexcode(hexcode)
 
     solver = mk_solver(args)
     this = mk_this()
 
     ex = sevm.mk_exec(
-        code={this: contract},
+        code={this: Contract(b"")},
         storage={this: {}},
         balance=mk_balance(),
         block=mk_block(),
@@ -251,6 +252,7 @@ def deploy_test(
         callvalue=con(0),
         caller=mk_caller(args),
         this=this,
+        pgm=creation_bytecode,
         symbolic=False,
         solver=solver,
     )
@@ -268,7 +270,9 @@ def deploy_test(
         raise ValueError(f"constructor: failed: {ex.current_opcode()}: {ex.error}")
 
     # deployed bytecode
-    ex.code[this] = Contract(ex.output)
+    deployed_bytecode = Contract(ex.output)
+    ex.code[this] = deployed_bytecode
+    ex.pgm = deployed_bytecode
 
     # reset vm state
     ex.pc = 0
@@ -436,6 +440,7 @@ def run(
             caller=setup_ex.caller,
             this=setup_ex.this,
             #
+            pgm=setup_ex.code[setup_ex.this],
             pc=0,
             st=State(),
             jumpis={},

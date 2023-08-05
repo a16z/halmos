@@ -125,6 +125,40 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Call.t.sol:CallTest": [
+            {
+                "name": "check_call(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_callcode(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_delegatecall(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_staticcall(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Console.t.sol:ConsoleTest": [
             {
                 "name": "check_log()",
@@ -148,6 +182,24 @@
         "test/Const.t.sol:ConstTestTest": [
             {
                 "name": "check_Const()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Constructor.t.sol:ConstructorTest": [
+            {
+                "name": "check_constructor()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_setCodesize()",
                 "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
@@ -772,8 +824,8 @@
         ],
         "test/Proxy.t.sol:ProxyTest": [
             {
-                "name": "check_foo(uint256)",
-                "exitcode": 1,
+                "name": "check_foo(uint256,uint256,address)",
+                "exitcode": 0,
                 "num_models": 0,
                 "num_paths": null,
                 "time": null,

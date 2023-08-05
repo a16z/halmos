@@ -51,8 +51,9 @@ def storage():
 
 
 def mk_ex(hexcode, sevm, solver, storage, caller, this):
+    bytecode = Contract(hexcode)
     return sevm.mk_exec(
-        code={this: Contract(hexcode)},
+        code={this: bytecode},
         storage={this: storage},
         balance=balance,
         block=mk_block(),
@@ -60,6 +61,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         callvalue=callvalue,
         caller=caller,
         this=this,
+        pgm=bytecode,
         symbolic=True,
         solver=solver,
     )
