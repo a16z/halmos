@@ -1034,24 +1034,34 @@
         "test/Struct.t.sol:StructTest": [
             {
                 "name": "check_Struct((uint256,uint256))",
-                "exitcode": 0,
-                "num_models": 0,
+                "exitcode": 1,
+                "num_models": 1,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
             },
             {
                 "name": "check_StructArray((uint256,uint256)[],(uint256,uint256)[2])",
-                "exitcode": 0,
-                "num_models": 0,
+                "exitcode": 1,
+                "num_models": 1,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
             },
             {
-                "name": "check_StructArrayArray((uint256,uint256)[][],(uint256,uint256)[3][],(uint256,uint256)[][5],(uint256,uint256)[7][9])",
-                "exitcode": 0,
-                "num_models": 0,
+                "name": "check_StructArrayArray((uint256,uint256)[][],(uint256,uint256)[2][],(uint256,uint256)[][2],(uint256,uint256)[2][2])",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Struct.t.sol:StructTest2": [
+            {
+                "name": "check_S((uint256,uint256[],uint256),(uint256,(uint256,uint256[],uint256),uint256[],(uint256,uint256[],uint256)[],uint256[1],(uint256,uint256[],uint256)[][])[])",
+                "exitcode": 1,
+                "num_models": 1,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
