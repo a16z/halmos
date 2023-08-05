@@ -70,9 +70,8 @@ def parse_type(var: str, typ: str, item: Dict) -> Type:
 
 
 def parse_tuple_type(var: str, items: List[Dict]) -> Type:
-    return TupleType(
-        var, [parse_type(item["name"], item["type"], item) for item in items]
-    )
+    parsed_items = [parse_type(item["name"], item["type"], item) for item in items]
+    return TupleType(var, parsed_items)
 
 
 @dataclass(frozen=True)

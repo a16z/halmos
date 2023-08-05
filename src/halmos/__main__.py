@@ -77,13 +77,16 @@ def mk_calldata(
     # find function abi
     fun_abi = find_abi(abi, fun_info)
 
+    # no parameters
+    if len(fun_abi["inputs"]) == 0:
+        return
+
     # generate symbolic ABI calldata
     calldata = Calldata(args, mk_arrlen(args), dyn_param_size)
     result = calldata.create(fun_abi)
 
-    if result is not None:
-        # TODO: use Contract abstraction for calldata
-        wstore(cd, 4, result.size() // 8, result)
+    # TODO: use Contract abstraction for calldata
+    wstore(cd, 4, result.size() // 8, result)
 
 
 def mk_callvalue() -> Word:
