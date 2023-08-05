@@ -70,7 +70,9 @@ def parse_type(var: str, typ: str, item: Dict) -> Type:
 
 
 def parse_tuple_type(var: str, items: List[Dict]) -> Type:
-    return TupleType(var, [parse_type(item["name"], item["type"], item) for item in items])
+    return TupleType(
+        var, [parse_type(item["name"], item["type"], item) for item in items]
+    )
 
 
 @dataclass(frozen=True)
@@ -85,12 +87,12 @@ class Calldata:
     arrlen: Dict[str, int]
     dyn_param_size: List[str]  # to be updated
 
-
-    def __init__(self, args: Namespace, arrlen: Dict[str, int], dyn_param_size: List[str]) -> None:
+    def __init__(
+        self, args: Namespace, arrlen: Dict[str, int], dyn_param_size: List[str]
+    ) -> None:
         self.args = args
         self.arrlen = arrlen
         self.dyn_param_size = dyn_param_size
-
 
     def choose_array_len(self, name: str) -> int:
         if name in self.arrlen:
@@ -105,7 +107,6 @@ class Calldata:
         self.dyn_param_size.append(f"|{name}|={array_len}")
 
         return array_len
-
 
     def create(self, abi: Dict) -> BitVecRef:
         """Create calldata of ABI type"""
@@ -126,7 +127,6 @@ class Calldata:
             raise ValueError(encoded)
 
         return result
-
 
     def encode(self, name: str, typ: Type) -> EncodingResult:
         """Create symbolic ABI encoded calldata
@@ -150,14 +150,19 @@ class Calldata:
             array_len = self.choose_array_len(name)
             items = [self.encode(f"{name}[{i}]", typ.base) for i in range(array_len)]
             encoded = self.encode_tuple(items)
-            return EncodingResult([con(array_len)] + encoded.data, 32 + encoded.size, False)
+            return EncodingResult(
+                [con(array_len)] + encoded.data, 32 + encoded.size, False
+            )
 
         if isinstance(typ, BaseType):
             # bytes, string
             if typ.typ in ["bytes", "string"]:
                 size = 65  # ECDSA signature size  # TODO: use args
                 size_pad_right = ((size + 31) // 32) * 32
-                data = [con(size_pad_right), BitVec(f"p_{name}_{typ.typ}", 8 * size_pad_right)]
+                data = [
+                    con(size_pad_right),
+                    BitVec(f"p_{name}_{typ.typ}", 8 * size_pad_right),
+                ]
                 return EncodingResult(data, 32 + size_pad_right, False)
 
             # uintN, intN, address, bool, bytesN
@@ -165,7 +170,6 @@ class Calldata:
                 return EncodingResult([BitVec(f"p_{name}_{typ.typ}", 256)], 32, True)
 
         raise ValueError(typ)
-
 
     def encode_tuple(self, items: List[EncodingResult]) -> EncodingResult:
         # For X = (X(1), ..., X(k)):
