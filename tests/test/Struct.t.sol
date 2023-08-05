@@ -7,8 +7,20 @@ contract StructTest {
         uint y;
     }
 
-    // TODO: support struct parameter
-    function check_Struct(Point memory) public pure {
+    function check_Struct(Point memory p) public pure {
+        assert(true);
+    }
+
+    function check_StructArray(Point[] memory p, Point[2] memory q) public pure {
+        assert(true);
+    }
+
+    function check_StructArrayArray(
+        Point[][] memory p,
+        Point[3][] memory q,
+        Point[][5] memory r,
+        Point[7][9] memory s
+    ) public pure {
         assert(true);
     }
 }
