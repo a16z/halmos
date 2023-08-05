@@ -667,7 +667,13 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
         setup_args = extend_args(
             args, parse_devdoc(setup_info.sig, run_args.contract_json)
         )
-        setup_ex = setup(run_args.creation_hexcode, run_args.deployed_hexcode, run_args.abi, setup_info, setup_args)
+        setup_ex = setup(
+            run_args.creation_hexcode,
+            run_args.deployed_hexcode,
+            run_args.abi,
+            setup_info,
+            setup_args,
+        )
     except Exception as err:
         print(
             color_warn(f"Error: {setup_info.sig} failed: {type(err).__name__}: {err}")

@@ -55,7 +55,9 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--symbolic-msg-sender", action="store_true", help="set msg.sender symbolic"
     )
     parser.add_argument(
-        "--no-test-constructor", action="store_true", help="do not run the constructor of test contracts"
+        "--no-test-constructor",
+        action="store_true",
+        help="do not run the constructor of test contracts",
     )
 
     parser.add_argument(
