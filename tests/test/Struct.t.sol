@@ -12,7 +12,7 @@ contract StructTest {
         unchecked {
             result += p.x + p.y;
         }
-        assert(result == 0);
+        assert(result == 0); // expected to fail and generate a counterexample that incorporates all calldata symbols
     }
 
     /// @custom:halmos --array-lengths p=1
@@ -27,7 +27,7 @@ contract StructTest {
                 result += q[i].x + q[i].y;
             }
         }
-        assert(result == 0);
+        assert(result == 0); // expected to fail and generate a counterexample that incorporates all calldata symbols
     }
 
     /// @custom:halmos --array-lengths p=1,p[0]=1
@@ -65,7 +65,7 @@ contract StructTest {
                 }
             }
         }
-        assert(result == 0);
+        assert(result == 0); // expected to fail and generate a counterexample that incorporates all calldata symbols
     }
 }
 
@@ -94,7 +94,7 @@ contract StructTest2 {
                 result += sum_S(s[i]);
             }
         }
-        assert(result == 0);
+        assert(result == 0); // expected to fail and generate a counterexample that incorporates all calldata symbols
     }
 
     function sum_P(P memory p) internal pure returns (uint result) {
