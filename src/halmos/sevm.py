@@ -1738,6 +1738,7 @@ class SEVM:
     def create(
         self,
         ex: Exec,
+        op: int,
         stack: List[Tuple[Exec, int]],
         step_id: int,
         out: List[Exec],
@@ -1746,6 +1747,9 @@ class SEVM:
         value: Word = ex.st.pop()
         loc: int = int_of(ex.st.pop(), "symbolic CREATE offset")
         size: int = int_of(ex.st.pop(), "symbolic CREATE size")
+
+        if op == EVM.CREATE2:
+            salt = ex.st.pop()
 
         # contract creation code
         create_hexcode = wload(ex.st.memory, loc, size, prefer_concrete=True)
@@ -2229,8 +2233,8 @@ class SEVM:
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
-                elif opcode == EVM.CREATE:
-                    self.create(ex, stack, step_id, out, bounded_loops)
+                elif opcode in [EVM.CREATE, EVM.CREATE2]:
+                    self.create(ex, opcode, stack, step_id, out, bounded_loops)
                     continue
 
                 elif opcode == EVM.POP:
