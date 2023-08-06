@@ -930,7 +930,7 @@ class Exec:  # an execution path
         # assume hash values are sufficiently smaller than the uint max
         self.solver.add(ULE(sha3_expr, con(2**256 - 2**64)))
         self.assume_sha3_distinct(sha3_expr)
-        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xff, 8)):  # create2
+        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xFF, 8)):  # create2
             return con(0xBBBB0000 + self.sha3s[sha3_expr])
         else:
             return sha3_expr
@@ -1763,7 +1763,7 @@ class SEVM:
             new_addr = ex.new_address()
         else:
             code_hash = ex.sha3_data(create_hexcode, create_hexcode.size() // 8)
-            hash_data = simplify(Concat(con(0xff, 8), ex.this, salt, code_hash))
+            hash_data = simplify(Concat(con(0xFF, 8), ex.this, salt, code_hash))
             new_addr = uint160(ex.sha3_data(hash_data, 85))
 
         if new_addr in ex.code:
