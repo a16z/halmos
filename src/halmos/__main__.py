@@ -408,7 +408,7 @@ def run(
             #
             log=deepcopy(setup_ex.log),
             cnts=deepcopy(setup_ex.cnts),
-            sha3s=deepcopy(setup_ex.sha3s),
+            sha3s=deepcopy(setup_ex.sha3s),  # TODO: shallow copy
             storages=deepcopy(setup_ex.storages),
             balances=deepcopy(setup_ex.balances),
             calls=deepcopy(setup_ex.calls),
