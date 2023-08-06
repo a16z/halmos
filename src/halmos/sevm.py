@@ -71,6 +71,8 @@ f_exp = Function("evm_exp", BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
 magic_address: int = 0xAAAA0000
 
+create2_magic_address: int = 0xBBBB0000
+
 new_address_offset: int = 1
 
 
@@ -929,9 +931,13 @@ class Exec:  # an execution path
 
         # assume hash values are sufficiently smaller than the uint max
         self.solver.add(ULE(sha3_expr, con(2**256 - 2**64)))
+
+        # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
-        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xFF, 8)):  # create2
-            return con(0xBBBB0000 + self.sha3s[sha3_expr])
+
+        # handle create2 hash
+        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xFF, 8)):
+            return con(create2_magic_address + self.sha3s[sha3_expr])
         else:
             return sha3_expr
 
@@ -1754,6 +1760,9 @@ class SEVM:
         if op == EVM.CREATE2:
             salt = ex.st.pop()
 
+        # lookup prank
+        caller = ex.prank.lookup(ex.this, con_addr(0))
+
         # contract creation code
         create_hexcode = wload(ex.st.memory, loc, size, prefer_concrete=True)
         create_code = Contract(create_hexcode)
@@ -1761,9 +1770,9 @@ class SEVM:
         # new account address
         if op == EVM.CREATE:
             new_addr = ex.new_address()
-        else:
+        else:  # EVM.CREATE2
             code_hash = ex.sha3_data(create_hexcode, create_hexcode.size() // 8)
-            hash_data = simplify(Concat(con(0xFF, 8), ex.this, salt, code_hash))
+            hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
             new_addr = uint160(ex.sha3_data(hash_data, 85))
 
         if new_addr in ex.code:
@@ -1775,9 +1784,6 @@ class SEVM:
         # setup new account
         ex.code[new_addr] = Contract(b"")  # existing code must be empty
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
-
-        # lookup prank
-        caller = ex.prank.lookup(ex.this, new_addr)
 
         # transfer value
         # assume balance is enough; otherwise ignore this path
