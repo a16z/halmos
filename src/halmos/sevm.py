@@ -380,8 +380,8 @@ class State:
 
     def __deepcopy__(self, memo):  # -> State:
         st = State()
-        st.stack = deepcopy(self.stack)
-        st.memory = deepcopy(self.memory)
+        st.stack = self.stack.copy()
+        st.memory = self.memory.copy()
         return st
 
     def __str__(self) -> str:
@@ -1292,8 +1292,8 @@ class SEVM:
 
         orig_code = ex.code.copy()
         orig_storage = deepcopy(ex.storage)
-        orig_balance = deepcopy(ex.balance)
-        orig_log = deepcopy(ex.log)
+        orig_balance = ex.balance
+        orig_log = ex.log.copy()
 
         if op == EVM.CALL and not (is_bv_value(fund) and fund.as_long() == 0):
             # no balance update for CALLCODE which transfers to itself
@@ -1364,7 +1364,7 @@ class SEVM:
                 new_ex.jumpis = deepcopy(ex.jumpis)
                 # new_ex.output is passed into the caller
                 new_ex.symbolic = ex.symbolic
-                new_ex.prank = ex.prank
+                new_ex.prank = deepcopy(ex.prank)
 
                 # set return data (in memory)
                 actual_ret_size = new_ex.returndatasize()
@@ -1864,7 +1864,7 @@ class SEVM:
                 new_ex.jumpis = deepcopy(ex.jumpis)
                 new_ex.output = None  # output is reset, not restored
                 new_ex.symbolic = ex.symbolic
-                new_ex.prank = ex.prank
+                new_ex.prank = deepcopy(ex.prank)
 
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))
@@ -1972,12 +1972,12 @@ class SEVM:
         new_solver.set(timeout=self.options["timeout"])
         new_solver.add(ex.solver.assertions())
         new_solver.add(cond)
-        new_path = deepcopy(ex.path)
+        new_path = ex.path.copy()
         new_path.append(str(cond))
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
             storage=deepcopy(ex.storage),
-            balance=deepcopy(ex.balance),
+            balance=ex.balance,
             #
             block=deepcopy(ex.block),
             #
@@ -1990,19 +1990,19 @@ class SEVM:
             pc=target,
             st=deepcopy(ex.st),
             jumpis=deepcopy(ex.jumpis),
-            output=deepcopy(ex.output),
+            output=ex.output,
             symbolic=ex.symbolic,
             prank=deepcopy(ex.prank),
             #
             solver=new_solver,
             path=new_path,
             #
-            log=deepcopy(ex.log),
+            log=ex.log.copy(),
             cnts=deepcopy(ex.cnts),
-            sha3s=deepcopy(ex.sha3s),  # TODO: shallow copy
-            storages=deepcopy(ex.storages),
-            balances=deepcopy(ex.balances),
-            calls=deepcopy(ex.calls),
+            sha3s=ex.sha3s.copy(),
+            storages=ex.storages.copy(),
+            balances=ex.balances.copy(),
+            calls=ex.calls.copy(),
             failed=ex.failed,
             error=ex.error,
         )
