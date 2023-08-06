@@ -9,7 +9,7 @@ import re
 import traceback
 
 from argparse import Namespace
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from timeit import default_timer as timer
 from importlib import metadata
 
@@ -184,12 +184,13 @@ def deploy_test(
     deployed_hexcode: str,
     sevm: SEVM,
     args: Namespace,
+    libs: Dict = {}
 ) -> Exec:
     # test contract creation bytecode
     creation_bytecode = Contract.from_hexcode(creation_hexcode)
 
     this = mk_this()
-
+    
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
         storage={this: {}},
@@ -199,10 +200,19 @@ def deploy_test(
         callvalue=con(0),
         caller=mk_caller(args),
         this=this,
-        pgm=creation_bytecode,
+        pgm=None,
         symbolic=False,
         solver=mk_solver(args),
     )
+    
+    # import libs and update ex.code
+    hexcode = ex.maybe_import_libs(hexcode, libs)
+    
+    # test contract creation bytecode
+    creation_bytecode = Contract.from_hexcode(hexcode)
+    
+    # ex.code = code
+    ex.pgm = creation_bytecode
 
     # use the given deployed bytecode if --no-test-constructor is enabled
     if args.no_test_constructor:
@@ -244,12 +254,13 @@ def setup(
     abi: List,
     setup_info: FunctionInfo,
     args: Namespace,
+    libs: Dict = {}
 ) -> Exec:
     setup_start = timer()
 
     sevm = SEVM(mk_options(args))
 
-    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args)
+    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
     setup_mid = timer()
 
@@ -552,7 +563,7 @@ class SetupAndRunSingleArgs:
     fun_info: FunctionInfo
     setup_args: Namespace
     args: Namespace
-
+    libs: Dict = field(default_factory=lambda: {})
 
 def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
     args = fn_args.args
@@ -563,6 +574,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.abi,
             fn_args.setup_info,
             fn_args.setup_args,
+            fn_args.libs
         )
     except Exception as err:
         print(
@@ -622,15 +634,17 @@ class RunArgs:
 
     args: Namespace
     contract_json: Dict
+    libs: Dict = field(default_factory=lambda: {})
 
 
 def run_parallel(run_args: RunArgs) -> List[TestResult]:
     args = run_args.args
-    creation_hexcode, deployed_hexcode, abi, methodIdentifiers = (
+    creation_hexcode, deployed_hexcode, abi, methodIdentifiers, libs = (
         run_args.creation_hexcode,
         run_args.deployed_hexcode,
         run_args.abi,
         run_args.methodIdentifiers,
+        run_args.libs
     )
 
     setup_info = extract_setup(methodIdentifiers)
@@ -648,6 +662,7 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
             fun_info,
             extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json)),
             extend_args(args, parse_devdoc(fun_info.sig, run_args.contract_json)),
+            libs
         )
         for fun_info in fun_infos
     ]
@@ -673,6 +688,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             run_args.abi,
             setup_info,
             setup_args,
+            run_args.libs,
         )
     except Exception as err:
         print(
@@ -988,6 +1004,27 @@ def parse_natspec(natspec: Dict) -> str:
             result += item
     return result.strip()
 
+def import_libs(build_out_map: Dict, linkReferences: Dict) -> Dict:
+    libs = {}
+    
+    for source in linkReferences.keys():
+        file_name = source.split("/")[-1]
+        
+        for lib_name in linkReferences[source].keys():
+            (lib_json, lib_type, lib_natspec) = build_out_map[file_name][lib_name]
+            lib_hexcode = lib_json["deployedBytecode"]["object"]
+            
+            path = source + ":" + lib_name
+            
+            libs[path] = {}
+            
+            # in bytes, multiply indices by 2 and offset 0x
+            placeholder_index = linkReferences[source][lib_name][0]['start'] * 2 + 2
+            
+            libs[path]['placeholder_index'] = placeholder_index
+            libs[path]['hexcode'] = lib_hexcode
+            
+    return libs
 
 @dataclass(frozen=True)
 class MainResult:
@@ -1078,9 +1115,13 @@ def _main(_args=None) -> MainResult:
 
                 creation_hexcode = contract_json["bytecode"]["object"]
                 deployed_hexcode = contract_json["deployedBytecode"]["object"]
+                
                 abi = contract_json["abi"]
                 methodIdentifiers = contract_json["methodIdentifiers"]
-
+                linkReferences = contract_json["bytecode"]["linkReferences"]
+                
+                libs = import_libs(build_out_map, linkReferences) if linkReferences else None
+                
                 funsigs = [
                     funsig
                     for funsig in methodIdentifiers
@@ -1107,7 +1148,9 @@ def _main(_args=None) -> MainResult:
                         methodIdentifiers,
                         contract_args,
                         contract_json,
+                        libs
                     )
+                    
                     enable_parallel = args.test_parallel and len(funsigs) > 1
                     test_results = (
                         run_parallel(run_args)
