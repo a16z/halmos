@@ -54,6 +54,11 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--symbolic-msg-sender", action="store_true", help="set msg.sender symbolic"
     )
+    parser.add_argument(
+        "--no-test-constructor",
+        action="store_true",
+        help="do not run the constructor of test contracts",
+    )
 
     parser.add_argument(
         "--version", action="store_true", help="print the version number"

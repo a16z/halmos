@@ -180,14 +180,14 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
 
 
 def deploy_test(
-    hexcode: str,
+    creation_hexcode: str,
+    deployed_hexcode: str,
     sevm: SEVM,
     args: Namespace,
 ) -> Exec:
     # test contract creation bytecode
-    creation_bytecode = Contract.from_hexcode(hexcode)
+    creation_bytecode = Contract.from_hexcode(creation_hexcode)
 
-    solver = mk_solver(args)
     this = mk_this()
 
     ex = sevm.mk_exec(
@@ -201,8 +201,15 @@ def deploy_test(
         this=this,
         pgm=creation_bytecode,
         symbolic=False,
-        solver=solver,
+        solver=mk_solver(args),
     )
+
+    # use the given deployed bytecode if --no-test-constructor is enabled
+    if args.no_test_constructor:
+        deployed_bytecode = Contract.from_hexcode(deployed_hexcode)
+        ex.code[this] = deployed_bytecode
+        ex.pgm = deployed_bytecode
+        return ex
 
     # create test contract
     (exs, _, _) = sevm.run(ex)
@@ -232,7 +239,8 @@ def deploy_test(
 
 
 def setup(
-    hexcode: str,
+    creation_hexcode: str,
+    deployed_hexcode: str,
     abi: List,
     setup_info: FunctionInfo,
     args: Namespace,
@@ -241,7 +249,7 @@ def setup(
 
     sevm = SEVM(mk_options(args))
 
-    setup_ex = deploy_test(hexcode, sevm, args)
+    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args)
 
     setup_mid = timer()
 
@@ -537,7 +545,8 @@ def run(
 
 @dataclass(frozen=True)
 class SetupAndRunSingleArgs:
-    hexcode: str
+    creation_hexcode: str
+    deployed_hexcode: str
     abi: List
     setup_info: FunctionInfo
     fun_info: FunctionInfo
@@ -549,7 +558,8 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
     args = fn_args.args
     try:
         setup_ex = setup(
-            fn_args.hexcode,
+            fn_args.creation_hexcode,
+            fn_args.deployed_hexcode,
             fn_args.abi,
             fn_args.setup_info,
             fn_args.setup_args,
@@ -604,7 +614,8 @@ class RunArgs:
     funsigs: List[str]
 
     # code of the current contract
-    hexcode: str
+    creation_hexcode: str
+    deployed_hexcode: str
 
     abi: List
     methodIdentifiers: Dict[str, str]
@@ -615,8 +626,9 @@ class RunArgs:
 
 def run_parallel(run_args: RunArgs) -> List[TestResult]:
     args = run_args.args
-    hexcode, abi, methodIdentifiers = (
-        run_args.hexcode,
+    creation_hexcode, deployed_hexcode, abi, methodIdentifiers = (
+        run_args.creation_hexcode,
+        run_args.deployed_hexcode,
         run_args.abi,
         run_args.methodIdentifiers,
     )
@@ -629,7 +641,8 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     ]
     single_run_args = [
         SetupAndRunSingleArgs(
-            hexcode,
+            creation_hexcode,
+            deployed_hexcode,
             abi,
             setup_info,
             fun_info,
@@ -654,7 +667,13 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
         setup_args = extend_args(
             args, parse_devdoc(setup_info.sig, run_args.contract_json)
         )
-        setup_ex = setup(run_args.hexcode, run_args.abi, setup_info, setup_args)
+        setup_ex = setup(
+            run_args.creation_hexcode,
+            run_args.deployed_hexcode,
+            run_args.abi,
+            setup_info,
+            setup_args,
+        )
     except Exception as err:
         print(
             color_warn(f"Error: {setup_info.sig} failed: {type(err).__name__}: {err}")
@@ -1057,7 +1076,8 @@ def _main(_args=None) -> MainResult:
                 if contract_type != "contract":
                     continue
 
-                hexcode = contract_json["bytecode"]["object"]
+                creation_hexcode = contract_json["bytecode"]["object"]
+                deployed_hexcode = contract_json["deployedBytecode"]["object"]
                 abi = contract_json["abi"]
                 methodIdentifiers = contract_json["methodIdentifiers"]
 
@@ -1081,7 +1101,8 @@ def _main(_args=None) -> MainResult:
 
                     run_args = RunArgs(
                         funsigs,
-                        hexcode,
+                        creation_hexcode,
+                        deployed_hexcode,
                         abi,
                         methodIdentifiers,
                         contract_args,
