@@ -998,25 +998,28 @@ class Exec:  # an execution path
         return f"{self.pc}:" + ",".join(
             map(lambda x: str(x) if self.is_jumpdest(x) else "", self.st.stack)
         )
-        
+
     # import libs and substitute placeholders with lib addresses
     def maybe_import_libs(self, hexcode, lib_references) -> str:
         libs = {}
-        
+
         if lib_references:
             for lib in lib_references:
                 address = self.new_address()
-                
-                placeholder_index = lib_references[lib]['placeholder_index']
-                placeholder = hexcode[placeholder_index:placeholder_index + 40]
-                
-                hexcode = hexcode.replace(placeholder, hex(address.as_long())[2:].zfill(40))
-                
-                libs[address] = Contract.from_hexcode(lib_references[lib]['hexcode'])
-        
+
+                placeholder_index = lib_references[lib]["placeholder_index"]
+                placeholder = hexcode[placeholder_index : placeholder_index + 40]
+
+                hexcode = hexcode.replace(
+                    placeholder, hex(address.as_long())[2:].zfill(40)
+                )
+
+                libs[address] = Contract.from_hexcode(lib_references[lib]["hexcode"])
+
             self.code.update(libs)
-        
+
         return hexcode
+
 
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
