@@ -184,7 +184,7 @@ def deploy_test(
     deployed_hexcode: str,
     sevm: SEVM,
     args: Namespace,
-    libs: Dict = {}
+    libs: Dict = {},
 ) -> Exec:
     this = mk_this()
 
@@ -250,7 +250,7 @@ def setup(
     abi: List,
     setup_info: FunctionInfo,
     args: Namespace,
-    libs: Dict = {}
+    libs: Dict = {},
 ) -> Exec:
     setup_start = timer()
 
