@@ -1771,12 +1771,18 @@ class SEVM:
         if op == EVM.CREATE:
             new_addr = ex.new_address()
         else:  # EVM.CREATE2
+            if isinstance(create_hexcode, bytes):
+                create_hexcode = con(
+                    int.from_bytes(create_hexcode, "big"), len(create_hexcode) * 8
+                )
             code_hash = ex.sha3_data(create_hexcode, create_hexcode.size() // 8)
             hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
             new_addr = uint160(ex.sha3_data(hash_data, 85))
 
         if new_addr in ex.code:
-            raise ValueError(f"existing address: {new_addr}")
+            ex.error = f"existing address: {hexify(new_addr)}"
+            out.append(ex)
+            return
 
         for addr in ex.code:
             ex.solver.add(new_addr != addr)  # ensure new address is fresh
