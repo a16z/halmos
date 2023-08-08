@@ -71,6 +71,8 @@ f_exp = Function("evm_exp", BitVecSort(256), BitVecSort(256), BitVecSort(256))
 
 magic_address: int = 0xAAAA0000
 
+create2_magic_address: int = 0xBBBB0000
+
 new_address_offset: int = 1
 
 
@@ -626,7 +628,7 @@ class Exec:  # an execution path
     # logs
     log: List[Tuple[List[Word], Any]]  # event logs emitted
     cnts: Dict[str, Dict[int, int]]  # opcode -> frequency; counters
-    sha3s: List[Tuple[Word, Word]]  # sha3 hashes generated
+    sha3s: Dict[Word, int]  # sha3 hashes generated
     storages: Dict[Any, Any]  # storage updates
     balances: Dict[Any, Any]  # balance updates
     calls: List[Any]  # external calls
@@ -728,7 +730,7 @@ class Exec:  # an execution path
                         )
                     ),
                     f"SHA3 hashes:\n",
-                    "".join(map(lambda x: f"- {x}\n", self.sha3s)),
+                    "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
                     f"External calls:\n",
                     "".join(map(lambda x: f"- {x}\n", self.calls)),
                     # f"Calldata: {self.calldata}\n",
@@ -919,43 +921,50 @@ class Exec:  # an execution path
     def sha3(self) -> None:
         loc: int = self.st.mloc()
         size: int = int_of(self.st.pop(), "symbolic SHA3 data size")
-        self.sha3_data(wload(self.st.memory, loc, size), size)
+        self.st.push(self.sha3_data(wload(self.st.memory, loc, size), size))
 
-    def sha3_data(self, data: Bytes, size: int) -> None:
+    def sha3_data(self, data: Bytes, size: int) -> Word:
         f_sha3 = Function(
             "sha3_" + str(size * 8), BitVecSort(size * 8), BitVecSort(256)
         )
         sha3_expr = f_sha3(data)
-        sha3_output = BitVec(f"sha3_output_{len(self.sha3s):>02}", 256)
-        self.solver.add(sha3_output == sha3_expr)
-        # assume hash values are sufficiently smaller than the uint max
-        self.solver.add(ULE(sha3_output, con(2**256 - 2**64)))
-        self.assume_sha3_distinct(sha3_output, sha3_expr)
-        if size == 64 or size == 32:  # for storage hashed location
-            self.st.push(sha3_expr)
-        else:
-            self.st.push(sha3_output)
 
-    def assume_sha3_distinct(self, sha3_output, sha3_expr) -> None:
+        # assume hash values are sufficiently smaller than the uint max
+        self.solver.add(ULE(sha3_expr, con(2**256 - 2**64)))
+
+        # assume no hash collision
+        self.assume_sha3_distinct(sha3_expr)
+
+        # handle create2 hash
+        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xFF, 8)):
+            return con(create2_magic_address + self.sha3s[sha3_expr])
+        else:
+            return sha3_expr
+
+    def assume_sha3_distinct(self, sha3_expr) -> None:
+        # skip if already exist
+        if sha3_expr in self.sha3s:
+            return
+
         # we expect sha3_expr to be `sha3_<input-bitsize>(input_expr)`
         sha3_decl_name = sha3_expr.decl().name()
 
-        for prev_sha3_output, prev_sha3_expr in self.sha3s:
+        for prev_sha3_expr in self.sha3s:
             if prev_sha3_expr.decl().name() == sha3_decl_name:
                 # inputs have the same size: assume different inputs
                 # lead to different outputs
                 self.solver.add(
                     Implies(
                         sha3_expr.arg(0) != prev_sha3_expr.arg(0),
-                        sha3_output != prev_sha3_output,
+                        sha3_expr != prev_sha3_expr,
                     )
                 )
             else:
                 # inputs have different sizes: assume the outputs are different
-                self.solver.add(sha3_output != prev_sha3_output)
+                self.solver.add(sha3_expr != prev_sha3_expr)
 
-        self.solver.add(sha3_output != con(0))
-        self.sha3s.append((sha3_output, sha3_expr))
+        self.solver.add(sha3_expr != con(0))
+        self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
         self.cnts["fresh"]["gas"] += 1
@@ -1738,6 +1747,7 @@ class SEVM:
     def create(
         self,
         ex: Exec,
+        op: int,
         stack: List[Tuple[Exec, int]],
         step_id: int,
         out: List[Exec],
@@ -1747,15 +1757,32 @@ class SEVM:
         loc: int = int_of(ex.st.pop(), "symbolic CREATE offset")
         size: int = int_of(ex.st.pop(), "symbolic CREATE size")
 
+        if op == EVM.CREATE2:
+            salt = ex.st.pop()
+
+        # lookup prank
+        caller = ex.prank.lookup(ex.this, con_addr(0))
+
         # contract creation code
         create_hexcode = wload(ex.st.memory, loc, size, prefer_concrete=True)
         create_code = Contract(create_hexcode)
 
         # new account address
-        new_addr = ex.new_address()
+        if op == EVM.CREATE:
+            new_addr = ex.new_address()
+        else:  # EVM.CREATE2
+            if isinstance(create_hexcode, bytes):
+                create_hexcode = con(
+                    int.from_bytes(create_hexcode, "big"), len(create_hexcode) * 8
+                )
+            code_hash = ex.sha3_data(create_hexcode, create_hexcode.size() // 8)
+            hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
+            new_addr = uint160(ex.sha3_data(hash_data, 85))
 
         if new_addr in ex.code:
-            raise ValueError(f"existing address: {new_addr}")
+            ex.error = f"existing address: {hexify(new_addr)}"
+            out.append(ex)
+            return
 
         for addr in ex.code:
             ex.solver.add(new_addr != addr)  # ensure new address is fresh
@@ -1763,9 +1790,6 @@ class SEVM:
         # setup new account
         ex.code[new_addr] = Contract(b"")  # existing code must be empty
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
-
-        # lookup prank
-        caller = ex.prank.lookup(ex.this, new_addr)
 
         # transfer value
         # assume balance is enough; otherwise ignore this path
@@ -1975,7 +1999,7 @@ class SEVM:
             #
             log=deepcopy(ex.log),
             cnts=deepcopy(ex.cnts),
-            sha3s=deepcopy(ex.sha3s),
+            sha3s=deepcopy(ex.sha3s),  # TODO: shallow copy
             storages=deepcopy(ex.storages),
             balances=deepcopy(ex.balances),
             calls=deepcopy(ex.calls),
@@ -2229,8 +2253,8 @@ class SEVM:
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
-                elif opcode == EVM.CREATE:
-                    self.create(ex, stack, step_id, out, bounded_loops)
+                elif opcode in [EVM.CREATE, EVM.CREATE2]:
+                    self.create(ex, opcode, stack, step_id, out, bounded_loops)
                     continue
 
                 elif opcode == EVM.POP:
@@ -2349,7 +2373,7 @@ class SEVM:
                         val = int_of(insn.operand)
                         if opcode == EVM.PUSH32 and val in sha3_inv:
                             # restore precomputed hashes
-                            ex.sha3_data(con(sha3_inv[val]), 32)
+                            ex.st.push(ex.sha3_data(con(sha3_inv[val]), 32))
                         else:
                             ex.st.push(con(val))
                     else:
@@ -2444,7 +2468,7 @@ class SEVM:
             #
             log=[],
             cnts=defaultdict(lambda: defaultdict(int)),
-            sha3s=[],
+            sha3s={},
             storages={},
             balances={},
             calls=[],

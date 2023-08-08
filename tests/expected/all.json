@@ -363,6 +363,64 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Create2.t.sol:Create2Test": [
+            {
+                "name": "check_create2(uint256,uint256,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create2_caller(address,uint256,uint256,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create2_collision(uint256,uint256,bytes32)",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create2_collision_alias(uint256,uint256,bytes32)",
+                "exitcode": 1,
+                "num_models": 1,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create2_concrete()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create2_no_collision_1(uint256,uint256,bytes32,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create2_no_collision_2(uint256,uint256,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Deal.t.sol:DealTest": [
             {
                 "name": "check_deal_1(address,uint256)",
