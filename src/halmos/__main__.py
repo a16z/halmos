@@ -18,6 +18,7 @@ from .sevm import *
 from .utils import color_good, color_warn, hexify
 from .warnings import *
 from .parser import mk_arg_parser
+from .calldata import Calldata
 
 arg_parser = mk_arg_parser()
 
@@ -42,8 +43,9 @@ def str_abi(item: Dict) -> str:
         ret = []
         for arg in args:
             typ = arg["type"]
-            if typ == "tuple":
-                ret.append(str_tuple(arg["components"]))
+            match = re.search(r"^tuple((\[[0-9]*\])*)$", typ)
+            if match:
+                ret.append(str_tuple(arg["components"]) + match.group(1))
             else:
                 ret.append(typ)
         return "(" + ",".join(ret) + ")"
@@ -72,74 +74,19 @@ def mk_calldata(
     dyn_param_size: List[str],
     args: Namespace,
 ) -> None:
-    item = find_abi(abi, fun_info)
-    tba = []
-    offset = 0
-    for param in item["inputs"]:
-        param_name = param["name"]
-        param_type = param["type"]
-        if param_type == "tuple":
-            # TODO: support struct types
-            raise NotImplementedError(f"Not supported parameter type: {param_type}")
-        elif param_type == "bytes" or param_type == "string":
-            # wstore(cd, 4+offset, 32, BitVecVal(<?offset?>, 256))
-            tba.append((4 + offset, param))
-            offset += 32
-        elif param_type.endswith("[]"):
-            raise NotImplementedError(f"Not supported dynamic arrays: {param_type}")
-        else:
-            match = re.search(
-                r"(u?int[0-9]*|address|bool|bytes[0-9]+)(\[([0-9]+)\])?", param_type
-            )
-            if not match:
-                raise NotImplementedError(f"Unknown parameter type: {param_type}")
-            typ = match.group(1)
-            dim = match.group(3)
-            if dim:  # array
-                for idx in range(int(dim)):
-                    wstore(
-                        cd, 4 + offset, 32, BitVec(f"p_{param_name}[{idx}]_{typ}", 256)
-                    )
-                    offset += 32
-            else:  # primitive
-                wstore(cd, 4 + offset, 32, BitVec(f"p_{param_name}_{typ}", 256))
-                offset += 32
+    # find function abi
+    fun_abi = find_abi(abi, fun_info)
 
-    arrlen = mk_arrlen(args)
-    for loc_param in tba:
-        loc = loc_param[0]
-        param = loc_param[1]
-        param_name = param["name"]
-        param_type = param["type"]
+    # no parameters
+    if len(fun_abi["inputs"]) == 0:
+        return
 
-        if param_name not in arrlen:
-            size = args.loop
-            if args.debug:
-                print(
-                    f"Warning: no size provided for {param_name}; default value {size} will be used."
-                )
-        else:
-            size = arrlen[param_name]
+    # generate symbolic ABI calldata
+    calldata = Calldata(args, mk_arrlen(args), dyn_param_size)
+    result = calldata.create(fun_abi)
 
-        dyn_param_size.append(f"|{param_name}|={size}")
-
-        if param_type == "bytes" or param_type == "string":
-            # head
-            wstore(cd, loc, 32, BitVecVal(offset, 256))
-            # tail
-            size_pad_right = int((size + 31) / 32) * 32
-            wstore(cd, 4 + offset, 32, BitVecVal(size, 256))
-            offset += 32
-            if size_pad_right > 0:
-                wstore(
-                    cd,
-                    4 + offset,
-                    size_pad_right,
-                    BitVec(f"p_{param_name}_{param_type}", 8 * size_pad_right),
-                )
-                offset += size_pad_right
-        else:
-            raise ValueError(param_type)
+    # TODO: use Contract abstraction for calldata
+    wstore(cd, 4, result.size() // 8, result)
 
 
 def mk_callvalue() -> Word:
