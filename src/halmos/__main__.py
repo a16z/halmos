@@ -404,14 +404,14 @@ def run(
             prank=Prank(),  # prank is reset after setUp()
             #
             solver=solver,
-            path=deepcopy(setup_ex.path),
+            path=setup_ex.path.copy(),
             #
-            log=deepcopy(setup_ex.log),
+            log=setup_ex.log.copy(),
             cnts=deepcopy(setup_ex.cnts),
-            sha3s=deepcopy(setup_ex.sha3s),  # TODO: shallow copy
-            storages=deepcopy(setup_ex.storages),
-            balances=deepcopy(setup_ex.balances),
-            calls=deepcopy(setup_ex.calls),
+            sha3s=setup_ex.sha3s.copy(),
+            storages=setup_ex.storages.copy(),
+            balances=setup_ex.balances.copy(),
+            calls=setup_ex.calls.copy(),
             failed=setup_ex.failed,
             error=setup_ex.error,
         )
