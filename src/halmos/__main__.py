@@ -186,9 +186,6 @@ def deploy_test(
     args: Namespace,
     libs: Dict = {}
 ) -> Exec:
-    # test contract creation bytecode
-    creation_bytecode = Contract.from_hexcode(creation_hexcode)
-
     this = mk_this()
 
     ex = sevm.mk_exec(
@@ -206,10 +203,10 @@ def deploy_test(
     )
 
     # import libs and update ex.code
-    hexcode = ex.maybe_import_libs(hexcode, libs)
+    creation_hexcode = ex.maybe_import_libs(creation_hexcode, libs)
 
     # test contract creation bytecode
-    creation_bytecode = Contract.from_hexcode(hexcode)
+    creation_bytecode = Contract.from_hexcode(creation_hexcode)
 
     ex.pgm = creation_bytecode
 
@@ -1117,7 +1114,7 @@ def _main(_args=None) -> MainResult:
 
                 creation_hexcode = contract_json["bytecode"]["object"]
                 deployed_hexcode = contract_json["deployedBytecode"]["object"]
-                
+
                 abi = contract_json["abi"]
                 methodIdentifiers = contract_json["methodIdentifiers"]
                 linkReferences = contract_json["bytecode"]["linkReferences"]
