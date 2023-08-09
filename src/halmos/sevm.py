@@ -1000,9 +1000,7 @@ class Exec:  # an execution path
         )
 
     # import libs and substitute placeholders with lib addresses
-    def maybe_import_libs(self, hexcode, lib_references) -> str:
-        libs = {}
-
+    def resolve_libs(self, hexcode, lib_references) -> str:
         if lib_references:
             for lib in lib_references:
                 address = self.new_address()
@@ -1014,9 +1012,7 @@ class Exec:  # an execution path
                     placeholder, hex(address.as_long())[2:].zfill(40)
                 )
 
-                libs[address] = Contract.from_hexcode(lib_references[lib]["hexcode"])
-
-            self.code.update(libs)
+                self.code[address] = Contract.from_hexcode(lib_references[lib]["hexcode"])
 
         return hexcode
 

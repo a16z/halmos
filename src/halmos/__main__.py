@@ -9,7 +9,7 @@ import re
 import traceback
 
 from argparse import Namespace
-from dataclasses import dataclass, asdict, field
+from dataclasses import dataclass, asdict
 from timeit import default_timer as timer
 from importlib import metadata
 
@@ -184,7 +184,7 @@ def deploy_test(
     deployed_hexcode: str,
     sevm: SEVM,
     args: Namespace,
-    libs: Dict = {},
+    libs: Dict,
 ) -> Exec:
     this = mk_this()
 
@@ -197,17 +197,16 @@ def deploy_test(
         callvalue=con(0),
         caller=mk_caller(args),
         this=this,
-        pgm=None,
+        pgm=None,  # to be added
         symbolic=False,
         solver=mk_solver(args),
     )
 
-    # import libs and update ex.code
-    creation_hexcode = ex.maybe_import_libs(creation_hexcode, libs)
+    # deploy libraries and resolve library placeholders in bytecode
+    creation_hexcode = ex.resolve_libs(creation_hexcode, libs)
 
     # test contract creation bytecode
     creation_bytecode = Contract.from_hexcode(creation_hexcode)
-
     ex.pgm = creation_bytecode
 
     # use the given deployed bytecode if --no-test-constructor is enabled
@@ -250,7 +249,7 @@ def setup(
     abi: List,
     setup_info: FunctionInfo,
     args: Namespace,
-    libs: Dict = {},
+    libs: Dict,
 ) -> Exec:
     setup_start = timer()
 
@@ -559,7 +558,7 @@ class SetupAndRunSingleArgs:
     fun_info: FunctionInfo
     setup_args: Namespace
     args: Namespace
-    libs: Dict = field(default_factory=lambda: {})
+    libs: Dict
 
 
 def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
@@ -631,7 +630,7 @@ class RunArgs:
 
     args: Namespace
     contract_json: Dict
-    libs: Dict = field(default_factory=lambda: {})
+    libs: Dict
 
 
 def run_parallel(run_args: RunArgs) -> List[TestResult]:
@@ -1005,10 +1004,10 @@ def parse_natspec(natspec: Dict) -> str:
 def import_libs(build_out_map: Dict, linkReferences: Dict) -> Dict:
     libs = {}
 
-    for source in linkReferences.keys():
+    for source in linkReferences:
         file_name = source.split("/")[-1]
 
-        for lib_name in linkReferences[source].keys():
+        for lib_name in linkReferences[source]:
             (lib_json, lib_type, lib_natspec) = build_out_map[file_name][lib_name]
             lib_hexcode = lib_json["deployedBytecode"]["object"]
 
@@ -1122,7 +1121,7 @@ def _main(_args=None) -> MainResult:
                 libs = (
                     import_libs(build_out_map, linkReferences)
                     if linkReferences
-                    else None
+                    else {}
                 )
 
                 funsigs = [
