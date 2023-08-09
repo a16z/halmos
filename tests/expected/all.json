@@ -567,7 +567,16 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/LibraryLinking.t.sol:LibTest": [],
+        "test/LibraryLinking.t.sol:LibTest": [
+            {
+                "name": "check_foo()",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/LibraryLinking.t.sol:LibTest2": [
             {
                 "name": "check_bar()",

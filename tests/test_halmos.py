@@ -48,12 +48,8 @@ def test_main(cmd, expected_path, halmos_options):
     "cmd",
     [
         ["--root", "tests", "--contract", "SetupFailTest"],
-        ["--root", "tests", "--contract", "LibTest"],
     ],
-    ids=(
-        "SetupFailTest",
-        "LibTest",
-    ),
+    ids=("SetupFailTest",),
 )
 def test_main_fail(cmd, halmos_options):
     actual = asdict(_main(cmd + halmos_options.split()))

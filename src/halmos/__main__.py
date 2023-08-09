@@ -184,10 +184,8 @@ def deploy_test(
     deployed_hexcode: str,
     sevm: SEVM,
     args: Namespace,
+    libs: Dict,
 ) -> Exec:
-    # test contract creation bytecode
-    creation_bytecode = Contract.from_hexcode(creation_hexcode)
-
     this = mk_this()
 
     ex = sevm.mk_exec(
@@ -199,10 +197,19 @@ def deploy_test(
         callvalue=con(0),
         caller=mk_caller(args),
         this=this,
-        pgm=creation_bytecode,
+        pgm=None,  # to be added
         symbolic=False,
         solver=mk_solver(args),
     )
+
+    # deploy libraries and resolve library placeholders in hexcode
+    (creation_hexcode, deployed_hexcode) = ex.resolve_libs(
+        creation_hexcode, deployed_hexcode, libs
+    )
+
+    # test contract creation bytecode
+    creation_bytecode = Contract.from_hexcode(creation_hexcode)
+    ex.pgm = creation_bytecode
 
     # use the given deployed bytecode if --no-test-constructor is enabled
     if args.no_test_constructor:
@@ -244,12 +251,13 @@ def setup(
     abi: List,
     setup_info: FunctionInfo,
     args: Namespace,
+    libs: Dict,
 ) -> Exec:
     setup_start = timer()
 
     sevm = SEVM(mk_options(args))
 
-    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args)
+    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
     setup_mid = timer()
 
@@ -552,6 +560,7 @@ class SetupAndRunSingleArgs:
     fun_info: FunctionInfo
     setup_args: Namespace
     args: Namespace
+    libs: Dict
 
 
 def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
@@ -563,6 +572,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.abi,
             fn_args.setup_info,
             fn_args.setup_args,
+            fn_args.libs,
         )
     except Exception as err:
         print(
@@ -622,15 +632,17 @@ class RunArgs:
 
     args: Namespace
     contract_json: Dict
+    libs: Dict
 
 
 def run_parallel(run_args: RunArgs) -> List[TestResult]:
     args = run_args.args
-    creation_hexcode, deployed_hexcode, abi, methodIdentifiers = (
+    creation_hexcode, deployed_hexcode, abi, methodIdentifiers, libs = (
         run_args.creation_hexcode,
         run_args.deployed_hexcode,
         run_args.abi,
         run_args.methodIdentifiers,
+        run_args.libs,
     )
 
     setup_info = extract_setup(methodIdentifiers)
@@ -648,6 +660,7 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
             fun_info,
             extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json)),
             extend_args(args, parse_devdoc(fun_info.sig, run_args.contract_json)),
+            libs,
         )
         for fun_info in fun_infos
     ]
@@ -673,6 +686,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             run_args.abi,
             setup_info,
             setup_args,
+            run_args.libs,
         )
     except Exception as err:
         print(
@@ -989,6 +1003,28 @@ def parse_natspec(natspec: Dict) -> str:
     return result.strip()
 
 
+def import_libs(build_out_map: Dict, hexcode: str, linkReferences: Dict) -> Dict:
+    libs = {}
+
+    for filepath in linkReferences:
+        file_name = filepath.split("/")[-1]
+
+        for lib_name in linkReferences[filepath]:
+            (lib_json, _, _) = build_out_map[file_name][lib_name]
+            lib_hexcode = lib_json["deployedBytecode"]["object"]
+
+            # in bytes, multiply indices by 2 and offset 0x
+            placeholder_index = linkReferences[filepath][lib_name][0]["start"] * 2 + 2
+            placeholder = hexcode[placeholder_index : placeholder_index + 40]
+
+            libs[f"{filepath}:{lib_name}"] = {
+                "placeholder": placeholder,
+                "hexcode": lib_hexcode,
+            }
+
+    return libs
+
+
 @dataclass(frozen=True)
 class MainResult:
     exitcode: int
@@ -1078,8 +1114,16 @@ def _main(_args=None) -> MainResult:
 
                 creation_hexcode = contract_json["bytecode"]["object"]
                 deployed_hexcode = contract_json["deployedBytecode"]["object"]
+
                 abi = contract_json["abi"]
                 methodIdentifiers = contract_json["methodIdentifiers"]
+                linkReferences = contract_json["bytecode"]["linkReferences"]
+
+                libs = (
+                    import_libs(build_out_map, creation_hexcode, linkReferences)
+                    if linkReferences
+                    else {}
+                )
 
                 funsigs = [
                     funsig
@@ -1107,7 +1151,9 @@ def _main(_args=None) -> MainResult:
                         methodIdentifiers,
                         contract_args,
                         contract_json,
+                        libs,
                     )
+
                     enable_parallel = args.test_parallel and len(funsigs) > 1
                     test_results = (
                         run_parallel(run_args)
