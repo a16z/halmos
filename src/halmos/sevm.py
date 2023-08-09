@@ -999,22 +999,23 @@ class Exec:  # an execution path
             map(lambda x: str(x) if self.is_jumpdest(x) else "", self.st.stack)
         )
 
-    # import libs and substitute placeholders with lib addresses
-    def resolve_libs(self, hexcode, lib_references) -> str:
+    # deploy libraries and resolve library placeholders in hexcode
+    def resolve_libs(self, creation_hexcode, deployed_hexcode, lib_references) -> str:
         if lib_references:
             for lib in lib_references:
                 address = self.new_address()
 
-                placeholder_index = lib_references[lib]["placeholder_index"]
-                placeholder = hexcode[placeholder_index : placeholder_index + 40]
-
-                hexcode = hexcode.replace(
-                    placeholder, hex(address.as_long())[2:].zfill(40)
+                self.code[address] = Contract.from_hexcode(
+                    lib_references[lib]["hexcode"]
                 )
 
-                self.code[address] = Contract.from_hexcode(lib_references[lib]["hexcode"])
+                placeholder = lib_references[lib]["placeholder"]
+                hex_address = hex(address.as_long())[2:].zfill(40)
 
-        return hexcode
+                creation_hexcode = creation_hexcode.replace(placeholder, hex_address)
+                deployed_hexcode = deployed_hexcode.replace(placeholder, hex_address)
+
+        return (creation_hexcode, deployed_hexcode)
 
 
 #             x  == b   if sort(x) = bool

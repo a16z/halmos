@@ -202,8 +202,10 @@ def deploy_test(
         solver=mk_solver(args),
     )
 
-    # deploy libraries and resolve library placeholders in bytecode
-    creation_hexcode = ex.resolve_libs(creation_hexcode, libs)
+    # deploy libraries and resolve library placeholders in hexcode
+    (creation_hexcode, deployed_hexcode) = ex.resolve_libs(
+        creation_hexcode, deployed_hexcode, libs
+    )
 
     # test contract creation bytecode
     creation_bytecode = Contract.from_hexcode(creation_hexcode)
@@ -1001,25 +1003,24 @@ def parse_natspec(natspec: Dict) -> str:
     return result.strip()
 
 
-def import_libs(build_out_map: Dict, linkReferences: Dict) -> Dict:
+def import_libs(build_out_map: Dict, hexcode: str, linkReferences: Dict) -> Dict:
     libs = {}
 
-    for source in linkReferences:
-        file_name = source.split("/")[-1]
+    for filepath in linkReferences:
+        file_name = filepath.split("/")[-1]
 
-        for lib_name in linkReferences[source]:
-            (lib_json, lib_type, lib_natspec) = build_out_map[file_name][lib_name]
+        for lib_name in linkReferences[filepath]:
+            (lib_json, _, _) = build_out_map[file_name][lib_name]
             lib_hexcode = lib_json["deployedBytecode"]["object"]
 
-            path = source + ":" + lib_name
-
-            libs[path] = {}
-
             # in bytes, multiply indices by 2 and offset 0x
-            placeholder_index = linkReferences[source][lib_name][0]["start"] * 2 + 2
+            placeholder_index = linkReferences[filepath][lib_name][0]["start"] * 2 + 2
+            placeholder = hexcode[placeholder_index : placeholder_index + 40]
 
-            libs[path]["placeholder_index"] = placeholder_index
-            libs[path]["hexcode"] = lib_hexcode
+            libs[f"{filepath}:{lib_name}"] = {
+                "placeholder": placeholder,
+                "hexcode": lib_hexcode,
+            }
 
     return libs
 
@@ -1119,7 +1120,7 @@ def _main(_args=None) -> MainResult:
                 linkReferences = contract_json["bytecode"]["linkReferences"]
 
                 libs = (
-                    import_libs(build_out_map, linkReferences)
+                    import_libs(build_out_map, creation_hexcode, linkReferences)
                     if linkReferences
                     else {}
                 )
