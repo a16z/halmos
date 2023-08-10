@@ -424,20 +424,16 @@ class State:
     def push(self, v: Word) -> None:
         if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
             raise ValueError(v)
-        self.stack.insert(0, simplify(v))
+        self.stack.append(simplify(v))
 
     def pop(self) -> Word:
-        v = self.stack[0]
-        del self.stack[0]
-        return v
+        return self.stack.pop()
 
     def dup(self, n: int) -> None:
-        self.push(self.stack[n - 1])
+        self.push(self.stack[-n])
 
     def swap(self, n: int) -> None:
-        tmp = self.stack[0]
-        self.stack[0] = self.stack[n]
-        self.stack[n] = tmp
+        self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
     def mloc(self) -> int:
         loc: int = int_of(self.pop(), "symbolic memory offset")
