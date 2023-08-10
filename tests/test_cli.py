@@ -8,7 +8,6 @@ from halmos.utils import EVM
 from halmos.sevm import con, Contract, Instruction
 
 from halmos.__main__ import str_abi, run_bytecode, FunctionInfo
-import halmos.__main__
 
 from test_fixtures import args, options
 
