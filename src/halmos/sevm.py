@@ -36,11 +36,28 @@ Steps = Dict[int, Dict[str, Any]]  # execution tree
 class BitVecSortCache:
     def __init__(self):
         self.cache = {}
+        for size in (
+            1,
+            8,
+            16,
+            32,
+            64,
+            128,
+            160,
+            256,
+            264,
+            288,
+            512,
+            544,
+            800,
+            1024,
+            1056,
+        ):
+            self.cache[size] = BitVecSort(size)
 
     def __getitem__(self, size: int) -> BitVecSort:
-        if size not in self.cache:
-            self.cache[size] = BitVecSort(size)
-        return self.cache[size]
+        hit = self.cache.get(size)
+        return hit if hit is not None else BitVecSort(size)
 
 
 BitVecSorts = BitVecSortCache()
