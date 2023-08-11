@@ -688,4 +688,7 @@ class NamedTimer:
         return self.report()
 
     def __repr__(self):
-        return f"NamedTimer(name={self.name}, start_time={self.start_time}, end_time={self.end_time}, sub_timers={self.sub_timers})"
+        return (
+            f"NamedTimer(name={self.name}, start_time={self.start_time}, "
+            f"end_time={self.end_time}, sub_timers={self.sub_timers})"
+        )
