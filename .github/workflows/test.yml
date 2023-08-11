@@ -36,7 +36,7 @@ jobs:
 
       - name: Install Foundry dependencies
         if: steps.foundry-cache.outputs.cache-hit != 'true'
-        run: forge install --shallow
+        run: forge install --root tests/ --shallow
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
