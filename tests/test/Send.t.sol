@@ -48,4 +48,6 @@ contract SendTest {
             assert(oldBalanceOthers == newBalanceOthers);
         }
     }
+
+    receive() external payable {}
 }
