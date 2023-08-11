@@ -22,7 +22,7 @@ from .utils import (
     hexify,
 )
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
-from .warnings import warn, UNSUPPORTED_OPCODE, LIBRARY_PLACEHOLDER
+from .warnings import warn, UNSUPPORTED_OPCODE, LIBRARY_PLACEHOLDER, MULTIPLE_POTENTIAL_CALL_TARGETS
 
 Word = Any  # z3 expression (including constants)
 Byte = Any  # z3 expression (including constants)
@@ -1350,7 +1350,7 @@ class SEVM:
             )
             ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), fund))
 
-        def call_known() -> None:
+        def call_known(to) -> None:
             calldata = [None] * arg_size
             wextend(ex.st.memory, arg_loc, arg_size)
             wstore_bytes(
@@ -1774,12 +1774,78 @@ class SEVM:
 
         # separately handle known / unknown external calls
 
-        # TODO: avoid relying directly on dict membership here
-        # it is based on hashing of the z3 expr objects rather than equivalence
-        if to in ex.code:
-            call_known()
-        else:
+        if (
+            # precompile
+            eq(to, con_addr(1))
+            # cheatcode calls
+            or eq(to, halmos_cheat_code.address)
+            or eq(to, hevm_cheat_code.address)
+            or eq(to, console.address)
+        ):
             call_unknown()
+            return
+
+        # structually equal
+        if to in ex.code:
+            call_known(to)
+            return
+
+        # single must target
+        must_targets = []
+        for addr in ex.code:
+            # must equal
+            if (
+                ex.check(to != addr) == unsat
+                or ex.check(to == addr) != unsat
+            ):
+                must_targets.append(addr)
+
+        if len(must_targets) > 1:
+            raise ValueError(f"Duplicate addresses: {hexify(must_targets)} for {hexify(to)}")
+
+        if len(must_targets) == 1:
+            if self.options.get("debug"):
+                print(f"[DEBUG] External call made to: {hexify(must_targets[0])} for {hexify(to)}; calldata = {hexify(wload(ex.st.memory, arg_loc, arg_size))}")
+            call_known(must_targets[0])
+            return
+
+#       # multiple potential targets
+#       may_targets = []
+#       for addr in ex.code:
+#           # may equal
+#           if ex.check(to == addr) != unsat:
+#               may_targets.append(addr)
+
+#       if len(may_targets) > 1:
+#           warn(
+#               MULTIPLE_POTENTIAL_CALL_TARGETS,
+#               f"Multiple potential call targets: {hexify(may_targets)} for {hexify(to)}; calldata = {hexify(wload(ex.st.memory, arg_loc, arg_size))}",
+#           )
+
+#       for addr in may_targets:
+#           if self.options.get("debug"):
+#               print(f"[DEBUG] External call made to: {hexify(addr)} for {hexify(to)}; calldata = {hexify(wload(ex.st.memory, arg_loc, arg_size))}")
+#           call_known(addr)
+
+#       if len(may_targets) == 0:
+
+        if len(must_targets) == 0:
+            if (
+            #   # static call
+            #   op == EVM.STATICCALL
+                # simple ether send
+                (arg_size == 0 and ret_size == 0)
+            #   # cheatcode calls
+            #   or eq(to, halmos_cheat_code.address)
+            #   or eq(to, hevm_cheat_code.address)
+            #   or eq(to, console.address)
+            #   # precompile
+            #   or eq(to, con_addr(1))
+            ):
+                call_unknown()
+            else:
+                ex.error = f"Unknown contract call: to = {hexify(to)}; calldata = {hexify(wload(ex.st.memory, arg_loc, arg_size))}; callvalue = {hexify(fund)}"
+                out.append(ex)
 
     def create(
         self,
