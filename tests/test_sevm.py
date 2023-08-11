@@ -79,17 +79,17 @@ def o(opcode):
 @pytest.mark.parametrize(
     "hexcode, stack, pc, opcode",
     [
-        (BitVecVal(int("600100", 16), 24), "[1]", 2, EVM.STOP),
+        (BitVecVal(0x600100, 24), "[1]", 2, EVM.STOP),
         # symbolic opcodes are not supported
         # (BitVec('x', 256), '[]', 0, 'Extract(255, 248, x)'),
         # (Concat(BitVecVal(int('6001', 16), 16), BitVec('x', 8), BitVecVal(0, 8)), '[1]', 2, 'x'),
         (
-            Concat(BitVecVal(int("6101", 16), 16), BitVec("x", 8), BitVecVal(0, 8)),
+            Concat(BitVecVal(0x6101, 16), BitVec("x", 8), BitVecVal(0, 8)),
             "[Concat(1, x)]",
             3,
             EVM.STOP,
         ),
-        (BitVecVal(int("58585B5860015800", 16), 64), "[6, 1, 3, 1, 0]", 7, EVM.STOP),
+        (BitVecVal(0x58585B5860015800, 64), "[0, 1, 3, 1, 6]", 7, EVM.STOP),
     ],
 )
 def test_run(hexcode, stack, pc, opcode: int, sevm, solver, storage):
@@ -281,11 +281,47 @@ def byte_of(i, x):
 )
 def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     ex = mk_ex(Concat(hexcode, o(EVM.STOP)), sevm, solver, storage, caller, this)
-    ex.st.stack.extend(params)
+
+    # reversed because in the tests the stack is written with the top on the left
+    # but in the internal state, the top of the stack is the last element of the list
+    ex.st.stack.extend(reversed(params))
     (exs, _, _) = sevm.run(ex)
     assert len(exs) == 1
     ex = exs[0]
-    assert ex.st.stack[0] == simplify(output)
+    assert ex.st.stack.pop() == simplify(output)
+
+
+@pytest.mark.parametrize(
+    "hexcode, stack_in, stack_out",
+    [
+        (o(EVM.SWAP1), [x, y, z], [y, x, z]),
+        (o(EVM.SWAP2), [x, y, z], [z, y, x]),
+        (o(EVM.SWAP3), [x, 1, 2, y, 3], [y, 1, 2, x, 3]),
+        (o(EVM.SWAP4), [x, 1, 2, 3, y, 4], [y, 1, 2, 3, x, 4]),
+        (o(EVM.SWAP5), [x, 1, 2, 3, 4, y, 5], [y, 1, 2, 3, 4, x, 5]),
+        (o(EVM.SWAP6), [x, 1, 2, 3, 4, 5, y, 6], [y, 1, 2, 3, 4, 5, x, 6]),
+        (o(EVM.SWAP7), [x, 1, 2, 3, 4, 5, 6, y, 7], [y, 1, 2, 3, 4, 5, 6, x, 7]),
+        (o(EVM.SWAP8), [x, 1, 2, 3, 4, 5, 6, 7, y, 8], [y, 1, 2, 3, 4, 5, 6, 7, x, 8]),
+        (o(EVM.SWAP9), [x] + [0] * 8 + [y, 9], [y] + [0] * 8 + [x, 9]),
+        (o(EVM.SWAP10), [x] + [0] * 9 + [y, 10], [y] + [0] * 9 + [x, 10]),
+        (o(EVM.SWAP11), [x] + [0] * 10 + [y, 11], [y] + [0] * 10 + [x, 11]),
+        (o(EVM.SWAP12), [x] + [0] * 11 + [y, 12], [y] + [0] * 11 + [x, 12]),
+        (o(EVM.SWAP13), [x] + [0] * 12 + [y, 13], [y] + [0] * 12 + [x, 13]),
+        (o(EVM.SWAP14), [x] + [0] * 13 + [y, 14], [y] + [0] * 13 + [x, 14]),
+        (o(EVM.SWAP15), [x] + [0] * 14 + [y, 15], [y] + [0] * 14 + [x, 15]),
+        (o(EVM.SWAP16), [x] + [0] * 15 + [y, 16], [y] + [0] * 15 + [x, 16]),
+    ],
+)
+def test_opcode_stack(hexcode, stack_in, stack_out, sevm: SEVM, solver, storage):
+    ex = mk_ex(Concat(hexcode, o(EVM.STOP)), sevm, solver, storage, caller, this)
+
+    # reversed because in the tests the stack is written with the top on the left
+    # but in the internal state, the top of the stack is the last element of the list
+    ex.st.stack.extend(reversed(stack_in))
+    (exs, _, _) = sevm.run(ex)
+    assert len(exs) == 1
+    ex = exs[0]
+    assert ex.st.stack == list(reversed(stack_out))
 
 
 def test_stack_underflow_pop(sevm: SEVM, solver, storage):

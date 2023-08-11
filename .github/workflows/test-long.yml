@@ -11,6 +11,7 @@ jobs:
     runs-on: macos-latest
 
     strategy:
+      fail-fast: false
       matrix:
         include:
         - testname: "examples/tokens/ERC20"

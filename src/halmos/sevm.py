@@ -31,43 +31,82 @@ Address = BitVecRef  # 160-bitvector
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
+
+# dynamic BitVecSort sizes
+class BitVecSortCache:
+    def __init__(self):
+        self.cache = {}
+        for size in (
+            1,
+            8,
+            16,
+            32,
+            64,
+            128,
+            160,
+            256,
+            264,
+            288,
+            512,
+            544,
+            800,
+            1024,
+            1056,
+        ):
+            self.cache[size] = BitVecSort(size)
+
+    def __getitem__(self, size: int) -> BitVecSort:
+        hit = self.cache.get(size)
+        return hit if hit is not None else BitVecSort(size)
+
+
+BitVecSorts = BitVecSortCache()
+
+# known, fixed BitVecSort sizes
+BitVecSort1 = BitVecSorts[1]
+BitVecSort8 = BitVecSorts[8]
+BitVecSort160 = BitVecSorts[160]
+BitVecSort256 = BitVecSorts[256]
+BitVecSort264 = BitVecSorts[264]
+BitVecSort512 = BitVecSorts[512]
+
 # symbolic states
 # calldataload(index)
-f_calldataload = Function("calldataload", BitVecSort(256), BitVecSort(256))
+f_calldataload = Function("calldataload", BitVecSort256, BitVecSort256)
 # calldatasize()
-f_calldatasize = Function("calldatasize", BitVecSort(256))
+f_calldatasize = Function("calldatasize", BitVecSort256)
 # extcodesize(target address)
-f_extcodesize = Function("extcodesize", BitVecSort(160), BitVecSort(256))
+f_extcodesize = Function("extcodesize", BitVecSort160, BitVecSort256)
 # extcodehash(target address)
-f_extcodehash = Function("extcodehash", BitVecSort(160), BitVecSort(256))
+f_extcodehash = Function("extcodehash", BitVecSort160, BitVecSort256)
 # blockhash(block number)
-f_blockhash = Function("blockhash", BitVecSort(256), BitVecSort(256))
+f_blockhash = Function("blockhash", BitVecSort256, BitVecSort256)
 # gas(cnt)
-f_gas = Function("gas", BitVecSort(256), BitVecSort(256))
+f_gas = Function("gas", BitVecSort256, BitVecSort256)
 # gasprice()
-f_gasprice = Function("gasprice", BitVecSort(256))
+f_gasprice = Function("gasprice", BitVecSort256)
 # origin()
-f_origin = Function("origin", BitVecSort(160))
+f_origin = Function("origin", BitVecSort160)
 
 # uninterpreted arithmetic
 f_add = {
-    256: Function("evm_bvadd", BitVecSort(256), BitVecSort(256), BitVecSort(256)),
-    264: Function("evm_bvadd_264", BitVecSort(264), BitVecSort(264), BitVecSort(264)),
+    256: Function("evm_bvadd", BitVecSort256, BitVecSort256, BitVecSort256),
+    264: Function("evm_bvadd_264", BitVecSort264, BitVecSort264, BitVecSort264),
 }
-f_sub = Function("evm_bvsub", BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_sub = Function("evm_bvsub", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mul = {
-    256: Function("evm_bvmul", BitVecSort(256), BitVecSort(256), BitVecSort(256)),
-    512: Function("evm_bvmul_512", BitVecSort(512), BitVecSort(512), BitVecSort(512)),
+    256: Function("evm_bvmul", BitVecSort256, BitVecSort256, BitVecSort256),
+    512: Function("evm_bvmul_512", BitVecSort512, BitVecSort512, BitVecSort512),
 }
-f_div = Function("evm_bvudiv", BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
-    256: Function("evm_bvurem", BitVecSort(256), BitVecSort(256), BitVecSort(256)),
-    264: Function("evm_bvurem_264", BitVecSort(264), BitVecSort(264), BitVecSort(264)),
-    512: Function("evm_bvurem_512", BitVecSort(512), BitVecSort(512), BitVecSort(512)),
+    256: Function("evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
+    264: Function("evm_bvurem_264", BitVecSort264, BitVecSort264, BitVecSort264),
+    512: Function("evm_bvurem_512", BitVecSort512, BitVecSort512, BitVecSort512),
 }
-f_sdiv = Function("evm_bvsdiv", BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_smod = Function("evm_bvsrem", BitVecSort(256), BitVecSort(256), BitVecSort(256))
-f_exp = Function("evm_exp", BitVecSort(256), BitVecSort(256), BitVecSort(256))
+f_sdiv = Function("evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
+f_smod = Function("evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
+f_exp = Function("evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
 
 magic_address: int = 0xAAAA0000
 
@@ -100,9 +139,7 @@ class Instruction:
         if self.operand is not None:
             operand = self.operand
             if isinstance(operand, bytes):
-                operand = BitVecVal(
-                    int.from_bytes(self.operand, "big"), len(self.operand) * 8
-                )
+                operand = con(int.from_bytes(self.operand, "big"), len(operand) * 8)
 
             expected_operand_length = instruction_length(self.opcode) - 1
             actual_operand_length = operand.size() // 8
@@ -212,7 +249,7 @@ def uint160(x: BitVecRef) -> BitVecRef:
 
 
 def con(n: int, size_bits=256) -> Word:
-    return BitVecVal(n, size_bits)
+    return BitVecVal(n, BitVecSorts[size_bits])
 
 
 def byte_length(x: Any) -> int:
@@ -265,16 +302,16 @@ def wload(
     # wrap concrete bytes in BitVecs
     # this would truncate the upper bits if the value didn't fit in 8 bits
     # therefore we rely on the value range check above to raise an error
-    wrapped = [BitVecVal(i, 8) if not is_bv(i) else i for i in memslice]
+    wrapped = [BitVecVal(i, BitVecSort8) if not is_bv(i) else i for i in memslice]
 
-    # BitVecSort(size * 8)
+    # BitVecSorts[size * 8]
     return simplify(concat(wrapped))
 
 
 def wstore(
     mem: List[UnionType[int, BitVecRef]], loc: int, size: int, val: Bytes
 ) -> None:
-    if not eq(val.sort(), BitVecSort(size * 8)):
+    if not eq(val.sort(), BitVecSorts[size * 8]):
         raise ValueError(val)
     wextend(mem, loc, size)
     for i in range(size):
@@ -316,7 +353,7 @@ def wstore_bytes(
         raise ValueError(size, arr)
     wextend(mem, loc, size)
     for i in range(size):
-        if not eq(arr[i].sort(), BitVecSort(8)):
+        if not eq(arr[i].sort(), BitVecSort8):
             raise ValueError(arr)
         mem[loc + i] = arr[i]
 
@@ -402,22 +439,18 @@ class State:
         return ret + "\n"
 
     def push(self, v: Word) -> None:
-        if not (eq(v.sort(), BitVecSort(256)) or is_bool(v)):
+        if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
             raise ValueError(v)
-        self.stack.insert(0, simplify(v))
+        self.stack.append(simplify(v))
 
     def pop(self) -> Word:
-        v = self.stack[0]
-        del self.stack[0]
-        return v
+        return self.stack.pop()
 
     def dup(self, n: int) -> None:
-        self.push(self.stack[n - 1])
+        self.push(self.stack[-n])
 
     def swap(self, n: int) -> None:
-        tmp = self.stack[0]
-        self.stack[0] = self.stack[n]
-        self.stack[n] = tmp
+        self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
     def mloc(self) -> int:
         loc: int = int_of(self.pop(), "symbolic memory offset")
@@ -778,7 +811,7 @@ class Exec:  # an execution path
         assert_address(addr)
         assert_uint256(value)
         new_balance_var = Array(
-            f"balance_{1+len(self.balances):>02}", BitVecSort(160), BitVecSort(256)
+            f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
         self.solver.add(new_balance_var == new_balance)
@@ -788,8 +821,8 @@ class Exec:  # an execution path
     def empty_storage_of(self, addr: BitVecRef, slot: int, len_keys: int) -> ArrayRef:
         return Array(
             f"storage_{id_str(addr)}_{slot}_{len_keys}_00",
-            BitVecSort(len_keys * 256),
-            BitVecSort(256),
+            BitVecSorts[len_keys * 256],
+            BitVecSort256,
         )
 
     def sinit(self, addr: Any, slot: int, keys) -> None:
@@ -799,9 +832,8 @@ class Exec:  # an execution path
         if len(keys) not in self.storage[addr][slot]:
             if len(keys) == 0:
                 if self.symbolic:
-                    self.storage[addr][slot][len(keys)] = BitVec(
-                        f"storage_{id_str(addr)}_{slot}_{len(keys)}_00", 256
-                    )
+                    label = f"storage_{id_str(addr)}_{slot}_{len(keys)}_00"
+                    self.storage[addr][slot][len(keys)] = BitVec(label, BitVecSort256)
                 else:
                     self.storage[addr][slot][len(keys)] = con(0)
             else:
@@ -841,8 +873,8 @@ class Exec:  # an execution path
         else:
             new_storage_var = Array(
                 f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages):>02}",
-                BitVecSort(len(keys) * 256),
-                BitVecSort(256),
+                BitVecSorts[len(keys) * 256],
+                BitVecSort256,
             )
             new_storage = Store(self.storage[addr][slot][len(keys)], concat(keys), val)
             self.solver.add(new_storage_var == new_storage)
@@ -924,9 +956,7 @@ class Exec:  # an execution path
         self.st.push(self.sha3_data(wload(self.st.memory, loc, size), size))
 
     def sha3_data(self, data: Bytes, size: int) -> Word:
-        f_sha3 = Function(
-            "sha3_" + str(size * 8), BitVecSort(size * 8), BitVecSort(256)
-        )
+        f_sha3 = Function("sha3_" + str(size * 8), BitVecSorts[size * 8], BitVecSort256)
         sha3_expr = f_sha3(data)
 
         # assume hash values are sufficiently smaller than the uint max
@@ -1424,25 +1454,25 @@ class SEVM:
                 arg = wload(ex.st.memory, arg_loc, arg_size)
                 f_call = Function(
                     "call_" + str(arg_size * 8),
-                    BitVecSort(256),  # cnt
-                    BitVecSort(256),  # gas
-                    BitVecSort(160),  # to
-                    BitVecSort(256),  # value
-                    BitVecSort(arg_size * 8),  # args
-                    BitVecSort(256),
+                    BitVecSort256,  # cnt
+                    BitVecSort256,  # gas
+                    BitVecSort160,  # to
+                    BitVecSort256,  # value
+                    BitVecSorts[arg_size * 8],  # args
+                    BitVecSort256,
                 )
                 exit_code = f_call(con(call_id), gas, to, fund, arg)
             else:
                 f_call = Function(
                     "call_" + str(arg_size * 8),
-                    BitVecSort(256),  # cnt
-                    BitVecSort(256),  # gas
-                    BitVecSort(160),  # to
-                    BitVecSort(256),  # value
-                    BitVecSort(256),
+                    BitVecSort256,  # cnt
+                    BitVecSort256,  # gas
+                    BitVecSort160,  # to
+                    BitVecSort256,  # value
+                    BitVecSort256,
                 )
                 exit_code = f_call(con(call_id), gas, to, fund)
-            exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", 256)
+            exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
             ex.solver.add(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
@@ -1451,8 +1481,8 @@ class SEVM:
             if ret_size > 0:
                 f_ret = Function(
                     "ret_" + str(ret_size * 8),
-                    BitVecSort(256),
-                    BitVecSort(ret_size * 8),
+                    BitVecSort256,
+                    BitVecSorts[ret_size * 8],
                 )
                 ret = f_ret(exit_code_var)
 
@@ -1474,14 +1504,10 @@ class SEVM:
                         extract_bytes(arg, 4, 32),
                         "symbolic bit size for halmos.createUint()",
                     )
-                    label = name_of(extract_string_argument(arg, 1))
+                    name = name_of(extract_string_argument(arg, 1))
                     if bit_size <= 256:
-                        ret = uint256(
-                            BitVec(
-                                f"halmos_{label}_uint{bit_size}_{ex.new_symbol_id():>02}",
-                                bit_size,
-                            )
-                        )
+                        label = f"halmos_{name}_uint{bit_size}_{ex.new_symbol_id():>02}"
+                        ret = uint256(BitVec(label, BitVecSorts[bit_size]))
                     else:
                         ex.error = f"bitsize larger than 256: {bit_size}"
                         out.append(ex)
@@ -1493,41 +1519,34 @@ class SEVM:
                         extract_bytes(arg, 4, 32),
                         "symbolic byte size for halmos.createBytes()",
                     )
-                    label = name_of(extract_string_argument(arg, 1))
-                    symbolic_bytes = BitVec(
-                        f"halmos_{label}_bytes_{ex.new_symbol_id():>02}", byte_size * 8
-                    )
-                    ret = Concat(
-                        BitVecVal(32, 256), BitVecVal(byte_size, 256), symbolic_bytes
-                    )
+                    name = name_of(extract_string_argument(arg, 1))
+                    label = f"halmos_{name}_bytes_{ex.new_symbol_id():>02}"
+                    symbolic_bytes = BitVec(label, BitVecSorts[byte_size * 8])
+                    ret = Concat(con(32), con(byte_size), symbolic_bytes)
 
                 # createUint256(string) returns (uint256)
                 elif funsig == halmos_cheat_code.create_uint256:
-                    label = name_of(extract_string_argument(arg, 0))
-                    ret = BitVec(
-                        f"halmos_{label}_uint256_{ex.new_symbol_id():>02}", 256
-                    )
+                    name = name_of(extract_string_argument(arg, 0))
+                    label = f"halmos_{name}_uint256_{ex.new_symbol_id():>02}"
+                    ret = BitVec(label, BitVecSort256)
 
                 # createBytes32(string) returns (bytes32)
                 elif funsig == halmos_cheat_code.create_bytes32:
-                    label = name_of(extract_string_argument(arg, 0))
-                    ret = BitVec(
-                        f"halmos_{label}_bytes32_{ex.new_symbol_id():>02}", 256
-                    )
+                    name = name_of(extract_string_argument(arg, 0))
+                    label = f"halmos_{name}_bytes32_{ex.new_symbol_id():>02}"
+                    ret = BitVec(label, BitVecSort256)
 
                 # createAddress(string) returns (address)
                 elif funsig == halmos_cheat_code.create_address:
-                    label = name_of(extract_string_argument(arg, 0))
-                    ret = uint256(
-                        BitVec(f"halmos_{label}_address_{ex.new_symbol_id():>02}", 160)
-                    )
+                    name = name_of(extract_string_argument(arg, 0))
+                    label = f"halmos_{name}_address_{ex.new_symbol_id():>02}"
+                    ret = uint256(BitVec(label, BitVecSort160))
 
                 # createBool(string) returns (bool)
                 elif funsig == halmos_cheat_code.create_bool:
-                    label = name_of(extract_string_argument(arg, 0))
-                    ret = uint256(
-                        BitVec(f"halmos_{label}_bool_{ex.new_symbol_id():>02}", 1)
-                    )
+                    name = name_of(extract_string_argument(arg, 0))
+                    label = f"halmos_{name}_bool_{ex.new_symbol_id():>02}"
+                    ret = uint256(BitVec(label, BitVecSort1))
 
                 else:
                     ex.error = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
@@ -1545,7 +1564,7 @@ class SEVM:
                     return
                 # vm.assume(bool)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg)) == hevm_cheat_code.assume_sig
                 ):
                     assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
@@ -1591,10 +1610,10 @@ class SEVM:
                     ret_len = len(ret_bytes) // 2
                     ret_bytes = bytes.fromhex(ret_bytes)
 
-                    ret = BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
+                    ret = con(int.from_bytes(ret_bytes, "big"), ret_len * 8)
                 # vm.prank(address)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg)) == hevm_cheat_code.prank_sig
                 ):
                     result = ex.prank.prank(uint160(Extract(255, 0, arg)))
@@ -1604,7 +1623,7 @@ class SEVM:
                         return
                 # vm.startPrank(address)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg))
                     == hevm_cheat_code.start_prank_sig
                 ):
@@ -1615,13 +1634,13 @@ class SEVM:
                         return
                 # vm.stopPrank()
                 elif (
-                    eq(arg.sort(), BitVecSort((4) * 8))
+                    eq(arg.sort(), BitVecSorts[4 * 8])
                     and simplify(Extract(31, 0, arg)) == hevm_cheat_code.stop_prank_sig
                 ):
                     ex.prank.stopPrank()
                 # vm.deal(address,uint256)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32 * 2) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32 * 2) * 8])
                     and simplify(Extract(543, 512, arg)) == hevm_cheat_code.deal_sig
                 ):
                     who = uint160(Extract(511, 256, arg))
@@ -1629,7 +1648,7 @@ class SEVM:
                     ex.balance_update(who, amount)
                 # vm.store(address,bytes32,bytes32)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32 * 3) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32 * 3) * 8])
                     and simplify(Extract(799, 768, arg)) == hevm_cheat_code.store_sig
                 ):
                     store_account = uint160(Extract(767, 512, arg))
@@ -1643,7 +1662,7 @@ class SEVM:
                         return
                 # vm.load(address,bytes32)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32 * 2) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32 * 2) * 8])
                     and simplify(Extract(543, 512, arg)) == hevm_cheat_code.load_sig
                 ):
                     load_account = uint160(Extract(511, 256, arg))
@@ -1656,38 +1675,38 @@ class SEVM:
                         return
                 # vm.fee(uint256)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg)) == hevm_cheat_code.fee_sig
                 ):
                     ex.block.basefee = simplify(Extract(255, 0, arg))
                 # vm.chainId(uint256)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg)) == hevm_cheat_code.chainid_sig
                 ):
                     ex.block.chainid = simplify(Extract(255, 0, arg))
                 # vm.coinbase(address)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg)) == hevm_cheat_code.coinbase_sig
                 ):
                     ex.block.coinbase = uint160(Extract(255, 0, arg))
                 # vm.difficulty(uint256)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg))
                     == hevm_cheat_code.difficulty_sig
                 ):
                     ex.block.difficulty = simplify(Extract(255, 0, arg))
                 # vm.roll(uint256)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg)) == hevm_cheat_code.roll_sig
                 ):
                     ex.block.number = simplify(Extract(255, 0, arg))
                 # vm.warp(uint256)
                 elif (
-                    eq(arg.sort(), BitVecSort((4 + 32) * 8))
+                    eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
                     and simplify(Extract(287, 256, arg)) == hevm_cheat_code.warp_sig
                 ):
                     ex.block.timestamp = simplify(Extract(255, 0, arg))
@@ -2315,8 +2334,8 @@ class SEVM:
                         if ex.calldata is None:
                             f_calldatacopy = Function(
                                 "calldatacopy_" + str(size * 8),
-                                BitVecSort(256),
-                                BitVecSort(size * 8),
+                                BitVecSort256,
+                                BitVecSorts[size * 8],
                             )
                             data = f_calldatacopy(offset)
                             wstore(ex.st.memory, loc, size, data)
@@ -2334,7 +2353,7 @@ class SEVM:
                                     ex.st.memory,
                                     loc,
                                     size,
-                                    [BitVecVal(0, 8) for _ in range(size)],
+                                    [con(0, 8) for _ in range(size)],
                                 )
                             else:
                                 raise ValueError(offset, size, len(ex.calldata))
