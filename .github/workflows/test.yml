@@ -23,10 +23,20 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          submodules: recursive
+          submodules: false
+
+      - uses: actions/cache
+        id: foundry-cache
+        with:
+          path: tests/lib
+          key: cache-foundry-${{ hashFiles('.gitmodules') }}
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install Foundry dependencies
+        if: steps.foundry-cache.outputs.cache-hit != 'true'
+        run: forge install --shallow
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
