@@ -25,7 +25,7 @@ jobs:
         with:
           submodules: false
 
-      - uses: actions/cache
+      - uses: actions/cache@v3
         id: foundry-cache
         with:
           path: tests/lib
