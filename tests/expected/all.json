@@ -1012,6 +1012,40 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Signature.t.sol:SignatureTest": [
+            {
+                "name": "check_ecrecover(bytes32,uint8,bytes32,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_isValidERC1271SignatureNow(bytes32,bytes)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_isValidSignatureNow(bytes32,bytes)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_tryRecover(address,bytes32,bytes)",
+                "exitcode": 0,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Solver.t.sol:SolverTest": [
             {
                 "name": "check_foo(uint256,uint256)",
