@@ -424,7 +424,7 @@ class State:
     def __str__(self) -> str:
         return "".join(
             [
-                f"Stack: {str(self.stack)}\n",
+                f"Stack: {str(list(reversed(self.stack)))}\n",
                 # self.str_memory(),
             ]
         )
