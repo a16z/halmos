@@ -10,12 +10,11 @@ import traceback
 
 from argparse import Namespace
 from dataclasses import dataclass, asdict
-from timeit import default_timer as timer
 from importlib import metadata
 
 from .pools import thread_pool, process_pool
 from .sevm import *
-from .utils import color_good, color_warn, hexify
+from .utils import color_good, color_warn, hexify, NamedTimer
 from .warnings import *
 from .parser import mk_arg_parser
 from .calldata import Calldata
@@ -253,13 +252,14 @@ def setup(
     args: Namespace,
     libs: Dict,
 ) -> Exec:
-    setup_start = timer()
+    setup_timer = NamedTimer("setup")
+    setup_timer.create_subtimer("decode")
 
     sevm = SEVM(mk_options(args))
 
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
-    setup_mid = timer()
+    setup_timer.create_subtimer("run")
 
     setup_sig, setup_name, setup_selector = (
         setup_info.sig,
@@ -322,12 +322,8 @@ def setup(
             new_hexcode = assign[1].strip()
             setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
 
-    setup_end = timer()
-
     if args.statistics:
-        print(
-            f"[time] setup: {setup_end - setup_start:0.2f}s (decode: {setup_mid - setup_start:0.2f}s, run: {setup_end - setup_mid:0.2f}s)"
-        )
+        print(setup_timer.report())
 
     return setup_ex
 
@@ -381,7 +377,8 @@ def run(
     # run
     #
 
-    start = timer()
+    timer = NamedTimer("time")
+    timer.create_subtimer("paths")
 
     options = mk_options(args)
     sevm = SEVM(options)
@@ -425,7 +422,7 @@ def run(
         )
     )
 
-    mid = timer()
+    timer.create_subtimer("models")
 
     # check assertion violations
     normal = 0
@@ -467,7 +464,7 @@ def run(
     else:
         models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
 
-    end = timer()
+    timer.stop()
 
     no_counterexample = all(m.model is None for m in models)
     passed = no_counterexample and normal > 0 and len(stuck) == 0
@@ -475,14 +472,12 @@ def run(
         passed = passed and all(m.result == unsat for m in models)
     passfail = color_good("[PASS]") if passed else color_warn("[FAIL]")
 
-    time_total, time_paths, time_models = end - start, mid - start, end - mid
-    time_info = f"{time_total:0.2f}s"
-    if args.statistics:
-        time_info += f" (paths: {time_paths:0.2f}s, models: {time_models:0.2f}s)"
+    timer.stop()
+    time_info = timer.report(include_subtimers=args.statistics)
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+        f"{passfail} {funsig} (paths: {normal}/{len(exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
     )
     for m in models:
         model, validity, idx, result = m.model, m.validity, m.index, m.result
@@ -544,7 +539,7 @@ def run(
             exitcode,
             num_counterexamples,
             (len(exs), normal, len(stuck)),
-            (time_total, time_paths, time_models),
+            (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(bounded_loops),
         )
     else:
@@ -1033,7 +1028,8 @@ class MainResult:
 
 
 def _main(_args=None) -> MainResult:
-    main_start = timer()
+    timer = NamedTimer("total")
+    timer.create_subtimer("build")
 
     #
     # z3 global options
@@ -1087,7 +1083,7 @@ def _main(_args=None) -> MainResult:
             traceback.print_exc()
         return MainResult(1)
 
-    main_mid = timer()
+    timer.create_subtimer("tests")
 
     #
     # run
@@ -1137,7 +1133,7 @@ def _main(_args=None) -> MainResult:
                         f"{contract_json['ast']['absolutePath']}:{contract_name}"
                     )
                     print(f"\nRunning {len(funsigs)} tests for {contract_path}")
-                    contract_start = timer()
+                    contract_timer = NamedTimer("time")
 
                     contract_args = (
                         extend_args(args, parse_natspec(natspec)) if natspec else args
@@ -1165,7 +1161,7 @@ def _main(_args=None) -> MainResult:
                     num_failed = len(funsigs) - num_passed
 
                     print(
-                        f"Symbolic test result: {num_passed} passed; {num_failed} failed; time: {timer() - contract_start:0.2f}s"
+                        f"Symbolic test result: {num_passed} passed; {num_failed} failed; {contract_timer.report()}"
                     )
                     total_passed += num_passed
                     total_failed += num_failed
@@ -1174,12 +1170,8 @@ def _main(_args=None) -> MainResult:
                         raise ValueError("already exists", contract_path)
                     test_results_map[contract_path] = test_results
 
-    main_end = timer()
-
     if args.statistics:
-        print(
-            f"\n[time] total: {main_end - main_start:0.2f}s (build: {main_mid - main_start:0.2f}s, tests: {main_end - main_mid:0.2f}s)"
-        )
+        print(f"\n[time] {timer.report()}")
 
     if total_found == 0:
         error_msg = f"Error: No tests with the prefix `{args.function}`"
