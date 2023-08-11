@@ -464,8 +464,6 @@ def run(
     else:
         models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
 
-    timer.stop()
-
     no_counterexample = all(m.model is None for m in models)
     passed = no_counterexample and normal > 0 and len(stuck) == 0
     if args.error_unknown:
