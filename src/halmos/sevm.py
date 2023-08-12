@@ -1795,8 +1795,8 @@ class SEVM:
         for addr in ex.code:
             # must equal
             if (
-                ex.check(to != addr) == unsat
-                or ex.check(to == addr) != unsat
+                ex.check(simplify(to != addr)) == unsat
+                and ex.check(simplify(to == addr)) != unsat
             ):
                 must_targets.append(addr)
 
