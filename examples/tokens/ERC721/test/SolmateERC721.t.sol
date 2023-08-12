@@ -6,6 +6,8 @@ import {ERC721Test} from "./ERC721Test.sol";
 import {SolmateERC721} from "../src/SolmateERC721.sol";
 
 /// @custom:halmos --solver-timeout-assertion 0
+/// @custom:halmos --ignore-unknown-calls 0x150b7a02
+// ignore onERC721Received(address,address,uint256,bytes)
 contract SolmateERC721Test is ERC721Test {
     function setUp() public override {
         deployer = address(0x1000);

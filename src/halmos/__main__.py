@@ -882,6 +882,11 @@ def mk_options(args: Namespace) -> Dict:
     if args.loop is not None:
         options["max_loop"] = args.loop
 
+    options["unknown_calls"] = []
+    if args.ignore_unknown_calls:
+        for x in args.ignore_unknown_calls.split(","):
+            options["unknown_calls"].append(int(x, 0))
+
     return options
 
 

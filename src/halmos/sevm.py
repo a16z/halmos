@@ -1843,6 +1843,8 @@ class SEVM:
             #   or eq(to, con_addr(1))
             ):
                 call_unknown()
+            elif extract_funsig(wload(ex.st.memory, arg_loc, arg_size)) in self.options["unknown_calls"]:
+                call_unknown()
             else:
                 ex.error = f"Unknown contract call: to = {hexify(to)}; calldata = {hexify(wload(ex.st.memory, arg_loc, arg_size))}; callvalue = {hexify(fund)}"
                 out.append(ex)

@@ -28,7 +28,7 @@ jobs:
             branch: ""
           - repo: "farcasterxyz/contracts"
             dir: "farcaster-contracts"
-            cmd: "halmos --function check"
+            cmd: "halmos --function check --ignore-unknown-calls 0x1626ba7e" # isValidSignature(bytes32,bytes)
             branch: "test/halmos"
           - repo: "zobront/halmos-solady"
             dir: "halmos-solady"

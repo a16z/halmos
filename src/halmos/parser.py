@@ -47,6 +47,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--ignore-unknown-calls",
+        metavar="SELECTOR1,SELECTOR2,...",
+        help="ignore unknown external calls for the given 4-byte function signatures",
+    )
+
+    parser.add_argument(
         "--symbolic-storage",
         action="store_true",
         help="set default storage values to symbolic",
