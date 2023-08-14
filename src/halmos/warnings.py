@@ -25,7 +25,7 @@ UNSUPPORTED_OPCODE = ErrorCode("unsupported-opcode")
 LIBRARY_PLACEHOLDER = ErrorCode("library-placeholder")
 
 LOOP_BOUND = ErrorCode("loop-bound")
-MULTIPLE_POTENTIAL_CALL_TARGETS = ErrorCode("multiple-potential-call-targets")
+UNINTERPRETED_UNKNOWN_CALLS = ErrorCode("uninterpreted-unknown-calls")
 
 
 def warn(error_code: ErrorCode, msg: str):

@@ -413,6 +413,7 @@ def run(
             #
             solver=solver,
             path=setup_ex.path.copy(),
+            alias=setup_ex.alias.copy(),
             #
             log=setup_ex.log.copy(),
             cnts=deepcopy(setup_ex.cnts),
@@ -871,6 +872,7 @@ def mk_options(args: Namespace) -> Dict:
         "timeout": args.solver_timeout_branching,
         "sym_jump": args.symbolic_jump,
         "print_steps": args.print_steps,
+        "unknown_calls_return_size": args.return_size_of_unknown_calls,
     }
 
     if args.width is not None:
@@ -883,8 +885,8 @@ def mk_options(args: Namespace) -> Dict:
         options["max_loop"] = args.loop
 
     options["unknown_calls"] = []
-    if args.ignore_unknown_calls:
-        for x in args.ignore_unknown_calls.split(","):
+    if args.uninterpreted_unknown_calls:
+        for x in args.uninterpreted_unknown_calls.split(","):
             options["unknown_calls"].append(int(x, 0))
 
     return options
