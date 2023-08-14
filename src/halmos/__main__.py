@@ -489,6 +489,7 @@ def run(
     print(
         f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])"
     )
+    counterexamples = []
     for m in models:
         model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
         if result == unsat:
@@ -499,11 +500,13 @@ def run(
         if model is not None:
             if is_valid:
                 print(color_warn(f"Counterexample: {render_model(model)}"))
+                counterexamples.append(model)
             elif args.print_potential_counterexample:
                 warn(
                     COUNTEREXAMPLE_INVALID,
                     f"Counterexample (potentially invalid): {render_model(model)}",
                 )
+                counterexamples.append(model)
             else:
                 warn(
                     COUNTEREXAMPLE_INVALID,
@@ -543,21 +546,18 @@ def run(
 
     # return test result
     exitcode = 0 if passed else 1
-    sat_models = [m.model for m in models if m.result == sat]
-
-    num_counterexamples = len(sat_models)
     if args.extended_json_output:
         return TestResult(
             funsig,
             exitcode,
-            num_counterexamples,
-            sat_models,
+            len(counterexamples),
+            counterexamples,
             (len(exs), normal, len(stuck)),
             (time_total, time_paths, time_models),
             len(bounded_loops),
         )
     else:
-        return TestResult(funsig, exitcode, num_counterexamples, sat_models)
+        return TestResult(funsig, exitcode, len(counterexamples), counterexamples)
 
 
 @dataclass(frozen=True)
