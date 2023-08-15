@@ -1364,21 +1364,37 @@ class SEVM:
 
         caller = ex.prank.lookup(ex.this, to)
 
-        orig_code = ex.code.copy()
-        orig_storage = deepcopy(ex.storage)
-        orig_balance = ex.balance
-        orig_log = ex.log.copy()
+        def send_callvalue(condition=None) -> None:
+            if (
+                # no balance update for CALLCODE which transfers to itself
+                op == EVM.CALL
+                and not (is_bv_value(fund) and fund.as_long() == 0)
+            ):
+                # assume balance is enough; otherwise ignore this path
+                ex.solver.add(UGE(ex.balance_of(caller), fund))
 
-        # assume balance is enough; otherwise ignore this path
-        ex.solver.add(UGE(ex.balance_of(caller), fund))
-        if op == EVM.CALL and not (is_bv_value(fund) and fund.as_long() == 0):
-            # no balance update for CALLCODE which transfers to itself
-            ex.balance_update(
-                caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), fund)
-            )
-            ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), fund))
+                # conditional send
+                if condition is not None:
+                    value = If(condition, fund, con(0))
+                else:
+                    value = fund
+
+                ex.balance_update(
+                    caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value)
+                )
+                ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
 
         def call_known(to: Address) -> None:
+            # backup current state
+            orig_code = ex.code.copy()
+            orig_storage = deepcopy(ex.storage)
+            orig_balance = ex.balance
+            orig_log = ex.log.copy()
+
+            # transfer msg.value
+            send_callvalue()
+
+            # prepare calldata
             calldata = [None] * arg_size
             wextend(ex.st.memory, arg_loc, arg_size)
             wstore_bytes(
@@ -1504,8 +1520,12 @@ class SEVM:
             ex.solver.add(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
+            # transfer msg.value
+            send_callvalue(exit_code_var != con(0))
+
             if ret_size > 0:
                 # actual return data will be capped or zero-padded by ret_size
+                # FIX: this doesn't capture the case of returndatasize != ret_size
                 actual_ret_size = ret_size
             else:
                 actual_ret_size = self.options["unknown_calls_return_size"]
@@ -1836,9 +1856,8 @@ class SEVM:
         if extract_funsig(arg) in self.options["unknown_calls"]:
             warn(
                 UNINTERPRETED_UNKNOWN_CALLS,
-                f"The unknown call to {hexify(to)} for {hexify(arg)} is assumed to be arbitrarily static (read-only).",
+                f"Assumed static unknown call to {hexify(to)} for {hexify(arg)}.",
             )
-            # FIX: revert when return is false
             call_unknown()
             return
 
@@ -1893,9 +1912,10 @@ class SEVM:
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # transfer value
-        # assume balance is enough; otherwise ignore this path
-        ex.solver.add(UGE(ex.balance_of(caller), value))
         if not (is_bv_value(value) and value.as_long() == 0):
+            # assume balance is enough; otherwise ignore this path
+            ex.solver.add(UGE(ex.balance_of(caller), value))
+
             ex.balance_update(
                 caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value)
             )
