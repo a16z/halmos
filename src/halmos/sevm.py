@@ -1214,7 +1214,8 @@ class SEVM:
             if is_bv_value(w1) and is_bv_value(w2):
                 return UDiv(w1, w2)
             elif is_bv_value(w2):
-                i2: int = int(str(w2))  # must be concrete
+                # concrete denominator case
+                i2: int = w2.as_long()
                 if i2 == 0:
                     return w2
                 elif i2 == 1:
@@ -1246,10 +1247,25 @@ class SEVM:
             else:
                 return self.mk_mod(ex, w1, w2)
         elif op == EVM.SDIV:
-            if is_bv_value(w1) and is_bv_value(w2):
+            if self.options.get("div") or (is_bv_value(w1) and is_bv_value(w2)):
                 return w1 / w2  # bvsdiv
-            else:
-                return f_sdiv(w1, w2)
+
+            if is_bv_value(w2):
+                # concrete denominator case
+                i2: int = w2.as_long()
+
+                if i2 == 0:
+                    return w2  # div by 0 is 0
+
+                if i2 == 1:
+                    return w1  # div by 1 is identity
+
+                if self.options.get("divByConst"):
+                    return w1 / w2  # bvsdiv
+
+            # fall back to uninterpreted function :(
+            return f_sdiv(w1, w2)
+
         elif op == EVM.SMOD:
             if is_bv_value(w1) and is_bv_value(w2):
                 return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
