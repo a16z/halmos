@@ -382,8 +382,6 @@ def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecR
 
 def extract_funsig(calldata: BitVecRef):
     """Extracts the function signature (first 4 bytes) from calldata"""
-    n = calldata.size()
-    # return simplify(Extract(n-1, n-32, calldata))
     return extract_bytes(calldata, 0, 4)
 
 
@@ -1359,6 +1357,11 @@ class SEVM:
         if not ret_size >= 0:
             raise ValueError(ret_size)
 
+        if arg_size > 0:
+            arg = wload(ex.st.memory, arg_loc, arg_size)
+        else:
+            arg = None
+
         caller = ex.prank.lookup(ex.this, to)
 
         orig_code = ex.code.copy()
@@ -1366,6 +1369,8 @@ class SEVM:
         orig_balance = ex.balance
         orig_log = ex.log.copy()
 
+        # assume balance is enough; otherwise ignore this path
+        ex.solver.add(UGE(ex.balance_of(caller), fund))
         if op == EVM.CALL and not (is_bv_value(fund) and fund.as_long() == 0):
             # no balance update for CALLCODE which transfers to itself
             ex.balance_update(
@@ -1373,7 +1378,7 @@ class SEVM:
             )
             ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), fund))
 
-        def call_known(to) -> None:
+        def call_known(to: Address) -> None:
             calldata = [None] * arg_size
             wextend(ex.st.memory, arg_loc, arg_size)
             wstore_bytes(
@@ -1475,7 +1480,6 @@ class SEVM:
 
             # push exit code
             if arg_size > 0:
-                arg = wload(ex.st.memory, arg_loc, arg_size)
                 f_call = Function(
                     "call_" + str(arg_size * 8),
                     BitVecSort256,  # cnt
@@ -1817,27 +1821,29 @@ class SEVM:
             call_unknown()
             return
 
-        to_addr = self.resolve_address_alias(ex, to)
-
         # known call target
+        to_addr = self.resolve_address_alias(ex, to)
         if to_addr is not None:
             call_known(to_addr)
+            return
 
         # simple ether transfer to unknown call target
-        elif arg_size == 0 and ret_size == 0:
+        if arg_size == 0:
             call_unknown()
+            return
 
         # uninterpreted unknown calls
-        elif extract_funsig(wload(ex.st.memory, arg_loc, arg_size)) in self.options["unknown_calls"]:
+        if extract_funsig(arg) in self.options["unknown_calls"]:
             warn(
                 UNINTERPRETED_UNKNOWN_CALLS,
-                f"The unknown call to {hexify(to)} for {hexify(wload(ex.st.memory, arg_loc, arg_size))} is assumed to be arbitrarily static (read-only).",
+                f"The unknown call to {hexify(to)} for {hexify(arg)} is assumed to be arbitrarily static (read-only).",
             )
+            # FIX: revert when return is false
             call_unknown()
+            return
 
-        else:
-            ex.error = f"Unknown contract call: to = {hexify(to)}; calldata = {hexify(wload(ex.st.memory, arg_loc, arg_size))}; callvalue = {hexify(fund)}"
-            out.append(ex)
+        ex.error = f"Unknown contract call: to = {hexify(to)}; calldata = {hexify(arg)}; callvalue = {hexify(fund)}"
+        out.append(ex)
 
     def create(
         self,
