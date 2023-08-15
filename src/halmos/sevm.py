@@ -22,7 +22,12 @@ from .utils import (
     hexify,
 )
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
-from .warnings import warn, UNSUPPORTED_OPCODE, LIBRARY_PLACEHOLDER, UNINTERPRETED_UNKNOWN_CALLS
+from .warnings import (
+    warn,
+    UNSUPPORTED_OPCODE,
+    LIBRARY_PLACEHOLDER,
+    UNINTERPRETED_UNKNOWN_CALLS,
+)
 
 Word = Any  # z3 expression (including constants)
 Byte = Any  # z3 expression (including constants)
@@ -1322,7 +1327,9 @@ class SEVM:
                     and ex.check(target == addr) != unsat
                 ):
                     if self.options.get("debug"):
-                        print(f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}")
+                        print(
+                            f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}"
+                        )
                     ex.alias[target] = addr
                     break
 
