@@ -1240,33 +1240,6 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/SignedDiv.t.sol:TestBadWadMul": [
-            {
-                "name": "check_wadMul_solEquivalent(int256,int256)",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": [
-                    {
-                        "p_x_int256": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-                        "p_y_int256": "0x8000000000000000000000000000000000000000000000000000000000000000"
-                    }
-                ],
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
-        "test/SignedDiv.t.sol:TestGoodWadMul": [
-            {
-                "name": "check_wadMul_solEquivalent(int256,int256)",
-                "exitcode": 0,
-                "num_models": 0,
-                "models": [],
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
         "test/Signature.t.sol:SignatureTest": [
             {
                 "name": "check_ecrecover(bytes32,uint8,bytes32,bytes32)",
@@ -1296,6 +1269,33 @@
                 "name": "check_tryRecover(address,bytes32,bytes)",
                 "exitcode": 0,
                 "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SignedDiv.t.sol:TestBadWadMul": [
+            {
+                "name": "check_wadMul_solEquivalent(int256,int256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": [
+                    {
+                        "p_x_int256": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                        "p_y_int256": "0x8000000000000000000000000000000000000000000000000000000000000000"
+                    }
+                ],
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SignedDiv.t.sol:TestGoodWadMul": [
+            {
+                "name": "check_wadMul_solEquivalent(int256,int256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
