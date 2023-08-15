@@ -645,7 +645,9 @@ class NamedTimer:
         if stop_subtimers:
             for sub_timer in self.sub_timers:
                 sub_timer.stop()
-        self.end_time = timer()
+
+        # if the timer has already been stopped, do nothing
+        self.end_time = self.end_time or timer()
 
     def create_subtimer(self, name, auto_start=True, stop_previous=True):
         for timer in self.sub_timers:
