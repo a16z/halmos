@@ -55,6 +55,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--return-size-of-unknown-calls",
+        metavar="BYTE_SIZE",
         type=int,
         default=32,
         help="set the byte size of return data from uninterpreted unknown external calls (default: %(default)s)",
