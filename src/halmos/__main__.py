@@ -20,6 +20,9 @@ from .warnings import *
 from .parser import mk_arg_parser
 from .calldata import Calldata
 
+StrModel = Dict[str, str]
+AnyModel = UnionType[Model, StrModel]
+
 arg_parser = mk_arg_parser()
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
@@ -334,8 +337,9 @@ def setup(
 
 @dataclass(frozen=True)
 class ModelWithContext:
-    model: str
-    validity: bool
+    # can be a filename containing the model or a dict with variable assignments
+    model: Optional[UnionType[StrModel, str]]
+    is_valid: Optional[bool]
     index: int
     result: CheckSatResult
 
@@ -345,6 +349,7 @@ class TestResult:
     name: str  # test function name
     exitcode: int  # 0: passed, 1: failed, 2: setup failed, ...
     num_models: int = None
+    models: List[ModelWithContext] = None
     num_paths: Tuple[int, int, int] = None  # number of paths: [total, success, blocked]
     time: Tuple[int, int, int] = None  # time: [total, paths, models]
     num_bounded_loops: int = None  # number of incomplete loops
@@ -484,20 +489,24 @@ def run(
     print(
         f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])"
     )
+    counterexamples = []
     for m in models:
-        model, validity, idx, result = m.model, m.validity, m.index, m.result
+        model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
         if result == unsat:
             continue
-        ex = exs[idx]
+        ex = exs[index]
 
-        if model:
-            if validity:
-                print(color_warn(f"Counterexample: {model}"))
+        # model could be an empty dict here
+        if model is not None:
+            if is_valid:
+                print(color_warn(f"Counterexample: {render_model(model)}"))
+                counterexamples.append(model)
             elif args.print_potential_counterexample:
                 warn(
                     COUNTEREXAMPLE_INVALID,
-                    f"Counterexample (potentially invalid): {model}",
+                    f"Counterexample (potentially invalid): {render_model(model)}",
                 )
+                counterexamples.append(model)
             else:
                 warn(
                     COUNTEREXAMPLE_INVALID,
@@ -537,18 +546,18 @@ def run(
 
     # return test result
     exitcode = 0 if passed else 1
-    num_counterexamples = sum(m.result == sat for m in models)
     if args.extended_json_output:
         return TestResult(
             funsig,
             exitcode,
-            num_counterexamples,
+            len(counterexamples),
+            counterexamples,
             (len(exs), normal, len(stuck)),
             (time_total, time_paths, time_models),
             len(bounded_loops),
         )
     else:
-        return TestResult(funsig, exitcode, num_counterexamples)
+        return TestResult(funsig, exitcode, len(counterexamples), counterexamples)
 
 
 @dataclass(frozen=True)
@@ -749,7 +758,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
 
 def is_unknown(result: CheckSatResult, model: Model) -> bool:
-    return result == unknown or (result == sat and not is_valid_model(model))
+    return result == unknown or (result == sat and not is_model_valid(model))
 
 
 def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
@@ -805,7 +814,7 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
 
 
 def package_result(
-    model: UnionType[Model, str],
+    model: Optional[UnionType[Model, str]],
     idx: int,
     result: CheckSatResult,
     args: Namespace,
@@ -820,16 +829,16 @@ def package_result(
             print(f"  Valid path; counterexample generated (path id: {idx+1})")
 
         # convert model into string to avoid pickling errors for z3 (ctypes) objects containing pointers
-        validity = None
+        is_valid = None
         if model:
             if isinstance(model, str):
-                validity = True
+                is_valid = True
                 model = f"see {model}"
             else:
-                validity = is_valid_model(model)
-                model = f"{str_model(model, args)}"
+                is_valid = is_model_valid(model)
+                model = to_str_model(model, args.print_full_model)
 
-        return ModelWithContext(model, validity, idx, result)
+        return ModelWithContext(model, is_valid, idx, result)
 
     else:
         if args.verbose >= 1:
@@ -837,20 +846,27 @@ def package_result(
         return ModelWithContext(None, None, idx, result)
 
 
-def is_valid_model(model) -> bool:
+def is_model_valid(model: AnyModel) -> bool:
     for decl in model:
         if str(decl).startswith("evm_"):
             return False
     return True
 
 
-def str_model(model, args: Namespace) -> str:
+def to_str_model(model: Model, print_full_model: bool) -> StrModel:
     def select(var):
         name = str(var)
         return name.startswith("p_") or name.startswith("halmos_")
 
-    select_model = filter(select, model) if not args.print_full_model else model
-    formatted = [f"\n    {decl} = {hexify(model[decl])}" for decl in select_model]
+    select_model = filter(select, model) if not print_full_model else model
+    return {str(decl): hexify(model[decl]) for decl in select_model}
+
+
+def render_model(model: UnionType[str, StrModel]) -> str:
+    if isinstance(model, str):
+        return model
+
+    formatted = [f"\n    {decl} = {hexify(val)}" for decl, val in model.items()]
     return "".join(sorted(formatted)) if formatted else "∅"
 
 
