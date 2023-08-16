@@ -2,6 +2,7 @@
 
 import re
 
+from timeit import default_timer as timer
 from typing import Dict, Tuple
 
 from z3 import *
@@ -626,3 +627,70 @@ sha3_inv: Dict[int, int] = {  # sha3(x) -> x
 }
 
 sha3_inv_offset: Dict[int, Tuple[int, int]] = mk_sha3_inv_offset(sha3_inv)
+
+
+class NamedTimer:
+    def __init__(self, name: str, auto_start=True):
+        self.name = name
+        self.start_time = timer() if auto_start else None
+        self.end_time = None
+        self.sub_timers = []
+
+    def start(self):
+        if self.start_time is not None:
+            raise ValueError(f"Timer {self.name} has already been started.")
+        self.start_time = timer()
+
+    def stop(self, stop_subtimers=True):
+        if stop_subtimers:
+            for sub_timer in self.sub_timers:
+                sub_timer.stop()
+
+        # if the timer has already been stopped, do nothing
+        self.end_time = self.end_time or timer()
+
+    def create_subtimer(self, name, auto_start=True, stop_previous=True):
+        for timer in self.sub_timers:
+            if timer.name == name:
+                raise ValueError(f"Timer with name {name} already exists.")
+
+        if stop_previous and self.sub_timers:
+            self.sub_timers[-1].stop()
+
+        sub_timer = NamedTimer(name, auto_start=auto_start)
+        self.sub_timers.append(sub_timer)
+        return sub_timer
+
+    def __getitem__(self, name):
+        for timer in self.sub_timers:
+            if timer.name == name:
+                return timer
+        raise ValueError(f"Timer with name {name} does not exist.")
+
+    def elapsed(self) -> float:
+        if self.start_time is None:
+            raise ValueError(f"Timer {self.name} has not been started")
+
+        end_time = self.end_time if self.end_time is not None else timer()
+
+        return end_time - self.start_time
+
+    def report(self, include_subtimers=True) -> str:
+        sub_reports_str = ""
+
+        if include_subtimers:
+            sub_reports = [
+                f"{timer.name}: {timer.elapsed():.2f}s" for timer in self.sub_timers
+            ]
+            sub_reports_str = f" ({', '.join(sub_reports)})" if sub_reports else ""
+
+        return f"{self.name}: {self.elapsed():.2f}s{sub_reports_str}"
+
+    def __str__(self):
+        return self.report()
+
+    def __repr__(self):
+        return (
+            f"NamedTimer(name={self.name}, start_time={self.start_time}, "
+            f"end_time={self.end_time}, sub_timers={self.sub_timers})"
+        )
