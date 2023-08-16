@@ -6,7 +6,7 @@
                 "name": "check_assert(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -15,11 +15,7 @@
                 "name": "check_myAssert(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_x_uint256": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -30,7 +26,7 @@
                 "name": "check_Exp(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -39,7 +35,7 @@
                 "name": "check_Mod(uint256,uint256,address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -50,9 +46,7 @@
                 "name": "check_bar()",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {}
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -61,7 +55,7 @@
                 "name": "check_foo()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -72,7 +66,7 @@
                 "name": "check_chainId(uint64)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -81,7 +75,7 @@
                 "name": "check_coinbase(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -90,7 +84,7 @@
                 "name": "check_difficulty(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -99,7 +93,7 @@
                 "name": "check_fee(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -108,7 +102,7 @@
                 "name": "check_roll(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -117,7 +111,7 @@
                 "name": "check_warp(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -128,7 +122,7 @@
                 "name": "check_byte(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -139,16 +133,7 @@
                 "name": "check_SymbolicByteIndex(uint8,uint8)",
                 "exitcode": 1,
                 "num_models": 2,
-                "models": [
-                    {
-                        "p_i_uint8": "0x0",
-                        "p_x_uint8": "0x2b"
-                    },
-                    {
-                        "p_i_uint8": "0x1f",
-                        "p_x_uint8": "0x3"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -159,7 +144,7 @@
                 "name": "check_call(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -168,7 +153,7 @@
                 "name": "check_callcode(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -177,7 +162,7 @@
                 "name": "check_delegatecall(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -186,7 +171,7 @@
                 "name": "check_staticcall(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -197,7 +182,7 @@
                 "name": "check_log()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -208,7 +193,7 @@
                 "name": "check_Const()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -219,7 +204,7 @@
                 "name": "check_Const()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -230,7 +215,7 @@
                 "name": "check_constructor()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -239,7 +224,7 @@
                 "name": "check_setCodesize()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -250,7 +235,7 @@
                 "name": "check_div_1(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -259,7 +244,7 @@
                 "name": "check_div_2(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -268,7 +253,7 @@
                 "name": "check_foo(uint256,uint256,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -277,7 +262,7 @@
                 "name": "check_inc()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -286,7 +271,7 @@
                 "name": "check_incBy(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -295,7 +280,7 @@
                 "name": "check_incOpt()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -304,7 +289,7 @@
                 "name": "check_loopConst()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -313,7 +298,7 @@
                 "name": "check_loopConstIf()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -322,7 +307,7 @@
                 "name": "check_loopDoWhile(uint8)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -331,7 +316,7 @@
                 "name": "check_loopFor(uint8)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -340,7 +325,7 @@
                 "name": "check_loopWhile(uint8)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -349,7 +334,7 @@
                 "name": "check_mulDiv(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -358,7 +343,7 @@
                 "name": "check_set(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -367,7 +352,7 @@
                 "name": "check_setString(uint256,string,uint256,string,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -376,7 +361,7 @@
                 "name": "check_setSum(uint248,uint248)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -387,7 +372,7 @@
                 "name": "check_const()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -396,7 +381,7 @@
                 "name": "check_immutable()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -405,7 +390,7 @@
                 "name": "check_initialized()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -414,7 +399,7 @@
                 "name": "check_set(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -425,7 +410,7 @@
                 "name": "check_create2(uint256,uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -434,7 +419,7 @@
                 "name": "check_create2_caller(address,uint256,uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -443,7 +428,7 @@
                 "name": "check_create2_collision(uint256,uint256,bytes32)",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -452,13 +437,7 @@
                 "name": "check_create2_collision_alias(uint256,uint256,bytes32)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_salt_bytes32": "0x0",
-                        "p_y_uint256": "0x0",
-                        "p_x_uint256": "0x0"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -467,7 +446,7 @@
                 "name": "check_create2_concrete()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -476,7 +455,7 @@
                 "name": "check_create2_no_collision_1(uint256,uint256,bytes32,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -485,7 +464,7 @@
                 "name": "check_create2_no_collision_2(uint256,uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -496,7 +475,7 @@
                 "name": "check_deal_1(address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -505,7 +484,7 @@
                 "name": "check_deal_2(address,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -514,7 +493,7 @@
                 "name": "check_deal_new()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -525,7 +504,7 @@
                 "name": "check_assume(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -534,7 +513,7 @@
                 "name": "check_deployCode(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -543,7 +522,7 @@
                 "name": "check_etch_Concrete()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -552,7 +531,7 @@
                 "name": "check_etch_Overwrite()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -563,7 +542,7 @@
                 "name": "check_Getter(uint256)",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -574,7 +553,7 @@
                 "name": "check_FailUnknownCheatcode()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -583,7 +562,7 @@
                 "name": "check_SymbolLabel()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -592,7 +571,7 @@
                 "name": "check_createAddress()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -601,7 +580,7 @@
                 "name": "check_createBool()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -610,7 +589,7 @@
                 "name": "check_createBytes()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -619,7 +598,7 @@
                 "name": "check_createBytes32()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -628,7 +607,7 @@
                 "name": "check_createUint()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -637,7 +616,7 @@
                 "name": "check_createUint256()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -648,7 +627,7 @@
                 "name": "check_add(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -659,7 +638,7 @@
                 "name": "check_foo()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -670,7 +649,7 @@
                 "name": "check_bar()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -681,7 +660,7 @@
                 "name": "check_add(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -690,7 +669,7 @@
                 "name": "check_remove()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -699,7 +678,7 @@
                 "name": "check_set(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -710,7 +689,7 @@
                 "name": "check_add(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -719,7 +698,7 @@
                 "name": "check_remove()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -728,7 +707,7 @@
                 "name": "check_set(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -739,12 +718,7 @@
                 "name": "check_Avg(uint256,uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_a_uint256": "0x209783b74e6c1ecfeee4bf9a3b7aafbb899cb2035ab51226f10e0a0ae36d5f34",
-                        "p_b_uint256": "0xe4001c386d6fc52402d7265cf32750426d634df8932adbb90ee88aeba34b8c98"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -755,7 +729,7 @@
                 "name": "check_Loop3(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -764,11 +738,7 @@
                 "name": "check_Loop3Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_n_uint256": "0x3"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -779,7 +749,7 @@
                 "name": "check_Loop2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -788,11 +758,7 @@
                 "name": "check_Loop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_n_uint256": "0x2"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -801,7 +767,7 @@
                 "name": "check_Loop3(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -810,11 +776,7 @@
                 "name": "check_Loop3Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_n_uint256": "0x3"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -825,7 +787,7 @@
                 "name": "check_Loop2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -834,11 +796,7 @@
                 "name": "check_Loop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_n_uint256": "0x2"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -849,7 +807,7 @@
                 "name": "check_Loop3(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -858,11 +816,7 @@
                 "name": "check_Loop3Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_n_uint256": "0x3"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -871,7 +825,7 @@
                 "name": "check_Loop4(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -880,11 +834,7 @@
                 "name": "check_Loop4Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_n_uint256": "0x4"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -895,7 +845,7 @@
                 "name": "check_Loop2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -904,11 +854,7 @@
                 "name": "check_Loop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_n_uint256": "0x2"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -919,7 +865,7 @@
                 "name": "check_PUSH0()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -928,7 +874,7 @@
                 "name": "check_SIGNEXTEND(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -939,7 +885,7 @@
                 "name": "check_prank(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -950,7 +896,7 @@
                 "name": "check_prank(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -959,7 +905,7 @@
                 "name": "check_prank_Constructor(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -968,7 +914,7 @@
                 "name": "check_prank_External(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -977,7 +923,7 @@
                 "name": "check_prank_ExternalSelf(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -986,7 +932,7 @@
                 "name": "check_prank_Internal(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -995,7 +941,7 @@
                 "name": "check_prank_New(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1004,7 +950,7 @@
                 "name": "check_prank_Reset1(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1013,7 +959,7 @@
                 "name": "check_prank_Reset2(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1022,7 +968,7 @@
                 "name": "check_startPrank(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1031,7 +977,7 @@
                 "name": "check_stopPrank_1(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1040,7 +986,7 @@
                 "name": "check_stopPrank_2()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1051,7 +997,7 @@
                 "name": "check_foo(uint256,uint256,address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1062,7 +1008,7 @@
                 "name": "check_foo()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1073,7 +1019,7 @@
                 "name": "check_Revert1(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1082,7 +1028,7 @@
                 "name": "check_Revert2(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1091,7 +1037,7 @@
                 "name": "check_RevertBalance(bool,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1100,7 +1046,7 @@
                 "name": "check_RevertCode(address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1111,7 +1057,7 @@
                 "name": "check_Send(address,uint256,address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1120,7 +1066,7 @@
                 "name": "check_SendSelf(address,uint256,address)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1132,7 +1078,7 @@
                 "name": "check_True()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1143,7 +1089,7 @@
                 "name": "check_Setup()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1154,7 +1100,7 @@
                 "name": "check_Setup()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1165,7 +1111,7 @@
                 "name": "check_True()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1176,7 +1122,7 @@
                 "name": "check_SIGNEXTEND(int16)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1187,12 +1133,7 @@
                 "name": "check_wadMul_solEquivalent(int256,int256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_x_int256": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
-                        "p_y_int256": "0x8000000000000000000000000000000000000000000000000000000000000000"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1203,7 +1144,7 @@
                 "name": "check_wadMul_solEquivalent(int256,int256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1214,12 +1155,7 @@
                 "name": "check_foo(uint256,uint256)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_a_uint256": "0x61900000000000000000000000000000",
-                        "p_b_uint256": "0x861b00000000000000000000000000001"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1230,7 +1166,7 @@
                 "name": "check_addArr1(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1239,7 +1175,7 @@
                 "name": "check_addArr2(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1248,7 +1184,7 @@
                 "name": "check_addMap1Arr1(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1257,7 +1193,7 @@
                 "name": "check_setMap1(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1266,7 +1202,7 @@
                 "name": "check_setMap2(uint256,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1275,7 +1211,7 @@
                 "name": "check_setMap3(uint256,uint256,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1286,7 +1222,7 @@
                 "name": "check_store_Array(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1295,7 +1231,7 @@
                 "name": "check_store_Mapping(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1304,7 +1240,7 @@
                 "name": "check_store_Scalar(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1315,12 +1251,7 @@
                 "name": "check_Struct((uint256,uint256))",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_p.x_uint256": "0x0",
-                        "p_p.y_uint256": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffdd"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1329,16 +1260,7 @@
                 "name": "check_StructArray((uint256,uint256)[],(uint256,uint256)[2])",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_q[1].y_uint256": "0x0",
-                        "p_p[0].y_uint256": "0x8000000000000000000000000000000000000000000000000000000000000000",
-                        "p_q[0].x_uint256": "0x0",
-                        "p_q[0].y_uint256": "0x0",
-                        "p_p[0].x_uint256": "0x7fffffffffffffffffffffffffffffffc0000000000000000000000000000000",
-                        "p_q[1].x_uint256": "0x100000000000000000000"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1347,36 +1269,7 @@
                 "name": "check_StructArrayArray((uint256,uint256)[][],(uint256,uint256)[2][],(uint256,uint256)[][2],(uint256,uint256)[2][2])",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_s[0][1].x_uint256": "0xdffffffffbffffffffeffffffffeff3ffffff7fffffffffffc37ffffffe7ffee",
-                        "p_q[1][0].x_uint256": "0xdffffbfff6fffdffdfbdf3aeffbff7f77eaffd7f7df77ff2dffbfa4ff8000000",
-                        "p_q[1][1].x_uint256": "0xffedb7ffff7ffffff7fbfdffe7bffffffffefbf07dfffffcfe7cddffda885400",
-                        "p_s[1][1].y_uint256": "0xffdfddffffffffffffffffdfffff2effffffffffbfffffeffffffffdbffff7fd",
-                        "p_s[0][0].x_uint256": "0xbfde7bfffffdffffc5fbffffebacffff7fbebfffdfbffffde2fea37fff1cdfbe",
-                        "p_r[0][0].y_uint256": "0x9ded87fffffffffffffffffff7fdfffffffffefbbfffffffffffc687fdffff84",
-                        "p_r[0][1].y_uint256": "0xdffafbffffffbffffdf4ffeff3fdfbf7ffdffeffffffeefffffebc7ffbf7fbfe",
-                        "p_q[0][1].x_uint256": "0xe3bf7bffffffffffdf7fff6ffaffbcffffdfffdbffdffdfd7ffe1bfffcdebc00",
-                        "p_r[0][0].x_uint256": "0x7ff507ffffffffffffffffff7ffe5fffffffffffffffff800000000000000000",
-                        "p_q[1][0].y_uint256": "0xffdffffffffe7ffffffffffffffffffffffffffffffffffffefffffffffffffe",
-                        "p_r[1][0].x_uint256": "0x7cfff5ffdffffffffffffffffffff0fffffffbffe1ffffffffc7fffcffd80000",
-                        "p_r[1][1].y_uint256": "0xfaffaeffffffffffffffffffffffffffffffffffffbfbfe3ffffffffffffff9d",
-                        "p_q[0][0].y_uint256": "0xfffffffffffe7fffffffffffffffffffffffffffffffffffaffd7febffffffff",
-                        "p_q[0][1].y_uint256": "0x5fffd3fffffffffffffff7dfffffcffdfffffbfffffffffffffffffdfffffffe",
-                        "p_s[0][1].y_uint256": "0x72fdd7ffffffffffffff083fffdfffbfffffffffbe7fffbfffffffff40000000",
-                        "p_s[1][0].x_uint256": "0xf6bfff3fffffffffffffffffffffffffffffffffffc13fffffffffef1ffff860",
-                        "p_q[1][1].y_uint256": "0xe3ffa8fffdfebc7c773f7d5e7af5f7ef4d7fdab7a76da3f43ed6f49dffc3bc12",
-                        "p_s[1][0].y_uint256": "0xffffcfffffc0ffffffffffffffffffffffffffffffffffff7fe27ffadfffff80",
-                        "p_r[1][1].x_uint256": "0x7dab1bf3ff7ff4ffc043fca6340efd0c5158001002fffe5a75f7e7fcfc000000",
-                        "p_r[0][1].x_uint256": "0x5efffdffffffbfffffffffffffffffffffffffffffffffffffffffffff400c1e",
-                        "p_p[0][0].x_uint256": "0xdffdbbffffffffffffffffffffffffffffffffffdf7ffffffffff37ffefffffe",
-                        "p_q[0][0].x_uint256": "0xff9ffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffe",
-                        "p_s[1][1].x_uint256": "0x2004000420a00000118000000000800000002200000000000010000400000480",
-                        "p_r[1][0].y_uint256": "0xfff7fffffffdfffffffffffffffac7ff7fefffffffdfffd77f7da77fffffdf82",
-                        "p_p[0][0].y_uint256": "0xbe7fffbfff41fffffffffffffffffffffffffffffffefffcd11fffff00000000",
-                        "p_s[0][0].y_uint256": "0xdf5fb7fffcffffffffffffffffffffffffffffffffffffefffffffb2fffffe7e"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1387,46 +1280,7 @@
                 "name": "check_S((uint256,uint256[],uint256),(uint256,(uint256,uint256[],uint256),uint256[],(uint256,uint256[],uint256)[],uint256[1],(uint256,uint256[],uint256)[][])[])",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_s[0].f4[0].y[1]_uint256": "0x633eff6ffde3fffe7ffbb3fd1cde5f6cd5d73fdfffe9bbfffefca37eed1fe3f6",
-                        "p_s[0].f6[0][0].z_uint256": "0xf9fffffffff3fffffeffffffffffffffffffffffffffffffffffffffbe7ff38f",
-                        "p_s[0].f4[1].z_uint256": "0xdfffffffdffffbfffffde3fff7dffeea7fffcfbf9ffffeffffffdaffde010000",
-                        "p_s[0].f6[1][1].y[1]_uint256": "0x2ffffffffffbdfbff87ffffdbbdffef7ffbffffef7eff8ffed7fff87fefa6b0e",
-                        "p_s[0].f6[1][0].x_uint256": "0xfffffffff0fffffffffffff80248fffffffffffffcfffeb07fffff4000000000",
-                        "p_s[0].f6[0][0].y[1]_uint256": "0xf7ffffffffffffffffffffffffffffffffffffff4dfeefafbfbffbb3efffc000",
-                        "p_p.y[1]_uint256": "0x7fffffffffffffffffffffffffffffffffffffff7ff0ffffffffffdbfffffffe",
-                        "p_s[0].f1_uint256": "0xc7ffffffff3ffffffffffffffffbbfffffeffff7efdfffffffffbfffefffcdf4",
-                        "p_s[0].f2.y[1]_uint256": "0xffffffffff3fdff7fffc3ffffff8fffefbfc2eff5ffffffffffffffffaf3ff80",
-                        "p_s[0].f2.x_uint256": "0x15dfffffffffffffffffffffffffffedffffffffffffffffffffffe000000000",
-                        "p_s[0].f6[0][0].x_uint256": "0xfbfffffffffffffffffffffffdbf3ffffffffff83f3fdfcfc3ff7fffffffffff",
-                        "p_s[0].f4[0].x_uint256": "0x2f7ffefffec7fb8d97fdfffffbdff7ff9fbe7b7ffffdeff7ffd3ffc7debfff2c",
-                        "p_s[0].f6[0][1].y[1]_uint256": "0xffffbffffbffffffeffeffffffffffffff9fffffffffe21ffffcffffffe40000",
-                        "p_s[0].f5[0]_uint256": "0x93fffffffbfdffffffff03ffffffffffffffffbfffffffefffffce3cbffd1ff7",
-                        "p_s[0].f6[1][1].x_uint256": "0x7fffffffffbfffffffffffffffffffffffffff80ffefefbffc3fc7ff3ffff200",
-                        "p_s[0].f6[0][0].y[0]_uint256": "0xe6e1fffffffefffffffffffffffff8ffffffffffffffffffffffff7fcbffdff0",
-                        "p_s[0].f6[0][1].x_uint256": "0x687ffffffffffffffffffffffffd001ffffffffffffffffffffffe2ffffffff1",
-                        "p_s[0].f3[0]_uint256": "0x2ddffffffffffffffffffffffffffff1ffffdfffffffffffffffffefffffffff",
-                        "p_s[0].f4[1].y[1]_uint256": "0x1cc5fffffcfffd5ffdffdfbffd9c2d289b387fffff6fbfff3cffc7d7fe1fbf72",
-                        "p_s[0].f2.y[0]_uint256": "0xfff7fb77dbf79ef9edfbdfbf2fef7ef7ea5fdfffffdcfeeaf7ffe60000000000",
-                        "p_s[0].f6[1][0].z_uint256": "0x3ffffffff7fffdf03ffffffffffffffffffffe5fffff7ffffff3fbffd8000000",
-                        "p_p.z_uint256": "0x0",
-                        "p_s[0].f4[1].y[0]_uint256": "0xfeceb8c9f47ffa7fdfbf9dfbef77ffbd7c200000000000000000000000000000",
-                        "p_s[0].f4[0].z_uint256": "0x3ffffefffe2fbff7ffaffffffe77d7c1ff7fd05f1ffdffbffbfefffffff7fc80",
-                        "p_p.y[0]_uint256": "0xc083fffffffffffffffffffffffffffffffe5fffffffffffffffffffffffff00",
-                        "p_s[0].f6[1][0].y[1]_uint256": "0xffbfffffb9ebf7ffdfffffffff7fffffffc7fffdfff3fffffffdff6fffebffff",
-                        "p_s[0].f4[1].x_uint256": "0xffffffffdfefefefffefdfffffffffffffdfffffffffffbfffffffbffdf9fe00",
-                        "p_s[0].f6[1][1].y[0]_uint256": "0x1feffffffffffdffd3feffffffffcffffffbf107ffffffffffffffff9fffaf85",
-                        "p_s[0].f6[0][1].y[0]_uint256": "0x7fffbfffffffffffffffffffffffffffffffffffffffdffffffffd6fff200000",
-                        "p_s[0].f2.z_uint256": "0xffffffffffffffffffeefcffffff3fffffffffb6effefffffffe59898c000000",
-                        "p_s[0].f6[1][1].z_uint256": "0xafeffffffffffffffcfffefffffff7fffffffff7fffffffffffffffbbffffcff",
-                        "p_s[0].f4[0].y[0]_uint256": "0xef7ffffffffffffffffffc07ffffffffffffffcff5ffffffffffffffffff5e17",
-                        "p_s[0].f3[1]_uint256": "0xffffffffdffff7fffffbffffffffffebffffff2fffffffffff8fffbfffbd7e00",
-                        "p_s[0].f6[0][1].z_uint256": "0xef7e7ffffffefffffffdfffffffffeffffffffffffffffffffffffffd2800000",
-                        "p_p.x_uint256": "0x24fffffffffffffffffffffffffffffffff1bffffffffffffffffe0000000000",
-                        "p_s[0].f6[1][0].y[0]_uint256": "0xae3bfffffffffffffffffffffffeffffffffffffffffffffffffffffffffff0e"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1437,7 +1291,7 @@
                 "name": "check_value()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1448,30 +1302,7 @@
                 "name": "check_BalanceInvariant()",
                 "exitcode": 1,
                 "num_models": 2,
-                "models": [
-                    {
-                        "halmos_receiver_address_05": "0x0",
-                        "halmos_amount_uint256_06": "0x3c13e8bfffe0000",
-                        "halmos_amount_uint256_02": "0x0",
-                        "halmos_data_bytes_09": "0x30e0789e000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003fdffeafffbfc000000004",
-                        "halmos_caller_address_07": "0x0",
-                        "halmos_amount_uint256_04": "0x200025cafdfbfc000000000",
-                        "halmos_others_address_08": "0xd9d173b00040c3d0000012200010100021900001",
-                        "halmos_receiver_address_03": "0x20000000000000000000000000000000000",
-                        "halmos_receiver_address_01": "0x10000000000000000000000001008000000"
-                    },
-                    {
-                        "halmos_receiver_address_05": "0x0",
-                        "halmos_amount_uint256_06": "0xffff07f80000000000000",
-                        "halmos_amount_uint256_02": "0x14002038000173ee7fffffe",
-                        "halmos_data_bytes_09": "0x30e0789e00000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001e74a689fd7fffffffff17d",
-                        "halmos_caller_address_07": "0x2001000602010000000000000080080001",
-                        "halmos_amount_uint256_04": "0x1e74a689fd7fffffffff17d",
-                        "halmos_others_address_08": "0x2000000000000000000000000000000000",
-                        "halmos_receiver_address_03": "0x2000000000000000000000000000000000",
-                        "halmos_receiver_address_01": "0x0"
-                    }
-                ],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1482,7 +1313,7 @@
                 "name": "check_foo()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1493,7 +1324,7 @@
                 "name": "check_foo()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1504,7 +1335,7 @@
                 "name": "check_foo()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1515,7 +1346,7 @@
                 "name": "check_warp(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1524,7 +1355,7 @@
                 "name": "check_warp_External(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1533,7 +1364,7 @@
                 "name": "check_warp_ExternalSelf(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1542,7 +1373,7 @@
                 "name": "check_warp_Internal(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1551,7 +1382,7 @@
                 "name": "check_warp_New(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1560,7 +1391,7 @@
                 "name": "check_warp_Reset(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1569,7 +1400,7 @@
                 "name": "check_warp_SetUp()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null

@@ -85,9 +85,9 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--json-output", metavar="JSON_FILE_PATH", help="output test results in JSON"
     )
     group_debug.add_argument(
-        "--extended-json-output",
+        "--minimal-json-output",
         action="store_true",
-        help="include more information in test results",
+        help="include minimal information in the JSON output",
     )
     group_debug.add_argument(
         "--print-steps", action="store_true", help="print every execution steps"

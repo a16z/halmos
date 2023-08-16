@@ -539,7 +539,9 @@ def run(
 
     # return test result
     exitcode = 0 if passed else 1
-    if args.extended_json_output:
+    if args.minimal_json_output:
+        return TestResult(funsig, exitcode, len(counterexamples))
+    else:
         return TestResult(
             funsig,
             exitcode,
@@ -549,8 +551,6 @@ def run(
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(bounded_loops),
         )
-    else:
-        return TestResult(funsig, exitcode, len(counterexamples), counterexamples)
 
 
 @dataclass(frozen=True)
