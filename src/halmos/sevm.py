@@ -1351,7 +1351,14 @@ class SEVM:
 
         return ex.alias.get(target)
 
-    def transfer_value(self, ex: Exec, caller: Address, to: Address, value: Word, condition: Word = None) -> None:
+    def transfer_value(
+        self,
+        ex: Exec,
+        caller: Address,
+        to: Address,
+        value: Word,
+        condition: Word = None,
+    ) -> None:
         # no-op if value is zero
         if is_bv_value(value) and value.as_long() == 0:
             return
