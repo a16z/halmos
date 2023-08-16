@@ -159,7 +159,7 @@ class Calldata:
                 size = 65  # ECDSA signature size  # TODO: use args
                 size_pad_right = ((size + 31) // 32) * 32
                 data = [
-                    con(size_pad_right),
+                    con(size),
                     BitVec(f"p_{name}_{typ.typ}", 8 * size_pad_right),
                 ]
                 return EncodingResult(data, 32 + size_pad_right, False)

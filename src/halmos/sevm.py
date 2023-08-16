@@ -22,7 +22,12 @@ from .utils import (
     hexify,
 )
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
-from .warnings import warn, UNSUPPORTED_OPCODE, LIBRARY_PLACEHOLDER
+from .warnings import (
+    warn,
+    UNSUPPORTED_OPCODE,
+    LIBRARY_PLACEHOLDER,
+    UNINTERPRETED_UNKNOWN_CALLS,
+)
 
 Word = Any  # z3 expression (including constants)
 Byte = Any  # z3 expression (including constants)
@@ -382,8 +387,6 @@ def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecR
 
 def extract_funsig(calldata: BitVecRef):
     """Extracts the function signature (first 4 bytes) from calldata"""
-    n = calldata.size()
-    # return simplify(Extract(n-1, n-32, calldata))
     return extract_bytes(calldata, 0, 4)
 
 
@@ -424,7 +427,7 @@ class State:
     def __str__(self) -> str:
         return "".join(
             [
-                f"Stack: {str(self.stack)}\n",
+                f"Stack: {str(list(reversed(self.stack)))}\n",
                 # self.str_memory(),
             ]
         )
@@ -658,6 +661,7 @@ class Exec:  # an execution path
     # path
     solver: Solver
     path: List[Any]  # path conditions
+    alias: Dict[Address, Address]  # address aliases
     # logs
     log: List[Tuple[List[Word], Any]]  # event logs emitted
     cnts: Dict[str, Dict[int, int]]  # opcode -> frequency; counters
@@ -690,6 +694,7 @@ class Exec:  # an execution path
         #
         self.solver = kwargs["solver"]
         self.path = kwargs["path"]
+        self.alias = kwargs["alias"]
         #
         self.log = kwargs["log"]
         self.cnts = kwargs["cnts"]
@@ -744,6 +749,8 @@ class Exec:  # an execution path
                     ),
                     # f"Solver:\n{self.str_solver()}\n",
                     f"Path:\n{self.str_path()}",
+                    f"Aliases:\n",
+                    "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
                     f"Output: {self.output.hex() if isinstance(self.output, bytes) else self.output}\n",
                     f"Log: {self.log}\n",
                     # f"Opcodes:\n{self.str_cnts()}",
@@ -807,7 +814,7 @@ class Exec:  # an execution path
         self.solver.add(ULT(value, con(2**96)))
         return value
 
-    def balance_update(self, addr: Word, value: Word):
+    def balance_update(self, addr: Word, value: Word) -> None:
         assert_address(addr)
         assert_uint256(value)
         new_balance_var = Array(
@@ -1323,6 +1330,52 @@ class SEVM:
         else:
             raise ValueError(op)
 
+    def resolve_address_alias(self, ex: Exec, target: Address) -> Address:
+        if target in ex.code:
+            return target
+
+        if target not in ex.alias:
+            for addr in ex.code:
+                if (
+                    # must equal
+                    ex.check(target != addr) == unsat
+                    # ensure existing path condition is feasible
+                    and ex.check(target == addr) != unsat
+                ):
+                    if self.options.get("debug"):
+                        print(
+                            f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}"
+                        )
+                    ex.alias[target] = addr
+                    break
+
+        return ex.alias.get(target)
+
+    def transfer_value(
+        self,
+        ex: Exec,
+        caller: Address,
+        to: Address,
+        value: Word,
+        condition: Word = None,
+    ) -> None:
+        # no-op if value is zero
+        if is_bv_value(value) and value.as_long() == 0:
+            return
+
+        # assume balance is enough; otherwise ignore this path
+        # note: evm requires enough balance even for self-transfer
+        balance_cond = simplify(UGE(ex.balance_of(caller), value))
+        ex.solver.add(balance_cond)
+        ex.path.append(str(balance_cond))
+
+        # conditional transfer
+        if condition is not None:
+            value = If(condition, value, con(0))
+
+        ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value))
+        ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
+
     def call(
         self,
         ex: Exec,
@@ -1352,21 +1405,26 @@ class SEVM:
         if not ret_size >= 0:
             raise ValueError(ret_size)
 
+        arg = wload(ex.st.memory, arg_loc, arg_size) if arg_size > 0 else None
+
         caller = ex.prank.lookup(ex.this, to)
 
-        orig_code = ex.code.copy()
-        orig_storage = deepcopy(ex.storage)
-        orig_balance = ex.balance
-        orig_log = ex.log.copy()
-
-        if op == EVM.CALL and not (is_bv_value(fund) and fund.as_long() == 0):
+        def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
-            ex.balance_update(
-                caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), fund)
-            )
-            ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), fund))
+            if op == EVM.CALL:
+                self.transfer_value(ex, caller, to, fund, condition)
 
-        def call_known() -> None:
+        def call_known(to: Address) -> None:
+            # backup current state
+            orig_code = ex.code.copy()
+            orig_storage = deepcopy(ex.storage)
+            orig_balance = ex.balance
+            orig_log = ex.log.copy()
+
+            # transfer msg.value
+            send_callvalue()
+
+            # prepare calldata
             calldata = [None] * arg_size
             wextend(ex.st.memory, arg_loc, arg_size)
             wstore_bytes(
@@ -1397,6 +1455,7 @@ class SEVM:
                     #
                     solver=ex.solver,
                     path=ex.path,
+                    alias=ex.alias,
                     #
                     log=ex.log,
                     cnts=ex.cnts,
@@ -1467,7 +1526,6 @@ class SEVM:
 
             # push exit code
             if arg_size > 0:
-                arg = wload(ex.st.memory, arg_loc, arg_size)
                 f_call = Function(
                     "call_" + str(arg_size * 8),
                     BitVecSort256,  # cnt
@@ -1492,20 +1550,31 @@ class SEVM:
             ex.solver.add(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
-            ret = None
-            # TODO: handle inconsistent return sizes for unknown functions
+            # transfer msg.value
+            send_callvalue(exit_code_var != con(0))
+
             if ret_size > 0:
+                # actual return data will be capped or zero-padded by ret_size
+                # FIX: this doesn't capture the case of returndatasize != ret_size
+                actual_ret_size = ret_size
+            else:
+                actual_ret_size = self.options["unknown_calls_return_size"]
+
+            if actual_ret_size > 0:
                 f_ret = Function(
-                    "ret_" + str(ret_size * 8),
+                    "ret_" + str(actual_ret_size * 8),
                     BitVecSort256,
-                    BitVecSorts[ret_size * 8],
+                    BitVecSorts[actual_ret_size * 8],
                 )
                 ret = f_ret(exit_code_var)
+            else:
+                ret = None
 
             # TODO: cover other precompiled
             if eq(to, con_addr(1)):  # ecrecover exit code is always 1
                 ex.solver.add(exit_code_var != con(0))
 
+            # TODO: factor out cheatcode semantics
             # halmos cheat code
             if eq(to, halmos_cheat_code.address):
                 ex.solver.add(exit_code_var != con(0))
@@ -1670,8 +1739,9 @@ class SEVM:
                     store_account = uint160(Extract(767, 512, arg))
                     store_slot = simplify(Extract(511, 256, arg))
                     store_value = simplify(Extract(255, 0, arg))
-                    if store_account in ex.storage:
-                        ex.sstore(store_account, store_slot, store_value)
+                    store_account_addr = self.resolve_address_alias(ex, store_account)
+                    if store_account_addr is not None:
+                        ex.sstore(store_account_addr, store_slot, store_value)
                     else:
                         ex.error = f"uninitialized account: {store_account}"
                         out.append(ex)
@@ -1683,8 +1753,9 @@ class SEVM:
                 ):
                     load_account = uint160(Extract(511, 256, arg))
                     load_slot = simplify(Extract(255, 0, arg))
-                    if load_account in ex.storage:
-                        ret = ex.sload(load_account, load_slot)
+                    load_account_addr = self.resolve_address_alias(ex, load_account)
+                    if load_account_addr is not None:
+                        ret = ex.sload(load_account_addr, load_slot)
                     else:
                         ex.error = f"uninitialized account: {load_account}"
                         out.append(ex)
@@ -1788,14 +1859,40 @@ class SEVM:
             ex.next_pc()
             stack.append((ex, step_id))
 
-        # separately handle known / unknown external calls
-
-        # TODO: avoid relying directly on dict membership here
-        # it is based on hashing of the z3 expr objects rather than equivalence
-        if to in ex.code:
-            call_known()
-        else:
+        # precompiles or cheatcodes
+        if (
+            # precompile
+            eq(to, con_addr(1))
+            # cheatcode calls
+            or eq(to, halmos_cheat_code.address)
+            or eq(to, hevm_cheat_code.address)
+            or eq(to, console.address)
+        ):
             call_unknown()
+            return
+
+        # known call target
+        to_addr = self.resolve_address_alias(ex, to)
+        if to_addr is not None:
+            call_known(to_addr)
+            return
+
+        # simple ether transfer to unknown call target
+        if arg_size == 0:
+            call_unknown()
+            return
+
+        # uninterpreted unknown calls
+        if extract_funsig(arg) in self.options["unknown_calls"]:
+            warn(
+                UNINTERPRETED_UNKNOWN_CALLS,
+                f"Assumed static unknown call to {hexify(to)} for {hexify(arg)}.",
+            )
+            call_unknown()
+            return
+
+        ex.error = f"Unknown contract call: to = {hexify(to)}; calldata = {hexify(arg)}; callvalue = {hexify(fund)}"
+        out.append(ex)
 
     def create(
         self,
@@ -1845,15 +1942,7 @@ class SEVM:
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # transfer value
-        # assume balance is enough; otherwise ignore this path
-        ex.solver.add(UGE(ex.balance_of(caller), value))
-        if not (is_bv_value(value) and value.as_long() == 0):
-            ex.balance_update(
-                caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value)
-            )
-            ex.balance_update(
-                new_addr, self.arith(ex, EVM.ADD, ex.balance_of(new_addr), value)
-            )
+        self.transfer_value(ex, caller, new_addr, value)
 
         # execute contract creation code
         (new_exs, new_steps, new_bounded_loops) = self.run(
@@ -1879,6 +1968,7 @@ class SEVM:
                 #
                 solver=ex.solver,
                 path=ex.path,
+                alias=ex.alias,
                 #
                 log=ex.log,
                 cnts=ex.cnts,
@@ -2049,6 +2139,7 @@ class SEVM:
             #
             solver=new_solver,
             path=new_path,
+            alias=ex.alias.copy(),
             #
             log=ex.log.copy(),
             cnts=deepcopy(ex.cnts),
@@ -2247,20 +2338,30 @@ class SEVM:
                     ex.st.push(uint256(f_origin()))
                 elif opcode == EVM.ADDRESS:
                     ex.st.push(uint256(ex.this))
+                # TODO: define f_extcodesize for known addresses in advance
                 elif opcode == EVM.EXTCODESIZE:
-                    address = uint160(ex.st.pop())
-                    if address in ex.code:
-                        codesize = con(len(ex.code[address]))
+                    account = uint160(ex.st.pop())
+                    account_addr = self.resolve_address_alias(ex, account)
+                    if account_addr is not None:
+                        codesize = con(len(ex.code[account_addr]))
                     else:
-                        codesize = f_extcodesize(address)
+                        codesize = f_extcodesize(account)
                         if (
-                            address == hevm_cheat_code.address
-                            or address == halmos_cheat_code.address
+                            eq(account, hevm_cheat_code.address)
+                            or eq(account, halmos_cheat_code.address)
+                            or eq(account, console.address)
                         ):
                             ex.solver.add(codesize > 0)
                     ex.st.push(codesize)
+                # TODO: define f_extcodehash for known addresses in advance
                 elif opcode == EVM.EXTCODEHASH:
-                    ex.st.push(f_extcodehash(ex.st.pop()))
+                    account = uint160(ex.st.pop())
+                    account_addr = self.resolve_address_alias(ex, account)
+                    if account_addr is not None:
+                        codehash = f_extcodehash(account_addr)
+                    else:
+                        codehash = f_extcodehash(account)
+                    ex.st.push(codehash)
                 elif opcode == EVM.CODESIZE:
                     ex.st.push(con(len(ex.pgm)))
                 elif opcode == EVM.GAS:
@@ -2486,6 +2587,7 @@ class SEVM:
         #
         solver,
         # path,
+        # alias,
         #
         # log,
         # cnts,
@@ -2518,6 +2620,7 @@ class SEVM:
             #
             solver=solver,
             path=[],
+            alias={},
             #
             log=[],
             cnts=defaultdict(lambda: defaultdict(int)),

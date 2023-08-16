@@ -47,6 +47,21 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--uninterpreted-unknown-calls",
+        metavar="SELECTOR1,SELECTOR2,...",
+        # onERC721Received, IERC1271.isValidSignature
+        default="0x150b7a02,0x1626ba7e",
+        help="use uninterpreted abstractions for unknown external calls with the given function signatures (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--return-size-of-unknown-calls",
+        metavar="BYTE_SIZE",
+        type=int,
+        default=32,
+        help="set the byte size of return data from uninterpreted unknown external calls (default: %(default)s)",
+    )
+
+    parser.add_argument(
         "--symbolic-storage",
         action="store_true",
         help="set default storage values to symbolic",
