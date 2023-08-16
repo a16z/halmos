@@ -814,7 +814,7 @@ class Exec:  # an execution path
         self.solver.add(ULT(value, con(2**96)))
         return value
 
-    def balance_update(self, addr: Word, value: Word):
+    def balance_update(self, addr: Word, value: Word) -> None:
         assert_address(addr)
         assert_uint256(value)
         new_balance_var = Array(
@@ -1351,6 +1351,24 @@ class SEVM:
 
         return ex.alias.get(target)
 
+    def transfer_value(self, ex: Exec, caller: Address, to: Address, value: Word, condition: Word = None) -> None:
+        # no-op if value is zero
+        if is_bv_value(value) and value.as_long() == 0:
+            return
+
+        # assume balance is enough; otherwise ignore this path
+        # note: evm requires enough balance even for self-transfer
+        balance_cond = simplify(UGE(ex.balance_of(caller), value))
+        ex.solver.add(balance_cond)
+        ex.path.append(str(balance_cond))
+
+        # conditional transfer
+        if condition is not None:
+            value = If(condition, value, con(0))
+
+        ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value))
+        ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
+
     def call(
         self,
         ex: Exec,
@@ -1380,32 +1398,14 @@ class SEVM:
         if not ret_size >= 0:
             raise ValueError(ret_size)
 
-        if arg_size > 0:
-            arg = wload(ex.st.memory, arg_loc, arg_size)
-        else:
-            arg = None
+        arg = wload(ex.st.memory, arg_loc, arg_size) if arg_size > 0 else None
 
         caller = ex.prank.lookup(ex.this, to)
 
         def send_callvalue(condition=None) -> None:
-            if (
-                # no balance update for CALLCODE which transfers to itself
-                op == EVM.CALL
-                and not (is_bv_value(fund) and fund.as_long() == 0)
-            ):
-                # assume balance is enough; otherwise ignore this path
-                ex.solver.add(UGE(ex.balance_of(caller), fund))
-
-                # conditional send
-                if condition is not None:
-                    value = If(condition, fund, con(0))
-                else:
-                    value = fund
-
-                ex.balance_update(
-                    caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value)
-                )
-                ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
+            # no balance update for CALLCODE which transfers to itself
+            if op == EVM.CALL:
+                self.transfer_value(ex, caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
             # backup current state
@@ -1935,16 +1935,7 @@ class SEVM:
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # transfer value
-        if not (is_bv_value(value) and value.as_long() == 0):
-            # assume balance is enough; otherwise ignore this path
-            ex.solver.add(UGE(ex.balance_of(caller), value))
-
-            ex.balance_update(
-                caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value)
-            )
-            ex.balance_update(
-                new_addr, self.arith(ex, EVM.ADD, ex.balance_of(new_addr), value)
-            )
+        self.transfer_value(ex, caller, new_addr, value)
 
         # execute contract creation code
         (new_exs, new_steps, new_bounded_loops) = self.run(
