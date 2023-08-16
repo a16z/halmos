@@ -10,12 +10,11 @@ import traceback
 
 from argparse import Namespace
 from dataclasses import dataclass, asdict
-from timeit import default_timer as timer
 from importlib import metadata
 
 from .pools import thread_pool, process_pool
 from .sevm import *
-from .utils import color_good, color_warn, hexify
+from .utils import color_good, color_warn, hexify, NamedTimer
 from .warnings import *
 from .parser import mk_arg_parser
 from .calldata import Calldata
@@ -256,13 +255,14 @@ def setup(
     args: Namespace,
     libs: Dict,
 ) -> Exec:
-    setup_start = timer()
+    setup_timer = NamedTimer("setup")
+    setup_timer.create_subtimer("decode")
 
     sevm = SEVM(mk_options(args))
 
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
-    setup_mid = timer()
+    setup_timer.create_subtimer("run")
 
     setup_sig, setup_name, setup_selector = (
         setup_info.sig,
@@ -325,12 +325,8 @@ def setup(
             new_hexcode = assign[1].strip()
             setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
 
-    setup_end = timer()
-
     if args.statistics:
-        print(
-            f"[time] setup: {setup_end - setup_start:0.2f}s (decode: {setup_mid - setup_start:0.2f}s, run: {setup_end - setup_mid:0.2f}s)"
-        )
+        print(setup_timer.report())
 
     return setup_ex
 
@@ -386,7 +382,8 @@ def run(
     # run
     #
 
-    start = timer()
+    timer = NamedTimer("time")
+    timer.create_subtimer("paths")
 
     options = mk_options(args)
     sevm = SEVM(options)
@@ -430,7 +427,7 @@ def run(
         )
     )
 
-    mid = timer()
+    timer.create_subtimer("models")
 
     # check assertion violations
     normal = 0
@@ -472,22 +469,18 @@ def run(
     else:
         models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
 
-    end = timer()
-
     no_counterexample = all(m.model is None for m in models)
     passed = no_counterexample and normal > 0 and len(stuck) == 0
     if args.error_unknown:
         passed = passed and all(m.result == unsat for m in models)
     passfail = color_good("[PASS]") if passed else color_warn("[FAIL]")
 
-    time_total, time_paths, time_models = end - start, mid - start, end - mid
-    time_info = f"{time_total:0.2f}s"
-    if args.statistics:
-        time_info += f" (paths: {time_paths:0.2f}s, models: {time_models:0.2f}s)"
+    timer.stop()
+    time_info = timer.report(include_subtimers=args.statistics)
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {normal}/{len(exs)}, time: {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+        f"{passfail} {funsig} (paths: {normal}/{len(exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
     )
     counterexamples = []
     for m in models:
@@ -553,7 +546,7 @@ def run(
             len(counterexamples),
             counterexamples,
             (len(exs), normal, len(stuck)),
-            (time_total, time_paths, time_models),
+            (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(bounded_loops),
         )
     else:
@@ -1041,6 +1034,14 @@ def import_libs(build_out_map: Dict, hexcode: str, linkReferences: Dict) -> Dict
     return libs
 
 
+def build_output_iterator(build_out: Dict):
+    for compiler_version in sorted(build_out):
+        build_out_map = build_out[compiler_version]
+        for filename in sorted(build_out_map):
+            for contract_name in sorted(build_out_map[filename]):
+                yield (build_out_map, filename, contract_name)
+
+
 @dataclass(frozen=True)
 class MainResult:
     exitcode: int
@@ -1049,7 +1050,8 @@ class MainResult:
 
 
 def _main(_args=None) -> MainResult:
-    main_start = timer()
+    timer = NamedTimer("total")
+    timer.create_subtimer("build")
 
     #
     # z3 global options
@@ -1095,6 +1097,7 @@ def _main(_args=None) -> MainResult:
         print(color_warn(f"Build failed: {build_cmd}"))
         return MainResult(1)
 
+    timer.create_subtimer("load")
     try:
         build_out = parse_build_out(args)
     except Exception as err:
@@ -1103,7 +1106,7 @@ def _main(_args=None) -> MainResult:
             traceback.print_exc()
         return MainResult(1)
 
-    main_mid = timer()
+    timer.create_subtimer("tests")
 
     #
     # run
@@ -1112,90 +1115,69 @@ def _main(_args=None) -> MainResult:
     total_passed = 0
     total_failed = 0
     total_found = 0
-
     test_results_map = {}
 
-    for compiler_version in sorted(build_out):
-        build_out_map = build_out[compiler_version]
-        for filename in sorted(build_out_map):
-            for contract_name in sorted(build_out_map[filename]):
-                if args.contract and args.contract != contract_name:
-                    continue
+    for build_out_map, filename, contract_name in build_output_iterator(build_out):
+        if args.contract and args.contract != contract_name:
+            continue
 
-                (contract_json, contract_type, natspec) = build_out_map[filename][
-                    contract_name
-                ]
-                if contract_type != "contract":
-                    continue
+        (contract_json, contract_type, natspec) = build_out_map[filename][contract_name]
+        if contract_type != "contract":
+            continue
 
-                creation_hexcode = contract_json["bytecode"]["object"]
-                deployed_hexcode = contract_json["deployedBytecode"]["object"]
+        methodIdentifiers = contract_json["methodIdentifiers"]
+        funsigs = [f for f in methodIdentifiers if f.startswith(args.function)]
+        num_found = len(funsigs)
 
-                abi = contract_json["abi"]
-                methodIdentifiers = contract_json["methodIdentifiers"]
-                linkReferences = contract_json["bytecode"]["linkReferences"]
+        if num_found == 0:
+            continue
 
-                libs = (
-                    import_libs(build_out_map, creation_hexcode, linkReferences)
-                    if linkReferences
-                    else {}
-                )
+        contract_timer = NamedTimer("time")
 
-                funsigs = [
-                    funsig
-                    for funsig in methodIdentifiers
-                    if funsig.startswith(args.function)
-                ]
+        abi = contract_json["abi"]
+        creation_hexcode = contract_json["bytecode"]["object"]
+        deployed_hexcode = contract_json["deployedBytecode"]["object"]
+        linkReferences = contract_json["bytecode"]["linkReferences"]
+        libs = import_libs(build_out_map, creation_hexcode, linkReferences)
 
-                if funsigs:
-                    total_found += len(funsigs)
-                    contract_path = (
-                        f"{contract_json['ast']['absolutePath']}:{contract_name}"
-                    )
-                    print(f"\nRunning {len(funsigs)} tests for {contract_path}")
-                    contract_start = timer()
+        contract_path = f"{contract_json['ast']['absolutePath']}:{contract_name}"
+        print(f"\nRunning {num_found} tests for {contract_path}")
+        contract_args = extend_args(args, parse_natspec(natspec)) if natspec else args
 
-                    contract_args = (
-                        extend_args(args, parse_natspec(natspec)) if natspec else args
-                    )
+        run_args = RunArgs(
+            funsigs,
+            creation_hexcode,
+            deployed_hexcode,
+            abi,
+            methodIdentifiers,
+            contract_args,
+            contract_json,
+            libs,
+        )
 
-                    run_args = RunArgs(
-                        funsigs,
-                        creation_hexcode,
-                        deployed_hexcode,
-                        abi,
-                        methodIdentifiers,
-                        contract_args,
-                        contract_json,
-                        libs,
-                    )
+        enable_parallel = args.test_parallel and num_found > 1
+        run_method = run_parallel if enable_parallel else run_sequential
+        test_results = run_method(run_args)
 
-                    enable_parallel = args.test_parallel and len(funsigs) > 1
-                    test_results = (
-                        run_parallel(run_args)
-                        if enable_parallel
-                        else run_sequential(run_args)
-                    )
+        num_passed = sum(r.exitcode == 0 for r in test_results)
+        num_failed = num_found - num_passed
 
-                    num_passed = sum(r.exitcode == 0 for r in test_results)
-                    num_failed = len(funsigs) - num_passed
+        print(
+            f"Symbolic test result: {num_passed} passed; "
+            f"{num_failed} failed; {contract_timer.report()}"
+        )
 
-                    print(
-                        f"Symbolic test result: {num_passed} passed; {num_failed} failed; time: {timer() - contract_start:0.2f}s"
-                    )
-                    total_passed += num_passed
-                    total_failed += num_failed
+        total_found += num_found
+        total_passed += num_passed
+        total_failed += num_failed
 
-                    if contract_path in test_results_map:
-                        raise ValueError("already exists", contract_path)
-                    test_results_map[contract_path] = test_results
+        if contract_path in test_results_map:
+            raise ValueError("already exists", contract_path)
 
-    main_end = timer()
+        test_results_map[contract_path] = test_results
 
     if args.statistics:
-        print(
-            f"\n[time] total: {main_end - main_start:0.2f}s (build: {main_mid - main_start:0.2f}s, tests: {main_end - main_mid:0.2f}s)"
-        )
+        print(f"\n[time] {timer.report()}")
 
     if total_found == 0:
         error_msg = f"Error: No tests with the prefix `{args.function}`"
