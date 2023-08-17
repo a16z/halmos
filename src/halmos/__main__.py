@@ -277,15 +277,15 @@ def setup(
         dyn_param_size = []  # TODO: propagate to run
         mk_calldata(abi, setup_info, setup_ex.calldata, dyn_param_size, args)
 
-        (setup_exs_all, setup_steps, setup_bounded_loops) = sevm.run(setup_ex)
+        (setup_exs_all, setup_steps, setup_logs) = sevm.run(setup_ex)
 
-        if setup_bounded_loops:
+        if setup_logs.bounded_loops:
             warn(
                 LOOP_BOUND,
                 f"{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
             )
             if args.debug:
-                print("\n".join(setup_bounded_loops))
+                print("\n".join(setup_logs.bounded_loops))
 
         setup_exs = []
 
@@ -392,7 +392,7 @@ def run(
     solver.set(timeout=args.solver_timeout_branching)
     solver.add(setup_ex.solver.assertions())
 
-    (exs, steps, bounded_loops) = sevm.run(
+    (exs, steps, logs) = sevm.run(
         Exec(
             code=setup_ex.code.copy(),  # shallow copy
             storage=deepcopy(setup_ex.storage),
@@ -519,13 +519,21 @@ def run(
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
 
-    if bounded_loops:
+    if logs.bounded_loops:
         warn(
             LOOP_BOUND,
             f"{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
         )
         if args.debug:
-            print("\n".join(bounded_loops))
+            print("\n".join(logs.bounded_loops))
+
+    if logs.unknown_calls:
+        warn(
+            UNINTERPRETED_UNKNOWN_CALLS,
+            f"{funsig}: unknown calls have been assumed to be static: {', '.join(logs.unknown_calls)}",
+        )
+        if args.debug:
+            logs.print_unknown_calls()
 
     # print post-states
     if args.print_states:
@@ -550,7 +558,7 @@ def run(
             counterexamples,
             (len(exs), normal, len(stuck)),
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
-            len(bounded_loops),
+            len(logs.bounded_loops),
         )
 
 

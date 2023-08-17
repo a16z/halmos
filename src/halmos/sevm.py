@@ -6,7 +6,7 @@ import re
 
 from copy import deepcopy
 from collections import defaultdict
-from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
+from typing import List, Set, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
@@ -1125,6 +1125,34 @@ def is_power_of_two(x: int) -> bool:
         return False
 
 
+class Logs:
+    bounded_loops: List[str]
+    unknown_calls: Dict[str, Dict[str, Set[str]]]  # funsig -> to -> set(arg)
+
+    def __init__(self) -> None:
+        self.bounded_loops = []
+        self.unknown_calls = defaultdict(lambda: defaultdict(set))
+
+    def extend(self, logs) -> None:
+        self.bounded_loops.extend(logs.bounded_loops)
+        for funsig in logs.unknown_calls:
+            for to in logs.unknown_calls[funsig]:
+                self.unknown_calls[funsig][to].update(logs.unknown_calls[funsig][to])
+
+    def add_uninterpreted_unknown_call(self, funsig, to, arg):
+        funsig, to, arg = hexify(funsig), hexify(to), hexify(arg)
+        self.unknown_calls[funsig][to].add(arg)
+
+    def print_unknown_calls(self):
+        for funsig in logs.unknown_calls:
+            print(f"{funsig}:")
+            for to in logs.unknown_calls[funsig]:
+                print(f"- {to}:")
+                print(
+                    "\n".join([f"  - {arg}" for arg in logs.unknown_calls[funsig][to]])
+                )
+
+
 class SEVM:
     options: Dict
 
@@ -1383,7 +1411,7 @@ class SEVM:
         stack: List[Tuple[Exec, int]],
         step_id: int,
         out: List[Exec],
-        bounded_loops: List[str],
+        logs: Logs,
     ) -> None:
         gas = ex.st.pop()
 
@@ -1432,7 +1460,7 @@ class SEVM:
             )
 
             # execute external calls
-            (new_exs, new_steps, new_bounded_loops) = self.run(
+            (new_exs, new_steps, new_logs) = self.run(
                 Exec(
                     code=ex.code,
                     storage=ex.storage,
@@ -1468,7 +1496,7 @@ class SEVM:
                 )
             )
 
-            bounded_loops.extend(new_bounded_loops)
+            logs.extend(new_logs)
 
             # process result
             for idx, new_ex in enumerate(new_exs):
@@ -1883,11 +1911,9 @@ class SEVM:
             return
 
         # uninterpreted unknown calls
-        if extract_funsig(arg) in self.options["unknown_calls"]:
-            warn(
-                UNINTERPRETED_UNKNOWN_CALLS,
-                f"Assumed static unknown call to {hexify(to)} for {hexify(arg)}.",
-            )
+        funsig = extract_funsig(arg)
+        if funsig in self.options["unknown_calls"]:
+            logs.add_uninterpreted_unknown_call(funsig, to, arg)
             call_unknown()
             return
 
@@ -1901,7 +1927,7 @@ class SEVM:
         stack: List[Tuple[Exec, int]],
         step_id: int,
         out: List[Exec],
-        bounded_loops: List[str],
+        logs: Logs,
     ) -> None:
         value: Word = ex.st.pop()
         loc: int = int_of(ex.st.pop(), "symbolic CREATE offset")
@@ -1945,7 +1971,7 @@ class SEVM:
         self.transfer_value(ex, caller, new_addr, value)
 
         # execute contract creation code
-        (new_exs, new_steps, new_bounded_loops) = self.run(
+        (new_exs, new_steps, new_logs) = self.run(
             Exec(
                 code=ex.code,
                 storage=ex.storage,
@@ -1981,7 +2007,7 @@ class SEVM:
             )
         )
 
-        bounded_loops.extend(new_bounded_loops)
+        logs.extend(new_logs)
 
         # process result
         for idx, new_ex in enumerate(new_exs):
@@ -2024,7 +2050,7 @@ class SEVM:
         ex: Exec,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-        bounded_loops: List[str],
+        logs: Logs,
     ) -> None:
         jid = ex.jumpi_id()
 
@@ -2050,7 +2076,7 @@ class SEVM:
             follow_true = visited[True] < self.options["max_loop"]
             follow_false = visited[False] < self.options["max_loop"]
             if not (follow_true and follow_false):
-                bounded_loops.append(jid)
+                logs.bounded_loops.append(jid)
         else:
             # for constant-bounded loops
             follow_true = potential_true
@@ -2170,7 +2196,7 @@ class SEVM:
 
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps]:
         out: List[Exec] = []
-        bounded_loops: List[str] = []
+        logs = Logs()
         steps: Steps = {}
         step_id: int = 0
 
@@ -2229,7 +2255,7 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.JUMPI:
-                    self.jumpi(ex, stack, step_id, bounded_loops)
+                    self.jumpi(ex, stack, step_id, logs)
                     continue
 
                 elif opcode == EVM.JUMP:
@@ -2401,14 +2427,14 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
-                    self.call(ex, opcode, stack, step_id, out, bounded_loops)
+                    self.call(ex, opcode, stack, step_id, out, logs)
                     continue
 
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
-                    self.create(ex, opcode, stack, step_id, out, bounded_loops)
+                    self.create(ex, opcode, stack, step_id, out, logs)
                     continue
 
                 elif opcode == EVM.POP:
@@ -2561,7 +2587,7 @@ class SEVM:
                     print(ex)
                 raise
 
-        return (out, steps, bounded_loops)
+        return (out, steps, logs)
 
     def mk_exec(
         self,
