@@ -535,7 +535,9 @@ def run(
         if args.debug:
             for fsig in logs.unknown_calls:
                 print(f"{fsig}:")
-                print("\n".join([ f"- {to}: {arg}" for to, arg in logs.unknown_calls[fsig] ]))
+                for to in logs.unknown_calls[fsig]:
+                    print(f"- {to}:")
+                    print("\n".join([ f"  - {arg}" for arg in logs.unknown_calls[fsig][to] ]))
 
     # print post-states
     if args.print_states:

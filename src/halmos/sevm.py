@@ -1127,20 +1127,21 @@ def is_power_of_two(x: int) -> bool:
 
 class Logs:
     bounded_loops: List[str]
-    unknown_calls: Dict[str, Set[Tuple[str, str]]]
+    unknown_calls: Dict[str, Dict[str, Set[str]]]  # funsig -> to -> set(arg)
 
     def __init__(self) -> None:
         self.bounded_loops = []
-        self.unknown_calls = defaultdict(set)
+        self.unknown_calls = defaultdict(lambda: defaultdict(set))
 
     def extend(self, logs) -> None:
         self.bounded_loops.extend(logs.bounded_loops)
         for funsig in logs.unknown_calls:
-            self.unknown_calls[funsig].update(logs.unknown_calls[funsig])
+            for to in logs.unknown_calls[funsig]:
+                self.unknown_calls[funsig][to].update(logs.unknown_calls[funsig][to])
 
     def add_uninterpreted_unknown_call(self, funsig, to, arg):
         funsig, to, arg = hexify(funsig), hexify(to), hexify(arg)
-        self.unknown_calls[funsig].add((to, arg))
+        self.unknown_calls[funsig][to].add(arg)
 
 
 class SEVM:
