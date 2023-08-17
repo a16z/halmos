@@ -48,11 +48,19 @@ def con_addr(n: int) -> BitVecRef:
 
 
 def color_good(text: str) -> str:
-    return "\033[32m" + text + "\033[0m"
+    return f"\033[32m{text}\033[0m"
 
 
 def color_warn(text: str) -> str:
-    return "\033[31m" + text + "\033[0m"
+    return f"\033[31m{text}\033[0m"
+
+
+def color_info(text: str) -> str:
+    return f"\033[33m{text}\033[0m"
+
+
+def info(text: str) -> None:
+    print(color_info(text))
 
 
 class EVM:

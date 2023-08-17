@@ -20,6 +20,7 @@ from .utils import (
     con_addr,
     bv_value_to_bytes,
     hexify,
+    color_info,
 )
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
 from .warnings import (
@@ -1864,16 +1865,19 @@ class SEVM:
                     extract_funsig(arg), "symbolic console function selector"
                 )
 
-                if funsig == console.log_uint:
+                if funsig == console.log_uint256:
                     print(extract_bytes(arg, 4, 32))
 
                 # elif funsig == console.log_string:
 
                 else:
                     # TODO: support other console functions
-                    ex.error = f"Unsupported console function: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
-                    out.append(ex)
-                    return
+                    print(
+                        color_info(
+                            f"Unsupported console function: selector = 0x{funsig:0>8x}, "
+                            f"calldata = {hexify(arg)}"
+                        )
+                    )
 
             # store return value
             if ret_size > 0:
@@ -2383,10 +2387,11 @@ class SEVM:
                 elif opcode == EVM.EXTCODEHASH:
                     account = uint160(ex.st.pop())
                     account_addr = self.resolve_address_alias(ex, account)
-                    if account_addr is not None:
-                        codehash = f_extcodehash(account_addr)
-                    else:
-                        codehash = f_extcodehash(account)
+                    codehash = (
+                        f_extcodehash(account_addr)
+                        if account_addr is not None
+                        else f_extcodehash(account)
+                    )
                     ex.st.push(codehash)
                 elif opcode == EVM.CODESIZE:
                     ex.st.push(con(len(ex.pgm)))
