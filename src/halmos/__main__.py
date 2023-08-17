@@ -527,13 +527,15 @@ def run(
         if args.debug:
             print("\n".join(logs.bounded_loops))
 
-    if logs.uninterpreted_unknown_calls:
+    if logs.unknown_calls:
         warn(
             UNINTERPRETED_UNKNOWN_CALLS,
-            f"{funsig}: unknown calls have been assumed to be static, not altering any contract states",
+            f"{funsig}: unknown calls have been assumed to be static: {', '.join(logs.unknown_calls)}",
         )
         if args.debug:
-            print("\n".join(logs.uninterpreted_unknown_calls))
+            for fsig in logs.unknown_calls:
+                print(f"{fsig}:")
+                print("\n".join([ f"- {to}: {arg}" for to, arg in logs.unknown_calls[fsig] ]))
 
     # print post-states
     if args.print_states:

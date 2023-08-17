@@ -6,7 +6,7 @@ import re
 
 from copy import deepcopy
 from collections import defaultdict
-from typing import List, Dict, Union as UnionType, Tuple, Any, Optional
+from typing import List, Set, Dict, Union as UnionType, Tuple, Any, Optional
 from functools import reduce
 
 from z3 import *
@@ -1127,15 +1127,20 @@ def is_power_of_two(x: int) -> bool:
 
 class Logs:
     bounded_loops: List[str]
-    uninterpreted_unknown_calls: List[str]
+    unknown_calls: Dict[str, Set[Tuple[str, str]]]
 
     def __init__(self) -> None:
         self.bounded_loops = []
-        self.uninterpreted_unknown_calls = []
+        self.unknown_calls = defaultdict(set)
 
     def extend(self, logs) -> None:
         self.bounded_loops.extend(logs.bounded_loops)
-        self.uninterpreted_unknown_calls.extend(logs.uninterpreted_unknown_calls)
+        for funsig in logs.unknown_calls:
+            self.unknown_calls[funsig].update(logs.unknown_calls[funsig])
+
+    def add_uninterpreted_unknown_call(self, funsig, to, arg):
+        funsig, to, arg = hexify(funsig), hexify(to), hexify(arg)
+        self.unknown_calls[funsig].add((to, arg))
 
 
 class SEVM:
@@ -1896,10 +1901,9 @@ class SEVM:
             return
 
         # uninterpreted unknown calls
-        if extract_funsig(arg) in self.options["unknown_calls"]:
-            logs.uninterpreted_unknown_calls.append(
-                f"Assumed static unknown call to {hexify(to)} for {hexify(arg)}."
-            )
+        funsig = extract_funsig(arg)
+        if funsig in self.options["unknown_calls"]:
+            logs.add_uninterpreted_unknown_call(funsig, to, arg)
             call_unknown()
             return
 
