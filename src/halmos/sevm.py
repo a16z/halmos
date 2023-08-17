@@ -1143,6 +1143,15 @@ class Logs:
         funsig, to, arg = hexify(funsig), hexify(to), hexify(arg)
         self.unknown_calls[funsig][to].add(arg)
 
+    def print_unknown_calls(self):
+        for funsig in logs.unknown_calls:
+            print(f"{funsig}:")
+            for to in logs.unknown_calls[funsig]:
+                print(f"- {to}:")
+                print(
+                    "\n".join([f"  - {arg}" for arg in logs.unknown_calls[funsig][to]])
+                )
+
 
 class SEVM:
     options: Dict

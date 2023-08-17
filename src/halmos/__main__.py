@@ -533,11 +533,7 @@ def run(
             f"{funsig}: unknown calls have been assumed to be static: {', '.join(logs.unknown_calls)}",
         )
         if args.debug:
-            for fsig in logs.unknown_calls:
-                print(f"{fsig}:")
-                for to in logs.unknown_calls[fsig]:
-                    print(f"- {to}:")
-                    print("\n".join([ f"  - {arg}" for arg in logs.unknown_calls[fsig][to] ]))
+            logs.print_unknown_calls()
 
     # print post-states
     if args.print_states:
