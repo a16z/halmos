@@ -15,24 +15,24 @@ Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
 ## Installation
 
 ```
-$ pip install halmos
+pip install halmos
 ```
 
 Or, if you want to try out the nightly build version:
 ```
-$ pip install git+https://github.com/a16z/halmos
+pip install git+https://github.com/a16z/halmos
 ```
 
 ## Usage
 
 ```
-$ cd /path/to/src
-$ halmos
+cd /path/to/src
+halmos
 ```
 
 For more details:
 ```
-$ halmos --help
+halmos --help
 ```
 
 ## Examples
