@@ -2,7 +2,7 @@
 
 #### Usage Examples
 
-- [Simple examples](toy/)
+- [Simple examples](toy/README.md)
 - [ERC20](tokens/ERC20/): verifying OpenZeppelin and Solmate ERC20 tokens, and finding the DEI token bug exploited by the [Deus DAO hack](https://rekt.news/deus-dao-r3kt/).
 - [ERC721](tokens/ERC721/): verifying OpenZeppelin and Solmate ERC721 tokens.
 

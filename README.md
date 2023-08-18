@@ -3,15 +3,9 @@
 [![License](https://img.shields.io/github/license/a16z/halmos)](https://github.com/a16z/halmos/blob/main/LICENSE)
 [![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+4UhzHduai3MzZmUx)
 
-_Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode_
+Halmos is a _symbolic testing_ tool for EVM smart contracts. A Solidity/Foundry frontend is currently offered by default, with plans to provide support for other languages, such as Vyper and Huff, in the future.
 
-**_Symbolic_:** Halmos executes the given contract bytecode with symbolic function arguments and symbolic storage states, enabling it to systematically explore all possible behaviors of the contract.
-
-**_Bounded_:** Halmos unrolls loops up to a specified bound and sets the size of variable-length arrays, allowing it to run automatically without the need for additional user annotations.
-
-**_Model Checking_:** Halmos proves that assertions are never violated by any inputs or provides a counter-example. This allows Halmos to be used for bug detection as well as formal verification of the contract.
-
-For more information, refer to our post on "_[Symbolic testing with Halmos: Leveraging existing tests for formal verification][post]_."
+You can read more in our post: "_[Symbolic testing with Halmos: Leveraging existing tests for formal verification][post]_."
 
 Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
 
@@ -24,7 +18,7 @@ Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
 $ pip install halmos
 ```
 
-Or, if you want to try the latest dev version:
+Or, if you want to try out the nightly build version:
 ```
 $ pip install git+https://github.com/a16z/halmos
 ```
@@ -43,41 +37,7 @@ $ halmos --help
 
 ## Examples
 
-Given a contract, [Example.sol](examples/toy/src/Example.sol):
-```solidity
-contract Example {
-    function totalPriceBuggy(uint96 price, uint32 quantity) public pure returns (uint128) {
-        unchecked {
-            return uint120(price) * quantity; // buggy type casting: uint120 vs uint128
-        }
-    }
-}
-```
-
-You write some **property-based tests** (in Solidity), [Example.t.sol](examples/toy/test/Example.t.sol):
-```solidity
-contract ExampleTest is Example {
-    function testTotalPriceBuggy(uint96 price, uint32 quantity) public pure {
-        uint128 total = totalPriceBuggy(price, quantity);
-        assert(quantity == 0 || total >= price);
-    }
-}
-```
-
-Then you can run **fuzz testing** to quickly check those properties for **some random inputs**:
-```
-$ forge test
-[PASS] testTotalPriceBuggy(uint96,uint32) (runs: 256, μ: 462, ~: 466)
-```
-
-Once it passes, you can also perform **symbolic testing** to verify the same properties for **all possible inputs** (up to a specified limit):
-```
-$ halmos --function test
-[FAIL] testTotalPriceBuggy(uint96,uint32) (paths: 6, time: 0.10s, bounds: [])
-Counterexample: [p_price_uint96 = 39614081294025656978550816768, p_quantity_uint32 = 1073741824]
-```
-
-_(In this specific example, Halmos discovered an input that violated the assertion, which was missed by the fuzzer!)_
+Refer to the [getting started guide](docs/getting-started.md) and the [examples](examples/README.md) directory.
 
 ## Develop
 
