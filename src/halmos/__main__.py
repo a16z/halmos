@@ -136,28 +136,27 @@ def mk_solver(args: Namespace):
 
 
 def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
-    contract = Contract.from_hexcode(hexcode)
-
-    storage = {}
-
     solver = mk_solver(args)
-
+    contract = Contract.from_hexcode(hexcode)
     balance = mk_balance()
     block = mk_block()
-    callvalue = mk_callvalue()
-    caller = mk_caller(args)
-    this = mk_this()
     options = mk_options(args)
+    this = mk_this()
+
+    message = MessageCallInput(
+        target=this,
+        caller=mk_caller(args),
+        value=mk_callvalue(),
+        data=[],
+    )
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
         code={this: contract},
-        storage={this: storage},
+        storage={this: {}},
         balance=balance,
         block=block,
-        calldata=[],
-        callvalue=callvalue,
-        caller=caller,
+        message=MessageCall(input=message),
         this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
@@ -189,15 +188,19 @@ def deploy_test(
     libs: Dict,
 ) -> Exec:
     this = mk_this()
+    message = MessageCallInput(
+        target=this,
+        caller=mk_caller(args),
+        value=con(0),
+        data=[],
+    )
 
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
         storage={this: {}},
         balance=mk_balance(),
         block=mk_block(),
-        calldata=[],
-        callvalue=con(0),
-        caller=mk_caller(args),
+        message=MessageCall(input=message),
         this=this,
         pgm=None,  # to be added
         symbolic=False,
@@ -272,9 +275,20 @@ def setup(
         if args.verbose >= 1:
             print(f"Running {setup_sig}")
 
-        wstore(setup_ex.calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
+        calldata = []
+        wstore(calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
         dyn_param_size = []  # TODO: propagate to run
-        mk_calldata(abi, setup_info, setup_ex.calldata, dyn_param_size, args)
+        mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
+
+        setup_ex.message = MessageCall(
+            input=MessageCallInput(
+                target=setup_ex.message.input.target,
+                caller=setup_ex.message.input.caller,
+                value=setup_ex.message.input.value,
+                data=calldata,
+            ),
+            logs=setup_ex.message.logs,
+        )
 
         (setup_exs_all, setup_steps, setup_logs) = sevm.run(setup_ex)
 
@@ -370,11 +384,12 @@ def run(
     dyn_param_size = []
     mk_calldata(abi, fun_info, cd, dyn_param_size, args)
 
-    #
-    # callvalue
-    #
-
-    callvalue = mk_callvalue()
+    message = MessageCallInput(
+        target=setup_ex.this,
+        caller=setup_ex.caller(),
+        value=mk_callvalue(),
+        data=cd,
+    )
 
     #
     # run
@@ -398,9 +413,7 @@ def run(
             #
             block=deepcopy(setup_ex.block),
             #
-            calldata=cd,
-            callvalue=callvalue,
-            caller=setup_ex.caller,
+            message=MessageCall(input=message),
             this=setup_ex.this,
             #
             pgm=setup_ex.code[setup_ex.this],
@@ -415,7 +428,6 @@ def run(
             path=setup_ex.path.copy(),
             alias=setup_ex.alias.copy(),
             #
-            log=setup_ex.log.copy(),
             cnts=deepcopy(setup_ex.cnts),
             sha3s=setup_ex.sha3s.copy(),
             storages=setup_ex.storages.copy(),
