@@ -2356,10 +2356,12 @@ class SEVM:
                             )
                         )
                 elif opcode == EVM.CALLDATASIZE:
-                    if ex.calldata is None:
+                    calldata = ex.message.input.data
+                    # TODO: is optional calldata necessary?
+                    if calldata is None:
                         ex.st.push(f_calldatasize())
                     else:
-                        ex.st.push(con(len(ex.calldata)))
+                        ex.st.push(con(len(calldata)))
                 elif opcode == EVM.CALLVALUE:
                     ex.st.push(ex.callvalue)
                 elif opcode == EVM.CALLER:
@@ -2479,7 +2481,8 @@ class SEVM:
                     # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
                     if size > 0:
-                        if ex.calldata is None:
+                        calldata = ex.message.input.data
+                        if calldata is None:
                             f_calldatacopy = Function(
                                 "calldatacopy_" + str(size * 8),
                                 BitVecSort256,
@@ -2488,14 +2491,14 @@ class SEVM:
                             data = f_calldatacopy(offset)
                             wstore(ex.st.memory, loc, size, data)
                         else:
-                            if offset + size <= len(ex.calldata):
+                            if offset + size <= len(calldata):
                                 wstore_bytes(
                                     ex.st.memory,
                                     loc,
                                     size,
-                                    ex.calldata[offset : offset + size],
+                                    calldata[offset : offset + size],
                                 )
-                            elif offset == len(ex.calldata):
+                            elif offset == len(calldata):
                                 # copy zero bytes
                                 wstore_bytes(
                                     ex.st.memory,
@@ -2504,7 +2507,7 @@ class SEVM:
                                     [con(0, 8) for _ in range(size)],
                                 )
                             else:
-                                raise ValueError(offset, size, len(ex.calldata))
+                                raise ValueError(offset, size, len(calldata))
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()

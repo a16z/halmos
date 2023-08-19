@@ -259,7 +259,6 @@ def setup(
     setup_timer.create_subtimer("decode")
 
     sevm = SEVM(mk_options(args))
-
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
     setup_timer.create_subtimer("run")
@@ -366,7 +365,6 @@ def run(
     #
 
     cd = []
-
     wstore(cd, 0, 4, BitVecVal(int(funselector, 16), 32))
 
     dyn_param_size = []
