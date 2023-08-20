@@ -890,6 +890,7 @@ def mk_options(args: Namespace) -> Dict:
         "sym_jump": args.symbolic_jump,
         "print_steps": args.print_steps,
         "unknown_calls_return_size": args.return_size_of_unknown_calls,
+        "ffi": args.ffi,
     }
 
     if args.width is not None:

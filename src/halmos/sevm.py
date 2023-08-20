@@ -1883,6 +1883,10 @@ class SEVM:
                         return
                 # ffi(string[]) returns (bytes)
                 elif extract_funsig(arg) == hevm_cheat_code.ffi_sig:
+                    if not self.options.get("ffi"):
+                        ex.error = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
+                        out.append(ex)
+                        return
                     process = Popen(
                         extract_string_array_argument(arg, 0),
                         stdout=PIPE,
