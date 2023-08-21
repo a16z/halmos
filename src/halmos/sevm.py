@@ -411,38 +411,38 @@ def extract_string_argument(calldata: BitVecRef, arg_idx: int):
     string_bytes = string_value.to_bytes(string_length, "big")
     return string_bytes.decode("utf-8")
 
+
 def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
     """Extracts idx-th argument of string array from calldata"""
 
-    array_slot = int_of(extract_bytes(calldata, 4 + 32*arg_idx, 32))
+    array_slot = int_of(extract_bytes(calldata, 4 + 32 * arg_idx, 32))
     num_strings = int_of(extract_bytes(calldata, 4 + array_slot, 32))
 
     string_array = []
 
     for i in range(num_strings):
         string_offset = int_of(
-            extract_bytes(calldata, 4 + array_slot + 32*(i + 1), 32)
+            extract_bytes(calldata, 4 + array_slot + 32 * (i + 1), 32)
         )
         string_length = int_of(
             extract_bytes(calldata, 4 + array_slot + 32 + string_offset, 32)
         )
-        string_value = int_of(extract_bytes(
-            calldata, 4 + array_slot + 32 + string_offset + 32, string_length
-        ))
-        string_bytes = string_value.to_bytes(
-            string_length, "big"
+        string_value = int_of(
+            extract_bytes(
+                calldata, 4 + array_slot + 32 + string_offset + 32, string_length
+            )
         )
+        string_bytes = string_value.to_bytes(string_length, "big")
         string_array.append(string_bytes.decode("utf-8"))
 
     return string_array
+
 
 def stringified_bytes_to_bytes(string_bytes: str):
     """Converts a string of bytes to a bytes memory type"""
 
     string_bytes_len = (len(string_bytes) + 1) // 2
-    string_bytes_len_enc = (
-        hex(string_bytes_len).replace("0x", "").rjust(64, "0")
-    )
+    string_bytes_len_enc = hex(string_bytes_len).replace("0x", "").rjust(64, "0")
 
     string_bytes_len_ceil = (string_bytes_len + 31) // 32 * 32
 
@@ -1888,9 +1888,7 @@ class SEVM:
                         out.append(ex)
                         return
                     process = Popen(
-                        extract_string_array_argument(arg, 0),
-                        stdout=PIPE,
-                        stderr=PIPE
+                        extract_string_array_argument(arg, 0), stdout=PIPE, stderr=PIPE
                     )
 
                     (stdout, stderr) = process.communicate()
