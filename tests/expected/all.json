@@ -549,7 +549,7 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/Ffi.t.sol:Create2Test": [
+        "test/Ffi.t.sol:FfiTest": [
             {
                 "name": "check_FfiHexOutput()",
                 "exitcode": 0,
