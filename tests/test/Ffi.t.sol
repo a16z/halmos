@@ -6,10 +6,9 @@ import "forge-std/Test.sol";
 /// @custom:halmos --ffi
 contract FfiTest is Test {
     function check_FfiHexOutput() public {
-        string[] memory inputs = new string[](3);
+        string[] memory inputs = new string[](2);
         inputs[0] = "echo";
-        inputs[1] = "-n";
-        inputs[2] = /* "arbitrary string" abi.encoded hex representation */"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001061726269747261727920737472696e6700000000000000000000000000000000";
+        inputs[1] = /* "arbitrary string" abi.encoded hex representation */"0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001061726269747261727920737472696e6700000000000000000000000000000000";
 
         bytes memory res = vm.ffi(inputs);
 
@@ -22,10 +21,9 @@ contract FfiTest is Test {
     function check_FfiStringOutput() public {
         string memory str = "arbitrary string";
 
-        string[] memory inputs = new string[](3);
+        string[] memory inputs = new string[](2);
         inputs[0] = "echo";
-        inputs[1] = "-n";
-        inputs[2] = str;
+        inputs[1] = str;
 
         bytes32 expected = keccak256(abi.encodePacked(str));
         bytes32 output = keccak256(
