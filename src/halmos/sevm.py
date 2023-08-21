@@ -1903,7 +1903,7 @@ class SEVM:
                     out_bytes = stdout.decode("utf-8")
 
                     if not out_bytes.startswith("0x"):
-                        out_bytes = stdout.strip().encode("utf-8").hex()
+                        out_bytes = out_bytes.strip().encode("utf-8").hex()
                     else:
                         out_bytes = out_bytes.strip().replace("0x", "")
 
