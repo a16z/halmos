@@ -1,47 +1,59 @@
-# Halmos
+# Contributing to Halmos
 
-[![License](https://img.shields.io/github/license/a16z/halmos)](https://github.com/a16z/halmos/blob/main/LICENSE)
-[![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+4UhzHduai3MzZmUx)
-
-Halmos is a _symbolic testing_ tool for EVM smart contracts. A Solidity/Foundry frontend is currently offered by default, with plans to provide support for other languages, such as Vyper and Huff, in the future.
-
-You can read more in our post: "_[Symbolic testing with Halmos: Leveraging existing tests for formal verification][post]_."
+We greatly appreciate your feedback, suggestions, and contributions to make Halmos a better tool for everyone!
 
 Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
 
-[post]: <https://a16zcrypto.com/symbolic-testing-with-halmos-leveraging-existing-tests-for-formal-verification/>
 [chat]: <https://t.me/+4UhzHduai3MzZmUx>
 
-## Installation
+## Development Setup
 
-```
-pip install halmos
-```
+If you want to submit a pull request, fork the repository:
 
-Or, if you want to try out the nightly build version:
-```
-pip install git+https://github.com/a16z/halmos
+```sh
+gh repo fork a16z/halmos
 ```
 
-## Usage
+Or, if you just want to develop locally, clone it:
 
-```
-cd /path/to/src
-halmos
-```
-
-For more details:
-```
-halmos --help
+```sh
+git clone git@github.com:a16z/halmos.git
 ```
 
-## Examples
+Create and activate a virtual environment:
 
-Refer to the [getting started guide](docs/getting-started.md) and the [examples](examples/README.md) directory.
+```sh
+python3.11 -m venv .venv
+source .venv/bin/activate
+```
 
-## Contributing
+Install the dependencies:
 
-Refer to the [contributing guidelines](CONTRIBUTING.md).
+```sh
+python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+```
+
+Install and run the git hook scripts:
+
+```sh
+pre-commit install
+pre-commit run --all-files
+```
+
+## Coding Style
+
+We recommend enabling the [black] formatter in your editor, but you can run it manually if needed:
+
+```sh
+python -m black .
+```
+
+[black]: <https://black.readthedocs.io/en/stable/>
+
+## License
+
+By contributing, you agree that your contributions will be licensed under its [AGPL-3.0](LICENSE) License.
 
 ## Disclaimer
 
