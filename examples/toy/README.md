@@ -1,47 +1,40 @@
-# Halmos
+# Simple Examples
 
-[![License](https://img.shields.io/github/license/a16z/halmos)](https://github.com/a16z/halmos/blob/main/LICENSE)
-[![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+4UhzHduai3MzZmUx)
-
-Halmos is a _symbolic testing_ tool for EVM smart contracts. A Solidity/Foundry frontend is currently offered by default, with plans to provide support for other languages, such as Vyper and Huff, in the future.
-
-You can read more in our post: "_[Symbolic testing with Halmos: Leveraging existing tests for formal verification][post]_."
-
-Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
-
-[post]: <https://a16zcrypto.com/symbolic-testing-with-halmos-leveraging-existing-tests-for-formal-verification/>
-[chat]: <https://t.me/+4UhzHduai3MzZmUx>
-
-## Installation
-
-```
-pip install halmos
+Given a contract, [Example.sol](src/Example.sol):
+```solidity
+contract Example {
+    function totalPriceBuggy(uint96 price, uint32 quantity) public pure returns (uint128) {
+        unchecked {
+            return uint120(price) * quantity; // buggy type casting: uint120 vs uint128
+        }
+    }
+}
 ```
 
-Or, if you want to try out the nightly build version:
-```
-pip install git+https://github.com/a16z/halmos
-```
-
-## Usage
-
-```
-cd /path/to/src
-halmos
+You write some **property-based tests** (in Solidity), [Example.t.sol](test/Example.t.sol):
+```solidity
+contract ExampleTest is Example {
+    function testTotalPriceBuggy(uint96 price, uint32 quantity) public pure {
+        uint128 total = totalPriceBuggy(price, quantity);
+        assert(quantity == 0 || total >= price);
+    }
+}
 ```
 
-For more details:
+Then you can run **fuzz testing** to quickly check those properties for **some random inputs**:
 ```
-halmos --help
+$ forge test
+[PASS] testTotalPriceBuggy(uint96,uint32) (runs: 256, μ: 462, ~: 466)
 ```
 
-## Examples
+Once it passes, you can also perform **symbolic testing** to verify the same properties for **all possible inputs** (up to a specified limit):
+```
+$ halmos --function test
+[FAIL] testTotalPriceBuggy(uint96,uint32) (paths: 6, time: 0.10s, bounds: [])
+Counterexample: [p_price_uint96 = 39614081294025656978550816768, p_quantity_uint32 = 1073741824]
+```
 
-Refer to the [getting started guide](docs/getting-started.md) and the [examples](examples/README.md) directory.
-
-## Contributing
-
-Refer to the [contributing guidelines](CONTRIBUTING.md).
+_(In this specific example, Halmos discovered an input that violated the assertion, which was missed by the fuzzer!)_
 
 ## Disclaimer
 
