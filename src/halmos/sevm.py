@@ -426,7 +426,7 @@ class EventLog:
 
 
 @dataclass(frozen=True)
-class MessageCallInput:
+class Message:
     target: Address
     caller: Address
     value: Word
@@ -436,19 +436,30 @@ class MessageCallInput:
 
 
 @dataclass(frozen=True)
-class MessageCallOutput:
+class CallOutput:
     data: Bytes
     accounts_to_delete: Set[Address]
     error: EvmException
 
 
+TraceElement = UnionType["CallFrame", EventLog]
+
+
 @dataclass
-class MessageCall:
-    input: MessageCallInput
-    output: Optional[MessageCallOutput] = None
+class CallFrame:
+    message: Message
+    output: Optional[CallOutput] = None
     depth: int = 1
-    subcalls: List["MessageCall"] = field(default_factory=list)
-    logs: List[EventLog] = field(default_factory=list)
+    trace: List[TraceElement] = field(default_factory=list)
+
+    def subcalls(self) -> List["CallFrame"]:
+        return [t for t in self.trace if isinstance(t, CallFrame)]
+
+    def logs(self) -> List[EventLog]:
+        return [t for t in self.trace if isinstance(t, EventLog)]
+
+    def emit_log(self, log: EventLog):
+        self.trace.append(log)
 
 
 class State:
@@ -689,7 +700,7 @@ class Exec:  # an execution path
     block: Block
 
     # tx
-    message: MessageCall
+    call_frame: CallFrame
 
     # vm state
     this: Address  # current account address
@@ -721,7 +732,7 @@ class Exec:  # an execution path
         self.balance = kwargs["balance"]
         #
         self.block = kwargs["block"]
-        self.message = kwargs["message"]
+        self.call_frame = kwargs["call_frame"]
         #
         self.this = kwargs["this"]
         self.pgm = kwargs["pgm"]
@@ -744,17 +755,20 @@ class Exec:  # an execution path
         self.error = kwargs["error"]
         self.failed = kwargs["failed"] if "failed" in kwargs else False
 
-        assert_address(self.message.input.target)
+        assert_address(self.call_frame.message.target)
         assert_address(self.this)
 
     def calldata(self):
-        return self.message.input.data
+        return self.message().data
 
     def caller(self):
-        return self.message.input.caller
+        return self.message().caller
 
     def callvalue(self):
-        return self.message.input.value
+        return self.message().value
+
+    def message(self):
+        return self.call_frame.message
 
     def current_opcode(self) -> UnionType[int, BitVecRef]:
         return unbox_int(self.pgm[self.pc])
@@ -1506,7 +1520,7 @@ class SEVM:
                 calldata, 0, arg_size, ex.st.memory[arg_loc : arg_loc + arg_size]
             )
 
-            message_input = MessageCallInput(
+            message = Message(
                 target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
                 caller=caller if op != EVM.DELEGATECALL else ex.caller(),
                 value=fund if op != EVM.CALLCODE else ex.callvalue(),
@@ -1514,7 +1528,8 @@ class SEVM:
             )
 
             # TODO: check max call depth
-            message = MessageCall(input=message_input, depth=ex.message.depth + 1)
+            subcall = CallFrame(message=message, depth=ex.call_frame.depth + 1)
+            ex.call_frame.trace.append(subcall)
 
             # execute external calls
             (new_exs, new_steps, new_logs) = self.run(
@@ -1525,8 +1540,8 @@ class SEVM:
                     #
                     block=ex.block,
                     #
-                    message=message,
-                    this=message.input.target,
+                    call_frame=subcall,
+                    this=message.target,
                     #
                     pgm=ex.code[to],
                     pc=0,
@@ -1557,7 +1572,7 @@ class SEVM:
                 opcode = new_ex.current_opcode()
 
                 # restore tx msg
-                new_ex.message = ex.message
+                new_ex.call_frame = ex.call_frame
                 new_ex.this = ex.this
 
                 # restore vm state
@@ -2024,7 +2039,7 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, caller, new_addr, value)
 
-        message_input = MessageCallInput(
+        message = Message(
             target=new_addr,
             caller=caller,
             value=value,
@@ -2032,7 +2047,8 @@ class SEVM:
         )
 
         # TODO: check max call depth
-        message = MessageCall(input=message_input, depth=ex.message.depth + 1)
+        subcall = CallFrame(message=message, depth=ex.call_frame.depth + 1)
+        ex.call_frame.trace.append(subcall)
 
         # execute contract creation code
         (new_exs, new_steps, new_logs) = self.run(
@@ -2043,7 +2059,7 @@ class SEVM:
                 #
                 block=ex.block,
                 #
-                message=message,
+                call_frame=subcall,
                 this=new_addr,
                 #
                 pgm=create_code,
@@ -2082,7 +2098,7 @@ class SEVM:
                 new_ex.code[new_addr] = Contract(new_ex.output)
 
                 # restore tx msg
-                new_ex.message = ex.message
+                new_ex.call_frame = ex.call_frame
                 new_ex.this = ex.this
 
                 # restore vm state
@@ -2209,7 +2225,7 @@ class SEVM:
             #
             block=deepcopy(ex.block),
             #
-            message=deepcopy(ex.message),
+            call_frame=deepcopy(ex.call_frame),
             this=ex.this,
             #
             pgm=ex.pgm,
@@ -2248,11 +2264,6 @@ class SEVM:
 
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
-
-    def process_message_call(
-        self, message: MessageCallInput, ex0: Exec = None
-    ) -> Tuple[List[MessageCall], HalmosLogs]:
-        pass
 
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
         out: List[Exec] = []
@@ -2398,7 +2409,7 @@ class SEVM:
                     ex.st.push(ex.st.pop() ^ ex.st.pop())  # bvxor
 
                 elif opcode == EVM.CALLDATALOAD:
-                    calldata = ex.message.input.data
+                    calldata = ex.message().data
                     if calldata is None:
                         ex.st.push(f_calldataload(ex.st.pop()))
                     else:
@@ -2415,7 +2426,7 @@ class SEVM:
                             )
                         )
                 elif opcode == EVM.CALLDATASIZE:
-                    calldata = ex.message.input.data
+                    calldata = ex.message().data
                     # TODO: is optional calldata necessary?
                     if calldata is None:
                         ex.st.push(f_calldatasize())
@@ -2424,7 +2435,7 @@ class SEVM:
                 elif opcode == EVM.CALLVALUE:
                     ex.st.push(ex.callvalue())
                 elif opcode == EVM.CALLER:
-                    ex.st.push(uint256(ex.message.input.caller))
+                    ex.st.push(uint256(ex.message().caller))
                 elif opcode == EVM.ORIGIN:
                     ex.st.push(uint256(f_origin()))
                 elif opcode == EVM.ADDRESS:
@@ -2540,7 +2551,7 @@ class SEVM:
                     # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
                     if size > 0:
-                        calldata = ex.message.input.data
+                        calldata = ex.message().data
                         if calldata is None:
                             f_calldatacopy = Function(
                                 "calldatacopy_" + str(size * 8),
@@ -2602,15 +2613,13 @@ class SEVM:
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     num_topics: int = opcode - EVM.LOG0
+                    topics = list(ex.st.pop() for _ in range(num_topics))
+
                     loc: int = ex.st.mloc()
-                    # size (in bytes)
-                    size: int = int_of(ex.st.pop(), "symbolic LOG data size")
-                    topics = []
-                    for _ in range(num_topics):
-                        topics.append(ex.st.pop())
-                    ex.message.logs.append(
-                        EventLog(ex.this, topics, data=wload(ex.st.memory, loc, size))
-                    )
+                    size_bytes: int = int_of(ex.st.pop(), "symbolic LOG data size")
+                    data = wload(ex.st.memory, loc, size_bytes)
+
+                    ex.call_frame.emit_log(EventLog(ex.this, topics, data))
 
                 elif opcode == EVM.PUSH0:
                     ex.st.push(con(0))
@@ -2665,7 +2674,7 @@ class SEVM:
         #
         block,
         #
-        message: MessageCall,
+        call_frame: CallFrame,
         #
         this,
         #
@@ -2680,7 +2689,7 @@ class SEVM:
             #
             block=block,
             #
-            message=message,
+            call_frame=call_frame,
             #
             this=this,
             pgm=pgm,

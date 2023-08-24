@@ -135,42 +135,44 @@ def mk_solver(args: Namespace):
     return solver
 
 
-def render_trace(message: MessageCall) -> None:
+def render_trace(frame: CallFrame) -> None:
     print("Traces:")
 
     # TODO: label for known addresses
     # TODO: decode calldata
     # TODO: proper ordering of subcalls and logs
 
-    target = unbox_int(message.input.target)
+    message, output = frame.message, frame.output
+    target = unbox_int(message.target)
     target_str = str(target) if is_bv(target) else hex(target)
 
     calldata = (
-        simplify(Concat(message.input.data))
-        if any(is_bv(x) for x in message.input.data)
-        else hex(bytes(message.input.data))
+        simplify(Concat(message.data))
+        if any(is_bv(x) for x in message.data)
+        else hex(bytes(message.data))
     )
 
-    value = unbox_int(message.input.value)
+    value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
 
-    static_str = " [staticcall]" if message.input.is_static else ""
+    static_str = " [staticcall]" if message.is_static else ""
 
     returndata = "0x"
     failed = False
-    if message.output:
-        returndata = (
-            simplify(Concat(message.output.data))
-            if is_bv(message.output.data)
-            else hex(message.output.data)
-        )
-        failed = message.output.error is not None
+    error_str = ""
 
-    indent = message.depth * "    "
+    if output is not None:
+        returndata = (
+            simplify(Concat(output.data)) if is_bv(output.data) else hex(output.data)
+        )
+        failed = output.error is not None
+        error_str = f" (error: {output.error})" if failed else error_str
+
+    indent = frame.depth * "    "
     color = color_warn if failed else color_good
 
     print(f"{indent}{target_str}::{calldata}{static_str}{value_str}")
-    print(f"{indent}{color('← ')}{returndata}")
+    print(f"{indent}{color('← ')}{returndata}{error_str}")
     print()
 
 
@@ -182,7 +184,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
     options = mk_options(args)
     this = mk_this()
 
-    message = MessageCallInput(
+    message = Message(
         target=this,
         caller=mk_caller(args),
         value=mk_callvalue(),
@@ -195,7 +197,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         storage={this: {}},
         balance=balance,
         block=block,
-        message=MessageCall(input=message),
+        call_frame=CallFrame(message=message),
         this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
@@ -227,7 +229,7 @@ def deploy_test(
     libs: Dict,
 ) -> Exec:
     this = mk_this()
-    message = MessageCallInput(
+    message = Message(
         target=this,
         caller=mk_caller(args),
         value=con(0),
@@ -239,7 +241,7 @@ def deploy_test(
         storage={this: {}},
         balance=mk_balance(),
         block=mk_block(),
-        message=MessageCall(input=message),
+        call_frame=CallFrame(message=message),
         this=this,
         pgm=None,  # to be added
         symbolic=False,
@@ -315,14 +317,13 @@ def setup(
         dyn_param_size = []  # TODO: propagate to run
         mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
 
-        setup_ex.message = MessageCall(
-            input=MessageCallInput(
-                target=setup_ex.message.input.target,
-                caller=setup_ex.message.input.caller,
-                value=setup_ex.message.input.value,
+        setup_ex.call_frame = CallFrame(
+            message=Message(
+                target=setup_ex.message().target,
+                caller=setup_ex.message().caller,
+                value=setup_ex.message().value,
                 data=calldata,
             ),
-            logs=setup_ex.message.logs,
         )
 
         (setup_exs_all, setup_steps, setup_logs) = sevm.run(setup_ex)
@@ -419,7 +420,7 @@ def run(
     dyn_param_size = []
     mk_calldata(abi, fun_info, cd, dyn_param_size, args)
 
-    message = MessageCallInput(
+    message = Message(
         target=setup_ex.this,
         caller=setup_ex.caller(),
         value=mk_callvalue(),
@@ -448,7 +449,7 @@ def run(
             #
             block=deepcopy(setup_ex.block),
             #
-            message=MessageCall(input=message),
+            call_frame=CallFrame(message=message),
             this=setup_ex.this,
             #
             pgm=setup_ex.code[setup_ex.this],
@@ -559,7 +560,7 @@ def run(
             print(ex)
 
         if args.verbose >= 3:
-            render_trace(ex.message)
+            render_trace(ex.call_frame)
 
     for opcode, idx, ex in stuck:
         warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")
