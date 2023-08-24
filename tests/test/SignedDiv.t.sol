@@ -69,7 +69,6 @@ abstract contract TestMulWad is Test {
     SolidityWadMul solidityWadMul = new SolidityWadMul();
 
     function setUp() external {
-        solidityWadMul = new SolidityWadMul();
         wadMul = createWadMul();
     }
 

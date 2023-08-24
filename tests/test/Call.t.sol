@@ -115,7 +115,7 @@ contract CallTest is Test {
         assert(msg_value == fund);
         assert(target == address(d));
 
-        assert(d.num() == x); // delegatecall updates the caller's state 
+        assert(d.num() == x); // delegatecall updates the caller's state
         assert(d.c().num() == 0);
 
         assert(address(this).balance == 0);

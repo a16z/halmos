@@ -135,6 +135,45 @@ def mk_solver(args: Namespace):
     return solver
 
 
+def render_trace(message: MessageCall) -> None:
+    print("Traces:")
+
+    # TODO: label for known addresses
+    # TODO: decode calldata
+    # TODO: proper ordering of subcalls and logs
+
+    target = unbox_int(message.input.target)
+    target_str = str(target) if is_bv(target) else hex(target)
+
+    calldata = (
+        simplify(Concat(message.input.data))
+        if any(is_bv(x) for x in message.input.data)
+        else hex(bytes(message.input.data))
+    )
+
+    value = unbox_int(message.input.value)
+    value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
+
+    static_str = " [staticcall]" if message.input.is_static else ""
+
+    returndata = "0x"
+    failed = False
+    if message.output:
+        returndata = (
+            simplify(Concat(message.output.data))
+            if is_bv(message.output.data)
+            else hex(message.output.data)
+        )
+        failed = message.output.error is not None
+
+    indent = message.depth * "    "
+    color = color_warn if failed else color_good
+
+    print(f"{indent}{target_str}::{calldata}{static_str}{value_str}")
+    print(f"{indent}{color('← ')}{returndata}")
+    print()
+
+
 def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
     solver = mk_solver(args)
     contract = Contract.from_hexcode(hexcode)
@@ -266,11 +305,7 @@ def setup(
 
     setup_timer.create_subtimer("run")
 
-    setup_sig, setup_name, setup_selector = (
-        setup_info.sig,
-        setup_info.name,
-        setup_info.selector,
-    )
+    setup_sig, setup_selector = (setup_info.sig, setup_info.selector)
     if setup_sig:
         if args.verbose >= 1:
             print(f"Running {setup_sig}")
@@ -522,6 +557,9 @@ def run(
         if args.print_failed_states:
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
+
+        if args.verbose >= 3:
+            render_trace(ex.message)
 
     for opcode, idx, ex in stuck:
         warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")

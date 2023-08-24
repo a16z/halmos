@@ -1508,8 +1508,8 @@ class SEVM:
 
             message_input = MessageCallInput(
                 target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
-                caller=caller if op != EVM.DELEGATECALL else ex.caller,
-                value=fund if op != EVM.CALLCODE else ex.callvalue,
+                caller=caller if op != EVM.DELEGATECALL else ex.caller(),
+                value=fund if op != EVM.CALLCODE else ex.callvalue(),
                 data=calldata,
             )
 
@@ -2082,9 +2082,7 @@ class SEVM:
                 new_ex.code[new_addr] = Contract(new_ex.output)
 
                 # restore tx msg
-                new_ex.calldata = ex.calldata
-                new_ex.callvalue = ex.callvalue
-                new_ex.caller = ex.caller
+                new_ex.message = ex.message
                 new_ex.this = ex.this
 
                 # restore vm state
@@ -2424,7 +2422,7 @@ class SEVM:
                     else:
                         ex.st.push(con(len(calldata)))
                 elif opcode == EVM.CALLVALUE:
-                    ex.st.push(ex.message.input.value)
+                    ex.st.push(ex.callvalue())
                 elif opcode == EVM.CALLER:
                     ex.st.push(uint256(ex.message.input.caller))
                 elif opcode == EVM.ORIGIN:
