@@ -426,7 +426,7 @@ class EventLog:
 
     address: Address
     topics: List[Word]
-    data: Bytes
+    data: Optional[Bytes]
 
 
 @dataclass(frozen=True)
@@ -461,9 +461,6 @@ class CallFrame:
 
     def logs(self) -> List[EventLog]:
         return [t for t in self.trace if isinstance(t, EventLog)]
-
-    def emit_log(self, log: EventLog):
-        self.trace.append(log)
 
 
 class State:
@@ -775,6 +772,9 @@ class Exec:  # an execution path
         self.call_frame.output = CallOutput(
             data=data, accounts_to_delete=self.addresses_to_delete, error=error
         )
+
+    def emit_log(self, log: EventLog):
+        self.call_frame.trace.append(log)
 
     def calldata(self):
         return self.message().data
@@ -2631,13 +2631,12 @@ class SEVM:
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     num_topics: int = opcode - EVM.LOG0
-                    topics = list(ex.st.pop() for _ in range(num_topics))
-
                     loc: int = ex.st.mloc()
-                    size_bytes: int = int_of(ex.st.pop(), "symbolic LOG data size")
-                    data = wload(ex.st.memory, loc, size_bytes)
+                    size: int = int_of(ex.st.pop(), "symbolic LOG data size")
+                    topics = list(ex.st.pop() for _ in range(num_topics))
+                    data = wload(ex.st.memory, loc, size) if size > 0 else None
 
-                    ex.call_frame.emit_log(EventLog(ex.this, topics, data))
+                    ex.emit_log(EventLog(ex.this, topics, data))
 
                 elif opcode == EVM.PUSH0:
                     ex.st.push(con(0))

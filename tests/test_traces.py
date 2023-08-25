@@ -8,9 +8,12 @@ from z3 import *
 
 from halmos.__main__ import mk_block, render_trace
 from halmos.exceptions import *
-from halmos.sevm import Exec, Contract, Message, CallFrame, con
+from halmos.sevm import Exec, Contract, Message, CallFrame, EventLog, con, int_of
 from halmos.utils import EVM
 from test_fixtures import args, options, sevm
+
+# keccak256("FooEvent()")
+FOO_EVENT_SIG = 0x34E21A9428B1B47E73C4E509EABEEA7F2B74BECA07D82AAC87D4DD28B74C2A4A
 
 DEFAULT_EMPTY_CONSTRUCTOR = """
 contract Foo {}
@@ -158,5 +161,8 @@ def test_deploy_event_in_constructor(sevm, solver):
 
     assert exec.call_frame.output.error is None
     assert len(exec.call_frame.trace) == 1
-    assert exec.call_frame.trace[0].event == "FooEvent"
-    assert exec.call_frame.trace[0].data == []
+
+    event: EventLog = exec.call_frame.trace[0]
+    assert len(event.topics) == 1
+    assert int_of(event.topics[0]) == FOO_EVENT_SIG
+    assert event.data is None
