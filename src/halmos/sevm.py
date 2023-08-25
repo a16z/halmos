@@ -13,7 +13,7 @@ from functools import reduce
 from z3 import *
 
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
-from .exceptions import EvmException
+from .exceptions import *
 from .utils import (
     EVM,
     sha3_inv,
@@ -166,7 +166,11 @@ class Instruction:
         return instruction_length(self.opcode)
 
 
-class NotConcreteError(Exception):
+class InternalHalmosError(Exception):
+    pass
+
+
+class NotConcreteError(InternalHalmosError):
     pass
 
 
@@ -439,7 +443,7 @@ class Message:
 class CallOutput:
     data: Bytes
     accounts_to_delete: Set[Address]
-    error: EvmException
+    error: Optional[EvmException]
 
 
 TraceElement = UnionType["CallFrame", EventLog]
@@ -563,11 +567,15 @@ class Contract:
     #    (typically a Concat() of concrete and symbolic values)
     _rawcode: UnionType[bytes, BitVecRef]
 
-    def __init__(self, rawcode: UnionType[bytes, BitVecRef]) -> None:
+    def __init__(self, rawcode: UnionType[bytes, BitVecRef, str]) -> None:
         if is_bv_value(rawcode):
             if rawcode.size() % 8 != 0:
                 raise ValueError(rawcode)
             rawcode = rawcode.as_long().to_bytes(rawcode.size() // 8, "big")
+
+        if isinstance(rawcode, str):
+            rawcode = bytes.fromhex(rawcode)
+
         self._rawcode = rawcode
 
     def __init_jumpdests(self):
@@ -711,6 +719,7 @@ class Exec:  # an execution path
     output: Bytes  # returndata
     symbolic: bool  # symbolic or concrete storage
     prank: Prank
+    addresses_to_delete: Set[Address]
 
     # path
     solver: Solver
@@ -742,6 +751,7 @@ class Exec:  # an execution path
         self.output = kwargs["output"]
         self.symbolic = kwargs["symbolic"]
         self.prank = kwargs["prank"]
+        self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
         #
         self.solver = kwargs["solver"]
         self.path = kwargs["path"]
@@ -757,6 +767,14 @@ class Exec:  # an execution path
 
         assert_address(self.call_frame.message.target)
         assert_address(self.this)
+
+    def halt(self, data: Bytes, error: Optional[EvmException] = None) -> None:
+        if self.call_frame.output is not None:
+            raise InternalHalmosError("output already set")
+
+        self.call_frame.output = CallOutput(
+            data=data, accounts_to_delete=self.addresses_to_delete, error=error
+        )
 
     def calldata(self):
         return self.message().data
@@ -2306,22 +2324,22 @@ class SEVM:
                     print(ex)
 
                 if opcode == EVM.STOP:
-                    ex.output = None
+                    ex.halt(data=None)
                     out.append(ex)
                     continue
 
                 elif opcode == EVM.INVALID:
-                    ex.output = None
+                    ex.halt(data=None, error=InvalidOpcode)
                     out.append(ex)
                     continue
 
                 elif opcode == EVM.REVERT:
-                    ex.output = ex.st.ret()
+                    ex.halt(data=ex.st.ret(), error=Revert)
                     out.append(ex)
                     continue
 
                 elif opcode == EVM.RETURN:
-                    ex.output = ex.st.ret()
+                    ex.halt(data=ex.st.ret())
                     out.append(ex)
                     continue
 
@@ -2643,6 +2661,7 @@ class SEVM:
                     ex.st.swap(opcode - EVM.SWAP1 + 1)
 
                 else:
+                    # TODO: switch to InvalidOpcode when we have implemented every opcode
                     warn(
                         UNSUPPORTED_OPCODE,
                         f"Unsupported opcode {hex(opcode)} ({str_opcode.get(opcode, '?')})",

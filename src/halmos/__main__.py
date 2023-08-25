@@ -149,7 +149,7 @@ def render_trace(frame: CallFrame) -> None:
     calldata = (
         simplify(Concat(message.data))
         if any(is_bv(x) for x in message.data)
-        else hex(bytes(message.data))
+        else bytes(message.data).hex() or "0x"
     )
 
     value = unbox_int(message.value)
@@ -162,9 +162,15 @@ def render_trace(frame: CallFrame) -> None:
     error_str = ""
 
     if output is not None:
-        returndata = (
-            simplify(Concat(output.data)) if is_bv(output.data) else hex(output.data)
-        )
+        if is_bv(output.data):
+            returndata = simplify(Concat(output.data))
+        elif isinstance(output.data, bytes):
+            returndata = output.data.hex()
+        elif output.data is None:
+            pass
+        else:
+            raise ValueError("unexpected returndata in " + str(output))
+
         failed = output.error is not None
         error_str = f" (error: {output.error})" if failed else error_str
 
