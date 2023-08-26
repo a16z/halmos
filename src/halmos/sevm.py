@@ -434,7 +434,7 @@ class Message:
     target: Address
     caller: Address
     value: Word
-    data: Bytes
+    data: List[Byte]
     is_static: bool = False
     gas: Optional[Word] = None
 
@@ -1966,10 +1966,8 @@ class SEVM:
             if ret_size > 0:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)
 
-            # propagate callee's output to caller, which could be None
-            ex.output = ret
-
-            ex.calls.append((exit_code_var, exit_code, ex.output))
+            # TODO: check if still needed
+            ex.calls.append((exit_code_var, exit_code, ex.ret))
 
             ex.next_pc()
             stack.append((ex, step_id))
