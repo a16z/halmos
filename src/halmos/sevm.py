@@ -766,6 +766,8 @@ class Exec:  # an execution path
         assert_address(self.this)
 
     def halt(self, data: Bytes, error: Optional[EvmException] = None) -> None:
+        # print(f"halting execution id {id(self)} and call frame {id(self.call_frame)}")
+
         if self.call_frame.output is not None:
             raise InternalHalmosError("output already set")
 
@@ -950,6 +952,9 @@ class Exec:  # an execution path
             )
 
     def sstore(self, addr: Any, loc: Any, val: Any) -> None:
+        if self.call_frame.message.is_static:
+            raise WriteInStaticContext(f"message={self.call_frame.message}")
+
         offsets = self.decode_storage_loc(loc)
         if not len(offsets) > 0:
             raise ValueError(offsets)
@@ -1543,6 +1548,7 @@ class SEVM:
                 caller=caller if op != EVM.DELEGATECALL else ex.caller(),
                 value=fund if op != EVM.CALLCODE else ex.callvalue(),
                 data=calldata,
+                is_static=(op == EVM.STATICCALL),
             )
 
             # TODO: check max call depth
@@ -1587,9 +1593,7 @@ class SEVM:
 
             # process result
             for idx, new_ex in enumerate(new_exs):
-                opcode = new_ex.current_opcode()
-
-                # restore tx msg
+                # continue execution in the context of the parent
                 new_ex.call_frame = ex.call_frame
                 new_ex.this = ex.this
 
@@ -1613,25 +1617,19 @@ class SEVM:
                     actual_ret_size,
                 )
 
-                # set status code (in stack)
-                if opcode in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
-                    if opcode in [EVM.STOP, EVM.RETURN]:
-                        new_ex.st.push(con(1))
-                    else:
-                        new_ex.st.push(con(0))
+                # set status code on the stack
+                subcall_success = subcall.output.error is None
+                new_ex.st.push(con(1) if subcall_success else con(0))
 
-                        # revert network states
-                        new_ex.code = orig_code
-                        new_ex.storage = orig_storage
-                        new_ex.balance = orig_balance
+                if not subcall_success:
+                    # revert network states
+                    new_ex.code = orig_code
+                    new_ex.storage = orig_storage
+                    new_ex.balance = orig_balance
 
-                    # add to worklist even if it reverted during the external call
-                    new_ex.next_pc()
-                    stack.append((new_ex, step_id))
-                else:
-                    # got stuck during external call
-                    new_ex.error = f"External call encountered an issue at {mnemonic(opcode)}: {new_ex.error}"
-                    out.append(new_ex)
+                # add to worklist even if it reverted during the external call
+                new_ex.next_pc()
+                stack.append((new_ex, step_id))
 
         def call_unknown() -> None:
             call_id = len(ex.calls)
@@ -2668,6 +2666,11 @@ class SEVM:
 
                 ex.next_pc()
                 stack.append((ex, step_id))
+
+            except EvmException as err:
+                ex.halt(data=None, error=err)
+                out.append(ex)
+                continue
 
             except NotConcreteError as err:
                 ex.error = f"{err}"

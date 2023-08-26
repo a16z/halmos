@@ -77,7 +77,9 @@ contract Foo {
     uint256 x;
 
     function do_sstore() public returns (uint) {
-        x += 1;
+        unchecked {
+            x += 1;
+        }
     }
 
     function go() public view returns (bool success) {
@@ -87,7 +89,7 @@ contract Foo {
 """
 
 # TODO: chain calls and events, check ordering
-
+# TODO: symbolic subcalls
 
 caller = BitVec("msg_sender", 160)
 this = BitVec("this_address", 160)
@@ -293,3 +295,21 @@ def test_failed_call(sevm: SEVM, solver):
     assert len(subcalls) == 1
     assert subcalls[0].output.error is Revert
     assert int_of(subcalls[0].output.data) == PANIC_1
+
+
+def test_failed_static_call(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(FAILED_STATIC_CALL)
+    exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
+
+    sevm.run(exec)
+    render_trace(exec.call_frame)
+
+    # go() does not revert, it returns success=false
+    assert exec.call_frame.output.error is None
+    assert int_of(exec.call_frame.output.data) == 0
+
+    # the do_sstore() subcall fails
+    subcalls = exec.call_frame.subcalls()
+    assert len(subcalls) == 1
+    assert subcalls[0].message.is_static is True
+    assert isinstance(subcalls[0].output.error, WriteInStaticContext)
