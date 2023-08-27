@@ -565,6 +565,14 @@
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
+            },
+            {
+                "name": "check_FfiFailure()",
+                "exitcode": 1,
+                "num_models": 0,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/Foundry.t.sol:FoundryTest": [
