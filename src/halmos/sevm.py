@@ -1552,8 +1552,6 @@ class SEVM:
             )
 
             # TODO: check max call depth
-            subcall = CallFrame(message=message, depth=ex.call_frame.depth + 1)
-            ex.call_frame.trace.append(subcall)
 
             # execute external calls
             (new_exs, new_steps, new_logs) = self.run(
@@ -1564,7 +1562,9 @@ class SEVM:
                     #
                     block=ex.block,
                     #
-                    call_frame=subcall,
+                    call_frame=CallFrame(
+                        message=message, depth=ex.call_frame.depth + 1
+                    ),
                     this=message.target,
                     #
                     pgm=ex.code[to],
@@ -1592,9 +1592,15 @@ class SEVM:
             logs.extend(new_logs)
 
             # process result
-            for idx, new_ex in enumerate(new_exs):
+            for new_ex in new_exs:
+                subcall = new_ex.call_frame
+
+                # pessimistic copy because the subcall results may diverge
+                new_call_frame = deepcopy(ex.call_frame)
+                new_call_frame.trace.append(subcall)
+
                 # continue execution in the context of the parent
-                new_ex.call_frame = ex.call_frame
+                new_ex.call_frame = new_call_frame
                 new_ex.this = ex.this
 
                 # restore vm state

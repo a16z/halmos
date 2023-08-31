@@ -2,7 +2,7 @@ import json
 import pytest
 import subprocess
 
-from typing import Dict
+from typing import Dict, List
 
 from z3 import *
 
@@ -88,6 +88,19 @@ contract Foo {
 }
 """
 
+SYMBOLIC_SUBCALL = """
+contract Foo {
+    function may_fail(uint256 x) public pure returns (uint) {
+        assert(x != 42);
+    }
+
+    function go(uint256 x) public view returns (bool success) {
+        (success, ) = address(this).staticcall(abi.encodeWithSignature("may_fail(uint256)", x));
+    }
+}
+"""
+
+
 # TODO: chain calls and events, check ordering
 # TODO: symbolic subcalls
 
@@ -97,6 +110,12 @@ balance = Array("balance_0", BitVecSort(160), BitVecSort(256))
 
 # 0x0f59f83a is keccak256("go()")
 default_calldata = list(con(x, size_bits=8) for x in bytes.fromhex("0f59f83a"))
+
+go_uint256_selector = BitVecVal(0xB20E7344, 32)  # keccak256("go(uint256)")
+p_x_uint256 = BitVec("p_x_uint256", 256)
+symbolic_uint256_calldata: List[BitVecRef] = []
+wstore(symbolic_uint256_calldata, 0, 4, go_uint256_selector)
+wstore(symbolic_uint256_calldata, 4, 32, p_x_uint256)
 
 
 @pytest.fixture
@@ -262,11 +281,15 @@ def test_deploy_event_in_constructor(sevm, solver):
 
 def test_simple_call(sevm: SEVM, solver):
     _, runtime_hexcode = get_bytecode(SIMPLE_CALL)
-    exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
 
-    sevm.run(exec)
+    execs = sevm.run(input_exec)[0]
+    assert len(execs) == 1
+
+    exec = execs.pop()
     render_trace(exec.call_frame)
 
+    assert exec.call_frame.output is not None
     assert exec.call_frame.output.error is None
 
     # go() returns success=true
@@ -281,9 +304,12 @@ def test_simple_call(sevm: SEVM, solver):
 
 def test_failed_call(sevm: SEVM, solver):
     _, runtime_hexcode = get_bytecode(FAILED_SIMPLE_CALL)
-    exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
 
-    sevm.run(exec)
+    execs = sevm.run(input_exec)[0]
+    assert len(execs) == 1
+
+    exec = execs.pop()
     render_trace(exec.call_frame)
 
     # go() does not revert, it returns success=false
@@ -299,9 +325,12 @@ def test_failed_call(sevm: SEVM, solver):
 
 def test_failed_static_call(sevm: SEVM, solver):
     _, runtime_hexcode = get_bytecode(FAILED_STATIC_CALL)
-    exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
 
-    sevm.run(exec)
+    execs = sevm.run(input_exec)[0]
+    assert len(execs) == 1
+
+    exec = execs.pop()
     render_trace(exec.call_frame)
 
     # go() does not revert, it returns success=false
@@ -313,3 +342,27 @@ def test_failed_static_call(sevm: SEVM, solver):
     assert len(subcalls) == 1
     assert subcalls[0].message.is_static is True
     assert isinstance(subcalls[0].output.error, WriteInStaticContext)
+
+
+def test_symbolic_subcall(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(SYMBOLIC_SUBCALL)
+    input_exec: Exec = mk_ex(
+        runtime_hexcode, sevm, solver, data=symbolic_uint256_calldata
+    )
+
+    execs = sevm.run(input_exec)[0]
+
+    # we get 2 executions, one for x == 42 and one for x != 42
+    assert len(execs) == 2
+    render_trace(execs[0].call_frame)
+    render_trace(execs[1].call_frame)
+
+    # all executions have exactly one subcall and the outer call does not revert
+    assert all(len(x.call_frame.subcalls()) == 1 for x in execs)
+    assert all(x.call_frame.output.error is None for x in execs)
+
+    # in one of the executions, the subcall succeeds
+    assert any(x.call_frame.subcalls()[0].output.error is None for x in execs)
+
+    # in one of the executions, the subcall reverts
+    assert any(x.call_frame.subcalls()[0].output.error is Revert for x in execs)

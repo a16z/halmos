@@ -136,7 +136,8 @@ def mk_solver(args: Namespace):
 
 
 def render_trace(frame: CallFrame) -> None:
-    print("Traces:")
+    if frame.depth == 1:
+        print("Traces:")
 
     # TODO: label for known addresses
     # TODO: decode calldata
@@ -178,8 +179,12 @@ def render_trace(frame: CallFrame) -> None:
     color = color_warn if failed else color_good
 
     print(f"{indent}{target_str}::{calldata}{static_str}{value_str}")
+    for subcall in frame.subcalls():
+        render_trace(subcall)
     print(f"{indent}{color('← ')}{returndata}{error_str}")
-    print()
+
+    if frame.depth == 1:
+        print()
 
 
 def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
