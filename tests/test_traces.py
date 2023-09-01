@@ -100,9 +100,73 @@ contract Foo {
 }
 """
 
+SYMBOLIC_CREATE = """
+contract Bar {
+    uint256 immutable x;
+
+    constructor(uint256 _x) {
+        assert(_x != 42);
+        x = _x;
+    }
+}
+
+contract Foo {
+    function go(uint256 x) public returns (bool success) {
+        try new Bar(x) {
+            success = true;
+        } catch {
+            success = false;
+        }
+    }
+}
+"""
+
+FAILED_CREATE = """
+contract Bar {
+    uint256 immutable x;
+
+    constructor(uint256 _x) {
+        assert(_x != 42);
+        x = _x;
+    }
+}
+
+contract Foo {
+    function go() public returns(bool success) {
+        bytes memory creationCode = abi.encodePacked(
+            type(Bar).creationCode,
+            uint256(42)
+        );
+
+        address addr;
+        bytes memory returndata;
+
+        assembly {
+            addr := create(0, add(creationCode, 0x20), mload(creationCode))
+
+            // advance free mem pointer to allocate `size` bytes
+            let free_mem_ptr := mload(0x40)
+            mstore(0x40, add(free_mem_ptr, returndatasize()))
+
+            returndata := free_mem_ptr
+            mstore(returndata, returndatasize())
+
+            let offset := add(returndata, 32)
+            returndatacopy(
+                offset,
+                0, // returndata offset
+                returndatasize()
+            )
+        }
+
+        success = (addr != address(0));
+        // assert(returndata.length == 36);
+    }
+}
+"""
 
 # TODO: chain calls and events, check ordering
-# TODO: symbolic subcalls
+# TODO: symbolic event
 
 caller = BitVec("msg_sender", 160)
 this = BitVec("this_address", 160)
@@ -113,9 +177,9 @@ default_calldata = list(con(x, size_bits=8) for x in bytes.fromhex("0f59f83a"))
 
 go_uint256_selector = BitVecVal(0xB20E7344, 32)  # keccak256("go(uint256)")
 p_x_uint256 = BitVec("p_x_uint256", 256)
-symbolic_uint256_calldata: List[BitVecRef] = []
-wstore(symbolic_uint256_calldata, 0, 4, go_uint256_selector)
-wstore(symbolic_uint256_calldata, 4, 32, p_x_uint256)
+go_uint256_calldata: List[BitVecRef] = []
+wstore(go_uint256_calldata, 0, 4, go_uint256_selector)
+wstore(go_uint256_calldata, 4, 32, p_x_uint256)
 
 
 @pytest.fixture
@@ -346,9 +410,7 @@ def test_failed_static_call(sevm: SEVM, solver):
 
 def test_symbolic_subcall(sevm: SEVM, solver):
     _, runtime_hexcode = get_bytecode(SYMBOLIC_SUBCALL)
-    input_exec: Exec = mk_ex(
-        runtime_hexcode, sevm, solver, data=symbolic_uint256_calldata
-    )
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
 
     execs = sevm.run(input_exec)[0]
 
@@ -366,3 +428,47 @@ def test_symbolic_subcall(sevm: SEVM, solver):
 
     # in one of the executions, the subcall reverts
     assert any(x.call_frame.subcalls()[0].output.error is Revert for x in execs)
+
+
+def test_symbolic_create(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(SYMBOLIC_CREATE)
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
+
+    execs = sevm.run(input_exec)[0]
+
+    # we get 2 executions, one for x == 42 and one for x != 42
+    assert len(execs) == 2
+    render_trace(execs[0].call_frame)
+    render_trace(execs[1].call_frame)
+
+    # all executions have exactly one subcall and the outer call does not revert
+    assert all(len(x.call_frame.subcalls()) == 1 for x in execs)
+    assert all(x.call_frame.output.error is None for x in execs)
+
+    # in one of the executions, the subcall succeeds
+    assert any(x.call_frame.subcalls()[0].output.error is None for x in execs)
+
+    # in one of the executions, the subcall reverts
+    assert any(x.call_frame.subcalls()[0].output.error is Revert for x in execs)
+
+
+def test_failed_create(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(FAILED_CREATE)
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
+
+    execs = sevm.run(input_exec)[0]
+
+    assert len(execs) == 1
+
+    exec = execs.pop()
+    render_trace(exec.call_frame)
+
+    # go() does not revert, it returns success=false
+    assert exec.call_frame.output.error is None
+    assert int_of(exec.call_frame.output.data) == 0
+
+    # the create() subcall fails
+    subcalls = exec.call_frame.subcalls()
+    assert len(subcalls) == 1
+    assert subcalls[0].output.error is Revert
+    assert int_of(subcalls[0].output.data) == PANIC_1

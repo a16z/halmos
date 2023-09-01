@@ -436,6 +436,7 @@ class Message:
     value: Word
     data: List[Byte]
     is_static: bool = False
+    is_create: bool = False
     gas: Optional[Word] = None
 
 
@@ -1593,14 +1594,12 @@ class SEVM:
 
             # process result
             for new_ex in new_exs:
-                subcall = new_ex.call_frame
-
-                # pessimistic copy because the subcall results may diverge
-                new_call_frame = deepcopy(ex.call_frame)
-                new_call_frame.trace.append(subcall)
-
                 # continue execution in the context of the parent
-                new_ex.call_frame = new_call_frame
+                # pessimistic copy because the subcall results may diverge
+                subcall = new_ex.call_frame
+                new_ex.call_frame = deepcopy(ex.call_frame)
+                new_ex.call_frame.trace.append(subcall)
+
                 new_ex.this = ex.this
 
                 # restore vm state
@@ -2063,13 +2062,11 @@ class SEVM:
             target=new_addr,
             caller=caller,
             value=value,
-            data=[],
+            data=create_hexcode,
+            is_create=True,
         )
 
         # TODO: check max call depth
-        subcall = CallFrame(message=message, depth=ex.call_frame.depth + 1)
-        ex.call_frame.trace.append(subcall)
-
         # execute contract creation code
         (new_exs, new_steps, new_logs) = self.run(
             Exec(
@@ -2079,7 +2076,7 @@ class SEVM:
                 #
                 block=ex.block,
                 #
-                call_frame=subcall,
+                call_frame=CallFrame(message=message, depth=ex.call_frame.depth + 1),
                 this=new_addr,
                 #
                 pgm=create_code,
@@ -2109,36 +2106,40 @@ class SEVM:
         # process result
         for idx, new_ex in enumerate(new_exs):
             # sanity checks
-            if new_ex.failed:
-                raise ValueError(new_ex)
+            subcall = new_ex.call_frame
+            if subcall.output is None:
+                raise ValueError(
+                    "unfinished contract creation call frame: " + str(new_ex)
+                )
 
-            opcode = new_ex.current_opcode()
-            if opcode in [EVM.STOP, EVM.RETURN]:
+            # continue execution in the context of the parent
+            # pessimistic copy because the subcall results may diverge
+            new_ex.call_frame = deepcopy(ex.call_frame)
+            new_ex.call_frame.trace.append(subcall)
+
+            new_ex.this = ex.this
+
+            # restore vm state
+            new_ex.pgm = ex.pgm
+            new_ex.pc = ex.pc
+            new_ex.st = deepcopy(ex.st)
+            new_ex.jumpis = deepcopy(ex.jumpis)
+            new_ex.symbolic = ex.symbolic
+            new_ex.prank = deepcopy(ex.prank)
+
+            if subcall.output.error is None:
                 # new contract code
                 new_ex.code[new_addr] = Contract(new_ex.output)
 
-                # restore tx msg
-                new_ex.call_frame = ex.call_frame
-                new_ex.this = ex.this
-
-                # restore vm state
-                new_ex.pgm = ex.pgm
-                new_ex.pc = ex.pc
-                new_ex.st = deepcopy(ex.st)
-                new_ex.jumpis = deepcopy(ex.jumpis)
-                new_ex.output = None  # output is reset, not restored
-                new_ex.symbolic = ex.symbolic
-                new_ex.prank = deepcopy(ex.prank)
-
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))
-
-                # add to worklist
-                new_ex.next_pc()
-                stack.append((new_ex, step_id))
             else:
                 # creation failed
-                out.append(new_ex)
+                new_ex.st.push(con(0))
+
+            # add to worklist
+            new_ex.next_pc()
+            stack.append((new_ex, step_id))
 
     def jumpi(
         self,
@@ -2429,7 +2430,7 @@ class SEVM:
                     ex.st.push(ex.st.pop() ^ ex.st.pop())  # bvxor
 
                 elif opcode == EVM.CALLDATALOAD:
-                    calldata = ex.message().data
+                    calldata = None if ex.message().is_create else ex.message().data
                     if calldata is None:
                         ex.st.push(f_calldataload(ex.st.pop()))
                     else:
@@ -2446,7 +2447,7 @@ class SEVM:
                             )
                         )
                 elif opcode == EVM.CALLDATASIZE:
-                    calldata = ex.message().data
+                    calldata = None if ex.message().is_create else ex.message().data
                     # TODO: is optional calldata necessary?
                     if calldata is None:
                         ex.st.push(f_calldatasize())

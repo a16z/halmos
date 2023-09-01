@@ -135,33 +135,49 @@ def mk_solver(args: Namespace):
     return solver
 
 
-def render_trace(frame: CallFrame) -> None:
-    if frame.depth == 1:
-        print("Traces:")
+def render_initcode(frame: CallFrame) -> str:
+    message = frame.message
+    data = message.data
 
-    # TODO: label for known addresses
-    # TODO: decode calldata
-    # TODO: proper ordering of subcalls and logs
+    initcode_str = ""
+    args_str = ""
 
-    message, output = frame.message, frame.output
-    target = unbox_int(message.target)
-    target_str = str(target) if is_bv(target) else hex(target)
+    if (
+        isinstance(data, BitVecRef)
+        and is_app(data)
+        and data.decl().kind() == Z3_OP_CONCAT
+    ):
+        children = [arg for arg in data.children()]
+        if isinstance(children[0], BitVecNumRef):
+            initcode_str = hex(children[0].as_long())
+            args_str = ", ".join(map(str, children[1:]))
+    else:
+        initcode_str = hexify(data)
 
-    calldata = (
-        simplify(Concat(message.data))
-        if any(is_bv(x) for x in message.data)
-        else bytes(message.data).hex() or "0x"
-    )
+    return f"{initcode_str}({color_info(args_str)})"
+
+
+def render_create_call(frame: CallFrame) -> None:
+    message = frame.message
+    addr = unbox_int(message.target)
+    addr_str = str(addr) if is_bv(addr) else hex(addr)
+
+    initcode_str = render_initcode(frame)
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
+    indent = frame.depth * "    "
 
-    static_str = " [staticcall]" if message.is_static else ""
+    print(f"{indent}new contract @ {color_info(addr_str)}::{initcode_str}{value_str}")
+    render_output(frame)
 
+
+def render_output(frame: CallFrame) -> None:
     returndata = "0x"
     failed = False
     error_str = ""
 
+    output = frame.output
     if output is not None:
         if is_bv(output.data):
             returndata = simplify(Concat(output.data))
@@ -175,13 +191,46 @@ def render_trace(frame: CallFrame) -> None:
         failed = output.error is not None
         error_str = f" (error: {output.error})" if failed else error_str
 
-    indent = frame.depth * "    "
     color = color_warn if failed else color_good
+    color_if_err = color_warn if failed else lambda x: x
+    indent = frame.depth * "    "
+
+    print(f"{indent}{color('← ')}{color_if_err(returndata)}{color_if_err(error_str)}")
+
+
+def render_trace(frame: CallFrame) -> None:
+    if frame.depth == 1:
+        print("Traces:")
+
+    # TODO: label for known addresses
+    # TODO: decode calldata
+    # TODO: proper ordering of subcalls and logs
+
+    message = frame.message
+    if message.is_create:
+        render_create_call(frame)
+        return
+
+    target = unbox_int(message.target)
+    target_str = str(target) if is_bv(target) else hex(target)
+
+    calldata = (
+        simplify(Concat(message.data))
+        if any(is_bv(x) for x in message.data)
+        else bytes(message.data).hex() or "0x"
+    )
+
+    value = unbox_int(message.value)
+    value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
+    static_str = " [staticcall]" if message.is_static else ""
+    indent = frame.depth * "    "
 
     print(f"{indent}{target_str}::{calldata}{static_str}{value_str}")
+
     for subcall in frame.subcalls():
         render_trace(subcall)
-    print(f"{indent}{color('← ')}{returndata}{error_str}")
+
+    render_output(frame)
 
     if frame.depth == 1:
         print()
