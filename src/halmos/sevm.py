@@ -971,9 +971,7 @@ class SolidityStorage(Storage):
             else:
                 # do not use z3 const array `K(BitVecSort(len(keys)*256), con(0))` when not ex.symbolic
                 # instead use normal smt array, and generate emptyness axiom; see load()
-                ex.storage[addr][slot][len(keys)] = cls.empty(
-                    addr, slot, len(keys)
-                )
+                ex.storage[addr][slot][len(keys)] = cls.empty(addr, slot, len(keys))
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
@@ -988,8 +986,7 @@ class SolidityStorage(Storage):
             if not ex.symbolic:
                 # generate emptyness axiom for each array index, instead of using quantified formula; see init()
                 ex.solver.add(
-                    Select(cls.empty(addr, slot, len(keys)), concat(keys))
-                    == con(0)
+                    Select(cls.empty(addr, slot, len(keys)), concat(keys)) == con(0)
                 )
             return ex.select(
                 ex.storage[addr][slot][len(keys)], concat(keys), ex.storages
@@ -1042,9 +1039,7 @@ class SolidityStorage(Storage):
             args = loc.children()
             if len(args) < 2:
                 raise ValueError(loc)
-            args = sorted(
-                map(cls.decode, args), key=lambda x: len(x), reverse=True
-            )
+            args = sorted(map(cls.decode, args), key=lambda x: len(x), reverse=True)
             if len(args[1]) > 1:
                 # only args[0]'s length >= 1, the others must be 1
                 raise ValueError(loc)
@@ -1084,12 +1079,8 @@ class CustomStorage(Storage):
         cls.init(ex, addr, loc)
         if not ex.symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-            ex.solver.add(
-                Select(cls.empty(addr, loc), loc) == con(0)
-            )
-        return ex.select(
-            ex.storage[addr][loc.size()], loc, ex.storages
-        )
+            ex.solver.add(Select(cls.empty(addr, loc), loc) == con(0))
+        return ex.select(ex.storage[addr][loc.size()], loc, ex.storages)
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
