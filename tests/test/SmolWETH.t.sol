@@ -39,6 +39,7 @@ contract SmolWETH {
     }
 }
 
+/// @custom:halmos --custom-storage-layout
 contract SmolWETHTest is Test, SymTest {
     SmolWETH weth;
 

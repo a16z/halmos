@@ -652,221 +652,6 @@ class CodeIterator:
         return insn
 
 
-class Storage:
-    def __init__(self, custom: bool):
-        self.custom = custom
-
-    def normalize(expr: Any) -> Any:
-        # Concat(Extract(255, 8, bvadd(x, y)), bvadd(Extract(7, 0, x), Extract(7, 0, y))) => x + y
-        if expr.decl().name() == "concat" and expr.num_args() == 2:
-            arg0 = expr.arg(0)  # Extract(255, 8, bvadd(x, y))
-            arg1 = expr.arg(1)  # bvadd(Extract(7, 0, x), Extract(7, 0, y))
-            if (
-                arg0.decl().name() == "extract"
-                and arg0.num_args() == 1
-                and arg0.params() == [255, 8]
-            ):
-                arg00 = arg0.arg(0)  # bvadd(x, y)
-                if arg00.decl().name() == "bvadd":
-                    x = arg00.arg(0)
-                    y = arg00.arg(1)
-                    if arg1.decl().name() == "bvadd" and arg1.num_args() == 2:
-                        if eq(arg1.arg(0), simplify(Extract(7, 0, x))) and eq(
-                            arg1.arg(1), simplify(Extract(7, 0, y))
-                        ):
-                            return x + y
-        return expr
-
-
-class SolidityStorage(Storage):
-    def __init__(self):
-        super().__init__(False)
-
-    def empty_storage_of(self, addr: BitVecRef, slot: int, len_keys: int) -> ArrayRef:
-        return Array(
-            f"storage_{id_str(addr)}_{slot}_{len_keys}_00",
-            BitVecSorts[len_keys * 256],
-            BitVecSort256,
-        )
-
-    def sinit(self, addr: Any, slot: int, keys) -> None:
-        assert_address(addr)
-        if slot not in self.storage[addr]:
-            self.storage[addr][slot] = {}
-        if len(keys) not in self.storage[addr][slot]:
-            if len(keys) == 0:
-                if self.symbolic:
-                    label = f"storage_{id_str(addr)}_{slot}_{len(keys)}_00"
-                    self.storage[addr][slot][len(keys)] = BitVec(label, BitVecSort256)
-                else:
-                    self.storage[addr][slot][len(keys)] = con(0)
-            else:
-                # do not use z3 const array `K(BitVecSort(len(keys)*256), con(0))` when not self.symbolic
-                # instead use normal smt array, and generate emptyness axiom; see sload()
-                self.storage[addr][slot][len(keys)] = self.empty_storage_of(
-                    addr, slot, len(keys)
-                )
-
-    def sload(self, addr: Any, loc: Word) -> Word:
-        offsets = self.decode_storage_loc(loc)
-        if not len(offsets) > 0:
-            raise ValueError(offsets)
-        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
-        self.sinit(addr, slot, keys)
-        if len(keys) == 0:
-            return self.storage[addr][slot][0]
-        else:
-            if not self.symbolic:
-                # generate emptyness axiom for each array index, instead of using quantified formula; see sinit()
-                self.solver.add(
-                    Select(self.empty_storage_of(addr, slot, len(keys)), concat(keys))
-                    == con(0)
-                )
-            return self.select(
-                self.storage[addr][slot][len(keys)], concat(keys), self.storages
-            )
-
-    def sstore(self, addr: Any, loc: Any, val: Any) -> None:
-        if is_bool(val):
-            val = If(val, con(1), con(0))
-        offsets = self.decode_storage_loc(loc)
-        if not len(offsets) > 0:
-            raise ValueError(offsets)
-        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
-        self.sinit(addr, slot, keys)
-        if len(keys) == 0:
-            self.storage[addr][slot][0] = val
-        else:
-            new_storage_var = Array(
-                f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(self.storages):>02}",
-                BitVecSorts[len(keys) * 256],
-                BitVecSort256,
-            )
-            new_storage = Store(self.storage[addr][slot][len(keys)], concat(keys), val)
-            self.solver.add(new_storage_var == new_storage)
-            self.storage[addr][slot][len(keys)] = new_storage_var
-            self.storages[new_storage_var] = new_storage
-
-    def decode_storage_loc(self, loc: Any) -> Any:
-        loc = normalize(loc)
-
-        if loc.decl().name() == "sha3_512":  # m[k] : hash(k.m)
-            args = loc.arg(0)
-            offset = simplify(Extract(511, 256, args))
-            base = simplify(Extract(255, 0, args))
-            return self.decode_storage_loc(base) + (offset, con(0))
-        elif loc.decl().name() == "sha3_256":  # a[i] : hash(a)+i
-            base = loc.arg(0)
-            return self.decode_storage_loc(base) + (con(0),)
-        elif loc.decl().name() == "bvadd":
-            #   # when len(args) == 2
-            #   arg0 = self.decode_storage_loc(loc.arg(0))
-            #   arg1 = self.decode_storage_loc(loc.arg(1))
-            #   if len(arg0) == 1 and len(arg1) > 1: # i + hash(x)
-            #       return arg1[0:-1] + (arg1[-1] + arg0[0],)
-            #   elif len(arg0) > 1 and len(arg1) == 1: # hash(x) + i
-            #       return arg0[0:-1] + (arg0[-1] + arg1[0],)
-            #   elif len(arg0) == 1 and len(arg1) == 1: # i + j
-            #       return (arg0[0] + arg1[0],)
-            #   else: # hash(x) + hash(y) # ambiguous
-            #       raise ValueError(loc)
-            # when len(args) >= 2
-            args = loc.children()
-            if len(args) < 2:
-                raise ValueError(loc)
-            args = sorted(
-                map(self.decode_storage_loc, args), key=lambda x: len(x), reverse=True
-            )
-            if len(args[1]) > 1:
-                # only args[0]'s length >= 1, the others must be 1
-                raise ValueError(loc)
-            return args[0][0:-1] + (
-                reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),
-            )
-        elif is_bv_value(loc):
-            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
-            if preimage:  # loc == hash(preimage) + delta
-                return (con(preimage), con(delta))
-            else:
-                return (loc,)
-        elif is_bv(loc):
-            return (loc,)
-        else:
-            raise ValueError(loc)
-
-class CustomStorage(Storage):
-    def __init__(self):
-        super().__init__(True)
-
-    def empty_storage_of(self, addr: BitVecRef, slot: BitVecRef) -> ArrayRef:
-        return Array(
-            f"storage_{id_str(addr)}_{slot.size()}_00",
-            BitVecSorts[slot.size()],
-            BitVecSort256,
-        )
-
-    def sinit(self, addr: Any, slot: BitVecRef) -> None:
-        assert_address(addr)
-        if slot.size() not in self.storage[addr]:
-            self.storage[addr][slot.size()] = self.empty_storage_of(addr, slot)
-
-    def sload(self, addr: Any, loc: Word) -> Word:
-        slot = self.decode_storage_loc(loc)
-        self.sinit(addr, slot)
-        if not self.symbolic:
-            # generate emptyness axiom for each array index, instead of using quantified formula; see sinit()
-            self.solver.add(
-                Select(self.empty_storage_of(addr, slot), slot) == con(0)
-            )
-        return self.select(
-            self.storage[addr][slot.size()], slot, self.storages
-        )
-
-    def sstore(self, addr: Any, loc: Any, val: Any) -> None:
-        if is_bool(val):
-            val = If(val, con(1), con(0))
-        slot = self.decode_storage_loc(loc)
-        self.sinit(addr, slot)
-        new_storage_var = Array(
-            f"storage_{id_str(addr)}_{slot.size()}_{1+len(self.storages):>02}",
-            BitVecSorts[slot.size()],
-            BitVecSort256,
-        )
-        new_storage = Store(self.storage[addr][slot.size()], slot, val)
-        self.solver.add(new_storage_var == new_storage)
-        self.storage[addr][slot.size()] = new_storage_var
-        self.storages[new_storage_var] = new_storage
-
-    def decode_storage_loc(self, loc: Any) -> Any:
-        loc = self.normalize(loc)
-
-        if loc.decl().name() == "sha3_512":  # m[k] : hash(k.m)
-            args = loc.arg(0)
-            hi = self.decode_storage_loc(simplify(Extract(511, 256, args)))
-            lo = self.decode_storage_loc(simplify(Extract(255, 0, args)))
-            return myhash(Concat(hi, lo))
-        elif loc.decl().name() == "sha3_256":  # a[i] : hash(a)+i
-            base = loc.arg(0)
-            return myhash(self.decode_storage_loc(base))
-        elif loc.decl().name().startswith("sha3_"):
-            return myhash(self.decode_storage_loc(loc.arg(0)))
-        elif loc.decl().name() == "bvadd":
-            args = loc.children()
-            if len(args) < 2:
-                raise ValueError(loc)
-            return myadd([self.decode_storage_loc(arg) for arg in args])
-        elif is_bv_value(loc):
-            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
-            if preimage:  # loc == hash(preimage) + delta
-                return myadd([myhash(con(preimage)), con(delta)])
-            else:
-                return loc
-        elif is_bv(loc):
-            return loc
-        else:
-            raise ValueError(loc)
-
-
 class Exec:  # an execution path
     # network
     code: Dict[Address, Contract]
@@ -1150,6 +935,224 @@ class Exec:  # an execution path
                 deployed_hexcode = deployed_hexcode.replace(placeholder, hex_address)
 
         return (creation_hexcode, deployed_hexcode)
+
+
+class Storage:
+    @classmethod
+    def normalize(cls, expr: Any) -> Any:
+        # Concat(Extract(255, 8, bvadd(x, y)), bvadd(Extract(7, 0, x), Extract(7, 0, y))) => x + y
+        if expr.decl().name() == "concat" and expr.num_args() == 2:
+            arg0 = expr.arg(0)  # Extract(255, 8, bvadd(x, y))
+            arg1 = expr.arg(1)  # bvadd(Extract(7, 0, x), Extract(7, 0, y))
+            if (
+                arg0.decl().name() == "extract"
+                and arg0.num_args() == 1
+                and arg0.params() == [255, 8]
+            ):
+                arg00 = arg0.arg(0)  # bvadd(x, y)
+                if arg00.decl().name() == "bvadd":
+                    x = arg00.arg(0)
+                    y = arg00.arg(1)
+                    if arg1.decl().name() == "bvadd" and arg1.num_args() == 2:
+                        if eq(arg1.arg(0), simplify(Extract(7, 0, x))) and eq(
+                            arg1.arg(1), simplify(Extract(7, 0, y))
+                        ):
+                            return x + y
+        return expr
+
+
+class SolidityStorage(Storage):
+    @classmethod
+    def empty_storage_of(cls, addr: BitVecRef, slot: int, len_keys: int) -> ArrayRef:
+        return Array(
+            f"storage_{id_str(addr)}_{slot}_{len_keys}_00",
+            BitVecSorts[len_keys * 256],
+            BitVecSort256,
+        )
+
+    @classmethod
+    def sinit(cls, ex: Exec, addr: Any, slot: int, keys) -> None:
+        assert_address(addr)
+        if slot not in ex.storage[addr]:
+            ex.storage[addr][slot] = {}
+        if len(keys) not in ex.storage[addr][slot]:
+            if len(keys) == 0:
+                if ex.symbolic:
+                    label = f"storage_{id_str(addr)}_{slot}_{len(keys)}_00"
+                    ex.storage[addr][slot][len(keys)] = BitVec(label, BitVecSort256)
+                else:
+                    ex.storage[addr][slot][len(keys)] = con(0)
+            else:
+                # do not use z3 const array `K(BitVecSort(len(keys)*256), con(0))` when not ex.symbolic
+                # instead use normal smt array, and generate emptyness axiom; see sload()
+                ex.storage[addr][slot][len(keys)] = cls.empty_storage_of(
+                    addr, slot, len(keys)
+                )
+
+    @classmethod
+    def sload(cls, ex: Exec, addr: Any, loc: Word) -> Word:
+        offsets = cls.decode_storage_loc(loc)
+        if not len(offsets) > 0:
+            raise ValueError(offsets)
+        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
+        cls.sinit(ex, addr, slot, keys)
+        if len(keys) == 0:
+            return ex.storage[addr][slot][0]
+        else:
+            if not ex.symbolic:
+                # generate emptyness axiom for each array index, instead of using quantified formula; see sinit()
+                ex.solver.add(
+                    Select(cls.empty_storage_of(addr, slot, len(keys)), concat(keys))
+                    == con(0)
+                )
+            return ex.select(
+                ex.storage[addr][slot][len(keys)], concat(keys), ex.storages
+            )
+
+    @classmethod
+    def sstore(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        if is_bool(val):
+            val = If(val, con(1), con(0))
+        offsets = cls.decode_storage_loc(loc)
+        if not len(offsets) > 0:
+            raise ValueError(offsets)
+        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
+        cls.sinit(ex, addr, slot, keys)
+        if len(keys) == 0:
+            ex.storage[addr][slot][0] = val
+        else:
+            new_storage_var = Array(
+                f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(ex.storages):>02}",
+                BitVecSorts[len(keys) * 256],
+                BitVecSort256,
+            )
+            new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
+            ex.solver.add(new_storage_var == new_storage)
+            ex.storage[addr][slot][len(keys)] = new_storage_var
+            ex.storages[new_storage_var] = new_storage
+
+    @classmethod
+    def decode_storage_loc(cls, loc: Any) -> Any:
+        loc = cls.normalize(loc)
+
+        if loc.decl().name() == "sha3_512":  # m[k] : hash(k.m)
+            args = loc.arg(0)
+            offset = simplify(Extract(511, 256, args))
+            base = simplify(Extract(255, 0, args))
+            return cls.decode_storage_loc(base) + (offset, con(0))
+        elif loc.decl().name() == "sha3_256":  # a[i] : hash(a)+i
+            base = loc.arg(0)
+            return cls.decode_storage_loc(base) + (con(0),)
+        elif loc.decl().name() == "bvadd":
+            #   # when len(args) == 2
+            #   arg0 = cls.decode_storage_loc(loc.arg(0))
+            #   arg1 = cls.decode_storage_loc(loc.arg(1))
+            #   if len(arg0) == 1 and len(arg1) > 1: # i + hash(x)
+            #       return arg1[0:-1] + (arg1[-1] + arg0[0],)
+            #   elif len(arg0) > 1 and len(arg1) == 1: # hash(x) + i
+            #       return arg0[0:-1] + (arg0[-1] + arg1[0],)
+            #   elif len(arg0) == 1 and len(arg1) == 1: # i + j
+            #       return (arg0[0] + arg1[0],)
+            #   else: # hash(x) + hash(y) # ambiguous
+            #       raise ValueError(loc)
+            # when len(args) >= 2
+            args = loc.children()
+            if len(args) < 2:
+                raise ValueError(loc)
+            args = sorted(
+                map(cls.decode_storage_loc, args), key=lambda x: len(x), reverse=True
+            )
+            if len(args[1]) > 1:
+                # only args[0]'s length >= 1, the others must be 1
+                raise ValueError(loc)
+            return args[0][0:-1] + (
+                reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),
+            )
+        elif is_bv_value(loc):
+            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
+            if preimage:  # loc == hash(preimage) + delta
+                return (con(preimage), con(delta))
+            else:
+                return (loc,)
+        elif is_bv(loc):
+            return (loc,)
+        else:
+            raise ValueError(loc)
+
+
+class CustomStorage(Storage):
+    @classmethod
+    def empty_storage_of(cls, addr: BitVecRef, slot: BitVecRef) -> ArrayRef:
+        return Array(
+            f"storage_{id_str(addr)}_{slot.size()}_00",
+            BitVecSorts[slot.size()],
+            BitVecSort256,
+        )
+
+    @classmethod
+    def sinit(cls, ex: Exec, addr: Any, slot: BitVecRef) -> None:
+        assert_address(addr)
+        if slot.size() not in ex.storage[addr]:
+            ex.storage[addr][slot.size()] = cls.empty_storage_of(addr, slot)
+
+    @classmethod
+    def sload(cls, ex: Exec, addr: Any, loc: Word) -> Word:
+        slot = cls.decode_storage_loc(loc)
+        cls.sinit(ex, addr, slot)
+        if not ex.symbolic:
+            # generate emptyness axiom for each array index, instead of using quantified formula; see sinit()
+            ex.solver.add(
+                Select(cls.empty_storage_of(addr, slot), slot) == con(0)
+            )
+        return ex.select(
+            ex.storage[addr][slot.size()], slot, ex.storages
+        )
+
+    @classmethod
+    def sstore(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        if is_bool(val):
+            val = If(val, con(1), con(0))
+        slot = cls.decode_storage_loc(loc)
+        cls.sinit(ex, addr, slot)
+        new_storage_var = Array(
+            f"storage_{id_str(addr)}_{slot.size()}_{1+len(ex.storages):>02}",
+            BitVecSorts[slot.size()],
+            BitVecSort256,
+        )
+        new_storage = Store(ex.storage[addr][slot.size()], slot, val)
+        ex.solver.add(new_storage_var == new_storage)
+        ex.storage[addr][slot.size()] = new_storage_var
+        ex.storages[new_storage_var] = new_storage
+
+    @classmethod
+    def decode_storage_loc(cls, loc: Any) -> Any:
+        loc = cls.normalize(loc)
+
+        if loc.decl().name() == "sha3_512":  # m[k] : hash(k.m)
+            args = loc.arg(0)
+            hi = cls.decode_storage_loc(simplify(Extract(511, 256, args)))
+            lo = cls.decode_storage_loc(simplify(Extract(255, 0, args)))
+            return myhash(Concat(hi, lo))
+        elif loc.decl().name() == "sha3_256":  # a[i] : hash(a)+i
+            base = loc.arg(0)
+            return myhash(cls.decode_storage_loc(base))
+        elif loc.decl().name().startswith("sha3_"):
+            return myhash(cls.decode_storage_loc(loc.arg(0)))
+        elif loc.decl().name() == "bvadd":
+            args = loc.children()
+            if len(args) < 2:
+                raise ValueError(loc)
+            return myadd([cls.decode_storage_loc(arg) for arg in args])
+        elif is_bv_value(loc):
+            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
+            if preimage:  # loc == hash(preimage) + delta
+                return myadd([myhash(con(preimage)), con(delta)])
+            else:
+                return loc
+        elif is_bv(loc):
+            return loc
+        else:
+            raise ValueError(loc)
 
 
 #             x  == b   if sort(x) = bool
@@ -1454,6 +1457,18 @@ class SEVM:
             return Extract(255, 0, r2)
         else:
             raise ValueError(op)
+
+    def sload(self, ex: Exec, addr: Any, loc: Word) -> Word:
+        if self.options["custom_storage_layout"]:
+            return CustomStorage.sload(ex, addr, loc)
+        else:
+            return SolidityStorage.sload(ex, addr, loc)
+
+    def sstore(self, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        if self.options["custom_storage_layout"]:
+            CustomStorage.sstore(ex, addr, loc, val)
+        else:
+            SolidityStorage.sstore(ex, addr, loc, val)
 
     def resolve_address_alias(self, ex: Exec, target: Address) -> Address:
         if target in ex.code:
@@ -1873,7 +1888,7 @@ class SEVM:
                     store_value = simplify(Extract(255, 0, arg))
                     store_account_addr = self.resolve_address_alias(ex, store_account)
                     if store_account_addr is not None:
-                        ex.sstore(store_account_addr, store_slot, store_value)
+                        self.sstore(ex, store_account_addr, store_slot, store_value)
                     else:
                         ex.error = f"uninitialized account: {store_account}"
                         out.append(ex)
@@ -1887,7 +1902,7 @@ class SEVM:
                     load_slot = simplify(Extract(255, 0, arg))
                     load_account_addr = self.resolve_address_alias(ex, load_account)
                     if load_account_addr is not None:
-                        ret = ex.sload(load_account_addr, load_slot)
+                        ret = self.sload(ex, load_account_addr, load_slot)
                     else:
                         ex.error = f"uninitialized account: {load_account}"
                         out.append(ex)
@@ -2558,9 +2573,9 @@ class SEVM:
                     ex.st.push(con(size))
 
                 elif opcode == EVM.SLOAD:
-                    ex.st.push(ex.sload(ex.this, ex.st.pop()))
+                    ex.st.push(self.sload(ex, ex.this, ex.st.pop()))
                 elif opcode == EVM.SSTORE:
-                    ex.sstore(ex.this, ex.st.pop(), ex.st.pop())
+                    self.sstore(ex, ex.this, ex.st.pop(), ex.st.pop())
 
                 elif opcode == EVM.RETURNDATASIZE:
                     ex.st.push(con(ex.returndatasize()))
