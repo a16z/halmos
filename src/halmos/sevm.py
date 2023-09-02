@@ -2633,6 +2633,8 @@ class SEVM:
                         ex.st.push(self.sym_byte_of(idx, w))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
+                    if ex.message().is_static:
+                        raise WriteInStaticContext
                     num_topics: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
                     size: int = int_of(ex.st.pop(), "symbolic LOG data size")

@@ -135,7 +135,7 @@ def mk_solver(args: Namespace):
     return solver
 
 
-def render_initcode(frame: CallFrame) -> str:
+def rendered_initcode(frame: CallFrame) -> str:
     message = frame.message
     data = message.data
 
@@ -162,7 +162,7 @@ def render_create_call(frame: CallFrame) -> None:
     addr = unbox_int(message.target)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
 
-    initcode_str = render_initcode(frame)
+    initcode_str = rendered_initcode(frame)
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
@@ -180,7 +180,7 @@ def render_output(frame: CallFrame) -> None:
     output = frame.output
     if output is not None:
         if is_bv(output.data):
-            returndata = simplify(Concat(output.data))
+            returndata = simplify(output.data)
         elif isinstance(output.data, bytes):
             returndata = output.data.hex()
         elif output.data is None:
@@ -189,13 +189,25 @@ def render_output(frame: CallFrame) -> None:
             raise ValueError("unexpected returndata in " + str(output))
 
         failed = output.error is not None
-        error_str = f" (error: {output.error})" if failed else error_str
+        error_str = f" (error: {repr(output.error)})" if failed else error_str
 
     color = color_warn if failed else color_good
     color_if_err = color_warn if failed else lambda x: x
     indent = frame.depth * "    "
 
     print(f"{indent}{color('← ')}{color_if_err(returndata)}{color_if_err(error_str)}")
+
+
+def rendered_log(log: EventLog) -> str:
+    opcode_str = f"LOG{len(log.topics)}"
+    topics = [
+        f"{color_info(f'topic{i}')}={hexify(topic)}"
+        for i, topic in enumerate(log.topics)
+    ]
+    data_str = f"{color_info('data')}={hexify(log.data)}"
+    args_str = ", ".join(topics + [data_str])
+
+    return f"{opcode_str}({args_str})"
 
 
 def render_trace(frame: CallFrame) -> None:
@@ -227,8 +239,13 @@ def render_trace(frame: CallFrame) -> None:
 
     print(f"{indent}{target_str}::{calldata}{static_str}{value_str}")
 
-    for subcall in frame.subcalls():
-        render_trace(subcall)
+    for trace_element in frame.trace:
+        if isinstance(trace_element, CallFrame):
+            render_trace(trace_element)
+        elif isinstance(trace_element, EventLog):
+            print(f"{indent}{rendered_log(trace_element)}")
+        else:
+            raise InternalHalmosError(f"unexpected trace element: {trace_element}")
 
     render_output(frame)
 

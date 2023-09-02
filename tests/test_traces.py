@@ -25,6 +25,9 @@ from test_fixtures import args, options, sevm
 # keccak256("FooEvent()")
 FOO_EVENT_SIG = 0x34E21A9428B1B47E73C4E509EABEEA7F2B74BECA07D82AAC87D4DD28B74C2A4A
 
+# keccak256("Log(uint256)")
+LOG_U256_SIG = 0x909C57D5C6AC08245CF2A6DE3900E2B868513FA59099B92B27D8DB823D92DF9C
+
 # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
 PANIC_1 = 0x4E487B710000000000000000000000000000000000000000000000000000000000000001
 
@@ -165,8 +168,6 @@ contract Foo {
 }
 """
 
-# TODO: chain calls and events, check ordering
-# TODO: symbolic event
 
 caller = BitVec("msg_sender", 160)
 this = BitVec("this_address", 160)
@@ -194,6 +195,12 @@ def solver(args):
 @pytest.fixture
 def storage():
     return {}
+
+
+def render_path(ex: Exec) -> None:
+    path = list(dict.fromkeys(ex.path))
+    path.remove("True")
+    print(f"Path: {', '.join(path)}")
 
 
 def mk_create_ex(
@@ -472,3 +479,148 @@ def test_failed_create(sevm: SEVM, solver):
     assert len(subcalls) == 1
     assert subcalls[0].output.error is Revert
     assert int_of(subcalls[0].output.data) == PANIC_1
+
+
+def test_event_conditional_on_symbol(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(
+        """
+        contract Foo {
+            event Log(uint256 x);
+
+            function may_log(uint256 x) public returns (uint) {
+                if (x == 42) {
+                    emit Log(x);
+                }
+            }
+
+            function go(uint256 x) public returns (bool success) {
+                (success, ) = address(this).staticcall(abi.encodeWithSignature("may_log(uint256)", x));
+                if (x != 42) {
+                    emit Log(x);
+                }
+            }
+        }
+    """
+    )
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
+
+    execs = sevm.run(input_exec)[0]
+
+    for e in execs:
+        render_path(e)
+        render_trace(e.call_frame)
+
+    assert len(execs) == 2
+
+    # all executions have a single subcall
+    assert all(len(x.call_frame.subcalls()) == 1 for x in execs)
+
+    # one execution has a single subcall that reverts
+    assert any(
+        isinstance(x.call_frame.subcalls()[0].output.error, WriteInStaticContext)
+        for x in execs
+    )
+
+    # one execution has a single subcall that succeeds and emits an event
+    assert any(
+        x.call_frame.subcalls()[0].output.error is None
+        and len(x.call_frame.logs()) == 1
+        for x in execs
+    )
+
+
+def test_symbolic_event_data(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(
+        """
+        contract Foo {
+            event Log(uint256 x);
+
+            function go(uint256 x) public returns (bool success) {
+                emit Log(x);
+            }
+        }
+    """
+    )
+
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
+    execs = sevm.run(input_exec)[0]
+    assert len(execs) == 1
+
+    output_exec = execs.pop()
+    events = output_exec.call_frame.logs()
+    assert len(events) == 1
+
+    event = events[0]
+    assert len(event.topics) == 1
+    assert int_of(event.topics[0]) == LOG_U256_SIG
+    assert is_bv(event.data) and event.data.decl().name() == "p_x_uint256"
+
+
+def test_symbolic_event_topic(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(
+        """
+        contract Foo {
+            event Log(uint256 indexed x);
+
+            function go(uint256 x) public returns (bool success) {
+                emit Log(x);
+            }
+        }
+    """
+    )
+
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
+    execs = sevm.run(input_exec)[0]
+    assert len(execs) == 1
+
+    output_exec = execs.pop()
+    events = output_exec.call_frame.logs()
+    assert len(events) == 1
+
+    event = events[0]
+    assert len(event.topics) == 2
+    assert int_of(event.topics[0]) == LOG_U256_SIG
+    assert is_bv(event.topics[1]) and event.topics[1].decl().name() == "p_x_uint256"
+    assert event.data is None
+
+
+def test_trace_ordering(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(
+        """
+        contract Foo {
+            event FooEvent();
+
+            function view_func1() public view returns (uint) {
+                return gasleft();
+            }
+
+            function view_func2() public view returns (uint) {
+                return 42;
+            }
+
+            function go(uint256 x) public returns (bool success) {
+                (bool succ1, ) = address(this).staticcall(abi.encodeWithSignature("view_func1()"));
+                emit FooEvent();
+                (bool succ2, ) = address(this).staticcall(abi.encodeWithSignature("view_func2()"));
+                success = succ1 && succ2;
+            }
+        }
+    """
+    )
+
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
+    execs = sevm.run(input_exec)[0]
+    assert len(execs) == 1
+
+    output_exec = execs.pop()
+    render_trace(output_exec.call_frame)
+
+    assert len(output_exec.call_frame.subcalls()) == 2
+    assert len(output_exec.call_frame.logs()) == 1
+
+    call1, call2 = tuple(output_exec.call_frame.subcalls())
+    event = output_exec.call_frame.logs()[0]
+
+    # the trace must preserve the ordering
+    assert output_exec.call_frame.trace == [call1, event, call2]
+    assert int_of(call2.output.data) == 42
