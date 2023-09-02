@@ -1599,8 +1599,15 @@ class SEVM:
                 ret = None
 
             # TODO: cover other precompiled
-            if eq(to, con_addr(1)):  # ecrecover exit code is always 1
+
+            # ecrecover
+            if eq(to, con_addr(1)):
                 ex.solver.add(exit_code_var != con(0))
+
+            # identity
+            if eq(to, con_addr(4)):
+                ex.solver.add(exit_code_var != con(0))
+                ret = arg
 
             # TODO: factor out cheatcode semantics
             # halmos cheat code
@@ -1891,6 +1898,7 @@ class SEVM:
         if (
             # precompile
             eq(to, con_addr(1))
+            or eq(to, con_addr(4))
             # cheatcode calls
             or eq(to, halmos_cheat_code.address)
             or eq(to, hevm_cheat_code.address)
