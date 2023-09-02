@@ -10,3 +10,6 @@
 [submodule "tests/lib/solmate"]
 	path = tests/lib/solmate
 	url = https://github.com/transmissions11/solmate
+[submodule "tests/lib/solady"]
+	path = tests/lib/solady
+	url = https://github.com/Vectorized/solady
