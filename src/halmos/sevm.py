@@ -29,6 +29,7 @@ from .warnings import (
     UNSUPPORTED_OPCODE,
     LIBRARY_PLACEHOLDER,
     UNINTERPRETED_UNKNOWN_CALLS,
+    INTERNAL_ERROR,
 )
 
 Word = Any  # z3 expression (including constants)
@@ -1894,9 +1895,10 @@ class SEVM:
                     (stdout, stderr) = process.communicate()
 
                     if stderr:
-                        ex.error = f"An exception has occurred during the usage of the ffi cheatcode:\n{stderr.decode('utf-8')}"
-                        out.append(ex)
-                        return
+                        warn(
+                            INTERNAL_ERROR,
+                            f"An exception has occurred during the usage of the ffi cheatcode:\n{stderr.decode('utf-8')}",
+                        )
 
                     out_bytes = stdout.decode("utf-8")
 
