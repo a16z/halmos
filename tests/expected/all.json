@@ -549,32 +549,6 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/Ffi.t.sol:FfiTest": [
-            {
-                "name": "check_FfiHexOutput()",
-                "exitcode": 0,
-                "num_models": 0,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            },
-            {
-                "name": "check_FfiStringOutput()",
-                "exitcode": 0,
-                "num_models": 0,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            },
-            {
-                "name": "check_FfiFailure()",
-                "exitcode": 1,
-                "num_models": 0,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
         "test/Foundry.t.sol:FoundryTest": [
             {
                 "name": "check_assume(uint256)",
