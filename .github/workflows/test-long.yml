@@ -15,7 +15,11 @@ jobs:
       matrix:
         include:
         - testname: "examples/tokens/ERC20"
+          testopts: ""
         - testname: "examples/tokens/ERC721"
+          testopts: ""
+        - testname: "ffi:tests"
+          testopts: "--ffi"
 
     steps:
       - uses: actions/checkout@v3
@@ -39,4 +43,4 @@ jobs:
         run: pip install -e .
 
       - name: Run pytest
-        run: pytest -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="-v -st --error-unknown --test-parallel --solver-parallel --solver-timeout-assertion 0"
+        run: pytest -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="-v -st --error-unknown --test-parallel --solver-parallel --solver-timeout-assertion 0 ${{ matrix.testopts }}"
