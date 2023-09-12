@@ -1173,6 +1173,9 @@ class CustomStorage(Storage):
 
     @classmethod
     def simple_hash(cls, x: BitVecRef) -> BitVecRef:
+        # simple injective function for collision-free (though not secure) hash semantics, comprising:
+        # - left-shift by 256 bits to ensure sufficient logical domain space
+        # - an additional 1-bit for disambiguation (e.g., between map[key] vs array[i][j])
         return simplify(Concat(x, con(0, 257)))
 
     @classmethod
