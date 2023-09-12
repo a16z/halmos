@@ -4,6 +4,8 @@ import json
 import math
 import re
 
+from subprocess import Popen, PIPE
+
 from copy import deepcopy
 from collections import defaultdict
 from typing import List, Set, Dict, Union as UnionType, Tuple, Any, Optional
@@ -27,6 +29,7 @@ from .warnings import (
     UNSUPPORTED_OPCODE,
     LIBRARY_PLACEHOLDER,
     UNINTERPRETED_UNKNOWN_CALLS,
+    INTERNAL_ERROR,
 )
 
 Word = Any  # z3 expression (including constants)
@@ -408,6 +411,52 @@ def extract_string_argument(calldata: BitVecRef, arg_idx: int):
     )
     string_bytes = string_value.to_bytes(string_length, "big")
     return string_bytes.decode("utf-8")
+
+
+def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
+    """Extracts idx-th argument of string array from calldata"""
+
+    array_slot = int_of(extract_bytes(calldata, 4 + 32 * arg_idx, 32))
+    num_strings = int_of(extract_bytes(calldata, 4 + array_slot, 32))
+
+    string_array = []
+
+    for i in range(num_strings):
+        string_offset = int_of(
+            extract_bytes(calldata, 4 + array_slot + 32 * (i + 1), 32)
+        )
+        string_length = int_of(
+            extract_bytes(calldata, 4 + array_slot + 32 + string_offset, 32)
+        )
+        string_value = int_of(
+            extract_bytes(
+                calldata, 4 + array_slot + 32 + string_offset + 32, string_length
+            )
+        )
+        string_bytes = string_value.to_bytes(string_length, "big")
+        string_array.append(string_bytes.decode("utf-8"))
+
+    return string_array
+
+
+def stringified_bytes_to_bytes(string_bytes: str):
+    """Converts a string of bytes to a bytes memory type"""
+
+    string_bytes_len = (len(string_bytes) + 1) // 2
+    string_bytes_len_enc = hex(string_bytes_len).replace("0x", "").rjust(64, "0")
+
+    string_bytes_len_ceil = (string_bytes_len + 31) // 32 * 32
+
+    ret_bytes = (
+        "00" * 31
+        + "20"
+        + string_bytes_len_enc
+        + string_bytes.ljust(string_bytes_len_ceil * 2, "0")
+    )
+    ret_len = len(ret_bytes) // 2
+    ret_bytes = bytes.fromhex(ret_bytes)
+
+    return BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
 
 
 class State:
@@ -1707,23 +1756,7 @@ class SEVM:
                     else:
                         bytecode = artifact["bytecode"].replace("0x", "")
 
-                    bytecode_len = (len(bytecode) + 1) // 2
-                    bytecode_len_enc = (
-                        hex(bytecode_len).replace("0x", "").rjust(64, "0")
-                    )
-
-                    bytecode_len_ceil = (bytecode_len + 31) // 32 * 32
-
-                    ret_bytes = (
-                        "00" * 31
-                        + "20"
-                        + bytecode_len_enc
-                        + bytecode.ljust(bytecode_len_ceil * 2, "0")
-                    )
-                    ret_len = len(ret_bytes) // 2
-                    ret_bytes = bytes.fromhex(ret_bytes)
-
-                    ret = con(int.from_bytes(ret_bytes, "big"), ret_len * 8)
+                    ret = stringified_bytes_to_bytes(bytecode)
                 # vm.prank(address)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
@@ -1849,6 +1882,32 @@ class SEVM:
                         ex.error = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
                         out.append(ex)
                         return
+                # ffi(string[]) returns (bytes)
+                elif extract_funsig(arg) == hevm_cheat_code.ffi_sig:
+                    if not self.options.get("ffi"):
+                        ex.error = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
+                        out.append(ex)
+                        return
+                    process = Popen(
+                        extract_string_array_argument(arg, 0), stdout=PIPE, stderr=PIPE
+                    )
+
+                    (stdout, stderr) = process.communicate()
+
+                    if stderr:
+                        warn(
+                            INTERNAL_ERROR,
+                            f"An exception has occurred during the usage of the ffi cheatcode:\n{stderr.decode('utf-8')}",
+                        )
+
+                    out_bytes = stdout.decode("utf-8")
+
+                    if not out_bytes.startswith("0x"):
+                        out_bytes = out_bytes.strip().encode("utf-8").hex()
+                    else:
+                        out_bytes = out_bytes.strip().replace("0x", "")
+
+                    ret = stringified_bytes_to_bytes(out_bytes)
 
                 else:
                     # TODO: support other cheat codes

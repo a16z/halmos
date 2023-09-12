@@ -42,4 +42,4 @@ jobs:
         run: pip install -e .
 
       - name: Run pytest
-        run: pytest -v -k "not long" --halmos-options="-v -st --error-unknown ${{ matrix.parallel }} --solver-timeout-assertion 0"
+        run: pytest -v -k "not long and not ffi" --halmos-options="-v -st --error-unknown ${{ matrix.parallel }} --solver-timeout-assertion 0"

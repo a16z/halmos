@@ -76,6 +76,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--ffi",
+        action="store_true",
+        help="allow the usage of FFI to call external functions",
+    )
+
+    parser.add_argument(
         "--version", action="store_true", help="print the version number"
     )
 
