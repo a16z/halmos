@@ -566,6 +566,9 @@ class Contract:
     _rawcode: UnionType[bytes, BitVecRef]
 
     def __init__(self, rawcode: UnionType[bytes, BitVecRef, str]) -> None:
+        if rawcode is None:
+            raise InternalHalmosError("invalid contract code: None")
+
         if is_bv_value(rawcode):
             if rawcode.size() % 8 != 0:
                 raise ValueError(rawcode)
