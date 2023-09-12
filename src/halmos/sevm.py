@@ -442,23 +442,34 @@ class Message:
 
 @dataclass(frozen=True)
 class CallOutput:
+    """
+    Data record produced during the execution of a call.
+    """
+
     data: Bytes
     accounts_to_delete: Set[Address]
     error: Optional[EvmException]
+    error_str: Optional[str] = None
+
+    # TODO:
+    #   - touched_accounts
+    # not modeled:
+    #   - gas_refund
+    #   - gas_left
 
 
-TraceElement = UnionType["CallFrame", EventLog]
+TraceElement = UnionType["CallContext", EventLog]
 
 
 @dataclass
-class CallFrame:
+class CallContext:
     message: Message
     output: Optional[CallOutput] = None
     depth: int = 1
     trace: List[TraceElement] = field(default_factory=list)
 
-    def subcalls(self) -> List["CallFrame"]:
-        return [t for t in self.trace if isinstance(t, CallFrame)]
+    def subcalls(self) -> List["CallContext"]:
+        return [t for t in self.trace if isinstance(t, CallContext)]
 
     def logs(self) -> List[EventLog]:
         return [t for t in self.trace if isinstance(t, EventLog)]
@@ -709,7 +720,7 @@ class Exec:  # an execution path
     block: Block
 
     # tx
-    call_frame: CallFrame
+    context: CallContext
 
     # vm state
     this: Address  # current account address
@@ -742,7 +753,7 @@ class Exec:  # an execution path
         self.balance = kwargs["balance"]
         #
         self.block = kwargs["block"]
-        self.call_frame = kwargs["call_frame"]
+        self.context = kwargs["context"]
         #
         self.this = kwargs["this"]
         self.pgm = kwargs["pgm"]
@@ -766,21 +777,21 @@ class Exec:  # an execution path
         self.error = kwargs["error"]
         self.failed = kwargs["failed"] if "failed" in kwargs else False
 
-        assert_address(self.call_frame.message.target)
+        assert_address(self.context.message.target)
         assert_address(self.this)
 
     def halt(self, data: Bytes, error: Optional[EvmException] = None) -> None:
-        # print(f"halting execution id {id(self)} and call frame {id(self.call_frame)}")
+        # print(f"halting execution id {id(self)} and call frame {id(self.context)}")
 
-        if self.call_frame.output is not None:
+        if self.context.output is not None:
             raise InternalHalmosError("output already set")
 
-        self.call_frame.output = CallOutput(
+        self.context.output = CallOutput(
             data=data, accounts_to_delete=self.addresses_to_delete, error=error
         )
 
     def emit_log(self, log: EventLog):
-        self.call_frame.trace.append(log)
+        self.context.trace.append(log)
 
     def calldata(self):
         return self.message().data
@@ -792,7 +803,7 @@ class Exec:  # an execution path
         return self.message().value
 
     def message(self):
-        return self.call_frame.message
+        return self.context.message
 
     def current_opcode(self) -> UnionType[int, BitVecRef]:
         return unbox_int(self.pgm[self.pc])
@@ -956,8 +967,8 @@ class Exec:  # an execution path
             )
 
     def sstore(self, addr: Any, loc: Any, val: Any) -> None:
-        if self.call_frame.message.is_static:
-            raise WriteInStaticContext(f"message={self.call_frame.message}")
+        if self.context.message.is_static:
+            raise WriteInStaticContext(f"message={self.context.message}")
 
         offsets = self.decode_storage_loc(loc)
         if not len(offsets) > 0:
@@ -1566,9 +1577,7 @@ class SEVM:
                     #
                     block=ex.block,
                     #
-                    call_frame=CallFrame(
-                        message=message, depth=ex.call_frame.depth + 1
-                    ),
+                    context=CallContext(message=message, depth=ex.context.depth + 1),
                     this=message.target,
                     #
                     pgm=ex.code[to],
@@ -1599,9 +1608,9 @@ class SEVM:
             for new_ex in new_exs:
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
-                subcall = new_ex.call_frame
-                new_ex.call_frame = deepcopy(ex.call_frame)
-                new_ex.call_frame.trace.append(subcall)
+                subcall = new_ex.context
+                new_ex.context = deepcopy(ex.context)
+                new_ex.context.trace.append(subcall)
 
                 new_ex.this = ex.this
 
@@ -2079,7 +2088,7 @@ class SEVM:
                 #
                 block=ex.block,
                 #
-                call_frame=CallFrame(message=message, depth=ex.call_frame.depth + 1),
+                context=CallContext(message=message, depth=ex.context.depth + 1),
                 this=new_addr,
                 #
                 pgm=create_code,
@@ -2109,7 +2118,7 @@ class SEVM:
         # process result
         for idx, new_ex in enumerate(new_exs):
             # sanity checks
-            subcall = new_ex.call_frame
+            subcall = new_ex.context
             if subcall.output is None:
                 raise ValueError(
                     "unfinished contract creation call frame: " + str(new_ex)
@@ -2117,8 +2126,8 @@ class SEVM:
 
             # continue execution in the context of the parent
             # pessimistic copy because the subcall results may diverge
-            new_ex.call_frame = deepcopy(ex.call_frame)
-            new_ex.call_frame.trace.append(subcall)
+            new_ex.context = deepcopy(ex.context)
+            new_ex.context.trace.append(subcall)
 
             new_ex.this = ex.this
 
@@ -2249,7 +2258,7 @@ class SEVM:
             #
             block=deepcopy(ex.block),
             #
-            call_frame=deepcopy(ex.call_frame),
+            context=deepcopy(ex.context),
             this=ex.this,
             #
             pgm=ex.pgm,
@@ -2705,7 +2714,7 @@ class SEVM:
         #
         block,
         #
-        call_frame: CallFrame,
+        context: CallContext,
         #
         this,
         #
@@ -2720,7 +2729,7 @@ class SEVM:
             #
             block=block,
             #
-            call_frame=call_frame,
+            context=context,
             #
             this=this,
             pgm=pgm,

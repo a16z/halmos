@@ -12,7 +12,7 @@ from halmos.sevm import (
     Exec,
     Contract,
     Message,
-    CallFrame,
+    CallContext,
     EventLog,
     con,
     int_of,
@@ -222,7 +222,7 @@ def mk_create_ex(
         storage=storage,
         balance=balance,
         block=mk_block(),
-        call_frame=CallFrame(message=message),
+        context=CallContext(message=message),
         this=this,
         pgm=bytecode,
         symbolic=True,
@@ -256,7 +256,7 @@ def mk_ex(
         storage=storage,
         balance=balance,
         block=mk_block(),
-        call_frame=CallFrame(message=message),
+        context=CallContext(message=message),
         this=this,
         pgm=bytecode,
         symbolic=True,
@@ -299,15 +299,15 @@ def test_deploy_basic(sevm, solver):
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver)
 
     # before execution
-    assert exec.call_frame.output is None
+    assert exec.context.output is None
 
     sevm.run(exec)
-    render_trace(exec.call_frame)
+    render_trace(exec.context)
 
     # after execution
-    assert exec.call_frame.output.error is None
-    assert exec.call_frame.output.data == bytes.fromhex(runtime_hexcode)
-    assert len(exec.call_frame.trace) == 0
+    assert exec.context.output.error is None
+    assert exec.context.output.data == bytes.fromhex(runtime_hexcode)
+    assert len(exec.context.trace) == 0
 
 
 def test_deploy_nonpayable_reverts(sevm, solver):
@@ -315,11 +315,11 @@ def test_deploy_nonpayable_reverts(sevm, solver):
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver, value=con(1))
 
     sevm.run(exec)
-    render_trace(exec.call_frame)
+    render_trace(exec.context)
 
-    assert exec.call_frame.output.error is Revert
-    assert exec.call_frame.output.data is None
-    assert len(exec.call_frame.trace) == 0
+    assert exec.context.output.error is Revert
+    assert exec.context.output.data is None
+    assert len(exec.context.trace) == 0
 
 
 def test_deploy_payable(sevm, solver):
@@ -327,11 +327,11 @@ def test_deploy_payable(sevm, solver):
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver, value=con(1))
 
     sevm.run(exec)
-    render_trace(exec.call_frame)
+    render_trace(exec.context)
 
-    assert exec.call_frame.output.error is None
-    assert exec.call_frame.output.data == bytes.fromhex(runtime_hexcode)
-    assert len(exec.call_frame.trace) == 0
+    assert exec.context.output.error is None
+    assert exec.context.output.data == bytes.fromhex(runtime_hexcode)
+    assert len(exec.context.trace) == 0
 
 
 def test_deploy_event_in_constructor(sevm, solver):
@@ -339,12 +339,12 @@ def test_deploy_event_in_constructor(sevm, solver):
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver)
 
     sevm.run(exec)
-    render_trace(exec.call_frame)
+    render_trace(exec.context)
 
-    assert exec.call_frame.output.error is None
-    assert len(exec.call_frame.trace) == 1
+    assert exec.context.output.error is None
+    assert len(exec.context.trace) == 1
 
-    event: EventLog = exec.call_frame.trace[0]
+    event: EventLog = exec.context.trace[0]
     assert len(event.topics) == 1
     assert int_of(event.topics[0]) == FOO_EVENT_SIG
     assert event.data is None
@@ -358,16 +358,16 @@ def test_simple_call(sevm: SEVM, solver):
     assert len(execs) == 1
 
     exec = execs.pop()
-    render_trace(exec.call_frame)
+    render_trace(exec.context)
 
-    assert exec.call_frame.output is not None
-    assert exec.call_frame.output.error is None
+    assert exec.context.output is not None
+    assert exec.context.output.error is None
 
     # go() returns success=true
-    assert int_of(exec.call_frame.output.data) == 1
+    assert int_of(exec.context.output.data) == 1
 
     # view_func() returns 42
-    subcalls = exec.call_frame.subcalls()
+    subcalls = exec.context.subcalls()
     assert len(subcalls) == 1
     assert subcalls[0].output.error is None
     assert int_of(subcalls[0].output.data) == 42
@@ -381,14 +381,14 @@ def test_failed_call(sevm: SEVM, solver):
     assert len(execs) == 1
 
     exec = execs.pop()
-    render_trace(exec.call_frame)
+    render_trace(exec.context)
 
     # go() does not revert, it returns success=false
-    assert exec.call_frame.output.error is None
-    assert int_of(exec.call_frame.output.data) == 0
+    assert exec.context.output.error is None
+    assert int_of(exec.context.output.data) == 0
 
     # the just_fails() subcall fails
-    subcalls = exec.call_frame.subcalls()
+    subcalls = exec.context.subcalls()
     assert len(subcalls) == 1
     assert subcalls[0].output.error is Revert
     assert int_of(subcalls[0].output.data) == PANIC_1
@@ -402,14 +402,14 @@ def test_failed_static_call(sevm: SEVM, solver):
     assert len(execs) == 1
 
     exec = execs.pop()
-    render_trace(exec.call_frame)
+    render_trace(exec.context)
 
     # go() does not revert, it returns success=false
-    assert exec.call_frame.output.error is None
-    assert int_of(exec.call_frame.output.data) == 0
+    assert exec.context.output.error is None
+    assert int_of(exec.context.output.data) == 0
 
     # the do_sstore() subcall fails
-    subcalls = exec.call_frame.subcalls()
+    subcalls = exec.context.subcalls()
     assert len(subcalls) == 1
     assert subcalls[0].message.is_static is True
     assert isinstance(subcalls[0].output.error, WriteInStaticContext)
@@ -423,18 +423,18 @@ def test_symbolic_subcall(sevm: SEVM, solver):
 
     # we get 2 executions, one for x == 42 and one for x != 42
     assert len(execs) == 2
-    render_trace(execs[0].call_frame)
-    render_trace(execs[1].call_frame)
+    render_trace(execs[0].context)
+    render_trace(execs[1].context)
 
     # all executions have exactly one subcall and the outer call does not revert
-    assert all(len(x.call_frame.subcalls()) == 1 for x in execs)
-    assert all(x.call_frame.output.error is None for x in execs)
+    assert all(len(x.context.subcalls()) == 1 for x in execs)
+    assert all(x.context.output.error is None for x in execs)
 
     # in one of the executions, the subcall succeeds
-    assert any(x.call_frame.subcalls()[0].output.error is None for x in execs)
+    assert any(x.context.subcalls()[0].output.error is None for x in execs)
 
     # in one of the executions, the subcall reverts
-    assert any(x.call_frame.subcalls()[0].output.error is Revert for x in execs)
+    assert any(x.context.subcalls()[0].output.error is Revert for x in execs)
 
 
 def test_symbolic_create(sevm: SEVM, solver):
@@ -445,18 +445,18 @@ def test_symbolic_create(sevm: SEVM, solver):
 
     # we get 2 executions, one for x == 42 and one for x != 42
     assert len(execs) == 2
-    render_trace(execs[0].call_frame)
-    render_trace(execs[1].call_frame)
+    render_trace(execs[0].context)
+    render_trace(execs[1].context)
 
     # all executions have exactly one subcall and the outer call does not revert
-    assert all(len(x.call_frame.subcalls()) == 1 for x in execs)
-    assert all(x.call_frame.output.error is None for x in execs)
+    assert all(len(x.context.subcalls()) == 1 for x in execs)
+    assert all(x.context.output.error is None for x in execs)
 
     # in one of the executions, the subcall succeeds
-    assert any(x.call_frame.subcalls()[0].output.error is None for x in execs)
+    assert any(x.context.subcalls()[0].output.error is None for x in execs)
 
     # in one of the executions, the subcall reverts
-    assert any(x.call_frame.subcalls()[0].output.error is Revert for x in execs)
+    assert any(x.context.subcalls()[0].output.error is Revert for x in execs)
 
 
 def test_failed_create(sevm: SEVM, solver):
@@ -468,14 +468,14 @@ def test_failed_create(sevm: SEVM, solver):
     assert len(execs) == 1
 
     exec = execs.pop()
-    render_trace(exec.call_frame)
+    render_trace(exec.context)
 
     # go() does not revert, it returns success=false
-    assert exec.call_frame.output.error is None
-    assert int_of(exec.call_frame.output.data) == 0
+    assert exec.context.output.error is None
+    assert int_of(exec.context.output.data) == 0
 
     # the create() subcall fails
-    subcalls = exec.call_frame.subcalls()
+    subcalls = exec.context.subcalls()
     assert len(subcalls) == 1
     assert subcalls[0].output.error is Revert
     assert int_of(subcalls[0].output.data) == PANIC_1
@@ -508,23 +508,22 @@ def test_event_conditional_on_symbol(sevm: SEVM, solver):
 
     for e in execs:
         render_path(e)
-        render_trace(e.call_frame)
+        render_trace(e.context)
 
     assert len(execs) == 2
 
     # all executions have a single subcall
-    assert all(len(x.call_frame.subcalls()) == 1 for x in execs)
+    assert all(len(x.context.subcalls()) == 1 for x in execs)
 
     # one execution has a single subcall that reverts
     assert any(
-        isinstance(x.call_frame.subcalls()[0].output.error, WriteInStaticContext)
+        isinstance(x.context.subcalls()[0].output.error, WriteInStaticContext)
         for x in execs
     )
 
     # one execution has a single subcall that succeeds and emits an event
     assert any(
-        x.call_frame.subcalls()[0].output.error is None
-        and len(x.call_frame.logs()) == 1
+        x.context.subcalls()[0].output.error is None and len(x.context.logs()) == 1
         for x in execs
     )
 
@@ -547,7 +546,7 @@ def test_symbolic_event_data(sevm: SEVM, solver):
     assert len(execs) == 1
 
     output_exec = execs.pop()
-    events = output_exec.call_frame.logs()
+    events = output_exec.context.logs()
     assert len(events) == 1
 
     event = events[0]
@@ -574,7 +573,7 @@ def test_symbolic_event_topic(sevm: SEVM, solver):
     assert len(execs) == 1
 
     output_exec = execs.pop()
-    events = output_exec.call_frame.logs()
+    events = output_exec.context.logs()
     assert len(events) == 1
 
     event = events[0]
@@ -613,14 +612,14 @@ def test_trace_ordering(sevm: SEVM, solver):
     assert len(execs) == 1
 
     output_exec = execs.pop()
-    render_trace(output_exec.call_frame)
+    render_trace(output_exec.context)
 
-    assert len(output_exec.call_frame.subcalls()) == 2
-    assert len(output_exec.call_frame.logs()) == 1
+    assert len(output_exec.context.subcalls()) == 2
+    assert len(output_exec.context.logs()) == 1
 
-    call1, call2 = tuple(output_exec.call_frame.subcalls())
-    event = output_exec.call_frame.logs()[0]
+    call1, call2 = tuple(output_exec.context.subcalls())
+    event = output_exec.context.logs()[0]
 
     # the trace must preserve the ordering
-    assert output_exec.call_frame.trace == [call1, event, call2]
+    assert output_exec.context.trace == [call1, event, call2]
     assert int_of(call2.output.data) == 42

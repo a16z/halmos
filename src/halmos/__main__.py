@@ -135,7 +135,7 @@ def mk_solver(args: Namespace):
     return solver
 
 
-def rendered_initcode(frame: CallFrame) -> str:
+def rendered_initcode(frame: CallContext) -> str:
     message = frame.message
     data = message.data
 
@@ -157,7 +157,7 @@ def rendered_initcode(frame: CallFrame) -> str:
     return f"{initcode_str}({color_info(args_str)})"
 
 
-def render_create_call(frame: CallFrame) -> None:
+def render_create_call(frame: CallContext) -> None:
     message = frame.message
     addr = unbox_int(message.target)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
@@ -172,7 +172,7 @@ def render_create_call(frame: CallFrame) -> None:
     render_output(frame)
 
 
-def render_output(frame: CallFrame) -> None:
+def render_output(frame: CallContext) -> None:
     returndata = "0x"
     failed = False
     error_str = ""
@@ -210,7 +210,7 @@ def rendered_log(log: EventLog) -> str:
     return f"{opcode_str}({args_str})"
 
 
-def render_trace(frame: CallFrame) -> None:
+def render_trace(frame: CallContext) -> None:
     if frame.depth == 1:
         print("Traces:")
 
@@ -240,7 +240,7 @@ def render_trace(frame: CallFrame) -> None:
     print(f"{indent}{target_str}::{calldata}{static_str}{value_str}")
 
     for trace_element in frame.trace:
-        if isinstance(trace_element, CallFrame):
+        if isinstance(trace_element, CallContext):
             render_trace(trace_element)
         elif isinstance(trace_element, EventLog):
             print(f"{indent}{rendered_log(trace_element)}")
@@ -274,7 +274,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         storage={this: {}},
         balance=balance,
         block=block,
-        call_frame=CallFrame(message=message),
+        context=CallContext(message=message),
         this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
@@ -318,7 +318,7 @@ def deploy_test(
         storage={this: {}},
         balance=mk_balance(),
         block=mk_block(),
-        call_frame=CallFrame(message=message),
+        context=CallContext(message=message),
         this=this,
         pgm=None,  # to be added
         symbolic=False,
@@ -394,7 +394,7 @@ def setup(
         dyn_param_size = []  # TODO: propagate to run
         mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
 
-        setup_ex.call_frame = CallFrame(
+        setup_ex.context = CallContext(
             message=Message(
                 target=setup_ex.message().target,
                 caller=setup_ex.message().caller,
@@ -526,7 +526,7 @@ def run(
             #
             block=deepcopy(setup_ex.block),
             #
-            call_frame=CallFrame(message=message),
+            context=CallContext(message=message),
             this=setup_ex.this,
             #
             pgm=setup_ex.code[setup_ex.this],
@@ -637,7 +637,7 @@ def run(
             print(ex)
 
         if args.verbose >= 3:
-            render_trace(ex.call_frame)
+            render_trace(ex.context)
 
     for opcode, idx, ex in stuck:
         warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")
