@@ -1,4 +1,4 @@
-name: Test long
+name: Test FFI
 
 on:
   push:
@@ -14,8 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - testname: "examples/tokens/ERC20"
-        - testname: "examples/tokens/ERC721"
+        - testname: "ffi:tests"
 
     steps:
       - uses: actions/checkout@v3
@@ -39,4 +38,4 @@ jobs:
         run: pip install -e .
 
       - name: Run pytest
-        run: pytest -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="-v -st --error-unknown --test-parallel --solver-parallel --solver-timeout-assertion 0"
+        run: pytest -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="--ffi -v -st --error-unknown --test-parallel --solver-parallel --solver-timeout-assertion 0"
