@@ -13,13 +13,9 @@ jobs:
     strategy:
       matrix:
         os: ["macos-latest", "ubuntu-latest", "windows-latest"]
-        python-version: ["3.8", "3.9", "3.10", "3.11"]  # "3.8.13", "3.9.13", "3.10.6"
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
         parallel: ["", "--test-parallel", "--solver-parallel", "--test-parallel --solver-parallel"]
         custom-storage: ["", "--custom-storage-layout"]
-        exclude:
-          # python 3.8.13 is not available in windows-2022
-          - os: "windows-latest"
-            python-version: "3.8.13"
 
     steps:
       - uses: actions/checkout@v3
