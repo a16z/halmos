@@ -1331,6 +1331,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Storage2.t.sol:Storage2Test": [
+            {
+                "name": "check_set((uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint32,uint256,uint32,uint32,uint256,uint32,uint32,uint256,uint32,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256))",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Store.t.sol:StoreTest": [
             {
                 "name": "check_store_Array(uint256,uint256)",
