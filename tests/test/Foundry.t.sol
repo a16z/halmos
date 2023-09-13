@@ -6,6 +6,21 @@ import "forge-std/StdCheats.sol";
 
 import "../src/Counter.sol";
 
+contract DeepFailer is Test {
+    function do_test(uint256 x) external {
+        if (x >= 6) {
+            fail();
+        } else {
+            (bool success, ) = address(this).call(abi.encodeWithSelector(this.do_test.selector, x + 1));
+            success; // silence warnings
+        }
+    }
+
+    function test_fail_cheatcode() public {
+        DeepFailer(address(this)).do_test(0);
+    }
+}
+
 contract FoundryTest is Test {
     /* TODO: support checkFail prefix
     function checkFail() public {
@@ -50,6 +65,8 @@ contract FoundryTest is Test {
         assertEq(retval.length, 1);
         assertEq(uint256(uint8(retval[0])), 0xAA);
     }
+
+
 
     /// @notice etching to a symbolic address is not supported
     // function check_etch_SymbolicAddr(address who) public {

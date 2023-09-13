@@ -451,7 +451,6 @@ class CallOutput:
     data: Optional[Bytes] = None
     accounts_to_delete: Set[Address] = field(default_factory=set)
     error: Optional[EvmException] = None
-    error_str: Optional[str] = None
 
     # TODO:
     #   - touched_accounts
@@ -783,7 +782,6 @@ class Exec:  # an execution path
         self,
         data: Bytes = EMPTY_BYTES,
         error: Optional[EvmException] = None,
-        error_str: Optional[str] = None,
     ) -> None:
         output = self.context.output
 
@@ -792,7 +790,6 @@ class Exec:  # an execution path
 
         output.data = data
         output.error = error
-        output.error_str = error_str
 
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
@@ -1776,9 +1773,7 @@ class SEVM:
                 # vm.fail()
                 # BitVecVal(hevm_cheat_code.fail_payload, 800)
                 if arg == hevm_cheat_code.fail_payload:
-                    # TODO: check expected semantics here
-                    # ex.failed = True
-                    ex.halt(error=Revert(), error_str="hevm.fail()")
+                    ex.halt(error=HevmFailCheatcode())
                     out.append(ex)
                     return
 

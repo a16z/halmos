@@ -234,7 +234,7 @@ def render_trace(context: CallContext) -> None:
     target_str = str(target) if is_bv(target) else hex(target)
 
     calldata = (
-        simplify(Concat(message.data))
+        hexify(simplify(Concat(message.data)))
         if any(is_bv(x) for x in message.data)
         else bytes(message.data).hex() or "0x"
     )
@@ -519,6 +519,11 @@ class TestResult:
     num_bounded_loops: int = None  # number of incomplete loops
 
 
+def is_global_fail_set(context: CallContext) -> bool:
+    hevm_fail = isinstance(context.output.error, HevmFailCheatcode)
+    return hevm_fail or any(is_global_fail_set(x) for x in context.subcalls())
+
+
 def run(
     setup_ex: Exec,
     abi: List,
@@ -607,13 +612,18 @@ def run(
             render_trace(ex.context)
 
         error = ex.context.output.error
+
         if isinstance(error, Revert):
             returndata = ex.context.output.data
             if unbox_int(returndata) == ASSERT_FAIL:
                 execs_to_model.append((idx, ex))
-        elif error:
+                continue
+
+        if is_global_fail_set(ex.context):
             execs_to_model.append((idx, ex))
-        else:
+            continue
+
+        if not error:
             normal += 1
 
     if len(execs_to_model) > 0 and args.verbose >= 1:
@@ -677,7 +687,11 @@ def run(
             print(ex)
 
         if args.verbose >= VERBOSE_LEVEL_COUNTEREXAMPLE_TRACE:
-            print(f"Trace #{idx+1}/{len(exs)}:")
+            print(
+                f"Trace #{idx+1}/{len(exs)}:"
+                if args.verbose == VERBOSE_LEVEL_ALL_EXPLORED_TRACES
+                else "Trace:"
+            )
             render_trace(ex.context)
 
     for opcode, idx, ex in stuck:
