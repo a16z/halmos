@@ -32,6 +32,10 @@ if hasattr(sys, "set_int_max_str_digits"):
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 
+# Panic(1)
+# bytes4(keccak256("Panic(uint256)")) + bytes32(1)
+ASSERT_FAIL = 0x4E487B710000000000000000000000000000000000000000000000000000000000000001
+
 
 @dataclass(frozen=True)
 class FunctionInfo:
@@ -135,8 +139,8 @@ def mk_solver(args: Namespace):
     return solver
 
 
-def rendered_initcode(frame: CallContext) -> str:
-    message = frame.message
+def rendered_initcode(context: CallContext) -> str:
+    message = context.message
     data = message.data
 
     initcode_str = ""
@@ -157,27 +161,27 @@ def rendered_initcode(frame: CallContext) -> str:
     return f"{initcode_str}({color_info(args_str)})"
 
 
-def render_create_call(frame: CallContext) -> None:
-    message = frame.message
+def render_create_call(context: CallContext) -> None:
+    message = context.message
     addr = unbox_int(message.target)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
 
-    initcode_str = rendered_initcode(frame)
+    initcode_str = rendered_initcode(context)
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
-    indent = frame.depth * "    "
+    indent = context.depth * "    "
 
     print(f"{indent}new contract @ {color_info(addr_str)}::{initcode_str}{value_str}")
-    render_output(frame)
+    render_output(context)
 
 
-def render_output(frame: CallContext) -> None:
+def render_output(context: CallContext) -> None:
     returndata = "0x"
     failed = False
     error_str = ""
 
-    output = frame.output
+    output = context.output
     if output is not None:
         if is_bv(output.data):
             returndata = simplify(output.data)
@@ -193,7 +197,7 @@ def render_output(frame: CallContext) -> None:
 
     color = color_warn if failed else color_good
     color_if_err = color_warn if failed else lambda x: x
-    indent = frame.depth * "    "
+    indent = context.depth * "    "
 
     print(f"{indent}{color('← ')}{color_if_err(returndata)}{color_if_err(error_str)}")
 
@@ -210,17 +214,17 @@ def rendered_log(log: EventLog) -> str:
     return f"{opcode_str}({args_str})"
 
 
-def render_trace(frame: CallContext) -> None:
-    if frame.depth == 1:
+def render_trace(context: CallContext) -> None:
+    if context.depth == 1:
         print("Traces:")
 
     # TODO: label for known addresses
     # TODO: decode calldata
     # TODO: proper ordering of subcalls and logs
 
-    message = frame.message
+    message = context.message
     if message.is_create:
-        render_create_call(frame)
+        render_create_call(context)
         return
 
     target = unbox_int(message.target)
@@ -235,11 +239,11 @@ def render_trace(frame: CallContext) -> None:
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
     static_str = " [staticcall]" if message.is_static else ""
-    indent = frame.depth * "    "
+    indent = context.depth * "    "
 
     print(f"{indent}{target_str}::{calldata}{static_str}{value_str}")
 
-    for trace_element in frame.trace:
+    for trace_element in context.trace:
         if isinstance(trace_element, CallContext):
             render_trace(trace_element)
         elif isinstance(trace_element, EventLog):
@@ -247,9 +251,9 @@ def render_trace(frame: CallContext) -> None:
         else:
             raise InternalHalmosError(f"unexpected trace element: {trace_element}")
 
-    render_output(frame)
+    render_output(context)
 
-    if frame.depth == 1:
+    if context.depth == 1:
         print()
 
 
@@ -284,13 +288,20 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
 
     for idx, ex in enumerate(exs):
         opcode = ex.current_opcode()
-        if opcode in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
-            model_with_context = gen_model(args, idx, ex)
-            print(
-                f"Final opcode: {mnemonic(opcode)} | Return data: {ex.output} | Input example: {model_with_context.model}"
+        error = ex.context.output.error
+        returndata = ex.context.output.data
+
+        if error:
+            warn(
+                INTERNAL_ERROR,
+                f"{mnemonic(opcode)} failed, error={error}, returndata={returndata}",
             )
         else:
-            warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")
+            print(f"Final opcode: {mnemonic(opcode)})")
+            print(f"Return data: {returndata}")
+            model_with_context = gen_model(args, idx, ex)
+            print(f"Input example: {model_with_context.model}")
+
         if args.print_states:
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
@@ -347,22 +358,23 @@ def deploy_test(
     # sanity check
     if len(exs) != 1:
         raise ValueError(f"constructor: # of paths: {len(exs)}")
+
     ex = exs[0]
-    if ex.failed:
-        raise ValueError(f"constructor: failed: {ex.error}")
-    if ex.current_opcode() not in [EVM.STOP, EVM.RETURN]:
-        raise ValueError(f"constructor: failed: {ex.current_opcode()}: {ex.error}")
+    error = ex.context.output.error
+    returndata = ex.context.output.data
+    if error:
+        raise ValueError(f"constructor failed, error={error} returndata={returndata}")
 
     # deployed bytecode
-    deployed_bytecode = Contract(ex.output)
+    deployed_bytecode = Contract(returndata)
     ex.code[this] = deployed_bytecode
     ex.pgm = deployed_bytecode
 
     # reset vm state
     ex.pc = 0
     ex.st = State()
+    ex.context.output = CallOutput()
     ex.jumpis = {}
-    ex.output = None
     ex.prank = Prank()
 
     return ex
@@ -417,20 +429,23 @@ def setup(
 
         for idx, setup_ex in enumerate(setup_exs_all):
             opcode = setup_ex.current_opcode()
-            if opcode in [EVM.STOP, EVM.RETURN]:
+            error = setup_ex.context.output.error
+
+            if error is not None and opcode not in [EVM.REVERT, EVM.INVALID]:
+                print(
+                    color_warn(
+                        f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {error}"
+                    )
+                )
+            else:
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
                 res = setup_ex.solver.check()
                 if res != unsat:
                     setup_exs.append(setup_ex)
-            elif opcode not in [EVM.REVERT, EVM.INVALID]:
-                print(
-                    color_warn(
-                        f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {setup_ex.error}"
-                    )
-                )
 
         if len(setup_exs) == 0:
             raise ValueError(f"No successful path found in {setup_sig}")
+
         if len(setup_exs) > 1:
             print(
                 color_warn(
@@ -533,7 +548,6 @@ def run(
             pc=0,
             st=State(),
             jumpis={},
-            output=None,
             symbolic=args.symbolic_storage,
             prank=Prank(),  # prank is reset after setUp()
             #
@@ -546,8 +560,6 @@ def run(
             storages=setup_ex.storages.copy(),
             balances=setup_ex.balances.copy(),
             calls=setup_ex.calls.copy(),
-            failed=setup_ex.failed,
-            error=setup_ex.error,
         )
     )
 
@@ -560,21 +572,15 @@ def run(
     stuck = []
 
     for idx, ex in enumerate(exs):
-        opcode = ex.current_opcode()
-        if opcode in [EVM.STOP, EVM.RETURN]:
-            normal += 1
-        elif opcode in [EVM.REVERT, EVM.INVALID]:
-            # Panic(1)
-            # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
-            if (
-                unbox_int(ex.output)
-                == 0x4E487B710000000000000000000000000000000000000000000000000000000000000001
-            ):
+        error = ex.context.output.error
+        if isinstance(error, Revert):
+            returndata = ex.context.output.data
+            if unbox_int(returndata) == ASSERT_FAIL:
                 execs_to_model.append((idx, ex))
-        elif ex.failed:
+        elif error:
             execs_to_model.append((idx, ex))
         else:
-            stuck.append((opcode, idx, ex))
+            normal += 1
 
     if len(execs_to_model) > 0 and args.verbose >= 1:
         print(
@@ -640,7 +646,7 @@ def run(
             render_trace(ex.context)
 
     for opcode, idx, ex in stuck:
-        warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")
+        warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.context.output.error}")
         if args.print_blocked_states:
             print(f"# {idx+1} / {len(exs)}")
             print(ex)

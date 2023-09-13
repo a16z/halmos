@@ -13,6 +13,7 @@ from halmos.sevm import (
     Contract,
     Message,
     CallContext,
+    CallOutput,
     EventLog,
     con,
     int_of,
@@ -299,7 +300,7 @@ def test_deploy_basic(sevm, solver):
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver)
 
     # before execution
-    assert exec.context.output is None
+    assert exec.context.output.data is None
 
     sevm.run(exec)
     render_trace(exec.context)

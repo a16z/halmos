@@ -40,6 +40,8 @@ Address = BitVecRef  # 160-bitvector
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
+EMPTY_BYTES = b""
+
 
 # dynamic BitVecSort sizes
 class BitVecSortCache:
@@ -440,15 +442,15 @@ class Message:
     gas: Optional[Word] = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class CallOutput:
     """
     Data record produced during the execution of a call.
     """
 
-    data: Bytes
-    accounts_to_delete: Set[Address]
-    error: Optional[EvmException]
+    data: Optional[Bytes] = None
+    accounts_to_delete: Set[Address] = field(default_factory=set)
+    error: Optional[EvmException] = None
     error_str: Optional[str] = None
 
     # TODO:
@@ -464,7 +466,7 @@ TraceElement = UnionType["CallContext", EventLog]
 @dataclass
 class CallContext:
     message: Message
-    output: Optional[CallOutput] = None
+    output: CallOutput = field(default_factory=CallOutput)
     depth: int = 1
     trace: List[TraceElement] = field(default_factory=list)
 
@@ -760,7 +762,6 @@ class Exec:  # an execution path
         self.pc = kwargs["pc"]
         self.st = kwargs["st"]
         self.jumpis = kwargs["jumpis"]
-        self.output = kwargs["output"]
         self.symbolic = kwargs["symbolic"]
         self.prank = kwargs["prank"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
@@ -774,21 +775,24 @@ class Exec:  # an execution path
         self.storages = kwargs["storages"]
         self.balances = kwargs["balances"]
         self.calls = kwargs["calls"]
-        self.error = kwargs["error"]
-        self.failed = kwargs["failed"] if "failed" in kwargs else False
 
         assert_address(self.context.message.target)
         assert_address(self.this)
 
-    def halt(self, data: Bytes, error: Optional[EvmException] = None) -> None:
-        # print(f"halting execution id {id(self)} and call frame {id(self.context)}")
+    def halt(
+        self,
+        data: Bytes = EMPTY_BYTES,
+        error: Optional[EvmException] = None,
+        error_str: Optional[str] = None,
+    ) -> None:
+        output = self.context.output
 
-        if self.context.output is not None:
+        if output.data is not None:
             raise InternalHalmosError("output already set")
 
-        self.context.output = CallOutput(
-            data=data, accounts_to_delete=self.addresses_to_delete, error=error
-        )
+        output.data = data
+        output.error = error
+        output.error_str = error_str
 
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
@@ -831,6 +835,7 @@ class Exec:  # an execution path
         )
 
     def __str__(self) -> str:
+        output = self.context.output.data
         return hexify(
             "".join(
                 [
@@ -844,14 +849,10 @@ class Exec:  # an execution path
                             self.storage,
                         )
                     ),
-                    # f"Solver:\n{self.str_solver()}\n",
                     f"Path:\n{self.str_path()}",
                     f"Aliases:\n",
                     "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
-                    f"Output: {self.output.hex() if isinstance(self.output, bytes) else self.output}\n",
-                    # f"Log: {self.log}\n",
-                    # f"Opcodes:\n{self.str_cnts()}",
-                    # f"Memsize: {len(self.st.memory)}\n",
+                    f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
                     f"Balance updates:\n",
                     "".join(
                         map(
@@ -870,7 +871,6 @@ class Exec:  # an execution path
                     "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
                     f"External calls:\n",
                     "".join(map(lambda x: f"- {x}\n", self.calls)),
-                    # f"Calldata: {self.calldata}\n",
                 ]
             )
         )
@@ -1117,8 +1117,17 @@ class Exec:  # an execution path
         self.cnts["fresh"]["symbol"] += 1
         return self.cnts["fresh"]["symbol"]
 
+    def returndata(self) -> Optional[Bytes]:
+        """
+        Return data from the last executed sub-context or None
+        """
+
+        subcalls = self.context.subcalls()
+        return subcalls[-1].output.data if subcalls else None
+
     def returndatasize(self) -> int:
-        return 0 if self.output is None else byte_length(self.output)
+        returndata = self.returndata()
+        return 0 if returndata is None else byte_length(returndata)
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_concrete(x):
@@ -1584,7 +1593,6 @@ class SEVM:
                     pc=0,
                     st=State(),
                     jumpis={},
-                    output=None,
                     symbolic=ex.symbolic,
                     prank=Prank(),
                     #
@@ -1597,8 +1605,6 @@ class SEVM:
                     storages=ex.storages,
                     balances=ex.balances,
                     calls=ex.calls,
-                    failed=ex.failed,
-                    error=ex.error,
                 )
             )
 
@@ -1619,7 +1625,6 @@ class SEVM:
                 new_ex.pc = ex.pc
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
-                # new_ex.output is passed into the caller
                 new_ex.symbolic = ex.symbolic
                 new_ex.prank = deepcopy(ex.prank)
 
@@ -1630,7 +1635,7 @@ class SEVM:
                     ret_loc,
                     0,
                     min(ret_size, actual_ret_size),
-                    new_ex.output,
+                    subcall.output.data,
                     actual_ret_size,
                 )
 
@@ -1771,9 +1776,12 @@ class SEVM:
                 # vm.fail()
                 # BitVecVal(hevm_cheat_code.fail_payload, 800)
                 if arg == hevm_cheat_code.fail_payload:
-                    ex.failed = True
+                    # TODO: check expected semantics here
+                    # ex.failed = True
+                    ex.halt(error=Revert(), error_str="hevm.fail()")
                     out.append(ex)
                     return
+
                 # vm.assume(bool)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
@@ -1782,6 +1790,7 @@ class SEVM:
                     assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
                     ex.solver.add(assume_cond)
                     ex.path.append(str(assume_cond))
+
                 # vm.getCode(string)
                 elif (
                     simplify(Extract(arg_size * 8 - 1, arg_size * 8 - 32, arg))
@@ -1982,7 +1991,7 @@ class SEVM:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)
 
             # TODO: check if still needed
-            ex.calls.append((exit_code_var, exit_code, ex.ret))
+            ex.calls.append((exit_code_var, exit_code, ex.context.output.data))
 
             ex.next_pc()
             stack.append((ex, step_id))
@@ -2095,7 +2104,6 @@ class SEVM:
                 pc=0,
                 st=State(),
                 jumpis={},
-                output=None,
                 symbolic=False,
                 prank=Prank(),
                 #
@@ -2108,8 +2116,6 @@ class SEVM:
                 storages=ex.storages,
                 balances=ex.balances,
                 calls=ex.calls,
-                failed=ex.failed,
-                error=ex.error,
             )
         )
 
@@ -2119,7 +2125,7 @@ class SEVM:
         for idx, new_ex in enumerate(new_exs):
             # sanity checks
             subcall = new_ex.context
-            if subcall.output is None:
+            if subcall.output is None or subcall.output.data is None:
                 raise ValueError(
                     "unfinished contract creation call frame: " + str(new_ex)
                 )
@@ -2141,7 +2147,7 @@ class SEVM:
 
             if subcall.output.error is None:
                 # new contract code
-                new_ex.code[new_addr] = Contract(new_ex.output)
+                new_ex.code[new_addr] = Contract(subcall.output.data)
 
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))
@@ -2265,7 +2271,6 @@ class SEVM:
             pc=target,
             st=deepcopy(ex.st),
             jumpis=deepcopy(ex.jumpis),
-            output=ex.output,
             symbolic=ex.symbolic,
             prank=deepcopy(ex.prank),
             #
@@ -2278,7 +2283,6 @@ class SEVM:
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
             calls=ex.calls.copy(),
-            error=ex.error,
         )
         return new_ex
 
@@ -2339,17 +2343,17 @@ class SEVM:
                     print(ex)
 
                 if opcode == EVM.STOP:
-                    ex.halt(data=None)
+                    ex.halt()
                     out.append(ex)
                     continue
 
                 elif opcode == EVM.INVALID:
-                    ex.halt(data=None, error=InvalidOpcode)
+                    ex.halt(error=InvalidOpcode())
                     out.append(ex)
                     continue
 
                 elif opcode == EVM.REVERT:
-                    ex.halt(data=ex.st.ret(), error=Revert)
+                    ex.halt(data=ex.st.ret(), error=Revert())
                     out.append(ex)
                     continue
 
@@ -2574,8 +2578,15 @@ class SEVM:
                     offset: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
                     # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
+
+                    # TODO: do we need to pass returndatasize here?
                     wstore_partial(
-                        ex.st.memory, loc, offset, size, ex.output, ex.returndatasize()
+                        ex.st.memory,
+                        loc,
+                        offset,
+                        size,
+                        ex.returndata(),
+                        ex.returndatasize(),
                     )
 
                 elif opcode == EVM.CALLDATACOPY:
@@ -2736,7 +2747,6 @@ class SEVM:
             pc=0,
             st=State(),
             jumpis={},
-            output=None,
             symbolic=symbolic,
             prank=Prank(),
             #
@@ -2750,6 +2760,4 @@ class SEVM:
             storages={},
             balances={},
             calls=[],
-            failed=False,
-            error="",
         )
