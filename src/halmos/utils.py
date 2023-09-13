@@ -63,6 +63,10 @@ def info(text: str) -> None:
     print(color_info(text))
 
 
+def indent_text(text: str, n: int = 4) -> str:
+    return "\n".join(" " * n + line for line in text.splitlines())
+
+
 class EVM:
     STOP = 0x00
     ADD = 0x01

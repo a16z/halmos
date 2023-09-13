@@ -14,7 +14,7 @@ from importlib import metadata
 
 from .pools import thread_pool, process_pool
 from .sevm import *
-from .utils import color_good, color_warn, hexify, NamedTimer
+from .utils import color_good, color_warn, hexify, indent_text, NamedTimer
 from .warnings import *
 from .parser import mk_arg_parser
 from .calldata import Calldata
@@ -35,6 +35,12 @@ if sys.stdout.encoding != "utf-8":
 # Panic(1)
 # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
 ASSERT_FAIL = 0x4E487B710000000000000000000000000000000000000000000000000000000000000001
+
+VERBOSE_LEVEL_CONSTRUCTOR_TRACE = 5
+VERBOSE_LEVEL_ALL_SETUP_TRACES = 5
+VERBOSE_LEVEL_SINGLE_SETUP_TRACE = 3
+VERBOSE_LEVEL_ALL_EXPLORED_TRACES = 4
+VERBOSE_LEVEL_COUNTEREXAMPLE_TRACE = 2
 
 
 @dataclass(frozen=True)
@@ -215,9 +221,6 @@ def rendered_log(log: EventLog) -> str:
 
 
 def render_trace(context: CallContext) -> None:
-    if context.depth == 1:
-        print("Traces:")
-
     # TODO: label for known addresses
     # TODO: decode calldata
     # TODO: proper ordering of subcalls and logs
@@ -360,6 +363,11 @@ def deploy_test(
         raise ValueError(f"constructor: # of paths: {len(exs)}")
 
     ex = exs[0]
+
+    if args.verbose >= VERBOSE_LEVEL_CONSTRUCTOR_TRACE:
+        print("Constructor trace:")
+        render_trace(ex.context)
+
     error = ex.context.output.error
     returndata = ex.context.output.data
     if error:
@@ -428,6 +436,10 @@ def setup(
         setup_exs = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
+            if args.verbose >= VERBOSE_LEVEL_ALL_SETUP_TRACES:
+                print(f"Setup trace #{idx}/{len(setup_exs_all)}:")
+                render_trace(setup_ex.context)
+
             opcode = setup_ex.current_opcode()
             error = setup_ex.context.output.error
 
@@ -437,6 +449,13 @@ def setup(
                         f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {error}"
                     )
                 )
+
+                if (
+                    VERBOSE_LEVEL_SINGLE_SETUP_TRACE
+                    <= args.verbose
+                    < VERBOSE_LEVEL_ALL_SETUP_TRACES
+                ):
+                    render_trace(setup_ex.context)
             else:
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
                 res = setup_ex.solver.check()
@@ -456,6 +475,14 @@ def setup(
                 print("\n".join(map(str, setup_exs)))
 
         setup_ex = setup_exs[0]
+
+        if (
+            VERBOSE_LEVEL_SINGLE_SETUP_TRACE
+            <= args.verbose
+            < VERBOSE_LEVEL_ALL_SETUP_TRACES
+        ):
+            print(f"Setup trace:")
+            render_trace(setup_ex.context)
 
         if args.print_setup_states:
             print(setup_ex)
@@ -572,6 +599,13 @@ def run(
     stuck = []
 
     for idx, ex in enumerate(exs):
+        if args.verbose >= VERBOSE_LEVEL_ALL_EXPLORED_TRACES:
+            print(f"Path #{idx+1}/{len(exs)}:")
+            print(indent_text(ex.str_path()))
+
+            print("\nTrace:")
+            render_trace(ex.context)
+
         error = ex.context.output.error
         if isinstance(error, Revert):
             returndata = ex.context.output.data
@@ -642,7 +676,8 @@ def run(
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
 
-        if args.verbose >= 3:
+        if args.verbose >= VERBOSE_LEVEL_COUNTEREXAMPLE_TRACE:
+            print(f"Trace #{idx+1}/{len(exs)}:")
             render_trace(ex.context)
 
     for opcode, idx, ex in stuck:
