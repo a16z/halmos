@@ -192,7 +192,7 @@ def render_output(context: CallContext) -> None:
         if is_bv(output.data):
             returndata = simplify(output.data)
         elif isinstance(output.data, bytes):
-            returndata = output.data.hex()
+            returndata = output.data.hex() or "0x"
         elif output.data is None:
             pass
         else:
