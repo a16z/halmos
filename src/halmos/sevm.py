@@ -438,8 +438,11 @@ class Message:
     value: Word
     data: List[Byte]
     is_static: bool = False
-    is_create: bool = False
+    call_scheme: int = EVM.CALL
     gas: Optional[Word] = None
+
+    def is_create(self) -> bool:
+        return self.call_scheme == EVM.CREATE or self.call_scheme == EVM.CREATE2
 
 
 @dataclass
@@ -1546,6 +1549,7 @@ class SEVM:
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
+                # TODO: revert if context is static
                 self.transfer_value(ex, caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
@@ -1569,7 +1573,8 @@ class SEVM:
                 caller=caller if op != EVM.DELEGATECALL else ex.caller(),
                 value=fund if op != EVM.CALLCODE else ex.callvalue(),
                 data=calldata,
-                is_static=(op == EVM.STATICCALL),
+                is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
+                call_scheme=op,
             )
 
             # TODO: check max call depth
@@ -1773,7 +1778,7 @@ class SEVM:
                 # vm.fail()
                 # BitVecVal(hevm_cheat_code.fail_payload, 800)
                 if arg == hevm_cheat_code.fail_payload:
-                    ex.halt(error=HevmFailCheatcode())
+                    ex.halt(error=FailCheatcode())
                     out.append(ex)
                     return
 
@@ -2079,7 +2084,8 @@ class SEVM:
             caller=caller,
             value=value,
             data=create_hexcode,
-            is_create=True,
+            is_static=False,
+            call_scheme=op,
         )
 
         # TODO: check max call depth
@@ -2441,7 +2447,7 @@ class SEVM:
                     ex.st.push(ex.st.pop() ^ ex.st.pop())  # bvxor
 
                 elif opcode == EVM.CALLDATALOAD:
-                    calldata = None if ex.message().is_create else ex.message().data
+                    calldata = None if ex.message().is_create() else ex.message().data
                     if calldata is None:
                         ex.st.push(f_calldataload(ex.st.pop()))
                     else:
@@ -2458,7 +2464,7 @@ class SEVM:
                             )
                         )
                 elif opcode == EVM.CALLDATASIZE:
-                    calldata = None if ex.message().is_create else ex.message().data
+                    calldata = None if ex.message().is_create() else ex.message().data
                     # TODO: is optional calldata necessary?
                     if calldata is None:
                         ex.st.push(f_calldatasize())
@@ -2652,7 +2658,9 @@ class SEVM:
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     if ex.message().is_static:
-                        raise WriteInStaticContext
+                        raise WriteInStaticContext(
+                            f"addr={hexify(ex.this)} pc={ex.pc} insn={mnemonic(opcode)}"
+                        )
                     num_topics: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
                     size: int = int_of(ex.st.pop(), "symbolic LOG data size")

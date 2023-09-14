@@ -14,7 +14,17 @@ from importlib import metadata
 
 from .pools import thread_pool, process_pool
 from .sevm import *
-from .utils import color_good, color_warn, hexify, indent_text, NamedTimer
+from .utils import (
+    color_good,
+    color_warn,
+    hexify,
+    indent_text,
+    NamedTimer,
+    yellow,
+    cyan,
+    green,
+    red,
+)
 from .warnings import *
 from .parser import mk_arg_parser
 from .calldata import Calldata
@@ -223,12 +233,14 @@ def rendered_log(log: EventLog) -> str:
 def render_trace(context: CallContext) -> None:
     # TODO: label for known addresses
     # TODO: decode calldata
-    # TODO: proper ordering of subcalls and logs
+    # TODO: decode logs
 
     message = context.message
-    if message.is_create:
+    if message.is_create():
         render_create_call(context)
         return
+
+    callscheme_str = cyan(mnemonic(message.call_scheme) + " ")
 
     target = unbox_int(message.target)
     target_str = str(target) if is_bv(target) else hex(target)
@@ -239,12 +251,15 @@ def render_trace(context: CallContext) -> None:
         else bytes(message.data).hex() or "0x"
     )
 
+    call_color = green if context.output.error is None else red
+    call_str = f"{call_color(target_str)}::{call_color(calldata)}"
+
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
-    static_str = " [staticcall]" if message.is_static else ""
+    static_str = yellow(" [static]") if message.is_static else ""
     indent = context.depth * "    "
 
-    print(f"{indent}{target_str}::{calldata}{static_str}{value_str}")
+    print(f"{indent}{callscheme_str}{call_str}{static_str}{value_str}")
 
     for trace_element in context.trace:
         if isinstance(trace_element, CallContext):
@@ -520,7 +535,7 @@ class TestResult:
 
 
 def is_global_fail_set(context: CallContext) -> bool:
-    hevm_fail = isinstance(context.output.error, HevmFailCheatcode)
+    hevm_fail = isinstance(context.output.error, FailCheatcode)
     return hevm_fail or any(is_global_fail_set(x) for x in context.subcalls())
 
 

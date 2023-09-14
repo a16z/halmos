@@ -122,7 +122,7 @@ class InvalidContractPrefix(ExceptionalHalt):
     pass
 
 
-class HevmFailCheatcode(ExceptionalHalt):
+class FailCheatcode(ExceptionalHalt):
     """
     Raised when invoking hevm's vm.fail() cheatcode
     """

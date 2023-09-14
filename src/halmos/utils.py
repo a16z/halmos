@@ -47,16 +47,44 @@ def con_addr(n: int) -> BitVecRef:
     return BitVecVal(n, 160)
 
 
-def color_good(text: str) -> str:
+def green(text: str) -> str:
     return f"\033[32m{text}\033[0m"
 
 
-def color_warn(text: str) -> str:
+def red(text: str) -> str:
     return f"\033[31m{text}\033[0m"
 
 
-def color_info(text: str) -> str:
+def yellow(text: str) -> str:
     return f"\033[33m{text}\033[0m"
+
+
+def cyan(text: str) -> str:
+    return f"\033[36m{text}\033[0m"
+
+
+def color_good(text: str) -> str:
+    return green(text)
+
+
+def color_error(text: str) -> str:
+    return red(text)
+
+
+def color_warn(text: str) -> str:
+    return red(text)
+
+
+def color_info(text: str) -> str:
+    return cyan(text)
+
+
+def error(text: str) -> None:
+    print(color_error(text))
+
+
+def warn(text: str) -> None:
+    print(color_warn(text))
 
 
 def info(text: str) -> None:

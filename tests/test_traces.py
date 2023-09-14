@@ -318,7 +318,7 @@ def test_deploy_nonpayable_reverts(sevm, solver):
     sevm.run(exec)
     render_trace(exec.context)
 
-    assert exec.context.output.error is Revert
+    assert isinstance(exec.context.output.error, Revert)
     assert exec.context.output.data is None
     assert len(exec.context.trace) == 0
 
@@ -391,7 +391,7 @@ def test_failed_call(sevm: SEVM, solver):
     # the just_fails() subcall fails
     subcalls = exec.context.subcalls()
     assert len(subcalls) == 1
-    assert subcalls[0].output.error is Revert
+    assert isinstance(subcalls[0].output.error, Revert)
     assert int_of(subcalls[0].output.data) == PANIC_1
 
 
@@ -435,7 +435,7 @@ def test_symbolic_subcall(sevm: SEVM, solver):
     assert any(x.context.subcalls()[0].output.error is None for x in execs)
 
     # in one of the executions, the subcall reverts
-    assert any(x.context.subcalls()[0].output.error is Revert for x in execs)
+    assert any(isinstance(x.context.subcalls()[0].output.error, Revert) for x in execs)
 
 
 def test_symbolic_create(sevm: SEVM, solver):
@@ -457,7 +457,7 @@ def test_symbolic_create(sevm: SEVM, solver):
     assert any(x.context.subcalls()[0].output.error is None for x in execs)
 
     # in one of the executions, the subcall reverts
-    assert any(x.context.subcalls()[0].output.error is Revert for x in execs)
+    assert any(isinstance(x.context.subcalls()[0].output.error, Revert) for x in execs)
 
 
 def test_failed_create(sevm: SEVM, solver):
@@ -478,7 +478,7 @@ def test_failed_create(sevm: SEVM, solver):
     # the create() subcall fails
     subcalls = exec.context.subcalls()
     assert len(subcalls) == 1
-    assert subcalls[0].output.error is Revert
+    assert isinstance(subcalls[0].output.error, Revert)
     assert int_of(subcalls[0].output.data) == PANIC_1
 
 
@@ -605,7 +605,7 @@ def test_trace_ordering(sevm: SEVM, solver):
                 success = succ1 && succ2;
             }
         }
-    """
+        """
     )
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
@@ -624,3 +624,53 @@ def test_trace_ordering(sevm: SEVM, solver):
     # the trace must preserve the ordering
     assert output_exec.context.trace == [call1, event, call2]
     assert int_of(call2.output.data) == 42
+
+
+def test_static_context_propagates(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(
+        """
+            contract Foo {
+                event FooEvent();
+
+                function logFoo() public returns (uint) {
+                    emit FooEvent();
+                    return 42;
+                }
+
+                function view_func() public returns (bool succ) {
+                    (succ, ) = address(this).call(abi.encodeWithSignature("logFoo()"));
+                }
+
+                function go(uint256 x) public view {
+                    (bool outerSucc, bytes memory ret) = address(this).staticcall(abi.encodeWithSignature("view_func()"));
+                    assert(outerSucc);
+
+                    bool innerSucc = abi.decode(ret, (bool));
+                    assert(!innerSucc);
+                }
+            }
+        """
+    )
+
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
+
+    execs = sevm.run(input_exec)[0]
+    assert len(execs) == 1
+
+    output_exec = execs.pop()
+    render_trace(output_exec.context)
+
+    assert len(output_exec.context.subcalls()) == 1
+    outer_call = output_exec.context.subcalls()[0]
+
+    assert outer_call.message.call_scheme == EVM.STATICCALL
+    assert outer_call.message.is_static is True
+    assert outer_call.output.error is None
+
+    assert len(outer_call.subcalls()) == 1
+    inner_call = outer_call.subcalls()[0]
+
+    assert inner_call.message.call_scheme == EVM.CALL
+    assert inner_call.message.is_static is True
+    assert isinstance(inner_call.output.error, WriteInStaticContext)
+    assert len(inner_call.logs()) == 0
