@@ -62,9 +62,10 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
-        "--custom-storage-layout",
-        action="store_true",
-        help="allow for a custom (non-Solidity) storage layout",
+        "--storage-layout",
+        choices=["solidity", "generic"],
+        default="solidity",
+        help="Select one of the available storage layout models. The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.",
     )
 
     parser.add_argument(
