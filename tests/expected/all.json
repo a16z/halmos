@@ -182,6 +182,7 @@
                 "name": "check_alias_1(address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -190,6 +191,7 @@
                 "name": "check_alias_1a(bool,address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -198,6 +200,7 @@
                 "name": "check_alias_2(address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -206,6 +209,7 @@
                 "name": "check_alias_2a(bool,address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -214,6 +218,7 @@
                 "name": "check_alias_3(address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -222,6 +227,7 @@
                 "name": "check_alias_3a(bool,address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -590,7 +596,7 @@
         "test/Getter.t.sol:GetterTest": [
             {
                 "name": "check_Getter(uint256)",
-                "exitcode": 1,
+                "exitcode": 0,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -1116,6 +1122,7 @@
                 "name": "check_send(address,uint256,address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1191,6 +1198,7 @@
                 "name": "check_ecrecover(bytes32,uint8,bytes32,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1199,6 +1207,7 @@
                 "name": "check_isValidERC1271SignatureNow(bytes32,bytes)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1207,6 +1216,7 @@
                 "name": "check_isValidSignatureNow(bytes32,bytes)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1215,6 +1225,7 @@
                 "name": "check_tryRecover(address,bytes32,bytes)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1234,6 +1245,17 @@
         "test/SignedDiv.t.sol:TestGoodWadMul": [
             {
                 "name": "check_wadMul_solEquivalent(int256,int256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SmolWETH.t.sol:SmolWETHTest": [
+            {
+                "name": "check_deposit_once(address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1301,6 +1323,17 @@
             },
             {
                 "name": "check_setMap3(uint256,uint256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Storage2.t.sol:Storage2Test": [
+            {
+                "name": "check_set((uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint32,uint256,uint32,uint32,uint256,uint32,uint32,uint256,uint32,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256,uint32,uint256))",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1405,6 +1438,7 @@
                 "name": "check_unknown_call(address,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1413,6 +1447,7 @@
                 "name": "check_unknown_common_callbacks(address)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1421,6 +1456,7 @@
                 "name": "check_unknown_not_allowed(address)",
                 "exitcode": 1,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1429,6 +1465,7 @@
                 "name": "check_unknown_retsize_0(address)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1437,6 +1474,7 @@
                 "name": "check_unknown_retsize_64(address)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1445,6 +1483,7 @@
                 "name": "check_unknown_retsize_default(address)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1453,6 +1492,7 @@
                 "name": "check_unknown_send(address,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1461,6 +1501,7 @@
                 "name": "check_unknown_send_fail(address)",
                 "exitcode": 1,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
@@ -1469,6 +1510,7 @@
                 "name": "check_unknown_transfer(address,uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null

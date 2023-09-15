@@ -62,6 +62,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--custom-storage-layout",
+        action="store_true",
+        help="allow for a custom (non-Solidity) storage layout",
+    )
+
+    parser.add_argument(
         "--symbolic-storage",
         action="store_true",
         help="set default storage values to symbolic",

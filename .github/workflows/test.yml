@@ -13,12 +13,9 @@ jobs:
     strategy:
       matrix:
         os: ["macos-latest", "ubuntu-latest", "windows-latest"]
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.8.13", "3.9.13", "3.10.6"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
         parallel: ["", "--test-parallel", "--solver-parallel", "--test-parallel --solver-parallel"]
-        exclude:
-          # python 3.8.13 is not available in windows-2022
-          - os: "windows-latest"
-            python-version: "3.8.13"
+        custom-storage: ["", "--custom-storage-layout"]
 
     steps:
       - uses: actions/checkout@v3
@@ -42,4 +39,4 @@ jobs:
         run: pip install -e .
 
       - name: Run pytest
-        run: pytest -v -k "not long and not ffi" --halmos-options="-v -st --error-unknown ${{ matrix.parallel }} --solver-timeout-assertion 0"
+        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-v -st --error-unknown ${{ matrix.parallel }} ${{ matrix.custom-storage }} --solver-timeout-assertion 0"
