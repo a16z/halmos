@@ -5,6 +5,7 @@ on:
 jobs:
   pypi:
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Checkout
         uses: actions/checkout@v3
