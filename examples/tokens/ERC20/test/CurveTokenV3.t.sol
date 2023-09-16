@@ -28,7 +28,7 @@ interface CurveTokenV3 {
 
 contract EmptyContract { }
 
-/// @custom:halmos --custom-storage-layout --solver-timeout-assertion 0
+/// @custom:halmos --storage-layout=generic --solver-timeout-assertion 0
 contract CurveTokenV3Test is ERC20Test {
     CurveTokenV3 token_;
     address minter;

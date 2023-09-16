@@ -3,7 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 // from https://github.com/a16z/halmos/issues/82
 
-/// @custom:halmos --custom-storage-layout
+/// @custom:halmos --storage-layout=generic
 contract GetterTest {
     uint256[3] v;
     uint w;

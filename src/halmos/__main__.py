@@ -891,7 +891,7 @@ def mk_options(args: Namespace) -> Dict:
         "print_steps": args.print_steps,
         "unknown_calls_return_size": args.return_size_of_unknown_calls,
         "ffi": args.ffi,
-        "custom_storage_layout": args.custom_storage_layout,
+        "storage_layout": args.storage_layout,
     }
 
     if args.width is not None:

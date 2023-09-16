@@ -8,7 +8,17 @@ from subprocess import Popen, PIPE
 
 from copy import deepcopy
 from collections import defaultdict
-from typing import List, Set, Dict, Union as UnionType, Tuple, Any, Optional
+from typing import (
+    List,
+    Set,
+    Dict,
+    Union as UnionType,
+    Tuple,
+    Any,
+    Optional,
+    TypeVar,
+    Type,
+)
 from functools import reduce
 
 from z3 import *
@@ -1107,7 +1117,7 @@ class SolidityStorage(Storage):
             raise ValueError(loc)
 
 
-class CustomStorage(Storage):
+class GenericStorage(Storage):
     @classmethod
     def empty(cls, addr: BitVecRef, loc: BitVecRef) -> ArrayRef:
         return Array(
@@ -1187,6 +1197,9 @@ class CustomStorage(Storage):
                 x = simplify(ZeroExt(bitsize - x.size(), x))
             res += x
         return simplify(res)
+
+
+SomeStorage = TypeVar("SomeStorage", bound=Storage)
 
 
 #             x  == b   if sort(x) = bool
@@ -1289,9 +1302,13 @@ class Logs:
 
 class SEVM:
     options: Dict
+    storage_model: Type[SomeStorage]
 
     def __init__(self, options: Dict) -> None:
         self.options = options
+
+        is_generic = self.options["storage_layout"] == "generic"
+        self.storage_model = GenericStorage if is_generic else SolidityStorage
 
     def div_xy_y(self, w1: Word, w2: Word) -> Word:
         # return the number of bits required to represent the given value. default = 256
@@ -1493,18 +1510,13 @@ class SEVM:
             raise ValueError(op)
 
     def sload(self, ex: Exec, addr: Any, loc: Word) -> Word:
-        if self.options["custom_storage_layout"]:
-            return CustomStorage.load(ex, addr, loc)
-        else:
-            return SolidityStorage.load(ex, addr, loc)
+        return self.storage_model.load(ex, addr, loc)
 
     def sstore(self, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
         if is_bool(val):
             val = If(val, con(1), con(0))
-        if self.options["custom_storage_layout"]:
-            CustomStorage.store(ex, addr, loc, val)
-        else:
-            SolidityStorage.store(ex, addr, loc, val)
+
+        self.storage_model.store(ex, addr, loc, val)
 
     def resolve_address_alias(self, ex: Exec, target: Address) -> Address:
         if target in ex.code:
