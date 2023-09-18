@@ -458,6 +458,7 @@ def test_symbolic_create(sevm: SEVM, solver):
 
     # in one of the executions, the subcall reverts
     assert any(isinstance(x.context.subcalls()[0].output.error, Revert) for x in execs)
+    assert False
 
 
 def test_failed_create(sevm: SEVM, solver):
@@ -480,6 +481,8 @@ def test_failed_create(sevm: SEVM, solver):
     assert len(subcalls) == 1
     assert isinstance(subcalls[0].output.error, Revert)
     assert int_of(subcalls[0].output.data) == PANIC_1
+
+    assert False
 
 
 def test_event_conditional_on_symbol(sevm: SEVM, solver):

@@ -748,8 +748,6 @@ class Exec:  # an execution path
     storages: Dict[Any, Any]  # storage updates
     balances: Dict[Any, Any]  # balance updates
     calls: List[Any]  # external calls
-    failed: bool  # TODO: check if needed
-    error: str
 
     def __init__(self, **kwargs) -> None:
         self.code = kwargs["code"]
@@ -1571,7 +1569,7 @@ class SEVM:
             message = Message(
                 target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
                 caller=caller if op != EVM.DELEGATECALL else ex.caller(),
-                value=fund if op != EVM.CALLCODE else ex.callvalue(),
+                value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
                 data=calldata,
                 is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
                 call_scheme=op,
@@ -2065,8 +2063,10 @@ class SEVM:
             new_addr = uint160(ex.sha3_data(hash_data, 85))
 
         if new_addr in ex.code:
-            ex.error = f"existing address: {hexify(new_addr)}"
-            out.append(ex)
+            # address conflicts don't revert, they push 0 on the stack and continue
+            ex.st.push(con(0))
+            ex.next_pc()
+            stack.append((ex, step_id))
             return
 
         for addr in ex.code:

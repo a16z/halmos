@@ -475,7 +475,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_create2_collision(uint256,uint256,bytes32)",
+                "name": "check_create2_collision_basic(uint256,uint256,bytes32)",
                 "exitcode": 1,
                 "num_models": 0,
                 "models": null,

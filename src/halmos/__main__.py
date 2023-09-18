@@ -179,43 +179,51 @@ def rendered_initcode(context: CallContext) -> str:
 
 def render_create_call(context: CallContext) -> None:
     message = context.message
+
+    color = green if context.output.error is None else red
+    create_scheme_str = f"{cyan(mnemonic(message.call_scheme))}"
+
     addr = unbox_int(message.target)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
 
-    initcode_str = rendered_initcode(context)
+    # TODO: select verbosity level to render full initcode
+    # initcode_str = rendered_initcode(context)
+
+    initcode_str = f"<{byte_length(message.data)} bytes of initcode>"
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
     indent = context.depth * "    "
 
-    print(f"{indent}new contract @ {color_info(addr_str)}::{initcode_str}{value_str}")
+    msg = f"{addr_str}::{initcode_str}"
+    print(f"{indent}{create_scheme_str} {color(msg)}{value_str}")
     render_output(context)
 
 
 def render_output(context: CallContext) -> None:
-    returndata = "0x"
+    returndata_str = "0x"
     failed = False
     error_str = ""
 
     output = context.output
     if output is not None:
-        if is_bv(output.data):
-            returndata = simplify(output.data)
-        elif isinstance(output.data, bytes):
-            returndata = output.data.hex() or "0x"
-        elif output.data is None:
-            pass
-        else:
-            raise ValueError("unexpected returndata in " + str(output))
-
+        is_create = context.message.is_create()
         failed = output.error is not None
+
+        returndata_str = (
+            f"<{byte_length(output.data)} bytes of code>"
+            if (is_create and not failed)
+            else hexify(output.data)
+        )
         error_str = f" (error: {repr(output.error)})" if failed else error_str
 
-    color = color_warn if failed else color_good
-    color_if_err = color_warn if failed else lambda x: x
+    color = red if failed else green
+    color_if_err = red if failed else lambda x: x
     indent = context.depth * "    "
 
-    print(f"{indent}{color('← ')}{color_if_err(returndata)}{color_if_err(error_str)}")
+    print(
+        f"{indent}{color('↩ ')}{color_if_err(returndata_str)}{color_if_err(error_str)}"
+    )
 
 
 def rendered_log(log: EventLog) -> str:
