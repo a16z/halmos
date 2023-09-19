@@ -1524,17 +1524,13 @@ class SEVM:
 
         if target not in ex.alias:
             for addr in ex.code:
-                if (
-                    # must equal
-                    ex.check(target != addr) == unsat
-                    # ensure existing path condition is feasible
-                    and ex.check(target == addr) != unsat
-                ):
+                if ex.check(target != addr) == unsat:  # target == addr
                     if self.options.get("debug"):
                         print(
                             f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}"
                         )
                     ex.alias[target] = addr
+                    ex.solver.add(target == addr)
                     break
 
         return ex.alias.get(target)
