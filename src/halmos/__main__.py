@@ -179,8 +179,6 @@ def rendered_initcode(context: CallContext) -> str:
 
 def render_create_call(context: CallContext) -> None:
     message = context.message
-
-    color = green if context.output.error is None else red
     create_scheme_str = f"{cyan(mnemonic(message.call_scheme))}"
 
     addr = unbox_int(message.target)
@@ -195,34 +193,34 @@ def render_create_call(context: CallContext) -> None:
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
     indent = context.depth * "    "
 
-    msg = f"{addr_str}::{initcode_str}"
-    print(f"{indent}{create_scheme_str} {color(msg)}{value_str}")
+    print(f"{indent}{create_scheme_str} {addr_str}::{initcode_str}{value_str}")
     render_output(context)
 
 
 def render_output(context: CallContext) -> None:
-    returndata_str = "0x"
-    failed = False
-    error_str = ""
-
     output = context.output
-    if output is not None:
+    returndata_str = "0x"
+    failed = output.error is not None
+    error_str = f" (error: {repr(output.error)})" if failed else ""
+
+    if output.data is not None:
         is_create = context.message.is_create()
-        failed = output.error is not None
 
         returndata_str = (
             f"<{byte_length(output.data)} bytes of code>"
             if (is_create and not failed)
             else hexify(output.data)
         )
-        error_str = f" (error: {repr(output.error)})" if failed else error_str
+
+    ret_scheme = context.output.return_scheme
+    ret_scheme_str = f"{cyan(mnemonic(ret_scheme))} " if ret_scheme is not None else ""
 
     color = red if failed else green
     color_if_err = red if failed else lambda x: x
     indent = context.depth * "    "
 
     print(
-        f"{indent}{color('↩ ')}{color_if_err(returndata_str)}{color_if_err(error_str)}"
+        f"{indent}{color('↩ ')}{ret_scheme_str}{color(returndata_str)}{color(error_str)}"
     )
 
 
@@ -260,7 +258,7 @@ def render_trace(context: CallContext) -> None:
     )
 
     call_color = green if context.output.error is None else red
-    call_str = f"{call_color(target_str)}::{call_color(calldata)}"
+    call_str = f"{target_str}::{calldata}"
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""

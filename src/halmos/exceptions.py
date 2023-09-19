@@ -128,3 +128,11 @@ class FailCheatcode(ExceptionalHalt):
     """
 
     pass
+
+
+class AddressCollision(ExceptionalHalt):
+    """
+    Raised when trying to deploy into a non-empty address
+    """
+
+    pass

@@ -150,7 +150,7 @@ class Instruction:
         if self.operand is not None:
             operand = self.operand
             if isinstance(operand, bytes):
-                operand = con(int.from_bytes(self.operand, "big"), len(operand) * 8)
+                operand = con(int.from_bytes(operand, "big"), len(operand) * 8)
 
             expected_operand_length = instruction_length(self.opcode) - 1
             actual_operand_length = operand.size() // 8
@@ -454,6 +454,7 @@ class CallOutput:
     data: Optional[Bytes] = None
     accounts_to_delete: Set[Address] = field(default_factory=set)
     error: Optional[EvmException] = None
+    return_scheme: Optional[int] = None
 
     # TODO:
     #   - touched_accounts
@@ -791,6 +792,7 @@ class Exec:  # an execution path
 
         output.data = data
         output.error = error
+        output.return_scheme = self.current_opcode()
 
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
@@ -2053,7 +2055,7 @@ class SEVM:
         # new account address
         if op == EVM.CREATE:
             new_addr = ex.new_address()
-        else:  # EVM.CREATE2
+        elif op == EVM.CREATE2:  # EVM.CREATE2
             if isinstance(create_hexcode, bytes):
                 create_hexcode = con(
                     int.from_bytes(create_hexcode, "big"), len(create_hexcode) * 8
@@ -2061,11 +2063,29 @@ class SEVM:
             code_hash = ex.sha3_data(create_hexcode, create_hexcode.size() // 8)
             hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
             new_addr = uint160(ex.sha3_data(hash_data, 85))
+        else:
+            raise InternalHalmosError(f"Unknown CREATE opcode: {op}")
+
+        message = Message(
+            target=new_addr,
+            caller=caller,
+            value=value,
+            data=create_hexcode,
+            is_static=False,
+            call_scheme=op,
+        )
 
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
             ex.st.push(con(0))
             ex.next_pc()
+
+            # add a virtual subcontext to the trace for debugging purposes
+            subcall = CallContext(message=message, depth=ex.context.depth + 1)
+            subcall.output.data = b""
+            subcall.output.error = AddressCollision()
+            ex.context.trace.append(subcall)
+
             stack.append((ex, step_id))
             return
 
@@ -2078,15 +2098,6 @@ class SEVM:
 
         # transfer value
         self.transfer_value(ex, caller, new_addr, value)
-
-        message = Message(
-            target=new_addr,
-            caller=caller,
-            value=value,
-            data=create_hexcode,
-            is_static=False,
-            call_scheme=op,
-        )
 
         # TODO: check max call depth
         # execute contract creation code
