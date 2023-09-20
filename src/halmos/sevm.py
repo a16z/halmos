@@ -1227,7 +1227,7 @@ def is_zero(x: Word) -> Word:
     return test(x, False)
 
 
-def lop(op, x: Word, y: Word) -> Word:
+def bitwise(op, x: Word, y: Word) -> Word:
     if is_bool(x) and is_bool(y):
         if op == EVM.AND:
             return And(x, y)
@@ -1243,13 +1243,13 @@ def lop(op, x: Word, y: Word) -> Word:
         elif op == EVM.OR:
             return x | y
         elif op == EVM.XOR:
-            return x ^ y
+            return x ^ y  # bvxor
         else:
             raise ValueError(op, x, y)
     elif is_bool(x) and is_bv(y):
-        return lop(op, If(x, con(1), con(0)), y)
+        return bitwise(op, If(x, con(1), con(0)), y)
     elif is_bv(x) and is_bool(y):
-        return lop(op, x, If(y, con(1), con(0)))
+        return bitwise(op, x, If(y, con(1), con(0)))
     else:
         raise ValueError(op, x, y)
 
@@ -2487,7 +2487,7 @@ class SEVM:
                     ex.st.push(is_zero(ex.st.pop()))
 
                 elif opcode in [EVM.AND, EVM.OR, EVM.XOR]:
-                    ex.st.push(lop(opcode, ex.st.pop(), ex.st.pop()))
+                    ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
                 elif opcode == EVM.NOT:
                     ex.st.push(~b2i(ex.st.pop()))  # bvnot
                 elif opcode == EVM.SHL:
