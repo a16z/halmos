@@ -2489,7 +2489,7 @@ class SEVM:
                 elif opcode in [EVM.AND, EVM.OR, EVM.XOR]:
                     ex.st.push(lop(opcode, ex.st.pop(), ex.st.pop()))
                 elif opcode == EVM.NOT:
-                    ex.st.push(~ex.st.pop())  # bvnot
+                    ex.st.push(~b2i(ex.st.pop()))  # bvnot
                 elif opcode == EVM.SHL:
                     w = ex.st.pop()
                     ex.st.push(b2i(ex.st.pop()) << b2i(w))  # bvshl
