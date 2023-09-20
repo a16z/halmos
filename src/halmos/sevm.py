@@ -1227,31 +1227,31 @@ def is_zero(x: Word) -> Word:
     return test(x, False)
 
 
-def and_or(x: Word, y: Word, is_and: bool) -> Word:
+def bitwise(op, x: Word, y: Word) -> Word:
     if is_bool(x) and is_bool(y):
-        if is_and:
+        if op == EVM.AND:
             return And(x, y)
-        else:
+        elif op == EVM.OR:
             return Or(x, y)
-    elif is_bv(x) and is_bv(y):
-        if is_and:
-            return x & y
+        elif op == EVM.XOR:
+            return Xor(x, y)
         else:
+            raise ValueError(op, x, y)
+    elif is_bv(x) and is_bv(y):
+        if op == EVM.AND:
+            return x & y
+        elif op == EVM.OR:
             return x | y
+        elif op == EVM.XOR:
+            return x ^ y  # bvxor
+        else:
+            raise ValueError(op, x, y)
     elif is_bool(x) and is_bv(y):
-        return and_or(If(x, con(1), con(0)), y, is_and)
+        return bitwise(op, If(x, con(1), con(0)), y)
     elif is_bv(x) and is_bool(y):
-        return and_or(x, If(y, con(1), con(0)), is_and)
+        return bitwise(op, x, If(y, con(1), con(0)))
     else:
-        raise ValueError(x, y, is_and)
-
-
-def and_of(x: Word, y: Word) -> Word:
-    return and_or(x, y, True)
-
-
-def or_of(x: Word, y: Word) -> Word:
-    return and_or(x, y, False)
+        raise ValueError(op, x, y)
 
 
 def b2i(w: Word) -> Word:
@@ -2486,12 +2486,10 @@ class SEVM:
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
 
-                elif opcode == EVM.AND:
-                    ex.st.push(and_of(ex.st.pop(), ex.st.pop()))
-                elif opcode == EVM.OR:
-                    ex.st.push(or_of(ex.st.pop(), ex.st.pop()))
+                elif opcode in [EVM.AND, EVM.OR, EVM.XOR]:
+                    ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
                 elif opcode == EVM.NOT:
-                    ex.st.push(~ex.st.pop())  # bvnot
+                    ex.st.push(~b2i(ex.st.pop()))  # bvnot
                 elif opcode == EVM.SHL:
                     w = ex.st.pop()
                     ex.st.push(b2i(ex.st.pop()) << b2i(w))  # bvshl
@@ -2507,9 +2505,6 @@ class SEVM:
                     if w <= 30:  # if w == 31, result is SignExt(0, value) == value
                         bl = (w + 1) * 8
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
-
-                elif opcode == EVM.XOR:
-                    ex.st.push(ex.st.pop() ^ ex.st.pop())  # bvxor
 
                 elif opcode == EVM.CALLDATALOAD:
                     if ex.calldata is None:
