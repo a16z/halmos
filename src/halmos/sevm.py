@@ -780,6 +780,10 @@ class Exec:  # an execution path
         assert_address(self.context.message.target)
         assert_address(self.this)
 
+    def context_str(self) -> str:
+        opcode = self.current_opcode()
+        return f"addr={hexify(self.this)} pc={self.pc} insn={mnemonic(opcode)}"
+
     def halt(
         self,
         data: Bytes = EMPTY_BYTES,
@@ -968,7 +972,7 @@ class Exec:  # an execution path
 
     def sstore(self, addr: Any, loc: Any, val: Any) -> None:
         if self.context.message.is_static:
-            raise WriteInStaticContext(f"message={self.context.message}")
+            raise WriteInStaticContext(self.context_str())
 
         offsets = self.decode_storage_loc(loc)
         if not len(offsets) > 0:
@@ -2038,6 +2042,9 @@ class SEVM:
         out: List[Exec],
         logs: HalmosLogs,
     ) -> None:
+        if ex.message().is_static:
+            raise WriteInStaticContext(ex.context_str())
+
         value: Word = ex.st.pop()
         loc: int = int_of(ex.st.pop(), "symbolic CREATE offset")
         size: int = int_of(ex.st.pop(), "symbolic CREATE size")
@@ -2669,9 +2676,8 @@ class SEVM:
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     if ex.message().is_static:
-                        raise WriteInStaticContext(
-                            f"addr={hexify(ex.this)} pc={ex.pc} insn={mnemonic(opcode)}"
-                        )
+                        raise WriteInStaticContext(ex.context_str())
+
                     num_topics: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
                     size: int = int_of(ex.st.pop(), "symbolic LOG data size")
