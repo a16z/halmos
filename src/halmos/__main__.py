@@ -453,6 +453,17 @@ def run(
         else:
             stuck.append((opcode, idx, ex))
 
+    if len(execs_to_model) > 0 and args.dump_smt_queries:
+        dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
+        os.makedirs(dirname)
+        print(f"Generating SMT queries in {dirname}")
+        for idx, ex in execs_to_model:
+            fname = f"{dirname}/{idx+1}.smt2"
+            query = ex.solver.to_smt2()
+            with open(fname, "w") as f:
+                f.write("(set-logic QF_AUFBV)\n")
+                f.write(query)
+
     if len(execs_to_model) > 0 and args.verbose >= 1:
         print(
             f"# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}"
