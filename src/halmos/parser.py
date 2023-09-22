@@ -216,6 +216,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         help="run an extra solver in subprocess for unknown",
     )
     group_solver.add_argument(
+        "--solver-subprocess-command",
+        metavar="COMMAND",
+        default="z3 -model",
+        help="use the given command for the subprocess solver (requires --solver-subprocess) (default: %(default)s)",
+    )
+    group_solver.add_argument(
         "--solver-parallel",
         action="store_true",
         help="run assertion solvers in parallel",

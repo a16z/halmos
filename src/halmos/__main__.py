@@ -800,7 +800,7 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
             print(f"  Checking again in an external process")
         fname = f"/tmp/{uuid.uuid4().hex}.smt2"
         if args.verbose >= 1:
-            print(f"    z3 -model {fname} >{fname}.out")
+            print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
         query = ex.solver.to_smt2()
         # replace uninterpreted abstraction with actual symbols for assertion solving
         # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
@@ -809,9 +809,8 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
         with open(fname, "w") as f:
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)
-        res_str = subprocess.run(
-            ["z3", "-model", fname], capture_output=True, text=True
-        ).stdout.strip()
+        cmd = args.solver_subprocess_command.split() + [fname]
+        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
         res_str_head = res_str.split("\n", 1)[0]
         with open(f"{fname}.out", "w") as f:
             f.write(res_str)
