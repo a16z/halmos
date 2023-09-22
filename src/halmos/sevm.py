@@ -1527,18 +1527,13 @@ class SEVM:
         logs: HalmosLogs,
     ) -> None:
         gas = ex.st.pop()
-
         to = uint160(ex.st.pop())
+        fund = con(0) if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-        if op == EVM.STATICCALL or op == EVM.DELEGATECALL:
-            fund = con(0)
-        else:
-            fund = ex.st.pop()
         arg_loc: int = ex.st.mloc()
-        # size (in bytes)
         arg_size: int = int_of(ex.st.pop(), "symbolic CALL input data size")
+
         ret_loc: int = ex.st.mloc()
-        # size (in bytes)
         ret_size: int = int_of(ex.st.pop(), "symbolic CALL return data size")
 
         if not arg_size >= 0:
@@ -1547,7 +1542,6 @@ class SEVM:
             raise ValueError(ret_size)
 
         arg = wload(ex.st.memory, arg_loc, arg_size) if arg_size > 0 else None
-
         caller = ex.prank.lookup(ex.this, to)
 
         def send_callvalue(condition=None) -> None:
@@ -1721,6 +1715,9 @@ class SEVM:
                     extract_funsig(arg), "symbolic halmos cheatcode function selector"
                 )
 
+                if self.options.get("debug"):
+                    print(f"Executing halmos cheat code: {hex(funsig)}")
+
                 # createUint(uint256,string) returns (uint256)
                 if funsig == halmos_cheat_code.create_uint:
                     bit_size = int_of(
@@ -1772,9 +1769,8 @@ class SEVM:
                     ret = uint256(BitVec(label, BitVecSort1))
 
                 else:
-                    ex.error = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
-                    out.append(ex)
-                    return
+                    msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
+                    raise InternalHalmosError(msg)
 
             # vm cheat code
             if eq(to, hevm_cheat_code.address):
@@ -1964,9 +1960,9 @@ class SEVM:
 
                 else:
                     # TODO: support other cheat codes
-                    ex.error = f"Unsupported cheat code: calldata = {hexify(arg)}"
-                    out.append(ex)
-                    return
+                    raise InternalHalmosError(
+                        f"Unsupported cheat code: calldata = {hexify(arg)}"
+                    )
 
             # console
             if eq(to, console.address):
@@ -1993,6 +1989,23 @@ class SEVM:
             # store return value
             if ret_size > 0:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)
+
+            ex.context.trace.append(
+                CallContext(
+                    message=Message(
+                        target=to,
+                        caller=caller,
+                        value=fund,
+                        data=ex.st.memory[arg_loc : arg_loc + arg_size],
+                        call_scheme=op,
+                    ),
+                    output=CallOutput(
+                        data=ret,
+                        error=None,
+                    ),
+                    depth=ex.context.depth + 1,
+                )
+            )
 
             # TODO: check if still needed
             ex.calls.append((exit_code_var, exit_code, ex.context.output.data))
@@ -2732,7 +2745,7 @@ class SEVM:
             except Exception as err:
                 if self.options["debug"]:
                     print(ex)
-                raise
+                raise err
 
         return (out, steps, logs)
 
