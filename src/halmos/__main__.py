@@ -439,7 +439,7 @@ def setup(
             message=Message(
                 target=setup_ex.message().target,
                 caller=setup_ex.message().caller,
-                value=setup_ex.message().value,
+                value=con(0),
                 data=calldata,
             ),
         )
@@ -568,7 +568,7 @@ def run(
     message = Message(
         target=setup_ex.this,
         caller=setup_ex.caller(),
-        value=mk_callvalue(),
+        value=con(0),
         data=cd,
     )
 
