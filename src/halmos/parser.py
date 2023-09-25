@@ -147,6 +147,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         help="turn unknown counterexample warnings to errors",
     )
 
+    group_debug.add_argument(
+        "--dump-smt-queries",
+        action="store_true",
+        help="dump SMT queries for assertion violations",
+    )
+
     # build options
     group_build = parser.add_argument_group("Build options")
 
@@ -208,6 +214,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--solver-subprocess",
         action="store_true",
         help="run an extra solver in subprocess for unknown",
+    )
+    group_solver.add_argument(
+        "--solver-subprocess-command",
+        metavar="COMMAND",
+        default="z3 -model",
+        help="use the given command for the subprocess solver (requires --solver-subprocess) (default: %(default)s)",
     )
     group_solver.add_argument(
         "--solver-parallel",
