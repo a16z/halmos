@@ -7,4 +7,5 @@ libs = ['lib']
 force = false
 evm_version = 'shanghai'
 
+# compile options used by halmos (to prevent unnecessary recompilation when running forge test and halmos together)
 extra_output = ["storageLayout", "metadata"]
