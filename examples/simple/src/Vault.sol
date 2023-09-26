@@ -13,7 +13,7 @@ contract Vault {
     }
 
     function mint(uint shares) public returns (uint assets) {
-        assets = (shares * totalAssets) / totalShares;
+        assets = (shares * totalAssets) / totalShares; // buggy
 
         totalAssets += assets;
         totalShares += shares;
