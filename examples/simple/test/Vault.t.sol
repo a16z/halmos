@@ -36,7 +36,8 @@ contract VaultTest is SymTest {
         uint A2 = vault.totalAssets();
         uint S2 = vault.totalShares();
 
-        assert(A1 / S1 <= A2 / S2); // no counterexamples
+        // assert(A1 / S1 <= A2 / S2);
+        assert(A1 * S2 <= A2 * S1); // no counterexample
     }
 
     /// @custom:halmos --smt-div
@@ -49,7 +50,7 @@ contract VaultTest is SymTest {
         uint A2 = vault.totalAssets();
         uint S2 = vault.totalShares();
 
-        // (A1 / S1 <= A2 / S2)
+        // assert(A1 / S1 <= A2 / S2);
         assert(A1 * S2 <= A2 * S1); // counterexamples exist
     }
 }
