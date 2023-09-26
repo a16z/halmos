@@ -14,6 +14,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+        - testname: "examples/simple"
         - testname: "examples/tokens/ERC20"
         - testname: "examples/tokens/ERC721"
 
