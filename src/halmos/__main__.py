@@ -15,8 +15,6 @@ from importlib import metadata
 from .pools import thread_pool, process_pool
 from .sevm import *
 from .utils import (
-    color_good,
-    color_warn,
     hexify,
     indent_text,
     NamedTimer,
@@ -24,6 +22,12 @@ from .utils import (
     cyan,
     green,
     red,
+    error,
+    info,
+    color_good,
+    color_warn,
+    color_info,
+    color_error,
 )
 from .warnings import *
 from .parser import mk_arg_parser
@@ -46,11 +50,10 @@ if sys.stdout.encoding != "utf-8":
 # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
 ASSERT_FAIL = 0x4E487B710000000000000000000000000000000000000000000000000000000000000001
 
-VERBOSE_LEVEL_CONSTRUCTOR_TRACE = 5
-VERBOSE_LEVEL_ALL_SETUP_TRACES = 5
-VERBOSE_LEVEL_SINGLE_SETUP_TRACE = 3
-VERBOSE_LEVEL_ALL_EXPLORED_TRACES = 4
-VERBOSE_LEVEL_COUNTEREXAMPLE_TRACE = 2
+VERBOSITY_TRACE_COUNTEREXAMPLE = 2
+VERBOSITY_TRACE_SETUP = 3
+VERBOSITY_TRACE_PATHS = 4
+VERBOSITY_TRACE_CONSTRUCTOR = 5
 
 
 @dataclass(frozen=True)
@@ -389,7 +392,7 @@ def deploy_test(
 
     ex = exs[0]
 
-    if args.verbose >= VERBOSE_LEVEL_CONSTRUCTOR_TRACE:
+    if args.verbose >= VERBOSITY_TRACE_CONSTRUCTOR:
         print("Constructor trace:")
         render_trace(ex.context)
 
@@ -431,9 +434,6 @@ def setup(
 
     setup_sig, setup_selector = (setup_info.sig, setup_info.selector)
     if setup_sig:
-        if args.verbose >= 1:
-            print(f"Running {setup_sig}")
-
         calldata = []
         wstore(calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
         dyn_param_size = []  # TODO: propagate to run
@@ -461,53 +461,48 @@ def setup(
         setup_exs = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
-            if args.verbose >= VERBOSE_LEVEL_ALL_SETUP_TRACES:
-                print(f"Setup trace #{idx}/{len(setup_exs_all)}:")
+            if args.verbose >= VERBOSITY_TRACE_SETUP:
+                num_traces = len(setup_exs_all)
+                print(
+                    f"{setup_sig} trace #{idx+1}/{num_traces}:"
+                    if num_traces > 1
+                    else f"{setup_sig} trace:"
+                )
                 render_trace(setup_ex.context)
 
             opcode = setup_ex.current_opcode()
             error = setup_ex.context.output.error
 
-            if error is not None and opcode not in [EVM.REVERT, EVM.INVALID]:
-                print(
-                    color_warn(
-                        f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {error}"
-                    )
-                )
-
-                if (
-                    VERBOSE_LEVEL_SINGLE_SETUP_TRACE
-                    <= args.verbose
-                    < VERBOSE_LEVEL_ALL_SETUP_TRACES
-                ):
-                    render_trace(setup_ex.context)
-            else:
+            if error is None:
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
                 res = setup_ex.solver.check()
                 if res != unsat:
                     setup_exs.append(setup_ex)
+            else:
+                if opcode not in [EVM.REVERT, EVM.INVALID]:
+                    warn(
+                        INTERNAL_ERROR,
+                        f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {error}",
+                    )
+
+                # only render the trace if we didn't already do it
+                if args.verbose < VERBOSITY_TRACE_SETUP:
+                    print(f"{setup_sig} trace:")
+                    render_trace(setup_ex.context)
 
         if len(setup_exs) == 0:
-            raise ValueError(f"No successful path found in {setup_sig}")
+            raise HalmosException(f"No successful path found in {setup_sig}")
 
         if len(setup_exs) > 1:
-            print(
-                color_warn(
-                    f"Warning: multiple paths were found in {setup_sig}; an arbitrary path has been selected for the following tests."
-                )
+            info(
+                f"Warning: multiple paths were found in {setup_sig}; "
+                "an arbitrary path has been selected for the following tests."
             )
+
             if args.debug:
                 print("\n".join(map(str, setup_exs)))
 
         setup_ex = setup_exs[0]
-
-        if (
-            VERBOSE_LEVEL_SINGLE_SETUP_TRACE
-            <= args.verbose
-            < VERBOSE_LEVEL_ALL_SETUP_TRACES
-        ):
-            print(f"Setup trace:")
-            render_trace(setup_ex.context)
 
         if args.print_setup_states:
             print(setup_ex)
@@ -629,7 +624,7 @@ def run(
     stuck = []
 
     for idx, ex in enumerate(exs):
-        if args.verbose >= VERBOSE_LEVEL_ALL_EXPLORED_TRACES:
+        if args.verbose >= VERBOSITY_TRACE_PATHS:
             print(f"Path #{idx+1}/{len(exs)}:")
             print(indent_text(ex.str_path()))
 
@@ -694,7 +689,7 @@ def run(
         # model could be an empty dict here
         if model is not None:
             if is_valid:
-                print(color_warn(f"Counterexample: {render_model(model)}"))
+                print(red(f"Counterexample: {render_model(model)}"))
                 counterexamples.append(model)
             elif args.print_potential_counterexample:
                 warn(
@@ -714,10 +709,10 @@ def run(
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
 
-        if args.verbose >= VERBOSE_LEVEL_COUNTEREXAMPLE_TRACE:
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
             print(
                 f"Trace #{idx+1}/{len(exs)}:"
-                if args.verbose == VERBOSE_LEVEL_ALL_EXPLORED_TRACES
+                if args.verbose == VERBOSITY_TRACE_PATHS
                 else "Trace:"
             )
             render_trace(ex.context)
@@ -795,11 +790,8 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.libs,
         )
     except Exception as err:
-        print(
-            color_warn(
-                f"Error: {fn_args.setup_info.sig} failed: {type(err).__name__}: {err}"
-            )
-        )
+        error(f"Error: {fn_args.setup_info.sig} failed: {type(err).__name__}: {err}")
+
         if args.debug:
             traceback.print_exc()
         return []
@@ -812,8 +804,8 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.args,
         )
     except Exception as err:
-        print(f"{color_warn('[SKIP]')} {fn_args.fun_info.sig}")
-        print(color_warn(f"{type(err).__name__}: {err}"))
+        print(f"{yellow('[SKIP]')} {fn_args.fun_info.sig}")
+        error(f"{type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
         return [TestResult(fn_args.fun_info.sig, 2)]
