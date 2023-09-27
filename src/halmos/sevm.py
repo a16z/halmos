@@ -813,7 +813,6 @@ class Exec:  # an execution path
         error: Optional[EvmException] = None,
     ) -> None:
         output = self.context.output
-
         if output.data is not None:
             raise HalmosException("output already set")
 
@@ -2178,7 +2177,7 @@ class SEVM:
             # sanity checks
             subcall = new_ex.context
             if subcall.output is None or subcall.output.data is None:
-                raise ValueError(
+                raise HalmosException(
                     "unfinished contract creation call frame: " + str(new_ex)
                 )
 
@@ -2203,6 +2202,12 @@ class SEVM:
 
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))
+
+            elif isinstance(subcall.output.error, HalmosException):
+                # abort the current path
+                out.append(new_ex)
+                continue
+
             else:
                 # creation failed
                 new_ex.st.push(con(0))
