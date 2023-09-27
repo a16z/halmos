@@ -203,6 +203,9 @@ def render_output(context: CallContext) -> None:
     failed = output.error is not None
     error_str = f" (error: {repr(output.error)})" if failed else ""
 
+    if not failed and context.stuck():
+        return
+
     if output.data is not None:
         is_create = context.message.is_create()
 
@@ -264,6 +267,7 @@ def render_trace(context: CallContext) -> None:
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
     static_str = yellow(" [static]") if message.is_static else ""
     indent = context.depth * "    "
+    log_indent = (context.depth + 1) * "    "
 
     print(f"{indent}{callscheme_str}{call_str}{static_str}{value_str}")
 
@@ -271,9 +275,9 @@ def render_trace(context: CallContext) -> None:
         if isinstance(trace_element, CallContext):
             render_trace(trace_element)
         elif isinstance(trace_element, EventLog):
-            print(f"{indent}{rendered_log(trace_element)}")
+            print(f"{log_indent}{rendered_log(trace_element)}")
         else:
-            raise InternalHalmosError(f"unexpected trace element: {trace_element}")
+            raise HalmosException(f"unexpected trace element: {trace_element}")
 
     render_output(context)
 
@@ -644,7 +648,10 @@ def run(
             execs_to_model.append((idx, ex))
             continue
 
-        if not error:
+        if err := ex.context.stuck():
+            stuck.append((idx, ex, err))
+
+        elif not error:
             normal += 1
 
     if len(execs_to_model) > 0 and args.verbose >= 1:
@@ -715,11 +722,11 @@ def run(
             )
             render_trace(ex.context)
 
-    for opcode, idx, ex in stuck:
-        warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.context.output.error}")
+    for idx, ex, err in stuck:
+        warn(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
-            print(f"# {idx+1} / {len(exs)}")
-            print(ex)
+            print(f"\nPath #{idx+1}/{len(exs)}")
+            render_trace(ex.context)
 
     if logs.bounded_loops:
         warn(

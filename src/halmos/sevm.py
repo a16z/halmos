@@ -7,7 +7,7 @@ import re
 from copy import deepcopy
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import List, Set, Dict, Union as UnionType, Tuple, Any, Optional
+from typing import List, Set, Dict, Union as UnionType, Tuple, Any, Optional, Iterator
 from functools import reduce
 
 from z3 import *
@@ -168,11 +168,11 @@ class Instruction:
         return instruction_length(self.opcode)
 
 
-class InternalHalmosError(Exception):
+class HalmosException(Exception):
     pass
 
 
-class NotConcreteError(InternalHalmosError):
+class NotConcreteError(HalmosException):
     pass
 
 
@@ -473,11 +473,34 @@ class CallContext:
     depth: int = 1
     trace: List[TraceElement] = field(default_factory=list)
 
-    def subcalls(self) -> List["CallContext"]:
-        return [t for t in self.trace if isinstance(t, CallContext)]
+    def subcalls(self) -> Iterator["CallContext"]:
+        return iter(t for t in self.trace if isinstance(t, CallContext))
 
-    def logs(self) -> List[EventLog]:
-        return [t for t in self.trace if isinstance(t, EventLog)]
+    def last_subcall(self) -> Optional["CallContext"]:
+        """
+        Returns the last subcall or None if there are no subcalls.
+        """
+
+        for c in reversed(self.trace):
+            if isinstance(c, CallContext):
+                return c
+
+        return None
+
+    def logs(self) -> Iterator[EventLog]:
+        return iter(t for t in self.trace if isinstance(t, EventLog))
+
+    def stuck(self) -> Optional[HalmosException]:
+        """
+        Returns the first internal error encountered during the execution of the call.
+        """
+
+        if isinstance(self.output.error, HalmosException):
+            return self.output.error
+
+        return next(
+            (err for c in self.subcalls() if (err := c.stuck()) is not None), None
+        )
 
 
 class State:
@@ -583,7 +606,7 @@ class Contract:
 
     def __init__(self, rawcode: UnionType[bytes, BitVecRef, str]) -> None:
         if rawcode is None:
-            raise InternalHalmosError("invalid contract code: None")
+            raise HalmosException("invalid contract code: None")
 
         if is_bv_value(rawcode):
             if rawcode.size() % 8 != 0:
@@ -792,7 +815,7 @@ class Exec:  # an execution path
         output = self.context.output
 
         if output.data is not None:
-            raise InternalHalmosError("output already set")
+            raise HalmosException("output already set")
 
         output.data = data
         output.error = error
@@ -959,16 +982,17 @@ class Exec:  # an execution path
         self.sinit(addr, slot, keys)
         if len(keys) == 0:
             return self.storage[addr][slot][0]
-        else:
-            if not self.symbolic:
-                # generate emptyness axiom for each array index, instead of using quantified formula; see sinit()
-                self.solver.add(
-                    Select(self.empty_storage_of(addr, slot, len(keys)), concat(keys))
-                    == con(0)
-                )
-            return self.select(
-                self.storage[addr][slot][len(keys)], concat(keys), self.storages
+
+        if not self.symbolic:
+            # generate emptyness axiom for each array index, instead of using quantified formula; see sinit()
+            self.solver.add(
+                Select(self.empty_storage_of(addr, slot, len(keys)), concat(keys))
+                == con(0)
             )
+
+        return self.select(
+            self.storage[addr][slot][len(keys)], concat(keys), self.storages
+        )
 
     def sstore(self, addr: Any, loc: Any, val: Any) -> None:
         if self.context.message.is_static:
@@ -1126,8 +1150,8 @@ class Exec:  # an execution path
         Return data from the last executed sub-context or None
         """
 
-        subcalls = self.context.subcalls()
-        return subcalls[-1].output.data if subcalls else None
+        last_subcall = self.context.last_subcall()
+        return last_subcall.output.data if last_subcall else None
 
     def returndatasize(self) -> int:
         returndata = self.returndata()
@@ -1615,10 +1639,17 @@ class SEVM:
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
                 subcall = new_ex.context
+
+                # restore context
                 new_ex.context = deepcopy(ex.context)
                 new_ex.context.trace.append(subcall)
-
                 new_ex.this = ex.this
+
+                if subcall.stuck():
+                    # internal errors abort the current path,
+                    # so we don't need to add it to the worklist
+                    out.append(new_ex)
+                    continue
 
                 # restore vm state
                 new_ex.pgm = ex.pgm
@@ -1729,9 +1760,7 @@ class SEVM:
                         label = f"halmos_{name}_uint{bit_size}_{ex.new_symbol_id():>02}"
                         ret = uint256(BitVec(label, BitVecSorts[bit_size]))
                     else:
-                        ex.error = f"bitsize larger than 256: {bit_size}"
-                        out.append(ex)
-                        return
+                        raise HalmosException(f"bitsize larger than 256: {bit_size}")
 
                 # createBytes(uint256,string) returns (bytes)
                 elif funsig == halmos_cheat_code.create_bytes:
@@ -1769,8 +1798,8 @@ class SEVM:
                     ret = uint256(BitVec(label, BitVecSort1))
 
                 else:
-                    msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
-                    raise InternalHalmosError(msg)
+                    error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
+                    raise HalmosException(error_msg)
 
             # vm cheat code
             if eq(to, hevm_cheat_code.address):
@@ -1778,9 +1807,7 @@ class SEVM:
                 # vm.fail()
                 # BitVecVal(hevm_cheat_code.fail_payload, 800)
                 if arg == hevm_cheat_code.fail_payload:
-                    ex.halt(error=FailCheatcode())
-                    out.append(ex)
-                    return
+                    raise FailCheatcode()
 
                 # vm.assume(bool)
                 elif (
@@ -1839,9 +1866,8 @@ class SEVM:
                 ):
                     result = ex.prank.prank(uint160(Extract(255, 0, arg)))
                     if not result:
-                        ex.error = "You have an active prank already."
-                        out.append(ex)
-                        return
+                        raise HalmosException("You have an active prank already.")
+
                 # vm.startPrank(address)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
@@ -1850,9 +1876,8 @@ class SEVM:
                 ):
                     result = ex.prank.startPrank(uint160(Extract(255, 0, arg)))
                     if not result:
-                        ex.error = "You have an active prank already."
-                        out.append(ex)
-                        return
+                        raise HalmosException("You have an active prank already.")
+
                 # vm.stopPrank()
                 elif (
                     eq(arg.sort(), BitVecSorts[4 * 8])
@@ -1879,9 +1904,8 @@ class SEVM:
                     if store_account_addr is not None:
                         ex.sstore(store_account_addr, store_slot, store_value)
                     else:
-                        ex.error = f"uninitialized account: {store_account}"
-                        out.append(ex)
-                        return
+                        raise HalmosException(f"uninitialized account: {store_account}")
+
                 # vm.load(address,bytes32)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32 * 2) * 8])
@@ -1893,9 +1917,8 @@ class SEVM:
                     if load_account_addr is not None:
                         ret = ex.sload(load_account_addr, load_slot)
                     else:
-                        ex.error = f"uninitialized account: {load_account}"
-                        out.append(ex)
-                        return
+                        raise HalmosException(f"uninitialized account: {store_account}")
+
                 # vm.fee(uint256)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
@@ -1939,9 +1962,8 @@ class SEVM:
 
                     # who must be concrete
                     if not is_bv_value(who):
-                        ex.error = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
-                        out.append(ex)
-                        return
+                        error_msg = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
+                        raise HalmosException(error_msg)
 
                     # code must be concrete
                     try:
@@ -1953,16 +1975,14 @@ class SEVM:
                         code_bytes = code_int.to_bytes(code_length, "big")
 
                         ex.code[who] = Contract(code_bytes)
-                    except Exception as e:
-                        ex.error = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
-                        out.append(ex)
-                        return
+                    except NotConcreteError as e:
+                        error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
+                        raise NotConcreteError(error_msg)
 
                 else:
                     # TODO: support other cheat codes
-                    raise InternalHalmosError(
-                        f"Unsupported cheat code: calldata = {hexify(arg)}"
-                    )
+                    msg = f"Unsupported cheat code: calldata = {hexify(arg)}"
+                    raise HalmosException(msg)
 
             # console
             if eq(to, console.address):
@@ -2084,7 +2104,7 @@ class SEVM:
             hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
             new_addr = uint160(ex.sha3_data(hash_data, 85))
         else:
-            raise InternalHalmosError(f"Unknown CREATE opcode: {op}")
+            raise HalmosException(f"Unknown CREATE opcode: {op}")
 
         message = Message(
             target=new_addr,
@@ -2343,10 +2363,7 @@ class SEVM:
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
         while stack:
             try:
-                if (
-                    "max_width" in self.options
-                    and len(out) >= self.options["max_width"]
-                ):
+                if len(out) >= self.options.get("max_width", 2**64):
                     break
 
                 (ex, prev_step_id) = stack.pop()
@@ -2733,19 +2750,16 @@ class SEVM:
                 stack.append((ex, step_id))
 
             except EvmException as err:
-                ex.halt(data=None, error=err)
+                ex.halt(error=err)
                 out.append(ex)
                 continue
 
-            except NotConcreteError as err:
-                ex.error = f"{err}"
-                out.append(ex)
-                continue
-
-            except Exception as err:
+            except HalmosException as err:
                 if self.options["debug"]:
-                    print(ex)
-                raise err
+                    print(err)
+                ex.halt(error=err)
+                out.append(ex)
+                continue
 
         return (out, steps, logs)
 

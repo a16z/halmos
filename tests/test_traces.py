@@ -2,23 +2,25 @@ import json
 import pytest
 import subprocess
 
-from typing import Dict, List
+from dataclasses import dataclass
+from typing import Dict, List, Any, Optional
 
 from z3 import *
 
 from halmos.__main__ import mk_block, render_trace
 from halmos.exceptions import *
 from halmos.sevm import (
-    Exec,
-    Contract,
-    Message,
     CallContext,
     CallOutput,
+    Contract,
     EventLog,
+    Exec,
+    Message,
+    NotConcreteError,
+    SEVM,
     con,
     int_of,
     wstore,
-    SEVM,
 )
 from halmos.utils import EVM
 from test_fixtures import args, options, sevm
@@ -36,94 +38,6 @@ DEFAULT_EMPTY_CONSTRUCTOR = """
 contract Foo {}
 """
 
-PAYABLE_CONSTRUCTOR = """
-contract Foo {
-    constructor() payable {}
-}
-"""
-
-CONSTRUCTOR_EMPTY_EVENT = """
-contract Foo {
-    event FooEvent();
-
-    constructor() {
-        emit FooEvent();
-    }
-}
-"""
-
-SIMPLE_CALL = """
-contract Foo {
-    function view_func() public pure returns (uint) {
-        return 42;
-    }
-
-    function go() public view returns (bool success) {
-        (success, ) = address(this).staticcall(abi.encodeWithSignature("view_func()"));
-    }
-}
-"""
-
-FAILED_SIMPLE_CALL = """
-contract Foo {
-    function just_fails() public pure returns (uint) {
-        assert(false);
-    }
-
-    function go() public view returns (bool success) {
-        (success, ) = address(this).staticcall(abi.encodeWithSignature("just_fails()"));
-    }
-}
-"""
-
-FAILED_STATIC_CALL = """
-contract Foo {
-    uint256 x;
-
-    function do_sstore() public returns (uint) {
-        unchecked {
-            x += 1;
-        }
-    }
-
-    function go() public view returns (bool success) {
-        (success, ) = address(this).staticcall(abi.encodeWithSignature("do_sstore()"));
-    }
-}
-"""
-
-SYMBOLIC_SUBCALL = """
-contract Foo {
-    function may_fail(uint256 x) public pure returns (uint) {
-        assert(x != 42);
-    }
-
-    function go(uint256 x) public view returns (bool success) {
-        (success, ) = address(this).staticcall(abi.encodeWithSignature("may_fail(uint256)", x));
-    }
-}
-"""
-
-SYMBOLIC_CREATE = """
-contract Bar {
-    uint256 immutable x;
-
-    constructor(uint256 _x) {
-        assert(_x != 42);
-        x = _x;
-    }
-}
-
-contract Foo {
-    function go(uint256 x) public returns (bool success) {
-        try new Bar(x) {
-            success = true;
-        } catch {
-            success = false;
-        }
-    }
-}
-"""
 
 FAILED_CREATE = """
 contract Bar {
@@ -196,6 +110,61 @@ def solver(args):
 @pytest.fixture
 def storage():
     return {}
+
+
+@dataclass(frozen=True)
+class SingleResult:
+    is_single: bool
+    value: Optional[Any]
+
+    # allows tuple-like unpacking
+    def __iter__(self):
+        return iter((self.is_single, self.value))
+
+
+NO_SINGLE_RESULT = SingleResult(False, None)
+
+
+def single(iterable) -> SingleResult:
+    """
+    Returns (True, element) if the iterable has exactly one element
+    or (False, None) otherwise.
+
+    Note:
+        - if the iterable has a single None element, this returns (True, None)
+    """
+    iterator = iter(iterable)
+    element = None
+    try:
+        element = next(iterator)
+    except StopIteration:
+        return NO_SINGLE_RESULT
+
+    try:
+        next(iterator)
+        return NO_SINGLE_RESULT
+    except StopIteration:
+        return SingleResult(True, element)
+
+
+def is_single(iterable) -> bool:
+    """
+    Returns True if the iterable has exactly one element, False otherwise.
+    """
+
+    return single(iterable).is_single
+
+
+def empty(iterable) -> bool:
+    """
+    Returns True if the iterable is empty, False otherwise.
+    """
+    iterator = iter(iterable)
+    try:
+        next(iterator)
+        return False
+    except StopIteration:
+        return True
 
 
 def render_path(ex: Exec) -> None:
@@ -324,7 +293,13 @@ def test_deploy_nonpayable_reverts(sevm, solver):
 
 
 def test_deploy_payable(sevm, solver):
-    deploy_hexcode, runtime_hexcode = get_bytecode(PAYABLE_CONSTRUCTOR)
+    deploy_hexcode, runtime_hexcode = get_bytecode(
+        """
+            contract Foo {
+                constructor() payable {}
+            }
+        """
+    )
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver, value=con(1))
 
     sevm.run(exec)
@@ -336,7 +311,17 @@ def test_deploy_payable(sevm, solver):
 
 
 def test_deploy_event_in_constructor(sevm, solver):
-    deploy_hexcode, _ = get_bytecode(CONSTRUCTOR_EMPTY_EVENT)
+    deploy_hexcode, _ = get_bytecode(
+        """
+            contract Foo {
+                event FooEvent();
+
+                constructor() {
+                    emit FooEvent();
+                }
+            }
+        """
+    )
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver)
 
     sevm.run(exec)
@@ -352,72 +337,124 @@ def test_deploy_event_in_constructor(sevm, solver):
 
 
 def test_simple_call(sevm: SEVM, solver):
-    _, runtime_hexcode = get_bytecode(SIMPLE_CALL)
+    _, runtime_hexcode = get_bytecode(
+        """
+            contract Foo {
+                function view_func() public pure returns (uint) {
+                    return 42;
+                }
+
+                function go() public view returns (bool success) {
+                    (success, ) = address(this).staticcall(abi.encodeWithSignature("view_func()"));
+                }
+            }
+        """
+    )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
 
     execs = sevm.run(input_exec)[0]
-    assert len(execs) == 1
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
 
-    exec = execs.pop()
-    render_trace(exec.context)
+    render_trace(output_exec.context)
 
-    assert exec.context.output is not None
-    assert exec.context.output.error is None
+    assert output_exec.context.output is not None
+    assert output_exec.context.output.error is None
 
     # go() returns success=true
-    assert int_of(exec.context.output.data) == 1
+    assert int_of(output_exec.context.output.data) == 1
 
     # view_func() returns 42
-    subcalls = exec.context.subcalls()
-    assert len(subcalls) == 1
-    assert subcalls[0].output.error is None
-    assert int_of(subcalls[0].output.data) == 42
+    (is_single_call, subcall) = single(output_exec.context.subcalls())
+    assert is_single_call
+    assert subcall.output.error is None
+    assert int_of(subcall.output.data) == 42
 
 
 def test_failed_call(sevm: SEVM, solver):
-    _, runtime_hexcode = get_bytecode(FAILED_SIMPLE_CALL)
+    _, runtime_hexcode = get_bytecode(
+        """
+            contract Foo {
+                function just_fails() public pure returns (uint) {
+                    assert(false);
+                }
+
+                function go() public view returns (bool success) {
+                    (success, ) = address(this).staticcall(abi.encodeWithSignature("just_fails()"));
+                }
+            }
+        """
+    )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
 
     execs = sevm.run(input_exec)[0]
-    assert len(execs) == 1
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
 
-    exec = execs.pop()
-    render_trace(exec.context)
+    render_trace(output_exec.context)
 
     # go() does not revert, it returns success=false
-    assert exec.context.output.error is None
-    assert int_of(exec.context.output.data) == 0
+    assert output_exec.context.output.error is None
+    assert int_of(output_exec.context.output.data) == 0
 
     # the just_fails() subcall fails
-    subcalls = exec.context.subcalls()
-    assert len(subcalls) == 1
-    assert isinstance(subcalls[0].output.error, Revert)
-    assert int_of(subcalls[0].output.data) == PANIC_1
+    (is_single_call, subcall) = single(output_exec.context.subcalls())
+    assert is_single_call
+    assert isinstance(subcall.output.error, Revert)
+    assert int_of(subcall.output.data) == PANIC_1
 
 
 def test_failed_static_call(sevm: SEVM, solver):
-    _, runtime_hexcode = get_bytecode(FAILED_STATIC_CALL)
+    _, runtime_hexcode = get_bytecode(
+        """
+            contract Foo {
+                uint256 x;
+
+                function do_sstore() public returns (uint) {
+                    unchecked {
+                        x += 1;
+                    }
+                }
+
+                function go() public view returns (bool success) {
+                    (success, ) = address(this).staticcall(abi.encodeWithSignature("do_sstore()"));
+                }
+            }
+        """
+    )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
 
     execs = sevm.run(input_exec)[0]
-    assert len(execs) == 1
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
 
-    exec = execs.pop()
-    render_trace(exec.context)
+    render_trace(output_exec.context)
 
     # go() does not revert, it returns success=false
-    assert exec.context.output.error is None
-    assert int_of(exec.context.output.data) == 0
+    assert output_exec.context.output.error is None
+    assert int_of(output_exec.context.output.data) == 0
 
     # the do_sstore() subcall fails
-    subcalls = exec.context.subcalls()
-    assert len(subcalls) == 1
-    assert subcalls[0].message.is_static is True
-    assert isinstance(subcalls[0].output.error, WriteInStaticContext)
+    (is_single_call, subcall) = single(output_exec.context.subcalls())
+    assert is_single_call
+    assert subcall.message.is_static is True
+    assert isinstance(subcall.output.error, WriteInStaticContext)
 
 
 def test_symbolic_subcall(sevm: SEVM, solver):
-    _, runtime_hexcode = get_bytecode(SYMBOLIC_SUBCALL)
+    _, runtime_hexcode = get_bytecode(
+        """
+            contract Foo {
+                function may_fail(uint256 x) public pure returns (uint) {
+                    assert(x != 42);
+                }
+
+                function go(uint256 x) public view returns (bool success) {
+                    (success, ) = address(this).staticcall(abi.encodeWithSignature("may_fail(uint256)", x));
+                }
+            }
+        """
+    )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
 
     execs = sevm.run(input_exec)[0]
@@ -428,18 +465,40 @@ def test_symbolic_subcall(sevm: SEVM, solver):
     render_trace(execs[1].context)
 
     # all executions have exactly one subcall and the outer call does not revert
-    assert all(len(x.context.subcalls()) == 1 for x in execs)
+    assert all(is_single(x.context.subcalls()) for x in execs)
     assert all(x.context.output.error is None for x in execs)
 
     # in one of the executions, the subcall succeeds
-    assert any(x.context.subcalls()[0].output.error is None for x in execs)
+    subcalls = list(single(x.context.subcalls()).value for x in execs)
+    assert any(subcall.output.error is None for subcall in subcalls)
 
     # in one of the executions, the subcall reverts
-    assert any(isinstance(x.context.subcalls()[0].output.error, Revert) for x in execs)
+    assert any(isinstance(subcall.output.error, Revert) for subcall in subcalls)
 
 
 def test_symbolic_create(sevm: SEVM, solver):
-    _, runtime_hexcode = get_bytecode(SYMBOLIC_CREATE)
+    _, runtime_hexcode = get_bytecode(
+        """
+            contract Bar {
+                uint256 immutable x;
+
+                constructor(uint256 _x) {
+                    assert(_x != 42);
+                    x = _x;
+                }
+            }
+
+            contract Foo {
+                function go(uint256 x) public returns (bool success) {
+                    try new Bar(x) {
+                        success = true;
+                    } catch {
+                        success = false;
+                    }
+                }
+            }
+        """
+    )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
 
     execs = sevm.run(input_exec)[0]
@@ -450,14 +509,15 @@ def test_symbolic_create(sevm: SEVM, solver):
     render_trace(execs[1].context)
 
     # all executions have exactly one subcall and the outer call does not revert
-    assert all(len(x.context.subcalls()) == 1 for x in execs)
+    assert all(is_single(x.context.subcalls()) for x in execs)
     assert all(x.context.output.error is None for x in execs)
 
     # in one of the executions, the subcall succeeds
-    assert any(x.context.subcalls()[0].output.error is None for x in execs)
+    subcalls = list(single(x.context.subcalls()).value for x in execs)
+    assert any(subcall.output.error is None for subcall in subcalls)
 
     # in one of the executions, the subcall reverts
-    assert any(isinstance(x.context.subcalls()[0].output.error, Revert) for x in execs)
+    assert any(isinstance(subcall.output.error, Revert) for subcall in subcalls)
 
 
 def test_failed_create(sevm: SEVM, solver):
@@ -465,21 +525,20 @@ def test_failed_create(sevm: SEVM, solver):
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
 
     execs = sevm.run(input_exec)[0]
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
 
-    assert len(execs) == 1
-
-    exec = execs.pop()
-    render_trace(exec.context)
+    render_trace(output_exec.context)
 
     # go() does not revert, it returns success=false
-    assert exec.context.output.error is None
-    assert int_of(exec.context.output.data) == 0
+    assert output_exec.context.output.error is None
+    assert int_of(output_exec.context.output.data) == 0
 
     # the create() subcall fails
-    subcalls = exec.context.subcalls()
-    assert len(subcalls) == 1
-    assert isinstance(subcalls[0].output.error, Revert)
-    assert int_of(subcalls[0].output.data) == PANIC_1
+    (is_single_call, subcall) = single(output_exec.context.subcalls())
+    assert is_single_call
+    assert isinstance(subcall.output.error, Revert)
+    assert int_of(subcall.output.data) == PANIC_1
 
 
 def test_event_conditional_on_symbol(sevm: SEVM, solver):
@@ -514,17 +573,20 @@ def test_event_conditional_on_symbol(sevm: SEVM, solver):
     assert len(execs) == 2
 
     # all executions have a single subcall
-    assert all(len(x.context.subcalls()) == 1 for x in execs)
+    assert all(is_single(x.context.subcalls()) for x in execs)
+
+    all_subcalls = list(single(x.context.subcalls()).value for x in execs)
 
     # one execution has a single subcall that reverts
     assert any(
-        isinstance(x.context.subcalls()[0].output.error, WriteInStaticContext)
-        for x in execs
+        isinstance(subcall.output.error, WriteInStaticContext)
+        for subcall in all_subcalls
     )
 
     # one execution has a single subcall that succeeds and emits an event
     assert any(
-        x.context.subcalls()[0].output.error is None and len(x.context.logs()) == 1
+        single(x.context.subcalls()).value.output.error is None
+        and is_single(x.context.logs())
         for x in execs
     )
 
@@ -544,13 +606,11 @@ def test_symbolic_event_data(sevm: SEVM, solver):
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
     execs = sevm.run(input_exec)[0]
-    assert len(execs) == 1
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
 
-    output_exec = execs.pop()
-    events = output_exec.context.logs()
-    assert len(events) == 1
-
-    event = events[0]
+    (is_single_event, event) = single(output_exec.context.logs())
+    assert is_single_event
     assert len(event.topics) == 1
     assert int_of(event.topics[0]) == LOG_U256_SIG
     assert is_bv(event.data) and event.data.decl().name() == "p_x_uint256"
@@ -571,13 +631,11 @@ def test_symbolic_event_topic(sevm: SEVM, solver):
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
     execs = sevm.run(input_exec)[0]
-    assert len(execs) == 1
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
 
-    output_exec = execs.pop()
-    events = output_exec.context.logs()
-    assert len(events) == 1
-
-    event = events[0]
+    (is_single_event, event) = single(output_exec.context.logs())
+    assert is_single_event
     assert len(event.topics) == 2
     assert int_of(event.topics[0]) == LOG_U256_SIG
     assert is_bv(event.topics[1]) and event.topics[1].decl().name() == "p_x_uint256"
@@ -610,19 +668,20 @@ def test_trace_ordering(sevm: SEVM, solver):
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
     execs = sevm.run(input_exec)[0]
-    assert len(execs) == 1
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
 
-    output_exec = execs.pop()
-    render_trace(output_exec.context)
+    top_level_call = output_exec.context
+    render_trace(top_level_call)
 
-    assert len(output_exec.context.subcalls()) == 2
-    assert len(output_exec.context.logs()) == 1
+    assert len(list(top_level_call.subcalls())) == 2
+    call1, call2 = tuple(top_level_call.subcalls())
 
-    call1, call2 = tuple(output_exec.context.subcalls())
-    event = output_exec.context.logs()[0]
+    (is_single_event, event) = single(top_level_call.logs())
+    assert is_single_event
 
     # the trace must preserve the ordering
-    assert output_exec.context.trace == [call1, event, call2]
+    assert top_level_call.trace == [call1, event, call2]
     assert int_of(call2.output.data) == 42
 
 
@@ -655,22 +714,131 @@ def test_static_context_propagates(sevm: SEVM, solver):
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
 
     execs = sevm.run(input_exec)[0]
-    assert len(execs) == 1
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
 
-    output_exec = execs.pop()
-    render_trace(output_exec.context)
+    top_level_call = output_exec.context
+    render_trace(top_level_call)
 
-    assert len(output_exec.context.subcalls()) == 1
-    outer_call = output_exec.context.subcalls()[0]
+    (is_single_call, outer_call) = single(top_level_call.subcalls())
+    assert is_single_call
 
     assert outer_call.message.call_scheme == EVM.STATICCALL
     assert outer_call.message.is_static is True
     assert outer_call.output.error is None
 
-    assert len(outer_call.subcalls()) == 1
-    inner_call = outer_call.subcalls()[0]
+    assert len(list(outer_call.subcalls())) == 1
+    inner_call = next(outer_call.subcalls())
 
     assert inner_call.message.call_scheme == EVM.CALL
     assert inner_call.message.is_static is True
     assert isinstance(inner_call.output.error, WriteInStaticContext)
-    assert len(inner_call.logs()) == 0
+    assert next(inner_call.logs(), None) is None
+
+
+def test_halmos_exception_halts_path(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(
+        """
+        contract Foo {
+            function sload(uint256 x) public view returns (uint256 value) {
+                assembly {
+                    value := sload(x)
+                }
+            }
+
+            function go(uint256 x) public view {
+                this.sload(x);
+            }
+        }
+    """
+    )
+
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
+
+    execs = sevm.run(input_exec)[0]
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
+
+    outer_call = output_exec.context
+    render_trace(outer_call)
+
+    # outer call does not return because of NotConcreteError
+    assert outer_call.output.error is None
+    assert outer_call.output.return_scheme == None
+
+    (is_single_call, inner_call) = single(outer_call.subcalls())
+    assert is_single_call
+
+    assert inner_call.message.call_scheme == EVM.STATICCALL
+    assert isinstance(inner_call.output.error, NotConcreteError)
+    assert not inner_call.output.data
+    assert inner_call.output.return_scheme == EVM.SLOAD
+
+
+def test_deploy_symbolic_bytecode(sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(
+        """
+            contract Foo {
+                function go(uint256 x) public {
+                    assembly {
+                        mstore(0, x)
+                        let addr := create(0, 0, 32)
+                    }
+                }
+            }
+        """
+    )
+
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
+
+    execs = sevm.run(input_exec)[0]
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
+
+    outer_call = output_exec.context
+    render_trace(outer_call)
+
+    # outer call does not return because of NotConcreteError
+    assert outer_call.output.error is None
+    assert outer_call.output.return_scheme == None
+
+    (is_single_call, inner_call) = single(outer_call.subcalls())
+    assert is_single_call
+    assert inner_call.message.call_scheme == EVM.CREATE
+
+    assert isinstance(inner_call.output.error, NotConcreteError)
+    assert not inner_call.output.data
+    assert is_bv(inner_call.output.return_scheme)
+
+
+def test_deploy_empty_runtime_bytecode(sevm: SEVM, solver):
+    for creation_bytecode_len in (0, 1):
+        _, runtime_hexcode = get_bytecode(
+            f"""
+                contract Foo {{
+                    function go() public {{
+                        assembly {{
+                            let addr := create(0, 0, {creation_bytecode_len})
+                        }}
+                    }}
+                }}
+            """
+        )
+
+        input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=default_calldata)
+
+        execs = sevm.run(input_exec)[0]
+        (is_single_exec, output_exec) = single(execs)
+        assert is_single_exec
+
+        outer_call = output_exec.context
+        render_trace(outer_call)
+
+        (is_single_call, inner_call) = single(outer_call.subcalls())
+        assert is_single_call
+        assert inner_call.message.call_scheme == EVM.CREATE
+        assert len(inner_call.message.data) == creation_bytecode_len
+
+        assert inner_call.output.error is None
+        assert len(inner_call.output.data) == 0
+        assert inner_call.output.return_scheme == EVM.STOP
