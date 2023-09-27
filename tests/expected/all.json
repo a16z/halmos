@@ -1253,6 +1253,76 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/StaticContexts.t.sol:StaticContextsTest": [
+            {
+                "name": "check_create2_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.030400621937587857,
+                    0.03034853981807828,
+                    4.764087498188019e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_create_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.02617007098160684,
+                    0.02615104499273002,
+                    1.5985919162631035e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_log_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.028228648006916046,
+                    0.02821106882765889,
+                    1.4947028830647469e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_sstore_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.025807512924075127,
+                    0.02578602684661746,
+                    1.846393570303917e-05
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
         "test/Storage.t.sol:StorageTest": [
             {
                 "name": "check_addArr1(uint256)",
