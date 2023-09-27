@@ -1,6 +1,6 @@
 # Simple Examples
 
-Given a contract, [Example.sol](src/Example.sol):
+Given a contract:
 ```solidity
 contract Example {
     function totalPriceBuggy(uint96 price, uint32 quantity) public pure returns (uint128) {
@@ -11,7 +11,7 @@ contract Example {
 }
 ```
 
-You write some **property-based tests** (in Solidity), [Example.t.sol](test/Example.t.sol):
+You write some **property-based tests** (in Solidity):
 ```solidity
 contract ExampleTest is Example {
     function testTotalPriceBuggy(uint96 price, uint32 quantity) public pure {
