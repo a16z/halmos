@@ -2745,13 +2745,9 @@ class SEVM:
                     ex.st.swap(opcode - EVM.SWAP1 + 1)
 
                 else:
-                    # TODO: switch to InvalidOpcode when we have implemented every opcode
-                    warn(
-                        UNSUPPORTED_OPCODE,
-                        f"Unsupported opcode {hex(opcode)} ({str_opcode.get(opcode, '?')})",
-                    )
-                    out.append(ex)
-                    continue
+                    # TODO: switch to InvalidOpcode when we have full opcode coverage
+                    # this halts the path, but we should only halt the current context
+                    raise HalmosException(f"Unsupported opcode {hex(opcode)}")
 
                 ex.next_pc()
                 stack.append((ex, step_id))

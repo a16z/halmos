@@ -1634,35 +1634,59 @@
         ],
         "test/UnsupportedOpcode.t.sol:X": [
             {
-                "name": "check_foo()",
+                "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
+                "models": [],
+                "num_paths": [
+                    1,
+                    0,
+                    1
+                ],
+                "time": [
+                    0.004063992062583566,
+                    0.003941374132409692,
+                    0.00012030405923724174
+                ],
+                "num_bounded_loops": 0
             }
         ],
         "test/UnsupportedOpcode.t.sol:Y": [
             {
-                "name": "check_foo()",
+                "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
+                "models": [],
+                "num_paths": [
+                    1,
+                    0,
+                    1
+                ],
+                "time": [
+                    0.012732983101159334,
+                    0.012426204979419708,
+                    0.0003033068496733904
+                ],
+                "num_bounded_loops": 0
             }
         ],
         "test/UnsupportedOpcode.t.sol:Z": [
             {
-                "name": "check_foo()",
+                "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
+                "models": [],
+                "num_paths": [
+                    1,
+                    0,
+                    1
+                ],
+                "time": [
+                    0.0225986260920763,
+                    0.022291108965873718,
+                    0.0003035308327525854
+                ],
+                "num_bounded_loops": 0
             }
         ],
         "test/Warp.t.sol:WarpTest": [
