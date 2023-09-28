@@ -1395,8 +1395,8 @@ class SEVM:
             div_for_overflow_check = self.div_xy_y(w1, w2)
             if div_for_overflow_check is not None:  # xy/x or xy/y
                 return div_for_overflow_check
-            if self.options.get("div"):
-                return UDiv(w1, w2)  # unsigned div (bvudiv)
+        #   if self.options.get("div"):
+        #       return UDiv(w1, w2)  # unsigned div (bvudiv)
             if is_bv_value(w1) and is_bv_value(w2):
                 return UDiv(w1, w2)
             elif is_bv_value(w2):
@@ -1408,15 +1408,15 @@ class SEVM:
                     return w1
                 elif is_power_of_two(i2):
                     return LShR(w1, int(math.log(i2, 2)))
-                elif self.options.get("divByConst"):
-                    return UDiv(w1, w2)
+            #   elif self.options.get("divByConst"):
+            #       return UDiv(w1, w2)
                 else:
                     return self.mk_div(ex, w1, w2)
             else:
                 return self.mk_div(ex, w1, w2)
         elif op == EVM.MOD:
-            if self.options.get("mod"):
-                return URem(w1, w2)
+        #   if self.options.get("mod"):
+        #       return URem(w1, w2)
             if is_bv_value(w1) and is_bv_value(w2):
                 return URem(w1, w2)  # bvurem
             elif is_bv_value(w2):
@@ -1426,14 +1426,16 @@ class SEVM:
                 elif is_power_of_two(i2):
                     bitsize = int(math.log(i2, 2))
                     return ZeroExt(w2.size() - bitsize, Extract(bitsize - 1, 0, w1))
-                elif self.options.get("modByConst"):
-                    return URem(w1, w2)
+            #   elif self.options.get("modByConst"):
+            #       return URem(w1, w2)
                 else:
                     return self.mk_mod(ex, w1, w2)
             else:
                 return self.mk_mod(ex, w1, w2)
         elif op == EVM.SDIV:
-            if self.options.get("div") or (is_bv_value(w1) and is_bv_value(w2)):
+        #   if self.options.get("div"):
+        #       return w1 / w2  # bvsdiv
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 / w2  # bvsdiv
 
             if is_bv_value(w2):
@@ -1446,8 +1448,8 @@ class SEVM:
                 if i2 == 1:
                     return w1  # div by 1 is identity
 
-                if self.options.get("divByConst"):
-                    return w1 / w2  # bvsdiv
+            #   if self.options.get("divByConst"):
+            #       return w1 / w2  # bvsdiv
 
             # fall back to uninterpreted function :(
             return f_sdiv(w1, w2)

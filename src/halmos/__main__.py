@@ -757,13 +757,26 @@ class GenModelArgs:
     sexpr: str
 
 
-def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
-    args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
+def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
     solver = SolverFor("QF_AUFBV", ctx=Context())
     solver.set(timeout=args.solver_timeout_assertion)
-    solver.from_string(sexpr)
-    res = solver.check()
-    model = solver.model() if res == sat else None
+    solver.from_string(query)
+    result = solver.check()
+    model = solver.model() if result == sat else None
+    return result, model
+
+
+def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
+    args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
+    res, model = solve(sexpr, args)
+#   solver = SolverFor("QF_AUFBV", ctx=Context())
+#   solver.set(timeout=args.solver_timeout_assertion)
+#   solver.from_string(sexpr)
+#   res = solver.check()
+#   model = solver.model() if res == sat else None
+
+    if res == sat and not is_model_valid(model):
+        res, model = solve(refine(sexpr), args)
 
     # TODO: handle args.solver_subprocess
 
@@ -772,6 +785,13 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
 def is_unknown(result: CheckSatResult, model: Model) -> bool:
     return result == unknown or (result == sat and not is_model_valid(model))
+
+
+def refine(query: str) -> str:
+    # replace uninterpreted abstraction with actual symbols for assertion solving
+    # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
+    #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
+    return re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
 
 
 def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
@@ -785,15 +805,21 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
     if res == sat:
         model = ex.solver.model()
 
-    if is_unknown(res, model) and args.solver_fresh:
+    if res == unknown and args.solver_fresh:
         if args.verbose >= 1:
             print(f"  Checking again with a fresh solver")
-        sol2 = SolverFor("QF_AUFBV", ctx=Context())
-        # sol2.set(timeout=args.solver_timeout_assertion)
-        sol2.from_string(ex.solver.to_smt2())
-        res = sol2.check()
-        if res == sat:
-            model = sol2.model()
+        res, model = solve(ex.solver.to_smt2(), args)
+
+    if res == sat and not is_model_valid(model):
+        if args.verbose >= 1:
+            print(f"  Checking again with refinement")
+        res, model = solve(refine(ex.solver.to_smt2()), args)
+    #   sol2 = SolverFor("QF_AUFBV", ctx=Context())
+    #   sol2.set(timeout=args.solver_timeout_assertion)
+    #   sol2.from_string(refine(ex.solver.to_smt2()))
+    #   res = sol2.check()
+    #   if res == sat:
+    #       model = sol2.model()
 
     if is_unknown(res, model) and args.solver_subprocess:
         if args.verbose >= 1:
@@ -801,11 +827,7 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
         fname = f"/tmp/{uuid.uuid4().hex}.smt2"
         if args.verbose >= 1:
             print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
-        query = ex.solver.to_smt2()
-        # replace uninterpreted abstraction with actual symbols for assertion solving
-        # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
-        #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
-        query = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
+        query = refine(ex.solver.to_smt2())
         with open(fname, "w") as f:
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)
@@ -860,6 +882,10 @@ def package_result(
 
 def is_model_valid(model: AnyModel) -> bool:
     for decl in model:
+        if str(decl) == "evm_bvudiv" and str(model[decl]) == "[else -> bvudiv_i(Var(0x0), Var(0x1))]":
+            continue
+        if str(decl) == "evm_bvsdiv" and str(model[decl]) == "[else -> bvsdiv_i(Var(0x0), Var(0x1))]":
+            continue
         if str(decl).startswith("evm_"):
             return False
     return True

@@ -27,7 +27,7 @@ contract VaultTest is SymTest {
     }
 
     // NOTE: currently timeout when --smt-div is enabled, while producing invalid counterexamples when --smt-div is not given
-    function check_deposit(uint assets) public {
+    function prove_deposit(uint assets) public {
         uint A1 = vault.totalAssets();
         uint S1 = vault.totalShares();
 

@@ -11,7 +11,7 @@ contract MathTest {
     }
 
     // NOTE: currently timeout when --smt-div is enabled; producing invalid counterexamples when --smt-div is not given
-    function check_deposit(uint a, uint A1, uint S1) public pure {
+    function prove_deposit(uint a, uint A1, uint S1) public pure {
         uint s = (a * S1) / A1;
 
         uint A2 = A1 + a;
