@@ -2062,8 +2062,10 @@ class SEVM:
             call_unknown()
             return
 
-        ex.error = f"Unknown contract call: to = {hexify(to)}; calldata = {hexify(arg)}; callvalue = {hexify(fund)}"
-        out.append(ex)
+        raise HalmosException(
+            f"Unknown contract call: to = {hexify(to)}; "
+            f"calldata = {hexify(arg)}; callvalue = {hexify(fund)}"
+        )
 
     def create(
         self,
