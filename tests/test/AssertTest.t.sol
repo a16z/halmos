@@ -13,18 +13,18 @@ contract C is Test {
     }
 }
 
-contract CTest is Test {
+contract AssertTest is Test {
     C c;
 
     function setUp() public {
         c = new C();
     }
 
-    function check_foo() public {
+    function check_assert_not_propagated() public {
         address(c).call(abi.encodeWithSelector(C.foo.selector, bytes(""))); // pass
     }
 
-    function check_bar() public {
+    function check_fail_propagated() public {
         address(c).call(abi.encodeWithSelector(C.bar.selector, bytes(""))); // fail
     }
 }

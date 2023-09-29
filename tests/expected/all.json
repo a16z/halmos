@@ -41,9 +41,9 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/AssertTest.sol:CTest": [
+        "test/AssertTest.t.sol:AssertTest": [
             {
-                "name": "check_bar()",
+                "name": "check_fail_propagated()",
                 "exitcode": 1,
                 "num_models": 1,
                 "models": null,
@@ -52,7 +52,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_foo()",
+                "name": "check_assert_not_propagated()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
