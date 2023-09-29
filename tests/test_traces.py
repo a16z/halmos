@@ -18,12 +18,15 @@ from halmos.sevm import (
     Message,
     NotConcreteError,
     SEVM,
+    byte_length,
     con,
     int_of,
     wstore,
 )
 from halmos.utils import EVM
 from test_fixtures import args, options, sevm
+
+import halmos.sevm
 
 # keccak256("FooEvent()")
 FOO_EVENT_SIG = 0x34E21A9428B1B47E73C4E509EABEEA7F2B74BECA07D82AAC87D4DD28B74C2A4A
@@ -260,7 +263,7 @@ def find_contract(contract_name: str, build_output: BuildOutput) -> Dict:
 
 def get_bytecode(source: str, contract_name: str = "Foo"):
     build_output = compile(source)
-    contract_object = find_contract("Foo", build_output)
+    contract_object = find_contract(contract_name, build_output)
     return contract_object["bin"], contract_object["bin-runtime"]
 
 
@@ -288,7 +291,7 @@ def test_deploy_nonpayable_reverts(sevm, solver):
     render_trace(exec.context)
 
     assert isinstance(exec.context.output.error, Revert)
-    assert exec.context.output.data is None
+    assert not exec.context.output.data
     assert len(exec.context.trace) == 0
 
 
@@ -333,7 +336,7 @@ def test_deploy_event_in_constructor(sevm, solver):
     event: EventLog = exec.context.trace[0]
     assert len(event.topics) == 1
     assert int_of(event.topics[0]) == FOO_EVENT_SIG
-    assert event.data is None
+    assert not event.data
 
 
 def test_simple_call(sevm: SEVM, solver):
@@ -639,7 +642,7 @@ def test_symbolic_event_topic(sevm: SEVM, solver):
     assert len(event.topics) == 2
     assert int_of(event.topics[0]) == LOG_U256_SIG
     assert is_bv(event.topics[1]) and event.topics[1].decl().name() == "p_x_uint256"
-    assert event.data is None
+    assert not event.data
 
 
 def test_trace_ordering(sevm: SEVM, solver):
@@ -842,3 +845,48 @@ def test_deploy_empty_runtime_bytecode(sevm: SEVM, solver):
         assert inner_call.output.error is None
         assert len(inner_call.output.data) == 0
         assert inner_call.output.return_scheme == EVM.STOP
+
+
+def test_call_limit_with_create(monkeypatch, sevm: SEVM, solver):
+    _, runtime_hexcode = get_bytecode(
+        """
+            contract Foo {
+                function go() public {
+                    // bytecode for:
+                    //     codecopy(0, 0, codesize())
+                    //     create(0, 0, codesize())
+                    bytes memory creationCode = hex"386000803938600080f050";
+                    assembly {
+                        let addr := create(0, add(creationCode, 0x20), mload(creationCode))
+                    }
+                }
+            }
+        """
+    )
+
+    input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=default_calldata)
+
+    # override the call depth limit to 3 (the test runs faster)
+    MAX_CALL_DEPTH_OVERRIDE = 3
+    monkeypatch.setattr(halmos.sevm, "MAX_CALL_DEPTH", MAX_CALL_DEPTH_OVERRIDE)
+
+    execs = sevm.run(input_exec)[0]
+    (is_single_exec, output_exec) = single(execs)
+    assert is_single_exec
+
+    outer_call = output_exec.context
+    render_trace(outer_call)
+
+    assert outer_call.output.error is None
+    assert byte_length(outer_call.output.data) == 0
+    assert not outer_call.is_stuck()
+
+    # peel the layer of the call stack onion until we get to the innermost call
+    inner_call = outer_call
+    for _ in range(MAX_CALL_DEPTH_OVERRIDE):
+        (is_single_call, inner_call) = single(inner_call.subcalls())
+        assert is_single_call
+        assert inner_call.message.call_scheme == EVM.CREATE
+        assert byte_length(inner_call.output.data) == 0
+
+    assert isinstance(inner_call.output.error, MessageDepthLimitError)

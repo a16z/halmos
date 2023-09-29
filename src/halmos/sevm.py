@@ -41,6 +41,7 @@ Address = BitVecRef  # 160-bitvector
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = b""
+MAX_CALL_DEPTH = 1024
 
 
 # dynamic BitVecSort sizes
@@ -490,17 +491,28 @@ class CallContext:
     def logs(self) -> Iterator[EventLog]:
         return iter(t for t in self.trace if isinstance(t, EventLog))
 
-    def stuck(self) -> Optional[HalmosException]:
+    def is_stuck(self) -> bool:
+        """
+        When called after execution, this method returns True if the call is stuck,
+        i.e. it encountered an internal error and has no output.
+
+        This is meaningless during execution, because the call may not yet have an output
+        """
+        return self.output.data is None
+
+    def get_stuck_reason(self) -> Optional[HalmosException]:
         """
         Returns the first internal error encountered during the execution of the call.
         """
-
         if isinstance(self.output.error, HalmosException):
             return self.output.error
 
-        return next(
-            (err for c in self.subcalls() if (err := c.stuck()) is not None), None
-        )
+        if self.output.data is not None:
+            # if this context has output data (including empty bytes), it is not stuck
+            return None
+
+        if (last_subcall := self.last_subcall()) is not None:
+            return last_subcall.get_stuck_reason()
 
 
 class State:
@@ -569,10 +581,7 @@ class State:
     def ret(self) -> Bytes:
         loc: int = self.mloc()
         size: int = int_of(self.pop(), "symbolic return data size")  # size in bytes
-        if size > 0:
-            return wload(self.memory, loc, size, prefer_concrete=True)
-        else:
-            return None
+        return wload(self.memory, loc, size, prefer_concrete=True) if size else b""
 
 
 class Block:
@@ -1644,7 +1653,7 @@ class SEVM:
                 new_ex.context.trace.append(subcall)
                 new_ex.this = ex.this
 
-                if subcall.stuck():
+                if subcall.is_stuck():
                     # internal errors abort the current path,
                     # so we don't need to add it to the worklist
                     out.append(new_ex)
@@ -2176,12 +2185,7 @@ class SEVM:
 
         # process result
         for idx, new_ex in enumerate(new_exs):
-            # sanity checks
             subcall = new_ex.context
-            if subcall.output is None or subcall.output.data is None:
-                raise HalmosException(
-                    "unfinished contract creation call frame: " + str(new_ex)
-                )
 
             # continue execution in the context of the parent
             # pessimistic copy because the subcall results may diverge
@@ -2199,7 +2203,7 @@ class SEVM:
             new_ex.prank = deepcopy(ex.prank)
 
             if subcall.output.error is None:
-                # new contract code
+                # new contract code, will revert if data is None
                 new_ex.code[new_addr] = Contract(subcall.output.data)
 
                 # push new address to stack
@@ -2376,6 +2380,9 @@ class SEVM:
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
 
+                if ex.context.depth > MAX_CALL_DEPTH:
+                    raise MessageDepthLimitError(ex.context)
+
                 insn = ex.current_instruction()
                 opcode = insn.opcode
                 ex.cnts["opcode"][opcode] += 1
@@ -2404,7 +2411,7 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.INVALID:
-                    ex.halt(error=InvalidOpcode())
+                    ex.halt(error=InvalidOpcode(opcode))
                     out.append(ex)
                     continue
 
@@ -2760,7 +2767,7 @@ class SEVM:
             except HalmosException as err:
                 if self.options["debug"]:
                     print(err)
-                ex.halt(error=err)
+                ex.halt(data=None, error=err)
                 out.append(ex)
                 continue
 
