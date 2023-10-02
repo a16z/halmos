@@ -454,7 +454,7 @@ class CallOutput:
 
     data: Optional[Bytes] = None
     accounts_to_delete: Set[Address] = field(default_factory=set)
-    error: Optional[EvmException] = None
+    error: Optional[UnionType[EvmException, HalmosException]] = None
     return_scheme: Optional[int] = None
 
     # TODO:
@@ -765,7 +765,6 @@ class Exec:  # an execution path
     pc: int
     st: State  # stack and memory
     jumpis: Dict[str, Dict[bool, int]]  # for loop detection
-    output: Bytes  # returndata
     symbolic: bool  # symbolic or concrete storage
     prank: Prank
     addresses_to_delete: Set[Address]
@@ -810,6 +809,7 @@ class Exec:  # an execution path
         self.calls = kwargs["calls"]
 
         assert_address(self.context.message.target)
+        assert_address(self.context.message.caller)
         assert_address(self.this)
 
     def context_str(self) -> str:
@@ -832,8 +832,9 @@ class Exec:  # an execution path
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
 
-    def calldata(self):
-        return self.message().data
+    def calldata(self) -> List[Byte]:
+        message = self.message()
+        return [] if message.is_create() else message.data
 
     def caller(self):
         return self.message().caller
@@ -2509,13 +2510,12 @@ class SEVM:
                     ex.st.push(ex.st.pop() ^ ex.st.pop())  # bvxor
 
                 elif opcode == EVM.CALLDATALOAD:
-                    calldata = None if ex.message().is_create() else ex.message().data
+                    calldata = ex.calldata()
                     if calldata is None:
                         ex.st.push(f_calldataload(ex.st.pop()))
                     else:
-                        offset: int = int_of(
-                            ex.st.pop(), "symbolic CALLDATALOAD offset"
-                        )
+                        err_msg = "symbolic CALLDATALOAD offset"
+                        offset: int = int_of(ex.st.pop(), err_msg)
 
                         # TODO: avoid pessimistic concat here
                         ex.st.push(
@@ -2526,7 +2526,7 @@ class SEVM:
                             )
                         )
                 elif opcode == EVM.CALLDATASIZE:
-                    calldata = None if ex.message().is_create() else ex.message().data
+                    calldata = ex.calldata()
                     # TODO: is optional calldata necessary?
                     if calldata is None:
                         ex.st.push(f_calldatasize())
@@ -2535,7 +2535,7 @@ class SEVM:
                 elif opcode == EVM.CALLVALUE:
                     ex.st.push(ex.callvalue())
                 elif opcode == EVM.CALLER:
-                    ex.st.push(uint256(ex.message().caller))
+                    ex.st.push(uint256(ex.caller()))
                 elif opcode == EVM.ORIGIN:
                     ex.st.push(uint256(f_origin()))
                 elif opcode == EVM.ADDRESS:
