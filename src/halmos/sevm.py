@@ -127,14 +127,6 @@ create2_magic_address: int = 0xBBBB0000
 new_address_offset: int = 1
 
 
-def id_str(x: Any) -> str:
-    return hexify(x).replace(" ", "")
-
-
-def name_of(x: str) -> str:
-    return re.sub(r"\s+", "_", x)
-
-
 class Instruction:
     pc: int
     opcode: int
@@ -175,6 +167,25 @@ class HalmosException(Exception):
 
 class NotConcreteError(HalmosException):
     pass
+
+
+def id_str(x: Any) -> str:
+    return hexify(x).replace(" ", "")
+
+
+def name_of(x: str) -> str:
+    return re.sub(r"\s+", "_", x)
+
+
+def padded_slice(lst: List, start: int, size: int, default=0) -> List:
+    """
+    Return a slice of lst, starting at start and with size elements. If the slice
+    is out of bounds, pad with default.
+    """
+
+    end = start + size
+    n = len(lst)
+    return [lst[i] if i < n else default for i in range(start, end)]
 
 
 def unbox_int(x: Any) -> Any:
@@ -688,7 +699,9 @@ class Contract:
                 return extracted
 
         # concrete
-        return self._rawcode[slice.start : slice.stop]
+        size = slice.stop - slice.start
+        data = padded_slice(self._rawcode, slice.start, size, default=0)
+        return bytes(data)
 
     def __getitem__(self, key) -> UnionType[int, BitVecRef]:
         """Returns the byte at the given offset."""
@@ -2516,22 +2529,15 @@ class SEVM:
                     else:
                         err_msg = "symbolic CALLDATALOAD offset"
                         offset: int = int_of(ex.st.pop(), err_msg)
+                        data = padded_slice(calldata, offset, 32, default=con(0, 8))
+                        ex.st.push(Concat(data))
 
-                        # TODO: avoid pessimistic concat here
-                        ex.st.push(
-                            Concat(
-                                (calldata + [BitVecVal(0, 8)] * 32)[
-                                    offset : offset + 32
-                                ]
-                            )
-                        )
                 elif opcode == EVM.CALLDATASIZE:
-                    calldata = ex.calldata()
+                    cd = ex.calldata()
+
                     # TODO: is optional calldata necessary?
-                    if calldata is None:
-                        ex.st.push(f_calldatasize())
-                    else:
-                        ex.st.push(con(len(calldata)))
+                    ex.st.push(f_calldatasize() if cd is None else con(len(cd)))
+
                 elif opcode == EVM.CALLVALUE:
                     ex.st.push(ex.callvalue())
                 elif opcode == EVM.CALLER:
@@ -2668,23 +2674,8 @@ class SEVM:
                             data = f_calldatacopy(offset)
                             wstore(ex.st.memory, loc, size, data)
                         else:
-                            if offset + size <= len(calldata):
-                                wstore_bytes(
-                                    ex.st.memory,
-                                    loc,
-                                    size,
-                                    calldata[offset : offset + size],
-                                )
-                            elif offset == len(calldata):
-                                # copy zero bytes
-                                wstore_bytes(
-                                    ex.st.memory,
-                                    loc,
-                                    size,
-                                    [con(0, 8) for _ in range(size)],
-                                )
-                            else:
-                                raise ValueError(offset, size, len(calldata))
+                            data = padded_slice(calldata, offset, size, con(0, 8))
+                            wstore_bytes(ex.st.memory, loc, size, data)
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()
@@ -2694,6 +2685,13 @@ class SEVM:
                     wextend(ex.st.memory, loc, size)
 
                     codeslice = ex.pgm[offset : offset + size]
+
+                    actual_size = byte_length(codeslice)
+                    if actual_size != size:
+                        raise HalmosException(
+                            f"CODECOPY: expected {size} bytes but got {actual_size}"
+                        )
+
                     ex.st.memory[loc : loc + size] = iter_bytes(codeslice)
 
                 elif opcode == EVM.BYTE:

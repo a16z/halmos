@@ -117,6 +117,76 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Buffers.sol:BuffersTest": [
+            {
+                "name": "check_calldatacopy_large_offset()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.007320739096030593,
+                    0.007303101941943169,
+                    1.5543075278401375e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_calldataload_large_offset()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.007406540913507342,
+                    0.007393713109195232,
+                    1.0492978617548943e-05
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_codecopy_large_offset()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.006659913109615445,
+                    0.006648608949035406,
+                    9.352806955575943e-06
+                ],
+                "num_bounded_loops": 0
+            },
+            {
+                "name": "check_codecopy_offset_across_boundary()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": [],
+                "num_paths": [
+                    1,
+                    1,
+                    0
+                ],
+                "time": [
+                    0.01030514482408762,
+                    0.0102834680583328,
+                    1.7741229385137558e-05
+                ],
+                "num_bounded_loops": 0
+            }
+        ],
         "test/Byte.t.sol:ByteTest": [
             {
                 "name": "check_byte(uint256,uint256)",
