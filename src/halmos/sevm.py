@@ -1174,18 +1174,18 @@ class Exec:  # an execution path
 
         last_subcall = self.context.last_subcall()
 
-        if last_subcall is None:
+        if not last_subcall:
             return EMPTY_BYTES
 
         output = last_subcall.output
-        if last_subcall.message.is_create():
-            return output.data if output.error else EMPTY_BYTES
+        if last_subcall.message.is_create() and not output.error:
+            return EMPTY_BYTES
 
         return output.data
 
     def returndatasize(self) -> int:
         returndata = self.returndata()
-        return 0 if returndata is None else byte_length(returndata)
+        return byte_length(returndata) if returndata is not None else 0
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_concrete(x):
@@ -2176,7 +2176,6 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, caller, new_addr, value)
 
-        # TODO: check max call depth
         # execute contract creation code
         (new_exs, new_steps, new_logs) = self.run(
             Exec(
@@ -2211,7 +2210,7 @@ class SEVM:
         logs.extend(new_logs)
 
         # process result
-        for idx, new_ex in enumerate(new_exs):
+        for new_ex in new_exs:
             subcall = new_ex.context
 
             # continue execution in the context of the parent
