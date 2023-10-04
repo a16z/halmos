@@ -84,27 +84,27 @@ contract ContextTest is Test {
     Context internal ctx;
 
     constructor() payable {
-        assert(returndatasize() == 0); // empty initial returndata
-        assert(msg.data.length == 0); // no calldata for test constructor
-        assert(msg.value == 0); // no callvalue
+        assertEq(returndatasize(), 0); // empty initial returndata
+        assertEq(msg.data.length, 0); // no calldata for test constructor
+        assertEq(msg.value, 0); // no callvalue
         testDeployer = msg.sender;
         testAddress = address(this);
     }
 
     function ensure_test_context() internal {
-        assert(address(this) == testAddress);
-        assert(msg.sender == testDeployer);
-        assert(msg.value == 0); // no callvalue
-        assert(msg.data.length > 0); // non-empty calldata
+        assertEq(address(this), testAddress);
+        assertEq(msg.sender, testDeployer);
+        assertEq(msg.value, 0); // no callvalue
+        assertGt(msg.data.length, 0); // non-empty calldata
     }
 
     function setUp() public payable {
-        assert(returndatasize() == 0); // empty initial returndata
+        assertEq(returndatasize(), 0); // empty initial returndata
         ensure_test_context();
 
         ctx = new Context();
 
-        assert(returndatasize() == 0); // empty returndata after create
+        assertEq(returndatasize(), 0); // empty returndata after create
     }
 
     function check_setup() public payable {
@@ -154,25 +154,28 @@ contract ContextTest is Test {
     }
 
     function check_create() public payable {
-        assert(returndatasize() == 0); // empty initial returndata
+        assertEq(returndatasize(), 0); // empty initial returndata
         ensure_test_context();
 
         Context ctx1 = new Context();
         ConstructorContext cc1 = new ConstructorContext(ctx1, 7, false);
-        assert(returndatasize() == 0); // empty returndata after create
+        cc1; // silence unused warning
+        assertEq(returndatasize(), 0); // empty returndata after create
         ensure_test_context();
 
-        assert(ctx1.flag());
-        assert(returndatasize() == 32);
+        assertTrue(ctx1.flag());
+        assertEq(returndatasize(), 32);
         ensure_test_context();
 
         Context ctx2 = new Context();
-        try new ConstructorContext(ctx2, 7, true) returns (ConstructorContext cc2) {} catch {}
-        assert(returndatasize() == 100); // returndata for create failure
+        try new ConstructorContext(ctx2, 7, true) returns (ConstructorContext cc2) {
+            cc2; // silence unused warning
+        } catch {}
+        assertEq(returndatasize(), 100); // returndata for create failure
         ensure_test_context();
 
-        assert(!ctx2.flag());
-        assert(returndatasize() == 32);
+        assertFalse(ctx2.flag());
+        assertEq(returndatasize(), 32);
         ensure_test_context();
     }
 
@@ -180,7 +183,9 @@ contract ContextTest is Test {
         assert(returndatasize() == 0); // empty initial returndata
         ensure_test_context();
 
-        try new ConstructorContext(ctx, 9, false) returns (ConstructorContext cc) {} catch {}
+        try new ConstructorContext(ctx, 9, false) returns (ConstructorContext cc) {
+            cc; // silence unused warning
+        } catch {}
 
         assert(false); // shouldn't reach here
     }

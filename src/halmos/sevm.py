@@ -359,7 +359,7 @@ def wstore_partial(
         return
 
     if not datasize >= offset + size:
-        raise ValueError(datasize, offset, size)
+        raise OutOfBoundsRead(datasize, offset, size)
 
     if is_bv(data):
         sub_data = Extract(
@@ -1169,11 +1169,19 @@ class Exec:  # an execution path
 
     def returndata(self) -> Optional[Bytes]:
         """
-        Return data from the last executed sub-context or None
+        Return data from the last executed sub-context or the empty bytes sequence
         """
 
         last_subcall = self.context.last_subcall()
-        return last_subcall.output.data if last_subcall else None
+
+        if last_subcall is None:
+            return EMPTY_BYTES
+
+        output = last_subcall.output
+        if last_subcall.message.is_create():
+            return output.data if output.error else EMPTY_BYTES
+
+        return output.data
 
     def returndatasize(self) -> int:
         returndata = self.returndata()
@@ -2156,6 +2164,11 @@ class SEVM:
         for addr in ex.code:
             ex.solver.add(new_addr != addr)  # ensure new address is fresh
 
+        # backup current state
+        orig_code = ex.code.copy()
+        orig_storage = deepcopy(ex.storage)
+        orig_balance = ex.balance
+
         # setup new account
         ex.code[new_addr] = Contract(b"")  # existing code must be empty
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
@@ -2216,21 +2229,26 @@ class SEVM:
             new_ex.symbolic = ex.symbolic
             new_ex.prank = deepcopy(ex.prank)
 
-            if subcall.output.error is None:
+            if subcall.is_stuck():
+                # internal errors abort the current path,
+                out.append(new_ex)
+                continue
+
+            elif subcall.output.error is None:
                 # new contract code, will revert if data is None
                 new_ex.code[new_addr] = Contract(subcall.output.data)
 
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))
 
-            elif isinstance(subcall.output.error, HalmosException):
-                # abort the current path
-                out.append(new_ex)
-                continue
-
             else:
                 # creation failed
                 new_ex.st.push(con(0))
+
+                # revert network states
+                new_ex.code = orig_code
+                new_ex.storage = orig_storage
+                new_ex.balance = orig_balance
 
             # add to worklist
             new_ex.next_pc()
