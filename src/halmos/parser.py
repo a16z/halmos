@@ -62,6 +62,13 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--storage-layout",
+        choices=["solidity", "generic"],
+        default="solidity",
+        help="Select one of the available storage layout models. The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.",
+    )
+
+    parser.add_argument(
         "--symbolic-storage",
         action="store_true",
         help="set default storage values to symbolic",
@@ -73,6 +80,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--no-test-constructor",
         action="store_true",
         help="do not run the constructor of test contracts",
+    )
+
+    parser.add_argument(
+        "--ffi",
+        action="store_true",
+        help="allow the usage of FFI to call external functions",
     )
 
     parser.add_argument(
@@ -132,6 +145,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--error-unknown",
         action="store_true",
         help="turn unknown counterexample warnings to errors",
+    )
+
+    group_debug.add_argument(
+        "--dump-smt-queries",
+        action="store_true",
+        help="dump SMT queries for assertion violations",
     )
 
     # build options
@@ -195,6 +214,12 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--solver-subprocess",
         action="store_true",
         help="run an extra solver in subprocess for unknown",
+    )
+    group_solver.add_argument(
+        "--solver-subprocess-command",
+        metavar="COMMAND",
+        default="z3 -model",
+        help="use the given command for the subprocess solver (requires --solver-subprocess) (default: %(default)s)",
     )
     group_solver.add_argument(
         "--solver-parallel",

@@ -17,8 +17,12 @@ from test_fixtures import halmos_options
             "tests/expected/all.json",
         ),
         (
-            ["--root", "examples/toy", "--function", "test"],
-            "tests/expected/toy.json",
+            ["--root", "tests", "--function", "testFFI_"],
+            "tests/expected/ffi.json",
+        ),
+        (
+            ["--root", "examples/simple"],
+            "tests/expected/simple.json",
         ),
         (
             ["--root", "examples/tokens/ERC20"],
@@ -31,7 +35,8 @@ from test_fixtures import halmos_options
     ],
     ids=(
         "tests",
-        "examples/toy",
+        "ffi:tests",
+        "long:examples/simple",
         "long:examples/tokens/ERC20",
         "long:examples/tokens/ERC721",
     ),

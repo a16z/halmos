@@ -151,6 +151,9 @@ class hevm_cheat_code:
     # bytes4(keccak256("etch(address,bytes)"))
     etch_sig: int = 0xB4D6C782
 
+    # bytes4(keccak256("ffi(string[])"))
+    ffi_sig: int = 0x89160467
+
 
 class console:
     # address constant CONSOLE_ADDRESS = address(0x000000000000000000636F6e736F6c652e6c6f67);

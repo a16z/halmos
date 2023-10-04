@@ -631,6 +631,17 @@ def run(
         elif not error:
             normal += 1
 
+    if len(execs_to_model) > 0 and args.dump_smt_queries:
+        dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
+        os.makedirs(dirname)
+        print(f"Generating SMT queries in {dirname}")
+        for idx, ex in execs_to_model:
+            fname = f"{dirname}/{idx+1}.smt2"
+            query = ex.solver.to_smt2()
+            with open(fname, "w") as f:
+                f.write("(set-logic QF_AUFBV)\n")
+                f.write(query)
+
     if len(execs_to_model) > 0 and args.verbose >= 1:
         print(
             f"# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}"
@@ -972,7 +983,7 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
             print(f"  Checking again in an external process")
         fname = f"/tmp/{uuid.uuid4().hex}.smt2"
         if args.verbose >= 1:
-            print(f"    z3 -model {fname} >{fname}.out")
+            print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
         query = ex.solver.to_smt2()
         # replace uninterpreted abstraction with actual symbols for assertion solving
         # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
@@ -981,9 +992,8 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
         with open(fname, "w") as f:
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)
-        res_str = subprocess.run(
-            ["z3", "-model", fname], capture_output=True, text=True
-        ).stdout.strip()
+        cmd = args.solver_subprocess_command.split() + [fname]
+        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
         res_str_head = res_str.split("\n", 1)[0]
         with open(f"{fname}.out", "w") as f:
             f.write(res_str)
@@ -1073,6 +1083,8 @@ def mk_options(args: Namespace) -> Dict:
         "sym_jump": args.symbolic_jump,
         "print_steps": args.print_steps,
         "unknown_calls_return_size": args.return_size_of_unknown_calls,
+        "ffi": args.ffi,
+        "storage_layout": args.storage_layout,
     }
 
     if args.width is not None:

@@ -1,0 +1,43 @@
+{
+    "exitcode": 1,
+    "test_results": {
+        "test/Ffi.t.sol:FfiTest": [
+            {
+                "name": "testFFI_Failure()",
+                "exitcode": 2,
+                "num_models": null,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "testFFI_HexOutput()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "testFFI_Stderr()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "testFFI_StringOutput()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
+}

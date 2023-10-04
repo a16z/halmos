@@ -9,4 +9,26 @@ contract MathTest {
             assert(r1 == r2);
         }
     }
+
+    // NOTE: currently timeout when --smt-div is enabled; producing invalid counterexamples when --smt-div is not given
+    function check_deposit(uint a, uint A1, uint S1) public pure {
+        uint s = (a * S1) / A1;
+
+        uint A2 = A1 + a;
+        uint S2 = S1 + s;
+
+        // (A1 / S1 <= A2 / S2)
+        assert(A1 * S2 <= A2 * S1); // no counterexample
+    }
+
+    /// @custom:halmos --smt-div
+    function check_mint(uint s, uint A1, uint S1) public pure {
+        uint a = (s * A1) / S1;
+
+        uint A2 = A1 + a;
+        uint S2 = S1 + s;
+
+        // (A1 / S1 <= A2 / S2)
+        assert(A1 * S2 <= A2 * S1); // counterexamples exist
+    }
 }

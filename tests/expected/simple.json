@@ -1,9 +1,9 @@
 {
-    "exitcode": 0,
+    "exitcode": 1,
     "test_results": {
-        "test/OpenZeppelinERC721.t.sol:OpenZeppelinERC721Test": [
+        "test/IsPowerOfTwo.t.sol:IsPowerOfTwoTest": [
             {
-                "name": "check_NoBackdoor(bytes4)",
+                "name": "check_eq_isPowerOfTwo_isPowerOfTwoIter(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -12,7 +12,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_transferFrom(address,address,address,address,uint256,uint256)",
+                "name": "check_isPowerOfTwo(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_isPowerOfTwo_small(uint8)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -21,9 +30,9 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/SoladyERC721.t.sol:SoladyERC721Test": [
+        "test/TotalPrice.t.sol:TotalPriceTest": [
             {
-                "name": "check_NoBackdoor(bytes4)",
+                "name": "check_eq_totalPriceFixed_totalPriceConservative(uint96,uint32)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -32,7 +41,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_transferFrom(address,address,address,address,uint256,uint256)",
+                "name": "check_totalPriceBuggy(uint96,uint32)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_totalPriceFixed(uint96,uint32)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -41,10 +59,10 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/SolmateERC721.t.sol:SolmateERC721Test": [
+        "test/Vault.t.sol:VaultTest": [
             {
-                "name": "check_NoBackdoor(bytes4)",
-                "exitcode": 0,
+                "name": "check_deposit(uint256)",
+                "exitcode": 1,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -52,9 +70,9 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_transferFrom(address,address,address,address,uint256,uint256)",
-                "exitcode": 0,
-                "num_models": 0,
+                "name": "check_mint(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,

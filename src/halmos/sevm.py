@@ -4,10 +4,23 @@ import json
 import math
 import re
 
+from subprocess import Popen, PIPE
+
 from copy import deepcopy
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import List, Set, Dict, Union as UnionType, Tuple, Any, Optional, Iterator
+from typing import (
+    List,
+    Set,
+    Dict,
+    Union as UnionType,
+    Tuple,
+    Any,
+    Optional,
+    TypeVar,
+    Type,
+)
 from functools import reduce
 
 from z3 import *
@@ -31,6 +44,7 @@ from .warnings import (
     UNSUPPORTED_OPCODE,
     LIBRARY_PLACEHOLDER,
     UNINTERPRETED_UNKNOWN_CALLS,
+    INTERNAL_ERROR,
 )
 
 Word = Any  # z3 expression (including constants)
@@ -430,6 +444,52 @@ def extract_string_argument(calldata: BitVecRef, arg_idx: int):
     )
     string_bytes = string_value.to_bytes(string_length, "big")
     return string_bytes.decode("utf-8")
+
+
+def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
+    """Extracts idx-th argument of string array from calldata"""
+
+    array_slot = int_of(extract_bytes(calldata, 4 + 32 * arg_idx, 32))
+    num_strings = int_of(extract_bytes(calldata, 4 + array_slot, 32))
+
+    string_array = []
+
+    for i in range(num_strings):
+        string_offset = int_of(
+            extract_bytes(calldata, 4 + array_slot + 32 * (i + 1), 32)
+        )
+        string_length = int_of(
+            extract_bytes(calldata, 4 + array_slot + 32 + string_offset, 32)
+        )
+        string_value = int_of(
+            extract_bytes(
+                calldata, 4 + array_slot + 32 + string_offset + 32, string_length
+            )
+        )
+        string_bytes = string_value.to_bytes(string_length, "big")
+        string_array.append(string_bytes.decode("utf-8"))
+
+    return string_array
+
+
+def stringified_bytes_to_bytes(string_bytes: str):
+    """Converts a string of bytes to a bytes memory type"""
+
+    string_bytes_len = (len(string_bytes) + 1) // 2
+    string_bytes_len_enc = hex(string_bytes_len).replace("0x", "").rjust(64, "0")
+
+    string_bytes_len_ceil = (string_bytes_len + 31) // 32 * 32
+
+    ret_bytes = (
+        "00" * 31
+        + "20"
+        + string_bytes_len_enc
+        + string_bytes.ljust(string_bytes_len_ceil * 2, "0")
+    )
+    ret_len = len(ret_bytes) // 2
+    ret_bytes = bytes.fromhex(ret_bytes)
+
+    return BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
 
 
 @dataclass(frozen=True)
@@ -1222,6 +1282,226 @@ class Exec:  # an execution path
         return (creation_hexcode, deployed_hexcode)
 
 
+class Storage:
+    @classmethod
+    def normalize(cls, expr: Any) -> Any:
+        # Concat(Extract(255, 8, bvadd(x, y)), bvadd(Extract(7, 0, x), Extract(7, 0, y))) => x + y
+        if expr.decl().name() == "concat" and expr.num_args() == 2:
+            arg0 = expr.arg(0)  # Extract(255, 8, bvadd(x, y))
+            arg1 = expr.arg(1)  # bvadd(Extract(7, 0, x), Extract(7, 0, y))
+            if (
+                arg0.decl().name() == "extract"
+                and arg0.num_args() == 1
+                and arg0.params() == [255, 8]
+            ):
+                arg00 = arg0.arg(0)  # bvadd(x, y)
+                if arg00.decl().name() == "bvadd":
+                    x = arg00.arg(0)
+                    y = arg00.arg(1)
+                    if arg1.decl().name() == "bvadd" and arg1.num_args() == 2:
+                        if eq(arg1.arg(0), simplify(Extract(7, 0, x))) and eq(
+                            arg1.arg(1), simplify(Extract(7, 0, y))
+                        ):
+                            return x + y
+        return expr
+
+
+class SolidityStorage(Storage):
+    @classmethod
+    def empty(cls, addr: BitVecRef, slot: int, len_keys: int) -> ArrayRef:
+        return Array(
+            f"storage_{id_str(addr)}_{slot}_{len_keys}_00",
+            BitVecSorts[len_keys * 256],
+            BitVecSort256,
+        )
+
+    @classmethod
+    def init(cls, ex: Exec, addr: Any, slot: int, keys) -> None:
+        assert_address(addr)
+        if slot not in ex.storage[addr]:
+            ex.storage[addr][slot] = {}
+        if len(keys) not in ex.storage[addr][slot]:
+            if len(keys) == 0:
+                if ex.symbolic:
+                    label = f"storage_{id_str(addr)}_{slot}_{len(keys)}_00"
+                    ex.storage[addr][slot][len(keys)] = BitVec(label, BitVecSort256)
+                else:
+                    ex.storage[addr][slot][len(keys)] = con(0)
+            else:
+                # do not use z3 const array `K(BitVecSort(len(keys)*256), con(0))` when not ex.symbolic
+                # instead use normal smt array, and generate emptyness axiom; see load()
+                ex.storage[addr][slot][len(keys)] = cls.empty(addr, slot, len(keys))
+
+    @classmethod
+    def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
+        offsets = cls.decode(loc)
+        if not len(offsets) > 0:
+            raise ValueError(offsets)
+        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
+        cls.init(ex, addr, slot, keys)
+        if len(keys) == 0:
+            return ex.storage[addr][slot][0]
+        else:
+            if not ex.symbolic:
+                # generate emptyness axiom for each array index, instead of using quantified formula; see init()
+                ex.solver.add(
+                    Select(cls.empty(addr, slot, len(keys)), concat(keys)) == con(0)
+                )
+            return ex.select(
+                ex.storage[addr][slot][len(keys)], concat(keys), ex.storages
+            )
+
+    @classmethod
+    def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        offsets = cls.decode(loc)
+        if not len(offsets) > 0:
+            raise ValueError(offsets)
+        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
+        cls.init(ex, addr, slot, keys)
+        if len(keys) == 0:
+            ex.storage[addr][slot][0] = val
+        else:
+            new_storage_var = Array(
+                f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(ex.storages):>02}",
+                BitVecSorts[len(keys) * 256],
+                BitVecSort256,
+            )
+            new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
+            ex.solver.add(new_storage_var == new_storage)
+            ex.storage[addr][slot][len(keys)] = new_storage_var
+            ex.storages[new_storage_var] = new_storage
+
+    @classmethod
+    def decode(cls, loc: Any) -> Any:
+        loc = cls.normalize(loc)
+        if loc.decl().name() == "sha3_512":  # m[k] : hash(k.m)
+            args = loc.arg(0)
+            offset = simplify(Extract(511, 256, args))
+            base = simplify(Extract(255, 0, args))
+            return cls.decode(base) + (offset, con(0))
+        elif loc.decl().name() == "sha3_256":  # a[i] : hash(a)+i
+            base = loc.arg(0)
+            return cls.decode(base) + (con(0),)
+        elif loc.decl().name() == "bvadd":
+            #   # when len(args) == 2
+            #   arg0 = cls.decode(loc.arg(0))
+            #   arg1 = cls.decode(loc.arg(1))
+            #   if len(arg0) == 1 and len(arg1) > 1: # i + hash(x)
+            #       return arg1[0:-1] + (arg1[-1] + arg0[0],)
+            #   elif len(arg0) > 1 and len(arg1) == 1: # hash(x) + i
+            #       return arg0[0:-1] + (arg0[-1] + arg1[0],)
+            #   elif len(arg0) == 1 and len(arg1) == 1: # i + j
+            #       return (arg0[0] + arg1[0],)
+            #   else: # hash(x) + hash(y) # ambiguous
+            #       raise ValueError(loc)
+            # when len(args) >= 2
+            args = loc.children()
+            if len(args) < 2:
+                raise ValueError(loc)
+            args = sorted(map(cls.decode, args), key=lambda x: len(x), reverse=True)
+            if len(args[1]) > 1:
+                # only args[0]'s length >= 1, the others must be 1
+                raise ValueError(loc)
+            return args[0][0:-1] + (
+                reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),
+            )
+        elif is_bv_value(loc):
+            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
+            if preimage:  # loc == hash(preimage) + delta
+                return (con(preimage), con(delta))
+            else:
+                return (loc,)
+        elif is_bv(loc):
+            return (loc,)
+        else:
+            raise ValueError(loc)
+
+
+class GenericStorage(Storage):
+    @classmethod
+    def empty(cls, addr: BitVecRef, loc: BitVecRef) -> ArrayRef:
+        return Array(
+            f"storage_{id_str(addr)}_{loc.size()}_00",
+            BitVecSorts[loc.size()],
+            BitVecSort256,
+        )
+
+    @classmethod
+    def init(cls, ex: Exec, addr: Any, loc: BitVecRef) -> None:
+        assert_address(addr)
+        if loc.size() not in ex.storage[addr]:
+            ex.storage[addr][loc.size()] = cls.empty(addr, loc)
+
+    @classmethod
+    def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
+        loc = cls.decode(loc)
+        cls.init(ex, addr, loc)
+        if not ex.symbolic:
+            # generate emptyness axiom for each array index, instead of using quantified formula; see init()
+            ex.solver.add(Select(cls.empty(addr, loc), loc) == con(0))
+        return ex.select(ex.storage[addr][loc.size()], loc, ex.storages)
+
+    @classmethod
+    def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        loc = cls.decode(loc)
+        cls.init(ex, addr, loc)
+        new_storage_var = Array(
+            f"storage_{id_str(addr)}_{loc.size()}_{1+len(ex.storages):>02}",
+            BitVecSorts[loc.size()],
+            BitVecSort256,
+        )
+        new_storage = Store(ex.storage[addr][loc.size()], loc, val)
+        ex.solver.add(new_storage_var == new_storage)
+        ex.storage[addr][loc.size()] = new_storage_var
+        ex.storages[new_storage_var] = new_storage
+
+    @classmethod
+    def decode(cls, loc: Any) -> Any:
+        loc = cls.normalize(loc)
+        if loc.decl().name() == "sha3_512":  # hash(hi,lo), recursively
+            args = loc.arg(0)
+            hi = cls.decode(simplify(Extract(511, 256, args)))
+            lo = cls.decode(simplify(Extract(255, 0, args)))
+            return cls.simple_hash(Concat(hi, lo))
+        elif loc.decl().name().startswith("sha3_"):
+            return cls.simple_hash(cls.decode(loc.arg(0)))
+        elif loc.decl().name() == "bvadd":
+            args = loc.children()
+            if len(args) < 2:
+                raise ValueError(loc)
+            return cls.add_all([cls.decode(arg) for arg in args])
+        elif is_bv_value(loc):
+            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
+            if preimage:  # loc == hash(preimage) + delta
+                return cls.add_all([cls.simple_hash(con(preimage)), con(delta)])
+            else:
+                return loc
+        elif is_bv(loc):
+            return loc
+        else:
+            raise ValueError(loc)
+
+    @classmethod
+    def simple_hash(cls, x: BitVecRef) -> BitVecRef:
+        # simple injective function for collision-free (though not secure) hash semantics, comprising:
+        # - left-shift by 256 bits to ensure sufficient logical domain space
+        # - an additional 1-bit for disambiguation (e.g., between map[key] vs array[i][j])
+        return simplify(Concat(x, con(0, 257)))
+
+    @classmethod
+    def add_all(cls, args: List) -> BitVecRef:
+        bitsize = max([x.size() for x in args])
+        res = con(0, bitsize)
+        for x in args:
+            if x.size() < bitsize:
+                x = simplify(ZeroExt(bitsize - x.size(), x))
+            res += x
+        return simplify(res)
+
+
+SomeStorage = TypeVar("SomeStorage", bound=Storage)
+
+
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
 def test(x: Word, b: bool) -> Word:
@@ -1247,31 +1527,31 @@ def is_zero(x: Word) -> Word:
     return test(x, False)
 
 
-def and_or(x: Word, y: Word, is_and: bool) -> Word:
+def bitwise(op, x: Word, y: Word) -> Word:
     if is_bool(x) and is_bool(y):
-        if is_and:
+        if op == EVM.AND:
             return And(x, y)
-        else:
+        elif op == EVM.OR:
             return Or(x, y)
-    elif is_bv(x) and is_bv(y):
-        if is_and:
-            return x & y
+        elif op == EVM.XOR:
+            return Xor(x, y)
         else:
+            raise ValueError(op, x, y)
+    elif is_bv(x) and is_bv(y):
+        if op == EVM.AND:
+            return x & y
+        elif op == EVM.OR:
             return x | y
+        elif op == EVM.XOR:
+            return x ^ y  # bvxor
+        else:
+            raise ValueError(op, x, y)
     elif is_bool(x) and is_bv(y):
-        return and_or(If(x, con(1), con(0)), y, is_and)
+        return bitwise(op, If(x, con(1), con(0)), y)
     elif is_bv(x) and is_bool(y):
-        return and_or(x, If(y, con(1), con(0)), is_and)
+        return bitwise(op, x, If(y, con(1), con(0)))
     else:
-        raise ValueError(x, y, is_and)
-
-
-def and_of(x: Word, y: Word) -> Word:
-    return and_or(x, y, True)
-
-
-def or_of(x: Word, y: Word) -> Word:
-    return and_or(x, y, False)
+        raise ValueError(op, x, y)
 
 
 def b2i(w: Word) -> Word:
@@ -1322,9 +1602,13 @@ class HalmosLogs:
 
 class SEVM:
     options: Dict
+    storage_model: Type[SomeStorage]
 
     def __init__(self, options: Dict) -> None:
         self.options = options
+
+        is_generic = self.options["storage_layout"] == "generic"
+        self.storage_model = GenericStorage if is_generic else SolidityStorage
 
     def div_xy_y(self, w1: Word, w2: Word) -> Word:
         # return the number of bits required to represent the given value. default = 256
@@ -1525,23 +1809,28 @@ class SEVM:
         else:
             raise ValueError(op)
 
+    def sload(self, ex: Exec, addr: Any, loc: Word) -> Word:
+        return self.storage_model.load(ex, addr, loc)
+
+    def sstore(self, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        if is_bool(val):
+            val = If(val, con(1), con(0))
+
+        self.storage_model.store(ex, addr, loc, val)
+
     def resolve_address_alias(self, ex: Exec, target: Address) -> Address:
         if target in ex.code:
             return target
 
         if target not in ex.alias:
             for addr in ex.code:
-                if (
-                    # must equal
-                    ex.check(target != addr) == unsat
-                    # ensure existing path condition is feasible
-                    and ex.check(target == addr) != unsat
-                ):
+                if ex.check(target != addr) == unsat:  # target == addr
                     if self.options.get("debug"):
                         print(
                             f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}"
                         )
                     ex.alias[target] = addr
+                    ex.solver.add(target == addr)
                     break
 
         return ex.alias.get(target)
@@ -1764,8 +2053,15 @@ class SEVM:
                 ret = None
 
             # TODO: cover other precompiled
-            if eq(to, con_addr(1)):  # ecrecover exit code is always 1
+
+            # ecrecover
+            if eq(to, con_addr(1)):
                 ex.solver.add(exit_code_var != con(0))
+
+            # identity
+            if eq(to, con_addr(4)):
+                ex.solver.add(exit_code_var != con(0))
+                ret = arg
 
             # TODO: factor out cheatcode semantics
             # halmos cheat code
@@ -1872,23 +2168,7 @@ class SEVM:
                     else:
                         bytecode = artifact["bytecode"].replace("0x", "")
 
-                    bytecode_len = (len(bytecode) + 1) // 2
-                    bytecode_len_enc = (
-                        hex(bytecode_len).replace("0x", "").rjust(64, "0")
-                    )
-
-                    bytecode_len_ceil = (bytecode_len + 31) // 32 * 32
-
-                    ret_bytes = (
-                        "00" * 31
-                        + "20"
-                        + bytecode_len_enc
-                        + bytecode.ljust(bytecode_len_ceil * 2, "0")
-                    )
-                    ret_len = len(ret_bytes) // 2
-                    ret_bytes = bytes.fromhex(ret_bytes)
-
-                    ret = con(int.from_bytes(ret_bytes, "big"), ret_len * 8)
+                    ret = stringified_bytes_to_bytes(bytecode)
                 # vm.prank(address)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
@@ -1932,7 +2212,7 @@ class SEVM:
                     store_value = simplify(Extract(255, 0, arg))
                     store_account_addr = self.resolve_address_alias(ex, store_account)
                     if store_account_addr is not None:
-                        ex.sstore(store_account_addr, store_slot, store_value)
+                        self.sstore(ex, store_account_addr, store_slot, store_value)
                     else:
                         raise HalmosException(f"uninitialized account: {store_account}")
 
@@ -1945,7 +2225,7 @@ class SEVM:
                     load_slot = simplify(Extract(255, 0, arg))
                     load_account_addr = self.resolve_address_alias(ex, load_account)
                     if load_account_addr is not None:
-                        ret = ex.sload(load_account_addr, load_slot)
+                        ret = self.sload(ex, load_account_addr, load_slot)
                     else:
                         raise HalmosException(f"uninitialized account: {store_account}")
 
@@ -2005,9 +2285,36 @@ class SEVM:
                         code_bytes = code_int.to_bytes(code_length, "big")
 
                         ex.code[who] = Contract(code_bytes)
-                    except NotConcreteError as e:
-                        error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
-                        raise NotConcreteError(error_msg)
+                    except Exception as e:
+                        ex.error = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
+                        out.append(ex)
+                        return
+                # ffi(string[]) returns (bytes)
+                elif extract_funsig(arg) == hevm_cheat_code.ffi_sig:
+                    if not self.options.get("ffi"):
+                        ex.error = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
+                        out.append(ex)
+                        return
+                    process = Popen(
+                        extract_string_array_argument(arg, 0), stdout=PIPE, stderr=PIPE
+                    )
+
+                    (stdout, stderr) = process.communicate()
+
+                    if stderr:
+                        warn(
+                            INTERNAL_ERROR,
+                            f"An exception has occurred during the usage of the ffi cheatcode:\n{stderr.decode('utf-8')}",
+                        )
+
+                    out_bytes = stdout.decode("utf-8")
+
+                    if not out_bytes.startswith("0x"):
+                        out_bytes = out_bytes.strip().encode("utf-8").hex()
+                    else:
+                        out_bytes = out_bytes.strip().replace("0x", "")
+
+                    ret = stringified_bytes_to_bytes(out_bytes)
 
                 else:
                     # TODO: support other cheat codes
@@ -2067,6 +2374,7 @@ class SEVM:
         if (
             # precompile
             eq(to, con_addr(1))
+            or eq(to, con_addr(4))
             # cheatcode calls
             or eq(to, halmos_cheat_code.address)
             or eq(to, hevm_cheat_code.address)
@@ -2514,12 +2822,10 @@ class SEVM:
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
 
-                elif opcode == EVM.AND:
-                    ex.st.push(and_of(ex.st.pop(), ex.st.pop()))
-                elif opcode == EVM.OR:
-                    ex.st.push(or_of(ex.st.pop(), ex.st.pop()))
+                elif opcode in [EVM.AND, EVM.OR, EVM.XOR]:
+                    ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
                 elif opcode == EVM.NOT:
-                    ex.st.push(~ex.st.pop())  # bvnot
+                    ex.st.push(~b2i(ex.st.pop()))  # bvnot
                 elif opcode == EVM.SHL:
                     w = ex.st.pop()
                     ex.st.push(b2i(ex.st.pop()) << b2i(w))  # bvshl
@@ -2535,9 +2841,6 @@ class SEVM:
                     if w <= 30:  # if w == 31, result is SignExt(0, value) == value
                         bl = (w + 1) * 8
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
-
-                elif opcode == EVM.XOR:
-                    ex.st.push(ex.st.pop() ^ ex.st.pop())  # bvxor
 
                 elif opcode == EVM.CALLDATALOAD:
                     calldata = ex.calldata()
@@ -2653,9 +2956,9 @@ class SEVM:
                     ex.st.push(con(size))
 
                 elif opcode == EVM.SLOAD:
-                    ex.st.push(ex.sload(ex.this, ex.st.pop()))
+                    ex.st.push(self.sload(ex, ex.this, ex.st.pop()))
                 elif opcode == EVM.SSTORE:
-                    ex.sstore(ex.this, ex.st.pop(), ex.st.pop())
+                    self.sstore(ex, ex.this, ex.st.pop(), ex.st.pop())
 
                 elif opcode == EVM.RETURNDATASIZE:
                     ex.st.push(con(ex.returndatasize()))
