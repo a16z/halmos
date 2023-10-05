@@ -846,7 +846,7 @@
             },
             {
                 "name": "check_externalGetter(uint256)",
-                "exitcode": 1,
+                "exitcode": 0,
                 "num_models": 0,
                 "models": [],
                 "num_paths": null,
@@ -1030,6 +1030,7 @@
                 "num_bounded_loops": null
             },
             {
+                "__comment": "there is unknown counterexample and we expect to run with --error-unknown",
                 "name": "check_deposit(uint256,uint256,uint256)",
                 "exitcode": 1,
                 "num_models": 0,

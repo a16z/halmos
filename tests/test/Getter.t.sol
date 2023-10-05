@@ -13,6 +13,6 @@ contract GetterTest {
     }
 
     function check_externalGetter(uint256 i) public view {
-        assert(this.v(i) >= 0); // unsupported static storage arrays
+        assert(this.v(i) >= 0);
     }
 }
