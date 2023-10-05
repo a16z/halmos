@@ -34,3 +34,7 @@ halmos = "halmos.__main__:main"
 
 [tool.black]
 target-versions = ["py38", "py39", "py310", "py311"]
+
+[tool.pytest.ini_options]
+# TODO: re-add test_traces.py when we have a better way to support it in CI
+addopts = "--ignore=tests/lib/solady/ext/woke --ignore=tests/test_traces.py"
