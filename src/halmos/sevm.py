@@ -4,24 +4,23 @@ import json
 import math
 import re
 
-from subprocess import Popen, PIPE
-
 from copy import deepcopy
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import (
-    List,
-    Set,
-    Dict,
-    Union as UnionType,
-    Tuple,
-    Any,
-    Optional,
-    TypeVar,
-    Type,
-)
 from functools import reduce
-
+from subprocess import Popen, PIPE
+from typing import (
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union as UnionType,
+)
 from z3 import *
 
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
