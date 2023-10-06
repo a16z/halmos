@@ -117,7 +117,7 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/Buffers.sol:BuffersTest": [
+        "test/Buffers.t.sol:BuffersTest": [
             {
                 "name": "check_calldatacopy_large_offset()",
                 "exitcode": 0,
