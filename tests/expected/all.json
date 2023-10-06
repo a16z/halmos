@@ -43,18 +43,18 @@
         ],
         "test/AssertTest.t.sol:AssertTest": [
             {
-                "name": "check_fail_propagated()",
-                "exitcode": 1,
-                "num_models": 1,
+                "name": "check_assert_not_propagated()",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
             },
             {
-                "name": "check_assert_not_propagated()",
-                "exitcode": 0,
-                "num_models": 0,
+                "name": "check_fail_propagated()",
+                "exitcode": 1,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -122,69 +122,37 @@
                 "name": "check_calldatacopy_large_offset()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.007320739096030593,
-                    0.007303101941943169,
-                    1.5543075278401375e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_calldataload_large_offset()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.007406540913507342,
-                    0.007393713109195232,
-                    1.0492978617548943e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_codecopy_large_offset()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.006659913109615445,
-                    0.006648608949035406,
-                    9.352806955575943e-06
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_codecopy_offset_across_boundary()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.01030514482408762,
-                    0.0102834680583328,
-                    1.7741229385137558e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/Byte.t.sol:ByteTest": [
@@ -628,143 +596,73 @@
                 "name": "check_create2(uint256,uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.2165892031043768,
-                    0.21655478002503514,
-                    3.112410195171833e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_create2_caller(address,uint256,uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    2,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.33866928005591035,
-                    0.3386358651332557,
-                    3.0114781111478806e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_create2_collision_alias(uint256,uint256,bytes32)",
                 "exitcode": 1,
                 "num_models": 1,
-                "models": [
-                    {
-                        "p_salt_bytes32": "0x0",
-                        "p_y_uint256": "0x0",
-                        "p_x_uint256": "0x0"
-                    }
-                ],
-                "num_paths": [
-                    1,
-                    0,
-                    0
-                ],
-                "time": [
-                    0.0939876011107117,
-                    0.0907805459573865,
-                    0.003203699830919504
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_create2_collision_basic(uint256,uint256,bytes32)",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    0,
-                    0
-                ],
-                "time": [
-                    0.05337692005559802,
-                    0.05335281486622989,
-                    2.0702136680483818e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_create2_collision_lowlevel(uint256,uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.08862494211643934,
-                    0.08860229817219079,
-                    1.9170111045241356e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_create2_concrete()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.16040668985806406,
-                    0.16037807008251548,
-                    2.499413676559925e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_create2_no_collision_1(uint256,uint256,bytes32,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.07831926411017776,
-                    0.07829754007980227,
-                    1.8525170162320137e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_create2_no_collision_2(uint256,uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.08936585090123117,
-                    0.08934153988957405,
-                    2.0622042939066887e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/Deal.t.sol:DealTest": [
@@ -848,10 +746,10 @@
                 "name": "check_externalGetter(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
+                "models": null,
                 "num_paths": null,
                 "time": null,
-                "num_bounded_loops": 0
+                "num_bounded_loops": null
             }
         ],
         "test/HalmosCheatCode.t.sol:HalmosCheatCodeTest": [
@@ -1030,7 +928,6 @@
                 "num_bounded_loops": null
             },
             {
-                "__comment": "there is unknown counterexample and we expect to run with --error-unknown",
                 "name": "check_deposit(uint256,uint256,uint256)",
                 "exitcode": 1,
                 "num_models": 0,
@@ -1549,69 +1446,37 @@
                 "name": "check_create2_fails()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.030400621937587857,
-                    0.03034853981807828,
-                    4.764087498188019e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_create_fails()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.02617007098160684,
-                    0.02615104499273002,
-                    1.5985919162631035e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_log_fails()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.028228648006916046,
-                    0.02821106882765889,
-                    1.4947028830647469e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             },
             {
                 "name": "check_sstore_fails()",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    1,
-                    0
-                ],
-                "time": [
-                    0.025807512924075127,
-                    0.02578602684661746,
-                    1.846393570303917e-05
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/Storage.t.sol:StorageTest": [
@@ -1860,18 +1725,10 @@
                 "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    0,
-                    1
-                ],
-                "time": [
-                    0.004063992062583566,
-                    0.003941374132409692,
-                    0.00012030405923724174
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/UnsupportedOpcode.t.sol:Y": [
@@ -1879,18 +1736,10 @@
                 "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    0,
-                    1
-                ],
-                "time": [
-                    0.012732983101159334,
-                    0.012426204979419708,
-                    0.0003033068496733904
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/UnsupportedOpcode.t.sol:Z": [
@@ -1898,18 +1747,10 @@
                 "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
-                "models": [],
-                "num_paths": [
-                    1,
-                    0,
-                    1
-                ],
-                "time": [
-                    0.0225986260920763,
-                    0.022291108965873718,
-                    0.0003035308327525854
-                ],
-                "num_bounded_loops": 0
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/Warp.t.sol:WarpTest": [
