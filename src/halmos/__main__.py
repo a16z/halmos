@@ -468,7 +468,10 @@ def setup(
                     )
 
                 # only render the trace if we didn't already do it
-                if args.verbose < VERBOSITY_TRACE_SETUP:
+                if (
+                    args.verbose < VERBOSITY_TRACE_SETUP
+                    and args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE
+                ):
                     print(f"{setup_sig} trace:")
                     render_trace(setup_ex.context)
 
