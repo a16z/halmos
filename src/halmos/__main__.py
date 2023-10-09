@@ -12,7 +12,8 @@ from argparse import Namespace
 from dataclasses import dataclass, asdict
 from importlib import metadata
 
-from .pools import thread_pool, process_pool
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
 from .sevm import *
 from .utils import (
     hexify,
@@ -657,7 +658,8 @@ def run(
         fn_args = [
             GenModelArgs(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model
         ]
-        models = [m for m in thread_pool.map(gen_model_from_sexpr, fn_args)]
+        with ThreadPoolExecutor() as thread_pool:
+            models = list(thread_pool.map(gen_model_from_sexpr, fn_args))
 
     else:
         models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
@@ -874,7 +876,8 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     ]
 
     # dispatch to the shared process pool
-    test_results = list(process_pool.map(setup_and_run_single, single_run_args))
+    with ProcessPoolExecutor() as process_pool:
+        test_results = list(process_pool.map(setup_and_run_single, single_run_args))
     test_results = sum(test_results, [])  # flatten lists
 
     return test_results
