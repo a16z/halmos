@@ -13,6 +13,8 @@ from halmos.sevm import (
     f_smod,
     f_exp,
     f_origin,
+    CallContext,
+    Message,
     SEVM,
     Exec,
     int_of,
@@ -52,14 +54,13 @@ def storage():
 
 def mk_ex(hexcode, sevm, solver, storage, caller, this):
     bytecode = Contract(hexcode)
+    message = Message(target=this, caller=caller, value=callvalue, data=[])
     return sevm.mk_exec(
         code={this: bytecode},
         storage={this: storage},
         balance=balance,
         block=mk_block(),
-        calldata=[],
-        callvalue=callvalue,
-        caller=caller,
+        context=CallContext(message),
         this=this,
         pgm=bytecode,
         symbolic=True,

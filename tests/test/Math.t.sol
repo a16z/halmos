@@ -21,7 +21,7 @@ contract MathTest {
         assert(A1 * S2 <= A2 * S1); // no counterexample
     }
 
-    /// @custom:halmos --smt-div
+    /// @custom:halmos --smt-div --solver-timeout-assertion=0
     function check_mint(uint s, uint A1, uint S1) public pure {
         uint a = (s * A1) / S1;
 

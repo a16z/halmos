@@ -41,20 +41,20 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/AssertTest.sol:CTest": [
+        "test/AssertTest.t.sol:AssertTest": [
             {
-                "name": "check_bar()",
-                "exitcode": 1,
-                "num_models": 1,
+                "name": "check_assert_not_propagated()",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
             },
             {
-                "name": "check_foo()",
-                "exitcode": 0,
-                "num_models": 0,
+                "name": "check_fail_propagated()",
+                "exitcode": 1,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -109,6 +109,44 @@
             },
             {
                 "name": "check_warp(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Buffers.t.sol:BuffersTest": [
+            {
+                "name": "check_calldatacopy_large_offset()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_calldataload_large_offset()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_codecopy_large_offset()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_codecopy_offset_across_boundary()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -278,6 +316,98 @@
             },
             {
                 "name": "check_setCodesize()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Context.t.sol:ContextTest": [
+            {
+                "name": "check_call0_fail()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_call0_halmos_exception()",
+                "exitcode": 1,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_call0_normal(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_call1_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_call1_halmos_exception(uint256)",
+                "exitcode": 1,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_call1_normal(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create_halmos_exception()",
+                "exitcode": 1,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_returndata()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_setup()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -481,7 +611,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_create2_collision(uint256,uint256,bytes32)",
+                "name": "check_create2_collision_alias(uint256,uint256,bytes32)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create2_collision_basic(uint256,uint256,bytes32)",
                 "exitcode": 1,
                 "num_models": 0,
                 "models": null,
@@ -490,9 +629,9 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_create2_collision_alias(uint256,uint256,bytes32)",
-                "exitcode": 1,
-                "num_models": 1,
+                "name": "check_create2_collision_lowlevel(uint256,uint256,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -596,6 +735,15 @@
         "test/Getter.t.sol:GetterTest": [
             {
                 "name": "check_Getter(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_externalGetter(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1293,6 +1441,44 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/StaticContexts.t.sol:StaticContextsTest": [
+            {
+                "name": "check_create2_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_create_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_log_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_sstore_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Storage.t.sol:StorageTest": [
             {
                 "name": "check_addArr1(uint256)",
@@ -1536,7 +1722,7 @@
         ],
         "test/UnsupportedOpcode.t.sol:X": [
             {
-                "name": "check_foo()",
+                "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
                 "models": null,
@@ -1547,7 +1733,7 @@
         ],
         "test/UnsupportedOpcode.t.sol:Y": [
             {
-                "name": "check_foo()",
+                "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
                 "models": null,
@@ -1558,7 +1744,7 @@
         ],
         "test/UnsupportedOpcode.t.sol:Z": [
             {
-                "name": "check_foo()",
+                "name": "check_unsupported_opcode()",
                 "exitcode": 1,
                 "num_models": 0,
                 "models": null,

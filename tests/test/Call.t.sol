@@ -111,11 +111,11 @@ contract CallTest is Test {
         (address msg_sender, uint msg_value, address target) = abi.decode(retdata, (address, uint, address));
 
         // delegatecall is executed in the caller's context
-        assert(msg_sender == address(this));
-        assert(msg_value == fund);
-        assert(target == address(d));
+        assertEq(msg_sender, address(this));
+        assertEq(msg_value, fund);
+        assertEq(target, address(d));
 
-        assert(d.num() == x); // delegatecall updates the caller's state 
+        assert(d.num() == x); // delegatecall updates the caller's state
         assert(d.c().num() == 0);
 
         assert(address(this).balance == 0);

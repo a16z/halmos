@@ -159,6 +159,6 @@ class console:
     # address constant CONSOLE_ADDRESS = address(0x000000000000000000636F6e736F6c652e6c6f67);
     address: BitVecRef = con_addr(0x000000000000000000636F6E736F6C652E6C6F67)
 
-    log_uint: int = 0xF5B1BBA9  # bytes4(keccak256("log(uint)"))
+    log_uint256: int = 0xF82C50F1  # bytes4(keccak256("log(uint256)"))
 
     log_string: int = 0x41304FAC  # bytes4(keccak256("log(string)"))
