@@ -12,9 +12,24 @@ from argparse import Namespace
 from dataclasses import dataclass, asdict
 from importlib import metadata
 
-from .pools import thread_pool, process_pool
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
 from .sevm import *
-from .utils import color_good, color_warn, hexify, NamedTimer
+from .utils import (
+    hexify,
+    indent_text,
+    NamedTimer,
+    yellow,
+    cyan,
+    green,
+    red,
+    error,
+    info,
+    color_good,
+    color_warn,
+    color_info,
+    color_error,
+)
 from .warnings import *
 from .parser import mk_arg_parser
 from .calldata import Calldata
@@ -28,9 +43,21 @@ arg_parser = mk_arg_parser()
 if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)
 
+# we need to be able to process at least the max message depth (1024)
+sys.setrecursionlimit(1024 * 4)
+
 # sometimes defaults to cp1252 on Windows, which can cause UnicodeEncodeError
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
+
+# Panic(1)
+# bytes4(keccak256("Panic(uint256)")) + bytes32(1)
+ASSERT_FAIL = 0x4E487B710000000000000000000000000000000000000000000000000000000000000001
+
+VERBOSITY_TRACE_COUNTEREXAMPLE = 2
+VERBOSITY_TRACE_SETUP = 3
+VERBOSITY_TRACE_PATHS = 4
+VERBOSITY_TRACE_CONSTRUCTOR = 5
 
 
 @dataclass(frozen=True)
@@ -135,29 +162,137 @@ def mk_solver(args: Namespace):
     return solver
 
 
+def rendered_initcode(context: CallContext) -> str:
+    message = context.message
+    data = message.data
+
+    initcode_str = ""
+    args_str = ""
+
+    if (
+        isinstance(data, BitVecRef)
+        and is_app(data)
+        and data.decl().kind() == Z3_OP_CONCAT
+    ):
+        children = [arg for arg in data.children()]
+        if isinstance(children[0], BitVecNumRef):
+            initcode_str = hex(children[0].as_long())
+            args_str = ", ".join(map(str, children[1:]))
+    else:
+        initcode_str = hexify(data)
+
+    return f"{initcode_str}({color_info(args_str)})"
+
+
+def render_output(context: CallContext) -> None:
+    output = context.output
+    returndata_str = "0x"
+    failed = output.error is not None
+
+    if not failed and context.is_stuck():
+        return
+
+    if output.data is not None:
+        is_create = context.message.is_create()
+
+        returndata_str = (
+            f"<{byte_length(output.data)} bytes of code>"
+            if (is_create and not failed)
+            else hexify(output.data)
+        )
+
+    ret_scheme = context.output.return_scheme
+    ret_scheme_str = f"{cyan(mnemonic(ret_scheme))} " if ret_scheme is not None else ""
+    error_str = f" (error: {repr(output.error)})" if failed else ""
+
+    color = red if failed else green
+    indent = context.depth * "    "
+    print(
+        f"{indent}{color('↩ ')}{ret_scheme_str}{color(returndata_str)}{color(error_str)}"
+    )
+
+
+def rendered_log(log: EventLog) -> str:
+    opcode_str = f"LOG{len(log.topics)}"
+    topics = [
+        f"{color_info(f'topic{i}')}={hexify(topic)}"
+        for i, topic in enumerate(log.topics)
+    ]
+    data_str = f"{color_info('data')}={hexify(log.data)}"
+    args_str = ", ".join(topics + [data_str])
+
+    return f"{opcode_str}({args_str})"
+
+
+def render_trace(context: CallContext) -> None:
+    # TODO: label for known addresses
+    # TODO: decode calldata
+    # TODO: decode logs
+
+    message = context.message
+    addr = unbox_int(message.target)
+    addr_str = str(addr) if is_bv(addr) else hex(addr)
+
+    value = unbox_int(message.value)
+    value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
+
+    call_scheme_str = f"{cyan(mnemonic(message.call_scheme))} "
+    indent = context.depth * "    "
+
+    if message.is_create():
+        # TODO: select verbosity level to render full initcode
+        # initcode_str = rendered_initcode(context)
+        initcode_str = f"<{byte_length(message.data)} bytes of initcode>"
+        print(f"{indent}{call_scheme_str}{addr_str}::{initcode_str}{value_str}")
+
+    else:
+        calldata = (
+            hexify(simplify(Concat(message.data)))
+            if any(is_bv(x) for x in message.data)
+            else bytes(message.data).hex() or "0x"
+        )
+
+        call_str = f"{addr_str}::{calldata}"
+        static_str = yellow(" [static]") if message.is_static else ""
+        print(f"{indent}{call_scheme_str}{call_str}{static_str}{value_str}")
+
+    log_indent = (context.depth + 1) * "    "
+    for trace_element in context.trace:
+        if isinstance(trace_element, CallContext):
+            render_trace(trace_element)
+        elif isinstance(trace_element, EventLog):
+            print(f"{log_indent}{rendered_log(trace_element)}")
+        else:
+            raise HalmosException(f"unexpected trace element: {trace_element}")
+
+    render_output(context)
+
+    if context.depth == 1:
+        print()
+
+
 def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
-    contract = Contract.from_hexcode(hexcode)
-
-    storage = {}
-
     solver = mk_solver(args)
-
+    contract = Contract.from_hexcode(hexcode)
     balance = mk_balance()
     block = mk_block()
-    callvalue = mk_callvalue()
-    caller = mk_caller(args)
-    this = mk_this()
     options = mk_options(args)
+    this = mk_this()
+
+    message = Message(
+        target=this,
+        caller=mk_caller(args),
+        value=mk_callvalue(),
+        data=[],
+    )
 
     sevm = SEVM(options)
     ex = sevm.mk_exec(
         code={this: contract},
-        storage={this: storage},
+        storage={this: {}},
         balance=balance,
         block=block,
-        calldata=[],
-        callvalue=callvalue,
-        caller=caller,
+        context=CallContext(message=message),
         this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
@@ -167,13 +302,20 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
 
     for idx, ex in enumerate(exs):
         opcode = ex.current_opcode()
-        if opcode in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
-            model_with_context = gen_model(args, idx, ex)
-            print(
-                f"Final opcode: {mnemonic(opcode)} | Return data: {ex.output} | Input example: {model_with_context.model}"
+        error = ex.context.output.error
+        returndata = ex.context.output.data
+
+        if error:
+            warn(
+                INTERNAL_ERROR,
+                f"{mnemonic(opcode)} failed, error={error}, returndata={returndata}",
             )
         else:
-            warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")
+            print(f"Final opcode: {mnemonic(opcode)})")
+            print(f"Return data: {returndata}")
+            model_with_context = gen_model(args, idx, ex)
+            print(f"Input example: {model_with_context.model}")
+
         if args.print_states:
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
@@ -189,15 +331,19 @@ def deploy_test(
     libs: Dict,
 ) -> Exec:
     this = mk_this()
+    message = Message(
+        target=this,
+        caller=mk_caller(args),
+        value=con(0),
+        data=[],
+    )
 
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
         storage={this: {}},
         balance=mk_balance(),
         block=mk_block(),
-        calldata=[],
-        callvalue=con(0),
-        caller=mk_caller(args),
+        context=CallContext(message=message),
         this=this,
         pgm=None,  # to be added
         symbolic=False,
@@ -226,22 +372,28 @@ def deploy_test(
     # sanity check
     if len(exs) != 1:
         raise ValueError(f"constructor: # of paths: {len(exs)}")
+
     ex = exs[0]
-    if ex.failed:
-        raise ValueError(f"constructor: failed: {ex.error}")
-    if ex.current_opcode() not in [EVM.STOP, EVM.RETURN]:
-        raise ValueError(f"constructor: failed: {ex.current_opcode()}: {ex.error}")
+
+    if args.verbose >= VERBOSITY_TRACE_CONSTRUCTOR:
+        print("Constructor trace:")
+        render_trace(ex.context)
+
+    error = ex.context.output.error
+    returndata = ex.context.output.data
+    if error:
+        raise ValueError(f"constructor failed, error={error} returndata={returndata}")
 
     # deployed bytecode
-    deployed_bytecode = Contract(ex.output)
+    deployed_bytecode = Contract(returndata)
     ex.code[this] = deployed_bytecode
     ex.pgm = deployed_bytecode
 
     # reset vm state
     ex.pc = 0
     ex.st = State()
+    ex.context.output = CallOutput()
     ex.jumpis = {}
-    ex.output = None
     ex.prank = Prank()
 
     return ex
@@ -259,23 +411,25 @@ def setup(
     setup_timer.create_subtimer("decode")
 
     sevm = SEVM(mk_options(args))
-
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
     setup_timer.create_subtimer("run")
 
-    setup_sig, setup_name, setup_selector = (
-        setup_info.sig,
-        setup_info.name,
-        setup_info.selector,
-    )
+    setup_sig, setup_selector = (setup_info.sig, setup_info.selector)
     if setup_sig:
-        if args.verbose >= 1:
-            print(f"Running {setup_sig}")
-
-        wstore(setup_ex.calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
+        calldata = []
+        wstore(calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
         dyn_param_size = []  # TODO: propagate to run
-        mk_calldata(abi, setup_info, setup_ex.calldata, dyn_param_size, args)
+        mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
+
+        setup_ex.context = CallContext(
+            message=Message(
+                target=setup_ex.message().target,
+                caller=setup_ex.message().caller,
+                value=con(0),
+                data=calldata,
+            ),
+        )
 
         (setup_exs_all, setup_steps, setup_logs) = sevm.run(setup_ex)
 
@@ -290,27 +444,47 @@ def setup(
         setup_exs = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
+            if args.verbose >= VERBOSITY_TRACE_SETUP:
+                num_traces = len(setup_exs_all)
+                print(
+                    f"{setup_sig} trace #{idx+1}/{num_traces}:"
+                    if num_traces > 1
+                    else f"{setup_sig} trace:"
+                )
+                render_trace(setup_ex.context)
+
             opcode = setup_ex.current_opcode()
-            if opcode in [EVM.STOP, EVM.RETURN]:
+            error = setup_ex.context.output.error
+
+            if error is None:
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
                 res = setup_ex.solver.check()
                 if res != unsat:
                     setup_exs.append(setup_ex)
-            elif opcode not in [EVM.REVERT, EVM.INVALID]:
-                print(
-                    color_warn(
-                        f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {setup_ex.error}"
+            else:
+                if opcode not in [EVM.REVERT, EVM.INVALID]:
+                    warn(
+                        INTERNAL_ERROR,
+                        f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {error}",
                     )
-                )
+
+                # only render the trace if we didn't already do it
+                if (
+                    args.verbose < VERBOSITY_TRACE_SETUP
+                    and args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE
+                ):
+                    print(f"{setup_sig} trace:")
+                    render_trace(setup_ex.context)
 
         if len(setup_exs) == 0:
-            raise ValueError(f"No successful path found in {setup_sig}")
+            raise HalmosException(f"No successful path found in {setup_sig}")
+
         if len(setup_exs) > 1:
-            print(
-                color_warn(
-                    f"Warning: multiple paths were found in {setup_sig}; an arbitrary path has been selected for the following tests."
-                )
+            info(
+                f"Warning: multiple paths were found in {setup_sig}; "
+                "an arbitrary path has been selected for the following tests."
             )
+
             if args.debug:
                 print("\n".join(map(str, setup_exs)))
 
@@ -351,6 +525,11 @@ class TestResult:
     num_bounded_loops: int = None  # number of incomplete loops
 
 
+def is_global_fail_set(context: CallContext) -> bool:
+    hevm_fail = isinstance(context.output.error, FailCheatcode)
+    return hevm_fail or any(is_global_fail_set(x) for x in context.subcalls())
+
+
 def run(
     setup_ex: Exec,
     abi: List,
@@ -366,17 +545,17 @@ def run(
     #
 
     cd = []
-
     wstore(cd, 0, 4, BitVecVal(int(funselector, 16), 32))
 
     dyn_param_size = []
     mk_calldata(abi, fun_info, cd, dyn_param_size, args)
 
-    #
-    # callvalue
-    #
-
-    callvalue = mk_callvalue()
+    message = Message(
+        target=setup_ex.this,
+        caller=setup_ex.caller(),
+        value=con(0),
+        data=cd,
+    )
 
     #
     # run
@@ -400,16 +579,13 @@ def run(
             #
             block=deepcopy(setup_ex.block),
             #
-            calldata=cd,
-            callvalue=callvalue,
-            caller=setup_ex.caller,
+            context=CallContext(message=message),
             this=setup_ex.this,
             #
             pgm=setup_ex.code[setup_ex.this],
             pc=0,
             st=State(),
             jumpis={},
-            output=None,
             symbolic=args.symbolic_storage,
             prank=Prank(),  # prank is reset after setUp()
             #
@@ -417,14 +593,11 @@ def run(
             path=setup_ex.path.copy(),
             alias=setup_ex.alias.copy(),
             #
-            log=setup_ex.log.copy(),
             cnts=deepcopy(setup_ex.cnts),
             sha3s=setup_ex.sha3s.copy(),
             storages=setup_ex.storages.copy(),
             balances=setup_ex.balances.copy(),
             calls=setup_ex.calls.copy(),
-            failed=setup_ex.failed,
-            error=setup_ex.error,
         )
     )
 
@@ -437,21 +610,30 @@ def run(
     stuck = []
 
     for idx, ex in enumerate(exs):
-        opcode = ex.current_opcode()
-        if opcode in [EVM.STOP, EVM.RETURN]:
-            normal += 1
-        elif opcode in [EVM.REVERT, EVM.INVALID]:
-            # Panic(1)
-            # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
-            if (
-                unbox_int(ex.output)
-                == 0x4E487B710000000000000000000000000000000000000000000000000000000000000001
-            ):
+        if args.verbose >= VERBOSITY_TRACE_PATHS:
+            print(f"Path #{idx+1}/{len(exs)}:")
+            print(indent_text(ex.str_path()))
+
+            print("\nTrace:")
+            render_trace(ex.context)
+
+        error = ex.context.output.error
+
+        if isinstance(error, Revert):
+            returndata = ex.context.output.data
+            if unbox_int(returndata) == ASSERT_FAIL:
                 execs_to_model.append((idx, ex))
-        elif ex.failed:
+                continue
+
+        if is_global_fail_set(ex.context):
             execs_to_model.append((idx, ex))
-        else:
-            stuck.append((opcode, idx, ex))
+            continue
+
+        if ex.context.is_stuck():
+            stuck.append((idx, ex, ex.context.get_stuck_reason()))
+
+        elif not error:
+            normal += 1
 
     if len(execs_to_model) > 0 and args.dump_smt_queries:
         dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
@@ -476,7 +658,8 @@ def run(
         fn_args = [
             GenModelArgs(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model
         ]
-        models = [m for m in thread_pool.map(gen_model_from_sexpr, fn_args)]
+        with ThreadPoolExecutor() as thread_pool:
+            models = list(thread_pool.map(gen_model_from_sexpr, fn_args))
 
     else:
         models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
@@ -504,7 +687,7 @@ def run(
         # model could be an empty dict here
         if model is not None:
             if is_valid:
-                print(color_warn(f"Counterexample: {render_model(model)}"))
+                print(red(f"Counterexample: {render_model(model)}"))
                 counterexamples.append(model)
             elif args.print_potential_counterexample:
                 warn(
@@ -524,11 +707,19 @@ def run(
             print(f"# {idx+1} / {len(exs)}")
             print(ex)
 
-    for opcode, idx, ex in stuck:
-        warn(INTERNAL_ERROR, f"{mnemonic(opcode)} failed: {ex.error}")
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            print(
+                f"Trace #{idx+1}/{len(exs)}:"
+                if args.verbose == VERBOSITY_TRACE_PATHS
+                else "Trace:"
+            )
+            render_trace(ex.context)
+
+    for idx, ex, err in stuck:
+        warn(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
-            print(f"# {idx+1} / {len(exs)}")
-            print(ex)
+            print(f"\nPath #{idx+1}/{len(exs)}")
+            render_trace(ex.context)
 
     if logs.bounded_loops:
         warn(
@@ -597,11 +788,8 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.libs,
         )
     except Exception as err:
-        print(
-            color_warn(
-                f"Error: {fn_args.setup_info.sig} failed: {type(err).__name__}: {err}"
-            )
-        )
+        error(f"Error: {fn_args.setup_info.sig} failed: {type(err).__name__}: {err}")
+
         if args.debug:
             traceback.print_exc()
         return []
@@ -614,8 +802,8 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.args,
         )
     except Exception as err:
-        print(f"{color_warn('[SKIP]')} {fn_args.fun_info.sig}")
-        print(color_warn(f"{type(err).__name__}: {err}"))
+        print(f"{yellow('[SKIP]')} {fn_args.fun_info.sig}")
+        error(f"{type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
         return [TestResult(fn_args.fun_info.sig, 2)]
@@ -688,7 +876,8 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     ]
 
     # dispatch to the shared process pool
-    test_results = list(process_pool.map(setup_and_run_single, single_run_args))
+    with ProcessPoolExecutor() as process_pool:
+        test_results = list(process_pool.map(setup_and_run_single, single_run_args))
     test_results = sum(test_results, [])  # flatten lists
 
     return test_results

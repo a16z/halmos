@@ -4,24 +4,27 @@ import json
 import math
 import re
 
-from subprocess import Popen, PIPE
-
 from copy import deepcopy
 from collections import defaultdict
-from typing import (
-    List,
-    Set,
-    Dict,
-    Union as UnionType,
-    Tuple,
-    Any,
-    Optional,
-    TypeVar,
-    Type,
-)
+from dataclasses import dataclass, field
 from functools import reduce
-
+from subprocess import Popen, PIPE
+from typing import (
+    Any,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union as UnionType,
+)
 from z3 import *
+
+from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
+from .exceptions import *
 from .utils import (
     EVM,
     sha3_inv,
@@ -32,8 +35,8 @@ from .utils import (
     con_addr,
     bv_value_to_bytes,
     hexify,
+    color_info,
 )
-from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
 from .warnings import (
     warn,
     UNSUPPORTED_OPCODE,
@@ -48,6 +51,9 @@ Bytes = Any  # z3 expression (including constants)
 Address = BitVecRef  # 160-bitvector
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
+
+EMPTY_BYTES = b""
+MAX_CALL_DEPTH = 1024
 
 
 # dynamic BitVecSort sizes
@@ -133,14 +139,6 @@ create2_magic_address: int = 0xBBBB0000
 new_address_offset: int = 1
 
 
-def id_str(x: Any) -> str:
-    return hexify(x).replace(" ", "")
-
-
-def name_of(x: str) -> str:
-    return re.sub(r"\s+", "_", x)
-
-
 class Instruction:
     pc: int
     opcode: int
@@ -157,7 +155,7 @@ class Instruction:
         if self.operand is not None:
             operand = self.operand
             if isinstance(operand, bytes):
-                operand = con(int.from_bytes(self.operand, "big"), len(operand) * 8)
+                operand = con(int.from_bytes(operand, "big"), len(operand) * 8)
 
             expected_operand_length = instruction_length(self.opcode) - 1
             actual_operand_length = operand.size() // 8
@@ -175,8 +173,31 @@ class Instruction:
         return instruction_length(self.opcode)
 
 
-class NotConcreteError(Exception):
+class HalmosException(Exception):
     pass
+
+
+class NotConcreteError(HalmosException):
+    pass
+
+
+def id_str(x: Any) -> str:
+    return hexify(x).replace(" ", "")
+
+
+def name_of(x: str) -> str:
+    return re.sub(r"\s+", "_", x)
+
+
+def padded_slice(lst: List, start: int, size: int, default=0) -> List:
+    """
+    Return a slice of lst, starting at start and with size elements. If the slice
+    is out of bounds, pad with default.
+    """
+
+    end = start + size
+    n = len(lst)
+    return [lst[i] if i < n else default for i in range(start, end)]
 
 
 def unbox_int(x: Any) -> Any:
@@ -350,7 +371,7 @@ def wstore_partial(
         return
 
     if not datasize >= offset + size:
-        raise ValueError(datasize, offset, size)
+        raise OutOfBoundsRead(datasize, offset, size)
 
     if is_bv(data):
         sub_data = Extract(
@@ -469,6 +490,100 @@ def stringified_bytes_to_bytes(string_bytes: str):
     return BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
 
 
+@dataclass(frozen=True)
+class EventLog:
+    """
+    Data record produced during the execution of a transaction.
+    """
+
+    address: Address
+    topics: List[Word]
+    data: Optional[Bytes]
+
+
+@dataclass(frozen=True)
+class Message:
+    target: Address
+    caller: Address
+    value: Word
+    data: List[Byte]
+    is_static: bool = False
+    call_scheme: int = EVM.CALL
+    gas: Optional[Word] = None
+
+    def is_create(self) -> bool:
+        return self.call_scheme == EVM.CREATE or self.call_scheme == EVM.CREATE2
+
+
+@dataclass
+class CallOutput:
+    """
+    Data record produced during the execution of a call.
+    """
+
+    data: Optional[Bytes] = None
+    accounts_to_delete: Set[Address] = field(default_factory=set)
+    error: Optional[UnionType[EvmException, HalmosException]] = None
+    return_scheme: Optional[int] = None
+
+    # TODO:
+    #   - touched_accounts
+    # not modeled:
+    #   - gas_refund
+    #   - gas_left
+
+
+TraceElement = UnionType["CallContext", EventLog]
+
+
+@dataclass
+class CallContext:
+    message: Message
+    output: CallOutput = field(default_factory=CallOutput)
+    depth: int = 1
+    trace: List[TraceElement] = field(default_factory=list)
+
+    def subcalls(self) -> Iterator["CallContext"]:
+        return iter(t for t in self.trace if isinstance(t, CallContext))
+
+    def last_subcall(self) -> Optional["CallContext"]:
+        """
+        Returns the last subcall or None if there are no subcalls.
+        """
+
+        for c in reversed(self.trace):
+            if isinstance(c, CallContext):
+                return c
+
+        return None
+
+    def logs(self) -> Iterator[EventLog]:
+        return iter(t for t in self.trace if isinstance(t, EventLog))
+
+    def is_stuck(self) -> bool:
+        """
+        When called after execution, this method returns True if the call is stuck,
+        i.e. it encountered an internal error and has no output.
+
+        This is meaningless during execution, because the call may not yet have an output
+        """
+        return self.output.data is None
+
+    def get_stuck_reason(self) -> Optional[HalmosException]:
+        """
+        Returns the first internal error encountered during the execution of the call.
+        """
+        if isinstance(self.output.error, HalmosException):
+            return self.output.error
+
+        if self.output.data is not None:
+            # if this context has output data (including empty bytes), it is not stuck
+            return None
+
+        if (last_subcall := self.last_subcall()) is not None:
+            return last_subcall.get_stuck_reason()
+
+
 class State:
     stack: List[Word]
     memory: List[Byte]
@@ -535,10 +650,7 @@ class State:
     def ret(self) -> Bytes:
         loc: int = self.mloc()
         size: int = int_of(self.pop(), "symbolic return data size")  # size in bytes
-        if size > 0:
-            return wload(self.memory, loc, size, prefer_concrete=True)
-        else:
-            return None
+        return wload(self.memory, loc, size, prefer_concrete=True) if size else b""
 
 
 class Block:
@@ -570,11 +682,18 @@ class Contract:
     #    (typically a Concat() of concrete and symbolic values)
     _rawcode: UnionType[bytes, BitVecRef]
 
-    def __init__(self, rawcode: UnionType[bytes, BitVecRef]) -> None:
+    def __init__(self, rawcode: UnionType[bytes, BitVecRef, str]) -> None:
+        if rawcode is None:
+            raise HalmosException("invalid contract code: None")
+
         if is_bv_value(rawcode):
             if rawcode.size() % 8 != 0:
                 raise ValueError(rawcode)
             rawcode = rawcode.as_long().to_bytes(rawcode.size() // 8, "big")
+
+        if isinstance(rawcode, str):
+            rawcode = bytes.fromhex(rawcode)
+
         self._rawcode = rawcode
 
     def __init_jumpdests(self):
@@ -638,7 +757,9 @@ class Contract:
                 return extracted
 
         # concrete
-        return self._rawcode[slice.start : slice.stop]
+        size = slice.stop - slice.start
+        data = padded_slice(self._rawcode, slice.start, size, default=0)
+        return bytes(data)
 
     def __getitem__(self, key) -> UnionType[int, BitVecRef]:
         """Returns the byte at the given offset."""
@@ -702,34 +823,34 @@ class Exec:  # an execution path
     code: Dict[Address, Contract]
     storage: Dict[Address, Dict[int, Any]]  # address -> { storage slot -> value }
     balance: Any  # address -> balance
+
     # block
     block: Block
+
     # tx
-    calldata: List[Byte]  # msg.data
-    callvalue: Word  # msg.value
-    caller: Address  # msg.sender
-    this: Address  # current account address
+    context: CallContext
+
     # vm state
+    this: Address  # current account address
     pgm: Contract
     pc: int
     st: State  # stack and memory
     jumpis: Dict[str, Dict[bool, int]]  # for loop detection
-    output: Any  # returndata
     symbolic: bool  # symbolic or concrete storage
     prank: Prank
+    addresses_to_delete: Set[Address]
+
     # path
     solver: Solver
     path: List[Any]  # path conditions
     alias: Dict[Address, Address]  # address aliases
-    # logs
-    log: List[Tuple[List[Word], Any]]  # event logs emitted
+
+    # internal bookkeeping
     cnts: Dict[str, Dict[int, int]]  # opcode -> frequency; counters
     sha3s: Dict[Word, int]  # sha3 hashes generated
     storages: Dict[Any, Any]  # storage updates
     balances: Dict[Any, Any]  # balance updates
     calls: List[Any]  # external calls
-    failed: bool
-    error: str
 
     def __init__(self, **kwargs) -> None:
         self.code = kwargs["code"]
@@ -737,35 +858,63 @@ class Exec:  # an execution path
         self.balance = kwargs["balance"]
         #
         self.block = kwargs["block"]
+        self.context = kwargs["context"]
         #
-        self.calldata = kwargs["calldata"]
-        self.callvalue = kwargs["callvalue"]
-        self.caller = kwargs["caller"]
         self.this = kwargs["this"]
-        #
         self.pgm = kwargs["pgm"]
         self.pc = kwargs["pc"]
         self.st = kwargs["st"]
         self.jumpis = kwargs["jumpis"]
-        self.output = kwargs["output"]
         self.symbolic = kwargs["symbolic"]
         self.prank = kwargs["prank"]
+        self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
         #
         self.solver = kwargs["solver"]
         self.path = kwargs["path"]
         self.alias = kwargs["alias"]
         #
-        self.log = kwargs["log"]
         self.cnts = kwargs["cnts"]
         self.sha3s = kwargs["sha3s"]
         self.storages = kwargs["storages"]
         self.balances = kwargs["balances"]
         self.calls = kwargs["calls"]
-        self.failed = kwargs["failed"]
-        self.error = kwargs["error"]
 
-        assert_address(self.caller)
+        assert_address(self.context.message.target)
+        assert_address(self.context.message.caller)
         assert_address(self.this)
+
+    def context_str(self) -> str:
+        opcode = self.current_opcode()
+        return f"addr={hexify(self.this)} pc={self.pc} insn={mnemonic(opcode)}"
+
+    def halt(
+        self,
+        data: Bytes = EMPTY_BYTES,
+        error: Optional[EvmException] = None,
+    ) -> None:
+        output = self.context.output
+        if output.data is not None:
+            raise HalmosException("output already set")
+
+        output.data = data
+        output.error = error
+        output.return_scheme = self.current_opcode()
+
+    def emit_log(self, log: EventLog):
+        self.context.trace.append(log)
+
+    def calldata(self) -> List[Byte]:
+        message = self.message()
+        return [] if message.is_create() else message.data
+
+    def caller(self):
+        return self.message().caller
+
+    def callvalue(self):
+        return self.message().value
+
+    def message(self):
+        return self.context.message
 
     def current_opcode(self) -> UnionType[int, BitVecRef]:
         return unbox_int(self.pgm[self.pc])
@@ -793,6 +942,7 @@ class Exec:  # an execution path
         )
 
     def __str__(self) -> str:
+        output = self.context.output.data
         return hexify(
             "".join(
                 [
@@ -806,14 +956,10 @@ class Exec:  # an execution path
                             self.storage,
                         )
                     ),
-                    # f"Solver:\n{self.str_solver()}\n",
                     f"Path:\n{self.str_path()}",
                     f"Aliases:\n",
                     "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
-                    f"Output: {self.output.hex() if isinstance(self.output, bytes) else self.output}\n",
-                    f"Log: {self.log}\n",
-                    # f"Opcodes:\n{self.str_cnts()}",
-                    # f"Memsize: {len(self.st.memory)}\n",
+                    f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
                     f"Balance updates:\n",
                     "".join(
                         map(
@@ -832,7 +978,6 @@ class Exec:  # an execution path
                     "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
                     f"External calls:\n",
                     "".join(map(lambda x: f"- {x}\n", self.calls)),
-                    # f"Calldata: {self.calldata}\n",
                 ]
             )
         )
@@ -944,8 +1089,25 @@ class Exec:  # an execution path
         self.cnts["fresh"]["symbol"] += 1
         return self.cnts["fresh"]["symbol"]
 
+    def returndata(self) -> Optional[Bytes]:
+        """
+        Return data from the last executed sub-context or the empty bytes sequence
+        """
+
+        last_subcall = self.context.last_subcall()
+
+        if not last_subcall:
+            return EMPTY_BYTES
+
+        output = last_subcall.output
+        if last_subcall.message.is_create() and not output.error:
+            return EMPTY_BYTES
+
+        return output.data
+
     def returndatasize(self) -> int:
-        return 0 if self.output is None else byte_length(self.output)
+        returndata = self.returndata()
+        return byte_length(returndata) if returndata is not None else 0
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_concrete(x):
@@ -1272,7 +1434,7 @@ def is_power_of_two(x: int) -> bool:
         return False
 
 
-class Logs:
+class HalmosLogs:
     bounded_loops: List[str]
     unknown_calls: Dict[str, Dict[str, Set[str]]]  # funsig -> to -> set(arg)
 
@@ -1280,7 +1442,7 @@ class Logs:
         self.bounded_loops = []
         self.unknown_calls = defaultdict(lambda: defaultdict(set))
 
-    def extend(self, logs) -> None:
+    def extend(self, logs: "HalmosLogs") -> None:
         self.bounded_loops.extend(logs.bounded_loops)
         for funsig in logs.unknown_calls:
             for to in logs.unknown_calls[funsig]:
@@ -1291,12 +1453,12 @@ class Logs:
         self.unknown_calls[funsig][to].add(arg)
 
     def print_unknown_calls(self):
-        for funsig in logs.unknown_calls:
+        for funsig in self.unknown_calls:
             print(f"{funsig}:")
-            for to in logs.unknown_calls[funsig]:
+            for to in self.unknown_calls[funsig]:
                 print(f"- {to}:")
                 print(
-                    "\n".join([f"  - {arg}" for arg in logs.unknown_calls[funsig][to]])
+                    "\n".join([f"  - {arg}" for arg in self.unknown_calls[funsig][to]])
                 )
 
 
@@ -1513,6 +1675,9 @@ class SEVM:
         return self.storage_model.load(ex, addr, loc)
 
     def sstore(self, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        if ex.message().is_static:
+            raise WriteInStaticContext(ex.context_str())
+
         if is_bool(val):
             val = If(val, con(1), con(0))
 
@@ -1567,21 +1732,16 @@ class SEVM:
         stack: List[Tuple[Exec, int]],
         step_id: int,
         out: List[Exec],
-        logs: Logs,
+        logs: HalmosLogs,
     ) -> None:
         gas = ex.st.pop()
-
         to = uint160(ex.st.pop())
+        fund = con(0) if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-        if op == EVM.STATICCALL or op == EVM.DELEGATECALL:
-            fund = con(0)
-        else:
-            fund = ex.st.pop()
         arg_loc: int = ex.st.mloc()
-        # size (in bytes)
         arg_size: int = int_of(ex.st.pop(), "symbolic CALL input data size")
+
         ret_loc: int = ex.st.mloc()
-        # size (in bytes)
         ret_size: int = int_of(ex.st.pop(), "symbolic CALL return data size")
 
         if not arg_size >= 0:
@@ -1590,12 +1750,12 @@ class SEVM:
             raise ValueError(ret_size)
 
         arg = wload(ex.st.memory, arg_loc, arg_size) if arg_size > 0 else None
-
         caller = ex.prank.lookup(ex.this, to)
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
+                # TODO: revert if context is static
                 self.transfer_value(ex, caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
@@ -1603,7 +1763,6 @@ class SEVM:
             orig_code = ex.code.copy()
             orig_storage = deepcopy(ex.storage)
             orig_balance = ex.balance
-            orig_log = ex.log.copy()
 
             # transfer msg.value
             send_callvalue()
@@ -1615,6 +1774,17 @@ class SEVM:
                 calldata, 0, arg_size, ex.st.memory[arg_loc : arg_loc + arg_size]
             )
 
+            message = Message(
+                target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
+                caller=caller if op != EVM.DELEGATECALL else ex.caller(),
+                value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
+                data=calldata,
+                is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
+                call_scheme=op,
+            )
+
+            # TODO: check max call depth
+
             # execute external calls
             (new_exs, new_steps, new_logs) = self.run(
                 Exec(
@@ -1624,16 +1794,13 @@ class SEVM:
                     #
                     block=ex.block,
                     #
-                    calldata=calldata,
-                    callvalue=fund if op != EVM.DELEGATECALL else ex.callvalue,
-                    caller=caller if op != EVM.DELEGATECALL else ex.caller,
-                    this=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
+                    context=CallContext(message=message, depth=ex.context.depth + 1),
+                    this=message.target,
                     #
                     pgm=ex.code[to],
                     pc=0,
                     st=State(),
                     jumpis={},
-                    output=None,
                     symbolic=ex.symbolic,
                     prank=Prank(),
                     #
@@ -1641,35 +1808,38 @@ class SEVM:
                     path=ex.path,
                     alias=ex.alias,
                     #
-                    log=ex.log,
                     cnts=ex.cnts,
                     sha3s=ex.sha3s,
                     storages=ex.storages,
                     balances=ex.balances,
                     calls=ex.calls,
-                    failed=ex.failed,
-                    error=ex.error,
                 )
             )
 
             logs.extend(new_logs)
 
             # process result
-            for idx, new_ex in enumerate(new_exs):
-                opcode = new_ex.current_opcode()
+            for new_ex in new_exs:
+                # continue execution in the context of the parent
+                # pessimistic copy because the subcall results may diverge
+                subcall = new_ex.context
 
-                # restore tx msg
-                new_ex.calldata = ex.calldata
-                new_ex.callvalue = ex.callvalue
-                new_ex.caller = ex.caller
+                # restore context
+                new_ex.context = deepcopy(ex.context)
+                new_ex.context.trace.append(subcall)
                 new_ex.this = ex.this
+
+                if subcall.is_stuck():
+                    # internal errors abort the current path,
+                    # so we don't need to add it to the worklist
+                    out.append(new_ex)
+                    continue
 
                 # restore vm state
                 new_ex.pgm = ex.pgm
                 new_ex.pc = ex.pc
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
-                # new_ex.output is passed into the caller
                 new_ex.symbolic = ex.symbolic
                 new_ex.prank = deepcopy(ex.prank)
 
@@ -1680,30 +1850,23 @@ class SEVM:
                     ret_loc,
                     0,
                     min(ret_size, actual_ret_size),
-                    new_ex.output,
+                    subcall.output.data,
                     actual_ret_size,
                 )
 
-                # set status code (in stack)
-                if opcode in [EVM.STOP, EVM.RETURN, EVM.REVERT, EVM.INVALID]:
-                    if opcode in [EVM.STOP, EVM.RETURN]:
-                        new_ex.st.push(con(1))
-                    else:
-                        new_ex.st.push(con(0))
+                # set status code on the stack
+                subcall_success = subcall.output.error is None
+                new_ex.st.push(con(1) if subcall_success else con(0))
 
-                        # revert network states
-                        new_ex.code = orig_code
-                        new_ex.storage = orig_storage
-                        new_ex.balance = orig_balance
-                        new_ex.log = orig_log
+                if not subcall_success:
+                    # revert network states
+                    new_ex.code = orig_code
+                    new_ex.storage = orig_storage
+                    new_ex.balance = orig_balance
 
-                    # add to worklist even if it reverted during the external call
-                    new_ex.next_pc()
-                    stack.append((new_ex, step_id))
-                else:
-                    # got stuck during external call
-                    new_ex.error = f"External call encountered an issue at {mnemonic(opcode)}: {new_ex.error}"
-                    out.append(new_ex)
+                # add to worklist even if it reverted during the external call
+                new_ex.next_pc()
+                stack.append((new_ex, step_id))
 
         def call_unknown() -> None:
             call_id = len(ex.calls)
@@ -1774,6 +1937,9 @@ class SEVM:
                     extract_funsig(arg), "symbolic halmos cheatcode function selector"
                 )
 
+                if self.options.get("debug"):
+                    print(f"Executing halmos cheat code: {hex(funsig)}")
+
                 # createUint(uint256,string) returns (uint256)
                 if funsig == halmos_cheat_code.create_uint:
                     bit_size = int_of(
@@ -1785,9 +1951,7 @@ class SEVM:
                         label = f"halmos_{name}_uint{bit_size}_{ex.new_symbol_id():>02}"
                         ret = uint256(BitVec(label, BitVecSorts[bit_size]))
                     else:
-                        ex.error = f"bitsize larger than 256: {bit_size}"
-                        out.append(ex)
-                        return
+                        raise HalmosException(f"bitsize larger than 256: {bit_size}")
 
                 # createBytes(uint256,string) returns (bytes)
                 elif funsig == halmos_cheat_code.create_bytes:
@@ -1825,9 +1989,8 @@ class SEVM:
                     ret = uint256(BitVec(label, BitVecSort1))
 
                 else:
-                    ex.error = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
-                    out.append(ex)
-                    return
+                    error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
+                    raise HalmosException(error_msg)
 
             # vm cheat code
             if eq(to, hevm_cheat_code.address):
@@ -1835,9 +1998,8 @@ class SEVM:
                 # vm.fail()
                 # BitVecVal(hevm_cheat_code.fail_payload, 800)
                 if arg == hevm_cheat_code.fail_payload:
-                    ex.failed = True
-                    out.append(ex)
-                    return
+                    raise FailCheatcode()
+
                 # vm.assume(bool)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
@@ -1846,6 +2008,7 @@ class SEVM:
                     assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
                     ex.solver.add(assume_cond)
                     ex.path.append(str(assume_cond))
+
                 # vm.getCode(string)
                 elif (
                     simplify(Extract(arg_size * 8 - 1, arg_size * 8 - 32, arg))
@@ -1878,9 +2041,8 @@ class SEVM:
                 ):
                     result = ex.prank.prank(uint160(Extract(255, 0, arg)))
                     if not result:
-                        ex.error = "You have an active prank already."
-                        out.append(ex)
-                        return
+                        raise HalmosException("You have an active prank already.")
+
                 # vm.startPrank(address)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
@@ -1889,9 +2051,8 @@ class SEVM:
                 ):
                     result = ex.prank.startPrank(uint160(Extract(255, 0, arg)))
                     if not result:
-                        ex.error = "You have an active prank already."
-                        out.append(ex)
-                        return
+                        raise HalmosException("You have an active prank already.")
+
                 # vm.stopPrank()
                 elif (
                     eq(arg.sort(), BitVecSorts[4 * 8])
@@ -1918,9 +2079,8 @@ class SEVM:
                     if store_account_addr is not None:
                         self.sstore(ex, store_account_addr, store_slot, store_value)
                     else:
-                        ex.error = f"uninitialized account: {store_account}"
-                        out.append(ex)
-                        return
+                        raise HalmosException(f"uninitialized account: {store_account}")
+
                 # vm.load(address,bytes32)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32 * 2) * 8])
@@ -1932,9 +2092,8 @@ class SEVM:
                     if load_account_addr is not None:
                         ret = self.sload(ex, load_account_addr, load_slot)
                     else:
-                        ex.error = f"uninitialized account: {load_account}"
-                        out.append(ex)
-                        return
+                        raise HalmosException(f"uninitialized account: {store_account}")
+
                 # vm.fee(uint256)
                 elif (
                     eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
@@ -1978,9 +2137,8 @@ class SEVM:
 
                     # who must be concrete
                     if not is_bv_value(who):
-                        ex.error = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
-                        out.append(ex)
-                        return
+                        error_msg = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
+                        raise HalmosException(error_msg)
 
                     # code must be concrete
                     try:
@@ -1993,18 +2151,15 @@ class SEVM:
 
                         ex.code[who] = Contract(code_bytes)
                     except Exception as e:
-                        ex.error = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
-                        out.append(ex)
-                        return
+                        error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
+                        raise HalmosException(error_msg) from e
                 # ffi(string[]) returns (bytes)
                 elif extract_funsig(arg) == hevm_cheat_code.ffi_sig:
                     if not self.options.get("ffi"):
-                        ex.error = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
-                        out.append(ex)
-                        return
-                    process = Popen(
-                        extract_string_array_argument(arg, 0), stdout=PIPE, stderr=PIPE
-                    )
+                        error_msg = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
+                        raise HalmosException(error_msg)
+                    cmd = extract_string_array_argument(arg, 0)
+                    process = Popen(cmd, stdout=PIPE, stderr=PIPE)
 
                     (stdout, stderr) = process.communicate()
 
@@ -2025,9 +2180,8 @@ class SEVM:
 
                 else:
                     # TODO: support other cheat codes
-                    ex.error = f"Unsupported cheat code: calldata = {hexify(arg)}"
-                    out.append(ex)
-                    return
+                    msg = f"Unsupported cheat code: calldata = {hexify(arg)}"
+                    raise HalmosException(msg)
 
             # console
             if eq(to, console.address):
@@ -2037,25 +2191,43 @@ class SEVM:
                     extract_funsig(arg), "symbolic console function selector"
                 )
 
-                if funsig == console.log_uint:
+                if funsig == console.log_uint256:
                     print(extract_bytes(arg, 4, 32))
 
                 # elif funsig == console.log_string:
 
                 else:
                     # TODO: support other console functions
-                    ex.error = f"Unsupported console function: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
-                    out.append(ex)
-                    return
+                    print(
+                        color_info(
+                            f"Unsupported console function: selector = 0x{funsig:0>8x}, "
+                            f"calldata = {hexify(arg)}"
+                        )
+                    )
 
             # store return value
             if ret_size > 0:
                 wstore(ex.st.memory, ret_loc, ret_size, ret)
 
-            # propagate callee's output to caller, which could be None
-            ex.output = ret
+            ex.context.trace.append(
+                CallContext(
+                    message=Message(
+                        target=to,
+                        caller=caller,
+                        value=fund,
+                        data=ex.st.memory[arg_loc : arg_loc + arg_size],
+                        call_scheme=op,
+                    ),
+                    output=CallOutput(
+                        data=ret,
+                        error=None,
+                    ),
+                    depth=ex.context.depth + 1,
+                )
+            )
 
-            ex.calls.append((exit_code_var, exit_code, ex.output))
+            # TODO: check if still needed
+            ex.calls.append((exit_code_var, exit_code, ex.context.output.data))
 
             ex.next_pc()
             stack.append((ex, step_id))
@@ -2091,8 +2263,10 @@ class SEVM:
             call_unknown()
             return
 
-        ex.error = f"Unknown contract call: to = {hexify(to)}; calldata = {hexify(arg)}; callvalue = {hexify(fund)}"
-        out.append(ex)
+        raise HalmosException(
+            f"Unknown contract call: to = {hexify(to)}; "
+            f"calldata = {hexify(arg)}; callvalue = {hexify(fund)}"
+        )
 
     def create(
         self,
@@ -2101,8 +2275,11 @@ class SEVM:
         stack: List[Tuple[Exec, int]],
         step_id: int,
         out: List[Exec],
-        logs: Logs,
+        logs: HalmosLogs,
     ) -> None:
+        if ex.message().is_static:
+            raise WriteInStaticContext(ex.context_str())
+
         value: Word = ex.st.pop()
         loc: int = int_of(ex.st.pop(), "symbolic CREATE offset")
         size: int = int_of(ex.st.pop(), "symbolic CREATE size")
@@ -2120,7 +2297,7 @@ class SEVM:
         # new account address
         if op == EVM.CREATE:
             new_addr = ex.new_address()
-        else:  # EVM.CREATE2
+        elif op == EVM.CREATE2:  # EVM.CREATE2
             if isinstance(create_hexcode, bytes):
                 create_hexcode = con(
                     int.from_bytes(create_hexcode, "big"), len(create_hexcode) * 8
@@ -2128,14 +2305,39 @@ class SEVM:
             code_hash = ex.sha3_data(create_hexcode, create_hexcode.size() // 8)
             hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
             new_addr = uint160(ex.sha3_data(hash_data, 85))
+        else:
+            raise HalmosException(f"Unknown CREATE opcode: {op}")
+
+        message = Message(
+            target=new_addr,
+            caller=caller,
+            value=value,
+            data=create_hexcode,
+            is_static=False,
+            call_scheme=op,
+        )
 
         if new_addr in ex.code:
-            ex.error = f"existing address: {hexify(new_addr)}"
-            out.append(ex)
+            # address conflicts don't revert, they push 0 on the stack and continue
+            ex.st.push(con(0))
+            ex.next_pc()
+
+            # add a virtual subcontext to the trace for debugging purposes
+            subcall = CallContext(message=message, depth=ex.context.depth + 1)
+            subcall.output.data = b""
+            subcall.output.error = AddressCollision()
+            ex.context.trace.append(subcall)
+
+            stack.append((ex, step_id))
             return
 
         for addr in ex.code:
             ex.solver.add(new_addr != addr)  # ensure new address is fresh
+
+        # backup current state
+        orig_code = ex.code.copy()
+        orig_storage = deepcopy(ex.storage)
+        orig_balance = ex.balance
 
         # setup new account
         ex.code[new_addr] = Contract(b"")  # existing code must be empty
@@ -2153,16 +2355,13 @@ class SEVM:
                 #
                 block=ex.block,
                 #
-                calldata=[],
-                callvalue=value,
-                caller=caller,
+                context=CallContext(message=message, depth=ex.context.depth + 1),
                 this=new_addr,
                 #
                 pgm=create_code,
                 pc=0,
                 st=State(),
                 jumpis={},
-                output=None,
                 symbolic=False,
                 prank=Prank(),
                 #
@@ -2170,61 +2369,66 @@ class SEVM:
                 path=ex.path,
                 alias=ex.alias,
                 #
-                log=ex.log,
                 cnts=ex.cnts,
                 sha3s=ex.sha3s,
                 storages=ex.storages,
                 balances=ex.balances,
                 calls=ex.calls,
-                failed=ex.failed,
-                error=ex.error,
             )
         )
 
         logs.extend(new_logs)
 
         # process result
-        for idx, new_ex in enumerate(new_exs):
-            # sanity checks
-            if new_ex.failed:
-                raise ValueError(new_ex)
+        for new_ex in new_exs:
+            subcall = new_ex.context
 
-            opcode = new_ex.current_opcode()
-            if opcode in [EVM.STOP, EVM.RETURN]:
-                # new contract code
-                new_ex.code[new_addr] = Contract(new_ex.output)
+            # continue execution in the context of the parent
+            # pessimistic copy because the subcall results may diverge
+            new_ex.context = deepcopy(ex.context)
+            new_ex.context.trace.append(subcall)
 
-                # restore tx msg
-                new_ex.calldata = ex.calldata
-                new_ex.callvalue = ex.callvalue
-                new_ex.caller = ex.caller
-                new_ex.this = ex.this
+            new_ex.this = ex.this
 
-                # restore vm state
-                new_ex.pgm = ex.pgm
-                new_ex.pc = ex.pc
-                new_ex.st = deepcopy(ex.st)
-                new_ex.jumpis = deepcopy(ex.jumpis)
-                new_ex.output = None  # output is reset, not restored
-                new_ex.symbolic = ex.symbolic
-                new_ex.prank = deepcopy(ex.prank)
+            # restore vm state
+            new_ex.pgm = ex.pgm
+            new_ex.pc = ex.pc
+            new_ex.st = deepcopy(ex.st)
+            new_ex.jumpis = deepcopy(ex.jumpis)
+            new_ex.symbolic = ex.symbolic
+            new_ex.prank = deepcopy(ex.prank)
+
+            if subcall.is_stuck():
+                # internal errors abort the current path,
+                out.append(new_ex)
+                continue
+
+            elif subcall.output.error is None:
+                # new contract code, will revert if data is None
+                new_ex.code[new_addr] = Contract(subcall.output.data)
 
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))
 
-                # add to worklist
-                new_ex.next_pc()
-                stack.append((new_ex, step_id))
             else:
                 # creation failed
-                out.append(new_ex)
+                new_ex.st.push(con(0))
+
+                # revert network states
+                new_ex.code = orig_code
+                new_ex.storage = orig_storage
+                new_ex.balance = orig_balance
+
+            # add to worklist
+            new_ex.next_pc()
+            stack.append((new_ex, step_id))
 
     def jumpi(
         self,
         ex: Exec,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-        logs: Logs,
+        logs: HalmosLogs,
     ) -> None:
         jid = ex.jumpi_id()
 
@@ -2324,16 +2528,13 @@ class SEVM:
             #
             block=deepcopy(ex.block),
             #
-            calldata=ex.calldata,
-            callvalue=ex.callvalue,
-            caller=ex.caller,
+            context=deepcopy(ex.context),
             this=ex.this,
             #
             pgm=ex.pgm,
             pc=target,
             st=deepcopy(ex.st),
             jumpis=deepcopy(ex.jumpis),
-            output=ex.output,
             symbolic=ex.symbolic,
             prank=deepcopy(ex.prank),
             #
@@ -2341,14 +2542,11 @@ class SEVM:
             path=new_path,
             alias=ex.alias.copy(),
             #
-            log=ex.log.copy(),
             cnts=deepcopy(ex.cnts),
             sha3s=ex.sha3s.copy(),
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
             calls=ex.calls.copy(),
-            failed=ex.failed,
-            error=ex.error,
         )
         return new_ex
 
@@ -2368,23 +2566,23 @@ class SEVM:
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
 
-    def run(self, ex0: Exec) -> Tuple[List[Exec], Steps]:
+    def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
         out: List[Exec] = []
-        logs = Logs()
+        logs = HalmosLogs()
         steps: Steps = {}
         step_id: int = 0
 
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
         while stack:
             try:
-                if (
-                    "max_width" in self.options
-                    and len(out) >= self.options["max_width"]
-                ):
+                if len(out) >= self.options.get("max_width", 2**64):
                     break
 
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
+
+                if ex.context.depth > MAX_CALL_DEPTH:
+                    raise MessageDepthLimitError(ex.context)
 
                 insn = ex.current_instruction()
                 opcode = insn.opcode
@@ -2409,22 +2607,22 @@ class SEVM:
                     print(ex)
 
                 if opcode == EVM.STOP:
-                    ex.output = None
+                    ex.halt()
                     out.append(ex)
                     continue
 
                 elif opcode == EVM.INVALID:
-                    ex.output = None
+                    ex.halt(error=InvalidOpcode(opcode))
                     out.append(ex)
                     continue
 
                 elif opcode == EVM.REVERT:
-                    ex.output = ex.st.ret()
+                    ex.halt(data=ex.st.ret(), error=Revert())
                     out.append(ex)
                     continue
 
                 elif opcode == EVM.RETURN:
-                    ex.output = ex.st.ret()
+                    ex.halt(data=ex.st.ret())
                     out.append(ex)
                     continue
 
@@ -2507,28 +2705,25 @@ class SEVM:
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
 
                 elif opcode == EVM.CALLDATALOAD:
-                    if ex.calldata is None:
+                    calldata = ex.calldata()
+                    if calldata is None:
                         ex.st.push(f_calldataload(ex.st.pop()))
                     else:
-                        offset: int = int_of(
-                            ex.st.pop(), "symbolic CALLDATALOAD offset"
-                        )
-                        ex.st.push(
-                            Concat(
-                                (ex.calldata + [BitVecVal(0, 8)] * 32)[
-                                    offset : offset + 32
-                                ]
-                            )
-                        )
+                        err_msg = "symbolic CALLDATALOAD offset"
+                        offset: int = int_of(ex.st.pop(), err_msg)
+                        data = padded_slice(calldata, offset, 32, default=con(0, 8))
+                        ex.st.push(Concat(data))
+
                 elif opcode == EVM.CALLDATASIZE:
-                    if ex.calldata is None:
-                        ex.st.push(f_calldatasize())
-                    else:
-                        ex.st.push(con(len(ex.calldata)))
+                    cd = ex.calldata()
+
+                    # TODO: is optional calldata necessary?
+                    ex.st.push(f_calldatasize() if cd is None else con(len(cd)))
+
                 elif opcode == EVM.CALLVALUE:
-                    ex.st.push(ex.callvalue)
+                    ex.st.push(ex.callvalue())
                 elif opcode == EVM.CALLER:
-                    ex.st.push(uint256(ex.caller))
+                    ex.st.push(uint256(ex.caller()))
                 elif opcode == EVM.ORIGIN:
                     ex.st.push(uint256(f_origin()))
                 elif opcode == EVM.ADDRESS:
@@ -2552,10 +2747,11 @@ class SEVM:
                 elif opcode == EVM.EXTCODEHASH:
                     account = uint160(ex.st.pop())
                     account_addr = self.resolve_address_alias(ex, account)
-                    if account_addr is not None:
-                        codehash = f_extcodehash(account_addr)
-                    else:
-                        codehash = f_extcodehash(account)
+                    codehash = (
+                        f_extcodehash(account_addr)
+                        if account_addr is not None
+                        else f_extcodehash(account)
+                    )
                     ex.st.push(codehash)
                 elif opcode == EVM.CODESIZE:
                     ex.st.push(con(len(ex.pgm)))
@@ -2633,8 +2829,15 @@ class SEVM:
                     offset: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
                     # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
+
+                    # TODO: do we need to pass returndatasize here?
                     wstore_partial(
-                        ex.st.memory, loc, offset, size, ex.output, ex.returndatasize()
+                        ex.st.memory,
+                        loc,
+                        offset,
+                        size,
+                        ex.returndata(),
+                        ex.returndatasize(),
                     )
 
                 elif opcode == EVM.CALLDATACOPY:
@@ -2643,7 +2846,8 @@ class SEVM:
                     # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
                     if size > 0:
-                        if ex.calldata is None:
+                        calldata = ex.message().data
+                        if calldata is None:
                             f_calldatacopy = Function(
                                 "calldatacopy_" + str(size * 8),
                                 BitVecSort256,
@@ -2652,23 +2856,8 @@ class SEVM:
                             data = f_calldatacopy(offset)
                             wstore(ex.st.memory, loc, size, data)
                         else:
-                            if offset + size <= len(ex.calldata):
-                                wstore_bytes(
-                                    ex.st.memory,
-                                    loc,
-                                    size,
-                                    ex.calldata[offset : offset + size],
-                                )
-                            elif offset == len(ex.calldata):
-                                # copy zero bytes
-                                wstore_bytes(
-                                    ex.st.memory,
-                                    loc,
-                                    size,
-                                    [con(0, 8) for _ in range(size)],
-                                )
-                            else:
-                                raise ValueError(offset, size, len(ex.calldata))
+                            data = padded_slice(calldata, offset, size, con(0, 8))
+                            wstore_bytes(ex.st.memory, loc, size, data)
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()
@@ -2678,6 +2867,13 @@ class SEVM:
                     wextend(ex.st.memory, loc, size)
 
                     codeslice = ex.pgm[offset : offset + size]
+
+                    actual_size = byte_length(codeslice)
+                    if actual_size != size:
+                        raise HalmosException(
+                            f"CODECOPY: expected {size} bytes but got {actual_size}"
+                        )
+
                     ex.st.memory[loc : loc + size] = iter_bytes(codeslice)
 
                 elif opcode == EVM.BYTE:
@@ -2703,16 +2899,16 @@ class SEVM:
                         ex.st.push(self.sym_byte_of(idx, w))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
-                    num_keys: int = opcode - EVM.LOG0
+                    if ex.message().is_static:
+                        raise WriteInStaticContext(ex.context_str())
+
+                    num_topics: int = opcode - EVM.LOG0
                     loc: int = ex.st.mloc()
-                    # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic LOG data size")
-                    keys = []
-                    for _ in range(num_keys):
-                        keys.append(ex.st.pop())
-                    ex.log.append(
-                        (keys, wload(ex.st.memory, loc, size) if size > 0 else None)
-                    )
+                    topics = list(ex.st.pop() for _ in range(num_topics))
+                    data = wload(ex.st.memory, loc, size) if size > 0 else None
+
+                    ex.emit_log(EventLog(ex.this, topics, data))
 
                 elif opcode == EVM.PUSH0:
                     ex.st.push(con(0))
@@ -2736,25 +2932,24 @@ class SEVM:
                     ex.st.swap(opcode - EVM.SWAP1 + 1)
 
                 else:
-                    warn(
-                        UNSUPPORTED_OPCODE,
-                        f"Unsupported opcode {hex(opcode)} ({str_opcode.get(opcode, '?')})",
-                    )
-                    out.append(ex)
-                    continue
+                    # TODO: switch to InvalidOpcode when we have full opcode coverage
+                    # this halts the path, but we should only halt the current context
+                    raise HalmosException(f"Unsupported opcode {hex(opcode)}")
 
                 ex.next_pc()
                 stack.append((ex, step_id))
 
-            except NotConcreteError as err:
-                ex.error = f"{err}"
+            except EvmException as err:
+                ex.halt(error=err)
                 out.append(ex)
                 continue
 
-            except Exception as err:
+            except HalmosException as err:
                 if self.options["debug"]:
-                    print(ex)
-                raise
+                    print(err)
+                ex.halt(data=None, error=err)
+                out.append(ex)
+                continue
 
         return (out, steps, logs)
 
@@ -2767,31 +2962,13 @@ class SEVM:
         #
         block,
         #
-        calldata,
-        callvalue,
-        caller,
+        context: CallContext,
+        #
         this,
         #
         pgm,
-        # pc,
-        # st,
-        # jumpis,
-        # output,
         symbolic,
-        # prank,
-        #
         solver,
-        # path,
-        # alias,
-        #
-        # log,
-        # cnts,
-        # sha3s,
-        # storages,
-        # balances,
-        # calls,
-        # failed,
-        # error,
     ) -> Exec:
         return Exec(
             code=code,
@@ -2800,16 +2977,13 @@ class SEVM:
             #
             block=block,
             #
-            calldata=calldata,
-            callvalue=callvalue,
-            caller=caller,
-            this=this,
+            context=context,
             #
+            this=this,
             pgm=pgm,
             pc=0,
             st=State(),
             jumpis={},
-            output=None,
             symbolic=symbolic,
             prank=Prank(),
             #
@@ -2823,6 +2997,4 @@ class SEVM:
             storages={},
             balances={},
             calls=[],
-            failed=False,
-            error="",
         )

@@ -47,12 +47,52 @@ def con_addr(n: int) -> BitVecRef:
     return BitVecVal(n, 160)
 
 
+def green(text: str) -> str:
+    return f"\033[32m{text}\033[0m"
+
+
+def red(text: str) -> str:
+    return f"\033[31m{text}\033[0m"
+
+
+def yellow(text: str) -> str:
+    return f"\033[33m{text}\033[0m"
+
+
+def cyan(text: str) -> str:
+    return f"\033[36m{text}\033[0m"
+
+
 def color_good(text: str) -> str:
-    return "\033[32m" + text + "\033[0m"
+    return green(text)
+
+
+def color_error(text: str) -> str:
+    return red(text)
 
 
 def color_warn(text: str) -> str:
-    return "\033[31m" + text + "\033[0m"
+    return red(text)
+
+
+def color_info(text: str) -> str:
+    return cyan(text)
+
+
+def error(text: str) -> None:
+    print(color_error(text))
+
+
+def warn(text: str) -> None:
+    print(color_warn(text))
+
+
+def info(text: str) -> None:
+    print(color_info(text))
+
+
+def indent_text(text: str, n: int = 4) -> str:
+    return "\n".join(" " * n + line for line in text.splitlines())
 
 
 class EVM:

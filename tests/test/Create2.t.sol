@@ -77,10 +77,36 @@ contract Create2Test is Test {
         assert(C(c2).num2() == x);
     }
 
-    function check_create2_collision(uint x, uint y, bytes32 salt) public {
+    function check_create2_collision_basic(uint x, uint y, bytes32 salt) public {
         C c1 = new C{salt: salt}(x, y);
-        C c2 = new C{salt: salt}(x, y); // expected to fail
-        assert(c1 == c2); // deadcode
+        C c2 = new C{salt: salt}(x, y); // expected to fail (Solidity reverts)
+        c1; c2; // silence warnings
+    }
+
+    function check_create2_collision_lowlevel(uint x, uint y, bytes32 salt) public {
+        bytes memory deploymentBytecode = abi.encodePacked(type(C).creationCode, abi.encode(x, y));
+
+        address addr1;
+        address addr2;
+
+        assembly {
+            addr1 := create2(
+                0, // value
+                add(deploymentBytecode, 32), // data offset
+                mload(deploymentBytecode), // data length
+                salt
+            )
+
+            addr2 := create2(
+                0, // value
+                add(deploymentBytecode, 32), // data offset
+                mload(deploymentBytecode), // data length
+                salt
+            )
+        }
+
+        assert(addr1 != address(0));
+        assert(addr2 == address(0)); // expected to fail without reverting
     }
 
     function check_create2_no_collision_1(uint x, uint y, bytes32 salt1, bytes32 salt2) public {
