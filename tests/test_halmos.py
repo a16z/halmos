@@ -13,11 +13,11 @@ from test_fixtures import halmos_options
     "cmd, expected_path",
     [
         (
-            ["--root", "tests"],
+            ["--root", "tests/regression"],
             "tests/expected/all.json",
         ),
         (
-            ["--root", "tests", "--function", "testFFI_"],
+            ["--root", "tests/regression", "--function", "testFFI_"],
             "tests/expected/ffi.json",
         ),
         (
