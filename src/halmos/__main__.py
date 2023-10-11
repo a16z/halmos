@@ -971,7 +971,11 @@ def refine(query: str) -> str:
     # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
     #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
     query = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
-    return re.sub(r"\(\s*declare-fun\s+evm_(bv[a-z]+)(_[0-9]+)?\b", r"(declare-fun dummy_\1\2", query)
+    return re.sub(
+        r"\(\s*declare-fun\s+evm_(bv[a-z]+)(_[0-9]+)?\b",
+        r"(declare-fun dummy_\1\2",
+        query,
+    )
 
 
 def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
