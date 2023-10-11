@@ -113,15 +113,6 @@ f_gasprice = Function("gasprice", BitVecSort256)
 f_origin = Function("origin", BitVecSort160)
 
 # uninterpreted arithmetic
-f_add = {
-    256: Function("evm_bvadd", BitVecSort256, BitVecSort256, BitVecSort256),
-    264: Function("evm_bvadd_264", BitVecSort264, BitVecSort264, BitVecSort264),
-}
-f_sub = Function("evm_bvsub", BitVecSort256, BitVecSort256, BitVecSort256)
-f_mul = {
-    256: Function("evm_bvmul", BitVecSort256, BitVecSort256, BitVecSort256),
-    512: Function("evm_bvmul_512", BitVecSort512, BitVecSort512, BitVecSort512),
-}
 f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
     256: Function("evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
@@ -1495,12 +1486,6 @@ class SEVM:
                     else:  # xy/y == x
                         return x
         return None
-
-    def mk_add(self, x: Any, y: Any) -> Any:
-        f_add[x.size()](x, y)
-
-    def mk_mul(self, x: Any, y: Any) -> Any:
-        f_mul[x.size()](x, y)
 
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_div(x, y)
