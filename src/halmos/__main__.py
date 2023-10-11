@@ -970,6 +970,8 @@ def refine(query: str) -> str:
     # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
     #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
     query = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
+    # remove the uninterpreted function symbols
+    # TODO: this will be no longer needed once is_model_valid is properly implemented
     return re.sub(
         r"\(\s*declare-fun\s+evm_(bv[a-z]+)(_[0-9]+)?\b",
         r"(declare-fun dummy_\1\2",
@@ -1050,6 +1052,8 @@ def package_result(
 
 
 def is_model_valid(model: AnyModel) -> bool:
+    # TODO: evaluate the path condition against the given model after excluding evm_* symbols,
+    #       since the evm_* symbols may still appear in valid models.
     for decl in model:
         if str(decl).startswith("evm_"):
             return False
