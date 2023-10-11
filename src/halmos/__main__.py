@@ -43,8 +43,8 @@ arg_parser = mk_arg_parser()
 if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)
 
-# # we need to be able to process at least the max message depth (1024)
-# sys.setrecursionlimit(1024 * 4)
+# we need to be able to process at least the max message depth (1024)
+sys.setrecursionlimit(1024 * 4)
 
 # sometimes defaults to cp1252 on Windows, which can cause UnicodeEncodeError
 if sys.stdout.encoding != "utf-8":
