@@ -16,6 +16,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 from .sevm import *
 from .utils import (
+    create_solver,
     hexify,
     indent_text,
     NamedTimer,
@@ -155,11 +156,11 @@ def mk_this() -> Address:
     return con_addr(magic_address + 1)
 
 
-def mk_solver(args: Namespace):
-    # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
-    solver = SolverFor("QF_AUFBV")
-    solver.set(timeout=args.solver_timeout_branching)
-    return solver
+def mk_solver(args: Namespace, logic="QF_AUFBV", ctx=None, assertion=False):
+    timeout = (
+        args.solver_timeout_assertion if assertion else args.solver_timeout_branching
+    )
+    return create_solver(logic, ctx, timeout, args.solver_max_memory)
 
 
 def rendered_initcode(context: CallContext) -> str:
@@ -567,8 +568,7 @@ def run(
     options = mk_options(args)
     sevm = SEVM(options)
 
-    solver = SolverFor("QF_AUFBV")
-    solver.set(timeout=args.solver_timeout_branching)
+    solver = mk_solver(args)
     solver.add(setup_ex.solver.assertions())
 
     (exs, steps, logs) = sevm.run(
@@ -942,8 +942,7 @@ class GenModelArgs:
 
 
 def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
-    solver = SolverFor("QF_AUFBV", ctx=Context())
-    solver.set(timeout=args.solver_timeout_assertion)
+    solver = mk_solver(args, ctx=Context(), assertion=True)
     solver.from_string(query)
     result = solver.check()
     model = solver.model() if result == sat else None
@@ -1082,6 +1081,7 @@ def mk_options(args: Namespace) -> Dict:
         "log": args.log,
         "expByConst": args.smt_exp_by_const,
         "timeout": args.solver_timeout_branching,
+        "max_memory": args.solver_max_memory,
         "sym_jump": args.symbolic_jump,
         "print_steps": args.print_steps,
         "unknown_calls_return_size": args.return_size_of_unknown_calls,

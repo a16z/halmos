@@ -189,6 +189,13 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout (default: %(default)s)",
     )
     group_solver.add_argument(
+        "--solver-max-memory",
+        metavar="SIZE",
+        type=int,
+        default=0,
+        help="set memory limit (in megabytes) for the solver; 0 means no limit (default: %(default)s)",
+    )
+    group_solver.add_argument(
         "--solver-fresh",
         action="store_true",
         help="run an extra solver with a fresh state for unknown",

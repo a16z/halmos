@@ -8,6 +8,20 @@ from typing import Dict, Tuple
 from z3 import *
 
 
+def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
+    # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
+    solver = SolverFor(logic, ctx=ctx)
+
+    # set timeout
+    solver.set(timeout=timeout)
+
+    # set memory limit
+    if max_memory > 0:
+        solver.set(max_memory=max_memory)
+
+    return solver
+
+
 def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
     if x.size() % 8 != 0:
         raise ValueError(x, x.size())

@@ -26,6 +26,7 @@ from z3 import *
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
 from .exceptions import *
 from .utils import (
+    create_solver,
     EVM,
     sha3_inv,
     restore_precomputed_hashes,
@@ -2469,8 +2470,9 @@ class SEVM:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
-        new_solver = SolverFor("QF_AUFBV")
-        new_solver.set(timeout=self.options["timeout"])
+        new_solver = create_solver(
+            timeout=self.options["timeout"], max_memory=self.options["max_memory"]
+        )
         new_solver.add(ex.solver.assertions())
         new_solver.add(cond)
         new_path = ex.path.copy()
