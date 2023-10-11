@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 
 contract FfiTest is Test {
 
-    function testFFI_HexOutput() public {
+    function check_HexOutput() public {
         string[] memory inputs = new string[](3);
         inputs[0] = "echo";
         inputs[1] = "-n";
@@ -19,7 +19,7 @@ contract FfiTest is Test {
         assert(expected == output);
     }
 
-    function testFFI_StringOutput() public {
+    function check_StringOutput() public {
         string memory str = "arbitrary string";
 
         string[] memory inputs = new string[](3);
@@ -35,7 +35,7 @@ contract FfiTest is Test {
         assert(expected == output);
     }
 
-    function testFFI_Stderr() public {
+    function check_Stderr() public {
         string[] memory inputs = new string[](3);
         inputs[0] = "logger";
         inputs[1] = "-s";
@@ -51,7 +51,7 @@ contract FfiTest is Test {
         */
     }
 
-    function testFFI_Failure() public {
+    function check_Failure() public {
         string[] memory inputs = new string[](1);
         inputs[0] = "must_fail";
 

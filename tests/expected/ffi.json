@@ -3,7 +3,7 @@
     "test_results": {
         "test/Ffi.t.sol:FfiTest": [
             {
-                "name": "testFFI_Failure()",
+                "name": "check_Failure()",
                 "exitcode": 2,
                 "num_models": null,
                 "models": null,
@@ -12,7 +12,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "testFFI_HexOutput()",
+                "name": "check_HexOutput()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -21,7 +21,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "testFFI_Stderr()",
+                "name": "check_Stderr()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -30,7 +30,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "testFFI_StringOutput()",
+                "name": "check_StringOutput()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,

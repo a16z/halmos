@@ -1,0 +1,11 @@
+[profile.default]
+src = 'src'
+out = 'out'
+libs = ['../lib', 'lib']
+
+# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+force = false
+evm_version = 'shanghai'
+
+# compile options used by halmos (to prevent unnecessary recompilation when running forge test and halmos together)
+extra_output = ["storageLayout", "metadata"]
