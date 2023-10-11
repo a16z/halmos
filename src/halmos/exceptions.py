@@ -79,6 +79,8 @@ class InvalidJumpDestError(ExceptionalHalt):
         `PUSH-N` opcodes.
     """
 
+    pass
+
 
 class MessageDepthLimitError(ExceptionalHalt):
     """
