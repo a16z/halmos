@@ -26,6 +26,7 @@ from z3 import *
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
 from .exceptions import *
 from .utils import (
+    create_solver,
     EVM,
     sha3_inv,
     restore_precomputed_hashes,
@@ -113,15 +114,6 @@ f_gasprice = Function("gasprice", BitVecSort256)
 f_origin = Function("origin", BitVecSort160)
 
 # uninterpreted arithmetic
-f_add = {
-    256: Function("evm_bvadd", BitVecSort256, BitVecSort256, BitVecSort256),
-    264: Function("evm_bvadd_264", BitVecSort264, BitVecSort264, BitVecSort264),
-}
-f_sub = Function("evm_bvsub", BitVecSort256, BitVecSort256, BitVecSort256)
-f_mul = {
-    256: Function("evm_bvmul", BitVecSort256, BitVecSort256, BitVecSort256),
-    512: Function("evm_bvmul_512", BitVecSort512, BitVecSort512, BitVecSort512),
-}
 f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
     256: Function("evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
@@ -1496,12 +1488,6 @@ class SEVM:
                         return x
         return None
 
-    def mk_add(self, x: Any, y: Any) -> Any:
-        f_add[x.size()](x, y)
-
-    def mk_mul(self, x: Any, y: Any) -> Any:
-        f_mul[x.size()](x, y)
-
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_div(x, y)
         ex.solver.add(ULE(term, x))  # (x / y) <= x
@@ -1516,131 +1502,100 @@ class SEVM:
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
         w1 = b2i(w1)
         w2 = b2i(w2)
+
         if op == EVM.ADD:
-            if self.options.get("add"):
-                return w1 + w2
-            if is_bv_value(w1) and is_bv_value(w2):
-                return w1 + w2
-            else:
-                return self.mk_add(w1, w2)
-        elif op == EVM.SUB:
-            if self.options.get("sub"):
-                return w1 - w2
-            if is_bv_value(w1) and is_bv_value(w2):
-                return w1 - w2
-            else:
-                return f_sub(w1, w2)
-        elif op == EVM.MUL:
-            if self.options.get("mul"):
-                return w1 * w2
-            if is_bv_value(w1) and is_bv_value(w2):
-                return w1 * w2
-            elif is_bv_value(w1):
-                i1: int = int(str(w1))  # must be concrete
-                if i1 == 0:
-                    return w1
-                elif is_power_of_two(i1):
-                    return w2 << int(math.log(i1, 2))
-                else:
-                    return self.mk_mul(w1, w2)
-            elif is_bv_value(w2):
-                i2: int = int(str(w2))  # must be concrete
-                if i2 == 0:
-                    return w2
-                elif is_power_of_two(i2):
-                    return w1 << int(math.log(i2, 2))
-                else:
-                    return self.mk_mul(w1, w2)
-            else:
-                return self.mk_mul(w1, w2)
-        elif op == EVM.DIV:
+            return w1 + w2
+
+        if op == EVM.SUB:
+            return w1 - w2
+
+        if op == EVM.MUL:
+            return w1 * w2
+
+        if op == EVM.DIV:
             div_for_overflow_check = self.div_xy_y(w1, w2)
             if div_for_overflow_check is not None:  # xy/x or xy/y
                 return div_for_overflow_check
-            if self.options.get("div"):
-                return UDiv(w1, w2)  # unsigned div (bvudiv)
+
             if is_bv_value(w1) and is_bv_value(w2):
-                return UDiv(w1, w2)
-            elif is_bv_value(w2):
+                return UDiv(w1, w2)  # unsigned div (bvudiv)
+
+            if is_bv_value(w2):
                 # concrete denominator case
                 i2: int = w2.as_long()
                 if i2 == 0:
                     return w2
-                elif i2 == 1:
+
+                if i2 == 1:
                     return w1
-                elif is_power_of_two(i2):
+
+                if is_power_of_two(i2):
                     return LShR(w1, int(math.log(i2, 2)))
-                elif self.options.get("divByConst"):
-                    return UDiv(w1, w2)
-                else:
-                    return self.mk_div(ex, w1, w2)
-            else:
-                return self.mk_div(ex, w1, w2)
-        elif op == EVM.MOD:
-            if self.options.get("mod"):
-                return URem(w1, w2)
+
+            return self.mk_div(ex, w1, w2)
+
+        if op == EVM.MOD:
             if is_bv_value(w1) and is_bv_value(w2):
                 return URem(w1, w2)  # bvurem
-            elif is_bv_value(w2):
+
+            if is_bv_value(w2):
                 i2: int = int(str(w2))
                 if i2 == 0 or i2 == 1:
                     return con(0, w2.size())
-                elif is_power_of_two(i2):
+
+                if is_power_of_two(i2):
                     bitsize = int(math.log(i2, 2))
                     return ZeroExt(w2.size() - bitsize, Extract(bitsize - 1, 0, w1))
-                elif self.options.get("modByConst"):
-                    return URem(w1, w2)
-                else:
-                    return self.mk_mod(ex, w1, w2)
-            else:
-                return self.mk_mod(ex, w1, w2)
-        elif op == EVM.SDIV:
-            if self.options.get("div") or (is_bv_value(w1) and is_bv_value(w2)):
+
+            return self.mk_mod(ex, w1, w2)
+
+        if op == EVM.SDIV:
+            if is_bv_value(w1) and is_bv_value(w2):
                 return w1 / w2  # bvsdiv
 
             if is_bv_value(w2):
                 # concrete denominator case
                 i2: int = w2.as_long()
-
                 if i2 == 0:
                     return w2  # div by 0 is 0
 
                 if i2 == 1:
                     return w1  # div by 1 is identity
 
-                if self.options.get("divByConst"):
-                    return w1 / w2  # bvsdiv
-
             # fall back to uninterpreted function :(
             return f_sdiv(w1, w2)
 
-        elif op == EVM.SMOD:
+        if op == EVM.SMOD:
             if is_bv_value(w1) and is_bv_value(w2):
                 return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
-            else:
-                return f_smod(w1, w2)
-        elif op == EVM.EXP:
+
+            # TODO: if is_bv_value(w2):
+
+            return f_smod(w1, w2)
+
+        if op == EVM.EXP:
             if is_bv_value(w1) and is_bv_value(w2):
                 i1: int = int(str(w1))  # must be concrete
                 i2: int = int(str(w2))  # must be concrete
                 return con(i1**i2)
-            elif is_bv_value(w2):
+
+            if is_bv_value(w2):
                 i2: int = int(str(w2))
                 if i2 == 0:
                     return con(1)
-                elif i2 == 1:
+
+                if i2 == 1:
                     return w1
-                elif i2 <= self.options.get("expByConst"):
+
+                if i2 <= self.options.get("expByConst"):
                     exp = w1
                     for _ in range(i2 - 1):
                         exp = exp * w1
                     return exp
-                else:
-                    return f_exp(w1, w2)
-            else:
-                return f_exp(w1, w2)
-        else:
-            raise ValueError(op)
+
+            return f_exp(w1, w2)
+
+        raise ValueError(op)
 
     def arith2(self, ex: Exec, op: int, w1: Word, w2: Word, w3: Word) -> Word:
         w1 = b2i(w1)
@@ -2515,8 +2470,9 @@ class SEVM:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
-        new_solver = SolverFor("QF_AUFBV")
-        new_solver.set(timeout=self.options["timeout"])
+        new_solver = create_solver(
+            timeout=self.options["timeout"], max_memory=self.options["max_memory"]
+        )
         new_solver.add(ex.solver.assertions())
         new_solver.add(cond)
         new_path = ex.path.copy()

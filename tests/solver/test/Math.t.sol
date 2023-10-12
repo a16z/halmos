@@ -10,7 +10,7 @@ contract MathTest {
         }
     }
 
-    // NOTE: currently timeout when --smt-div is enabled; producing invalid counterexamples when --smt-div is not given
+    /// @custom:halmos --solver-timeout-assertion 10000
     function check_deposit(uint a, uint A1, uint S1) public pure {
         uint s = (a * S1) / A1;
 
@@ -21,7 +21,7 @@ contract MathTest {
         assert(A1 * S2 <= A2 * S1); // no counterexample
     }
 
-    /// @custom:halmos --smt-div --solver-timeout-assertion=0
+    /// @custom:halmos --solver-timeout-assertion 0
     function check_mint(uint s, uint A1, uint S1) public pure {
         uint a = (s * A1) / S1;
 

@@ -74,7 +74,6 @@ abstract contract TestMulWad is Test {
 
     function createWadMul() internal virtual returns (WadMul);
 
-    /// @custom:halmos --smt-div
     function check_wadMul_solEquivalent(int256 x, int256 y) external {
         bytes memory encodedCall = abi.encodeWithSelector(WadMul.wadMul.selector, x, y);
 

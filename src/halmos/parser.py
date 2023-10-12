@@ -167,23 +167,6 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     group_solver = parser.add_argument_group("Solver options")
 
     group_solver.add_argument(
-        "--no-smt-add", action="store_true", help="do not interpret `+`"
-    )
-    group_solver.add_argument(
-        "--no-smt-sub", action="store_true", help="do not interpret `-`"
-    )
-    group_solver.add_argument(
-        "--no-smt-mul", action="store_true", help="do not interpret `*`"
-    )
-    group_solver.add_argument("--smt-div", action="store_true", help="interpret `/`")
-    group_solver.add_argument("--smt-mod", action="store_true", help="interpret `mod`")
-    group_solver.add_argument(
-        "--smt-div-by-const", action="store_true", help="interpret division by constant"
-    )
-    group_solver.add_argument(
-        "--smt-mod-by-const", action="store_true", help="interpret constant modulo"
-    )
-    group_solver.add_argument(
         "--smt-exp-by-const",
         metavar="N",
         type=int,
@@ -204,6 +187,13 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         type=int,
         default=1000,
         help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout (default: %(default)s)",
+    )
+    group_solver.add_argument(
+        "--solver-max-memory",
+        metavar="SIZE",
+        type=int,
+        default=0,
+        help="set memory limit (in megabytes) for the solver; 0 means no limit (default: %(default)s)",
     )
     group_solver.add_argument(
         "--solver-fresh",
@@ -247,11 +237,6 @@ def mk_arg_parser() -> argparse.ArgumentParser:
 
     group_experimental.add_argument(
         "--symbolic-jump", action="store_true", help="support symbolic jump destination"
-    )
-    group_experimental.add_argument(
-        "--print-potential-counterexample",
-        action="store_true",
-        help="print potentially invalid counterexamples",
     )
 
     return parser

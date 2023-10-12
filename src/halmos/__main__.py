@@ -16,6 +16,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 from .sevm import *
 from .utils import (
+    create_solver,
     hexify,
     indent_text,
     NamedTimer,
@@ -155,11 +156,11 @@ def mk_this() -> Address:
     return con_addr(magic_address + 1)
 
 
-def mk_solver(args: Namespace):
-    # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
-    solver = SolverFor("QF_AUFBV")
-    solver.set(timeout=args.solver_timeout_branching)
-    return solver
+def mk_solver(args: Namespace, logic="QF_AUFBV", ctx=None, assertion=False):
+    timeout = (
+        args.solver_timeout_assertion if assertion else args.solver_timeout_branching
+    )
+    return create_solver(logic, ctx, timeout, args.solver_max_memory)
 
 
 def rendered_initcode(context: CallContext) -> str:
@@ -567,8 +568,7 @@ def run(
     options = mk_options(args)
     sevm = SEVM(options)
 
-    solver = SolverFor("QF_AUFBV")
-    solver.set(timeout=args.solver_timeout_branching)
+    solver = mk_solver(args)
     solver.add(setup_ex.solver.assertions())
 
     (exs, steps, logs) = sevm.run(
@@ -689,17 +689,12 @@ def run(
             if is_valid:
                 print(red(f"Counterexample: {render_model(model)}"))
                 counterexamples.append(model)
-            elif args.print_potential_counterexample:
+            else:
                 warn(
                     COUNTEREXAMPLE_INVALID,
                     f"Counterexample (potentially invalid): {render_model(model)}",
                 )
                 counterexamples.append(model)
-            else:
-                warn(
-                    COUNTEREXAMPLE_INVALID,
-                    f"Counterexample (potentially invalid): (not displayed, use --print-potential-counterexample)",
-                )
         else:
             warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
 
@@ -946,13 +941,20 @@ class GenModelArgs:
     sexpr: str
 
 
+def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
+    solver = mk_solver(args, ctx=Context(), assertion=True)
+    solver.from_string(query)
+    result = solver.check()
+    model = solver.model() if result == sat else None
+    return result, model
+
+
 def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
     args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
-    solver = SolverFor("QF_AUFBV", ctx=Context())
-    solver.set(timeout=args.solver_timeout_assertion)
-    solver.from_string(sexpr)
-    res = solver.check()
-    model = solver.model() if res == sat else None
+    res, model = solve(sexpr, args)
+
+    if res == sat and not is_model_valid(model):
+        res, model = solve(refine(sexpr), args)
 
     # TODO: handle args.solver_subprocess
 
@@ -963,38 +965,40 @@ def is_unknown(result: CheckSatResult, model: Model) -> bool:
     return result == unknown or (result == sat and not is_model_valid(model))
 
 
+def refine(query: str) -> str:
+    # replace uninterpreted abstraction with actual symbols for assertion solving
+    # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
+    #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
+    query = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
+    # remove the uninterpreted function symbols
+    # TODO: this will be no longer needed once is_model_valid is properly implemented
+    return re.sub(
+        r"\(\s*declare-fun\s+evm_(bv[a-z]+)(_[0-9]+)?\b",
+        r"(declare-fun dummy_\1\2",
+        query,
+    )
+
+
 def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
     if args.verbose >= 1:
         print(f"Checking path condition (path id: {idx+1})")
 
-    model = None
-
     ex.solver.set(timeout=args.solver_timeout_assertion)
     res = ex.solver.check()
-    if res == sat:
-        model = ex.solver.model()
+    model = ex.solver.model() if res == sat else None
 
-    if is_unknown(res, model) and args.solver_fresh:
+    if res == sat and not is_model_valid(model):
         if args.verbose >= 1:
-            print(f"  Checking again with a fresh solver")
-        sol2 = SolverFor("QF_AUFBV", ctx=Context())
-        # sol2.set(timeout=args.solver_timeout_assertion)
-        sol2.from_string(ex.solver.to_smt2())
-        res = sol2.check()
-        if res == sat:
-            model = sol2.model()
+            print(f"  Checking again with refinement")
+        res, model = solve(refine(ex.solver.to_smt2()), args)
 
-    if is_unknown(res, model) and args.solver_subprocess:
+    if args.solver_subprocess and is_unknown(res, model):
         if args.verbose >= 1:
             print(f"  Checking again in an external process")
         fname = f"/tmp/{uuid.uuid4().hex}.smt2"
         if args.verbose >= 1:
             print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
-        query = ex.solver.to_smt2()
-        # replace uninterpreted abstraction with actual symbols for assertion solving
-        # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
-        #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
-        query = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
+        query = refine(ex.solver.to_smt2())
         with open(fname, "w") as f:
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)
@@ -1048,6 +1052,8 @@ def package_result(
 
 
 def is_model_valid(model: AnyModel) -> bool:
+    # TODO: evaluate the path condition against the given model after excluding evm_* symbols,
+    #       since the evm_* symbols may still appear in valid models.
     for decl in model:
         if str(decl).startswith("evm_"):
             return False
@@ -1077,15 +1083,9 @@ def mk_options(args: Namespace) -> Dict:
         "verbose": args.verbose,
         "debug": args.debug,
         "log": args.log,
-        "add": not args.no_smt_add,
-        "sub": not args.no_smt_sub,
-        "mul": not args.no_smt_mul,
-        "div": args.smt_div,
-        "mod": args.smt_mod,
-        "divByConst": args.smt_div_by_const,
-        "modByConst": args.smt_mod_by_const,
         "expByConst": args.smt_exp_by_const,
         "timeout": args.solver_timeout_branching,
+        "max_memory": args.solver_max_memory,
         "sym_jump": args.symbolic_jump,
         "print_steps": args.print_steps,
         "unknown_calls_return_size": args.return_size_of_unknown_calls,

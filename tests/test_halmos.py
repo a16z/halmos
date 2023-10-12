@@ -13,12 +13,16 @@ from test_fixtures import halmos_options
     "cmd, expected_path",
     [
         (
-            ["--root", "tests"],
+            ["--root", "tests/regression"],
             "tests/expected/all.json",
         ),
         (
-            ["--root", "tests", "--function", "testFFI_"],
+            ["--root", "tests/ffi"],
             "tests/expected/ffi.json",
+        ),
+        (
+            ["--root", "tests/solver"],
+            "tests/expected/solver.json",
         ),
         (
             ["--root", "examples/simple"],
@@ -34,8 +38,9 @@ from test_fixtures import halmos_options
         ),
     ],
     ids=(
-        "tests",
-        "ffi:tests",
+        "tests/regression",
+        "tests/ffi",
+        "long:tests/solver",
         "long:examples/simple",
         "long:examples/tokens/ERC20",
         "long:examples/tokens/ERC721",

@@ -1,0 +1,67 @@
+{
+    "exitcode": 1,
+    "test_results": {
+        "test/Math.t.sol:MathTest": [
+            {
+                "name": "check_Avg(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_deposit(uint256,uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_mint(uint256,uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SignedDiv.t.sol:TestBadWadMul": [
+            {
+                "name": "check_wadMul_solEquivalent(int256,int256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SignedDiv.t.sol:TestGoodWadMul": [
+            {
+                "name": "check_wadMul_solEquivalent(int256,int256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Solver.t.sol:SolverTest": [
+            {
+                "name": "check_foo(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
+}

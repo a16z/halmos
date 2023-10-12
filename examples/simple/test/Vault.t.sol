@@ -26,7 +26,7 @@ contract VaultTest is SymTest {
         vault.setTotalShares(svm.createUint256("S1"));
     }
 
-    // NOTE: currently timeout when --smt-div is enabled, while producing invalid counterexamples when --smt-div is not given
+    /// @custom:halmos --solver-timeout-assertion 10000
     function check_deposit(uint assets) public {
         uint A1 = vault.totalAssets();
         uint S1 = vault.totalShares();
@@ -40,7 +40,6 @@ contract VaultTest is SymTest {
         assert(A1 * S2 <= A2 * S1); // no counterexample
     }
 
-    /// @custom:halmos --smt-div
     function check_mint(uint shares) public {
         uint A1 = vault.totalAssets();
         uint S1 = vault.totalShares();
