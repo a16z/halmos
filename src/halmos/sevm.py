@@ -26,23 +26,24 @@ from z3 import *
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
 from .exceptions import *
 from .utils import (
-    create_solver,
-    EVM,
-    sha3_inv,
-    restore_precomputed_hashes,
-    str_opcode,
     assert_address,
     assert_uint256,
-    con_addr,
     bv_value_to_bytes,
-    hexify,
+    byte_length,
     color_info,
+    con_addr,
+    create_solver,
+    EVM,
+    hexify,
+    int_of,
+    restore_precomputed_hashes,
+    sha3_inv,
+    str_opcode,
+    unbox_int,
 )
 from .warnings import (
     warn,
-    UNSUPPORTED_OPCODE,
     LIBRARY_PLACEHOLDER,
-    UNINTERPRETED_UNKNOWN_CALLS,
     INTERNAL_ERROR,
 )
 
@@ -165,14 +166,6 @@ class Instruction:
         return instruction_length(self.opcode)
 
 
-class HalmosException(Exception):
-    pass
-
-
-class NotConcreteError(HalmosException):
-    pass
-
-
 def id_str(x: Any) -> str:
     return hexify(x).replace(" ", "")
 
@@ -190,26 +183,6 @@ def padded_slice(lst: List, start: int, size: int, default=0) -> List:
     end = start + size
     n = len(lst)
     return [lst[i] if i < n else default for i in range(start, end)]
-
-
-def unbox_int(x: Any) -> Any:
-    """Convert int-like objects to int"""
-    if isinstance(x, bytes):
-        return int.from_bytes(x, "big")
-
-    if is_bv_value(x):
-        return x.as_long()
-
-    return x
-
-
-def int_of(x: Any, err: str = "expected concrete value but got") -> int:
-    res = unbox_int(x)
-
-    if isinstance(res, int):
-        return res
-
-    raise NotConcreteError(f"{err}: {x}")
 
 
 def iter_bytes(x: Any, _byte_length: int = -1):
@@ -281,18 +254,6 @@ def uint160(x: BitVecRef) -> BitVecRef:
 
 def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, BitVecSorts[size_bits])
-
-
-def byte_length(x: Any) -> int:
-    if is_bv(x):
-        if x.size() % 8 != 0:
-            raise ValueError(x)
-        return x.size() >> 3
-
-    if isinstance(x, bytes):
-        return len(x)
-
-    raise ValueError(x)
 
 
 def instruction_length(opcode: Any) -> int:

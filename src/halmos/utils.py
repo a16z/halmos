@@ -3,9 +3,11 @@
 import re
 
 from timeit import default_timer as timer
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any
 
 from z3 import *
+
+from .exceptions import NotConcreteError
 
 
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
@@ -28,6 +30,43 @@ def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
     return x.as_long().to_bytes(x.size() // 8, "big")
 
 
+def unbox_int(x: Any) -> Any:
+    """
+    Attempts to convert int-like objects to int
+    """
+    if isinstance(x, bytes):
+        return int.from_bytes(x, "big")
+
+    if is_bv_value(x):
+        return x.as_long()
+
+    return x
+
+
+def int_of(x: Any, err: str = "expected concrete value but got") -> int:
+    """
+    Converts int-like objects to int or raises NotConcreteError
+    """
+    res = unbox_int(x)
+
+    if isinstance(res, int):
+        return res
+
+    raise NotConcreteError(f"{err}: {x}")
+
+
+def byte_length(x: Any) -> int:
+    if is_bv(x):
+        if x.size() % 8 != 0:
+            raise ValueError(x)
+        return x.size() >> 3
+
+    if isinstance(x, bytes):
+        return len(x)
+
+    raise ValueError(x)
+
+
 def hexify(x):
     if isinstance(x, str):
         return re.sub(r"\b(\d+)\b", lambda match: hex(int(match.group(1))), x)
@@ -36,11 +75,53 @@ def hexify(x):
     elif isinstance(x, bytes):
         return "0x" + x.hex()
     elif is_bv_value(x):
-        # preserving bitsize could be confusing due to some bv values given as strings; need refactoring to fix properly
-        # return hexify(x.as_long().to_bytes((x.size() + 7) // 8, 'big')) # bitsize may not be a multiple of 8
-        return hex(x.as_long())
+        # maintain the byte size of x
+        num_bytes = byte_length(x)
+        return f"0x{x.as_long():0{num_bytes * 2}x}"
     else:
         return hexify(str(x))
+
+
+def stringify(symbol_name: str, val: Any):
+    """
+    Formats a value based on the inferred type of the variable.
+
+    Expects symbol_name to be of the form 'p_<sourceVar>_<sourceType>', e.g. 'p_x_uint256'
+    """
+    if not is_bv_value(val):
+        warn(f"{val} is not a bitvector value")
+        return str(val)
+
+    tokens = symbol_name.split("_")
+    if len(tokens) < 3:
+        warn(f"Failed to infer type for symbol '{symbol_name}'")
+
+    if len(tokens) >= 4 and tokens[-1].isdigit():
+        # we may have something like p_val_bytes_01
+        # the last token being a symbol number, discard it
+        tokens.pop()
+
+    type_name = tokens[-1]
+
+    if type_name.startswith("uint"):
+        v = val.as_long()
+        return v if v < 2**64 else hex(v)
+    elif type_name.startswith("int"):
+        v = val.as_signed_long()
+        if -(2**63) <= v < 2**63:
+            return v
+        return f"0x{val.as_long():0{byte_length(val) * 2}x}"
+    elif type_name == "bool":
+        return str(val.as_long() != 0).lower()
+    elif type_name == "string":
+        str_val = bytes.fromhex(hexify(val)[2:]).decode("utf-8")
+        return f'"{str_val}"'
+    elif type_name == "bytes":
+        return f'hex"{hex(val.as_long())[2:]}"'
+    elif type_name == "address":
+        return f"0x{val.as_long():040x}"
+    else:  # address, bytes32, bytes4, structs, etc.
+        return hexify(val)
 
 
 def assert_address(x: BitVecRef) -> None:

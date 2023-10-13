@@ -18,6 +18,7 @@ from .sevm import *
 from .utils import (
     create_solver,
     hexify,
+    stringify,
     indent_text,
     NamedTimer,
     yellow,
@@ -1066,14 +1067,14 @@ def to_str_model(model: Model, print_full_model: bool) -> StrModel:
         return name.startswith("p_") or name.startswith("halmos_")
 
     select_model = filter(select, model) if not print_full_model else model
-    return {str(decl): hexify(model[decl]) for decl in select_model}
+    return {str(decl): stringify(str(decl), model[decl]) for decl in select_model}
 
 
 def render_model(model: UnionType[str, StrModel]) -> str:
     if isinstance(model, str):
         return model
 
-    formatted = [f"\n    {decl} = {hexify(val)}" for decl, val in model.items()]
+    formatted = [f"\n    {decl} = {val}" for decl, val in model.items()]
     return "".join(sorted(formatted)) if formatted else "∅"
 
 
