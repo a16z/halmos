@@ -71,11 +71,23 @@ class halmos_cheat_code:
     # bytes4(keccak256("createUint(uint256,string)"))
     create_uint: int = 0x66830DFA
 
+    # bytes4(keccak256("createUint256(string)"))
+    create_uint256: int = 0xBC7BEEFC
+
+    # bytes4(keccak256("createInt(uint256,string)"))
+    create_int: int = 0x49B9C7D4
+
+    # bytes4(keccak256("createInt256(string)"))
+    create_int256: int = 0xC2CE6AED
+
     # bytes4(keccak256("createBytes(uint256,string)"))
     create_bytes: int = 0xEEF5311D
 
-    # bytes4(keccak256("createUint256(string)"))
-    create_uint256: int = 0xBC7BEEFC
+    # bytes4(keccak256("createString(uint256,string)"))
+    create_string: int = 0xCE68656C
+
+    # bytes4(keccak256("createBytes4(string)"))
+    create_bytes4: int = 0xDE143925
 
     # bytes4(keccak256("createBytes32(string)"))
     create_bytes32: int = 0xBF72FA66
