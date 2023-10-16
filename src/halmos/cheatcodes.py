@@ -1,10 +1,89 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import json
+import re
+
+from subprocess import Popen, PIPE
 from typing import List, Dict, Set, Tuple, Any
 
 from z3 import *
 
-from .utils import assert_address, con_addr
+from .exceptions import FailCheatcode, HalmosException
+from .utils import *
+from .warnings import (
+    INTERNAL_ERROR,
+    warn,
+)
+
+
+def name_of(x: str) -> str:
+    return re.sub(r"\s+", "_", x)
+
+
+def extract_string_argument(calldata: BitVecRef, arg_idx: int):
+    """Extracts idx-th argument of string from calldata"""
+    string_offset = int_of(
+        extract_bytes(calldata, 4 + arg_idx * 32, 32),
+        "symbolic offset for string argument",
+    )
+    string_length = int_of(
+        extract_bytes(calldata, 4 + string_offset, 32),
+        "symbolic size for string argument",
+    )
+    if string_length == 0:
+        return ""
+    string_value = int_of(
+        extract_bytes(calldata, 4 + string_offset + 32, string_length),
+        "symbolic string argument",
+    )
+    string_bytes = string_value.to_bytes(string_length, "big")
+    return string_bytes.decode("utf-8")
+
+
+def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
+    """Extracts idx-th argument of string array from calldata"""
+
+    array_slot = int_of(extract_bytes(calldata, 4 + 32 * arg_idx, 32))
+    num_strings = int_of(extract_bytes(calldata, 4 + array_slot, 32))
+
+    string_array = []
+
+    for i in range(num_strings):
+        string_offset = int_of(
+            extract_bytes(calldata, 4 + array_slot + 32 * (i + 1), 32)
+        )
+        string_length = int_of(
+            extract_bytes(calldata, 4 + array_slot + 32 + string_offset, 32)
+        )
+        string_value = int_of(
+            extract_bytes(
+                calldata, 4 + array_slot + 32 + string_offset + 32, string_length
+            )
+        )
+        string_bytes = string_value.to_bytes(string_length, "big")
+        string_array.append(string_bytes.decode("utf-8"))
+
+    return string_array
+
+
+def stringified_bytes_to_bytes(string_bytes: str):
+    """Converts a string of bytes to a bytes memory type"""
+
+    string_bytes_len = (len(string_bytes) + 1) // 2
+    string_bytes_len_enc = hex(string_bytes_len).replace("0x", "").rjust(64, "0")
+
+    string_bytes_len_ceil = (string_bytes_len + 31) // 32 * 32
+
+    ret_bytes = (
+        "00" * 31
+        + "20"
+        + string_bytes_len_enc
+        + string_bytes.ljust(string_bytes_len_ceil * 2, "0")
+    )
+    ret_len = len(ret_bytes) // 2
+    ret_bytes = bytes.fromhex(ret_bytes)
+
+    return BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
 
 
 class Prank:
@@ -20,9 +99,9 @@ class Prank:
     def __str__(self) -> str:
         if self.addr:
             if self.keep:
-                return f"startPrank({str(addr)})"
+                return f"startPrank({str(self.addr)})"
             else:
-                return f"prank({str(addr)})"
+                return f"prank({str(self.addr)})"
         else:
             return "None"
 
@@ -98,6 +177,64 @@ class halmos_cheat_code:
     # bytes4(keccak256("createBool(string)"))
     create_bool: int = 0x6E0BB659
 
+    @staticmethod
+    def handle(ex, arg: BitVec) -> BitVec:
+        funsig: int = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
+
+        # createUint(uint256,string) returns (uint256)
+        if funsig == halmos_cheat_code.create_uint:
+            bit_size = int_of(
+                extract_bytes(arg, 4, 32),
+                "symbolic bit size for halmos.createUint()",
+            )
+            name = name_of(extract_string_argument(arg, 1))
+            if bit_size <= 256:
+                label = f"halmos_{name}_uint{bit_size}_{ex.new_symbol_id():>02}"
+                ret = uint256(BitVec(label, BitVecSorts[bit_size]))
+            else:
+                raise HalmosException(f"bitsize larger than 256: {bit_size}")
+
+        # createBytes(uint256,string) returns (bytes)
+        elif funsig == halmos_cheat_code.create_bytes:
+            byte_size = int_of(
+                extract_bytes(arg, 4, 32),
+                "symbolic byte size for halmos.createBytes()",
+            )
+            name = name_of(extract_string_argument(arg, 1))
+            label = f"halmos_{name}_bytes_{ex.new_symbol_id():>02}"
+            symbolic_bytes = BitVec(label, BitVecSorts[byte_size * 8])
+            ret = Concat(con(32), con(byte_size), symbolic_bytes)
+
+        # createUint256(string) returns (uint256)
+        elif funsig == halmos_cheat_code.create_uint256:
+            name = name_of(extract_string_argument(arg, 0))
+            label = f"halmos_{name}_uint256_{ex.new_symbol_id():>02}"
+            ret = BitVec(label, BitVecSort256)
+
+        # createBytes32(string) returns (bytes32)
+        elif funsig == halmos_cheat_code.create_bytes32:
+            name = name_of(extract_string_argument(arg, 0))
+            label = f"halmos_{name}_bytes32_{ex.new_symbol_id():>02}"
+            ret = BitVec(label, BitVecSort256)
+
+        # createAddress(string) returns (address)
+        elif funsig == halmos_cheat_code.create_address:
+            name = name_of(extract_string_argument(arg, 0))
+            label = f"halmos_{name}_address_{ex.new_symbol_id():>02}"
+            ret = uint256(BitVec(label, BitVecSort160))
+
+        # createBool(string) returns (bool)
+        elif funsig == halmos_cheat_code.create_bool:
+            name = name_of(extract_string_argument(arg, 0))
+            label = f"halmos_{name}_bool_{ex.new_symbol_id():>02}"
+            ret = uint256(BitVec(label, BitVecSort1))
+
+        else:
+            error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
+            raise HalmosException(error_msg)
+
+        return ret
+
 
 class hevm_cheat_code:
     # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
@@ -166,11 +303,185 @@ class hevm_cheat_code:
     # bytes4(keccak256("ffi(string[])"))
     ffi_sig: int = 0x89160467
 
+    @staticmethod
+    def handle(sevm, ex, arg: BitVec) -> BitVec:
+        funsig: int = int_of(extract_funsig(arg), "symbolic hevm cheatcode")
+
+        # vm.fail()
+        # BitVecVal(hevm_cheat_code.fail_payload, 800)
+        if arg == hevm_cheat_code.fail_payload:
+            raise FailCheatcode()
+
+        # vm.assume(bool)
+        elif (
+            eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
+            and funsig == hevm_cheat_code.assume_sig
+        ):
+            assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
+            ex.solver.add(assume_cond)
+            ex.path.append(str(assume_cond))
+
+        # vm.getCode(string)
+        elif funsig == hevm_cheat_code.get_code_sig:
+            calldata = bytes.fromhex(hex(arg.as_long())[2:])
+            path_len = int.from_bytes(calldata[36:68], "big")
+            path = calldata[68 : 68 + path_len].decode("utf-8")
+
+            if ":" in path:
+                [filename, contract_name] = path.split(":")
+                path = "out/" + filename + "/" + contract_name + ".json"
+
+            target = sevm.options["target"].rstrip("/")
+            path = target + "/" + path
+
+            with open(path) as f:
+                artifact = json.loads(f.read())
+
+            if artifact["bytecode"]["object"]:
+                bytecode = artifact["bytecode"]["object"].replace("0x", "")
+            else:
+                bytecode = artifact["bytecode"].replace("0x", "")
+
+            return stringified_bytes_to_bytes(bytecode)
+
+        # vm.prank(address)
+        elif funsig == hevm_cheat_code.prank_sig:
+            result = ex.prank.prank(uint160(Extract(255, 0, arg)))
+            if not result:
+                raise HalmosException("You have an active prank already.")
+
+        # vm.startPrank(address)
+        elif funsig == hevm_cheat_code.start_prank_sig:
+            result = ex.prank.startPrank(uint160(Extract(255, 0, arg)))
+            if not result:
+                raise HalmosException("You have an active prank already.")
+
+        # vm.stopPrank()
+        elif funsig == hevm_cheat_code.stop_prank_sig:
+            ex.prank.stopPrank()
+
+        # vm.deal(address,uint256)
+        elif funsig == hevm_cheat_code.deal_sig:
+            who = uint160(Extract(511, 256, arg))
+            amount = simplify(Extract(255, 0, arg))
+            ex.balance_update(who, amount)
+
+        # vm.store(address,bytes32,bytes32)
+        elif funsig == hevm_cheat_code.store_sig:
+            store_account = uint160(Extract(767, 512, arg))
+            store_slot = simplify(Extract(511, 256, arg))
+            store_value = simplify(Extract(255, 0, arg))
+            store_account_addr = sevm.resolve_address_alias(ex, store_account)
+            if store_account_addr is not None:
+                sevm.sstore(ex, store_account_addr, store_slot, store_value)
+            else:
+                raise HalmosException(f"uninitialized account: {store_account}")
+
+        # vm.load(address,bytes32)
+        elif funsig == hevm_cheat_code.load_sig:
+            load_account = uint160(Extract(511, 256, arg))
+            load_slot = simplify(Extract(255, 0, arg))
+            load_account_addr = sevm.resolve_address_alias(ex, load_account)
+            if load_account_addr is not None:
+                return sevm.sload(ex, load_account_addr, load_slot)
+            else:
+                raise HalmosException(f"uninitialized account: {store_account}")
+
+        # vm.fee(uint256)
+        elif funsig == hevm_cheat_code.fee_sig:
+            ex.block.basefee = simplify(Extract(255, 0, arg))
+
+        # vm.chainId(uint256)
+        elif funsig == hevm_cheat_code.chainid_sig:
+            ex.block.chainid = simplify(Extract(255, 0, arg))
+
+        # vm.coinbase(address)
+        elif funsig == hevm_cheat_code.coinbase_sig:
+            ex.block.coinbase = uint160(Extract(255, 0, arg))
+
+        # vm.difficulty(uint256)
+        elif funsig == hevm_cheat_code.difficulty_sig:
+            ex.block.difficulty = simplify(Extract(255, 0, arg))
+
+        # vm.roll(uint256)
+        elif funsig == hevm_cheat_code.roll_sig:
+            ex.block.number = simplify(Extract(255, 0, arg))
+
+        # vm.warp(uint256)
+        elif funsig == hevm_cheat_code.warp_sig:
+            ex.block.timestamp = simplify(Extract(255, 0, arg))
+
+        # vm.etch(address,bytes)
+        elif funsig == hevm_cheat_code.etch_sig:
+            who = extract_bytes(arg, 4 + 12, 20)
+
+            # who must be concrete
+            if not is_bv_value(who):
+                error_msg = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
+                raise HalmosException(error_msg)
+
+            # code must be concrete
+            try:
+                code_offset = int_of(extract_bytes(arg, 4 + 32, 32))
+                code_length = int_of(extract_bytes(arg, 4 + code_offset, 32))
+                code_int = int_of(extract_bytes(arg, 4 + code_offset + 32, code_length))
+                code_bytes = code_int.to_bytes(code_length, "big")
+                ex.set_code(who, code_bytes)
+            except Exception as e:
+                error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
+                raise HalmosException(error_msg) from e
+
+        # ffi(string[]) returns (bytes)
+        elif funsig == hevm_cheat_code.ffi_sig:
+            if not sevm.options.get("ffi"):
+                error_msg = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
+                raise HalmosException(error_msg)
+            cmd = extract_string_array_argument(arg, 0)
+            process = Popen(cmd, stdout=PIPE, stderr=PIPE)
+
+            (stdout, stderr) = process.communicate()
+
+            if stderr:
+                warn(
+                    INTERNAL_ERROR,
+                    f"An exception has occurred during the usage of the ffi cheatcode:\n{stderr.decode('utf-8')}",
+                )
+
+            out_bytes = stdout.decode("utf-8")
+
+            if not out_bytes.startswith("0x"):
+                out_bytes = out_bytes.strip().encode("utf-8").hex()
+            else:
+                out_bytes = out_bytes.strip().replace("0x", "")
+
+            return stringified_bytes_to_bytes(out_bytes)
+
+        else:
+            # TODO: support other cheat codes
+            msg = f"Unsupported cheat code: calldata = {hexify(arg)}"
+            raise HalmosException(msg)
+
 
 class console:
     # address constant CONSOLE_ADDRESS = address(0x000000000000000000636F6e736F6c652e6c6f67);
     address: BitVecRef = con_addr(0x000000000000000000636F6E736F6C652E6C6F67)
 
     log_uint256: int = 0xF82C50F1  # bytes4(keccak256("log(uint256)"))
-
+    log_uint: int = 0xF5B1BBA9  # bytes4(keccak256("log(uint256)"))
     log_string: int = 0x41304FAC  # bytes4(keccak256("log(string)"))
+
+    @staticmethod
+    def handle(ex, arg: BitVec) -> None:
+        funsig: int = int_of(extract_funsig(arg), "symbolic console function selector")
+
+        if funsig == console.log_uint256 or funsig == console.log_uint:
+            print(extract_bytes(arg, 4, 32))
+
+        # elif funsig == console.log_string:
+
+        else:
+            # TODO: support other console functions
+            info(
+                f"Unsupported console function: selector = 0x{funsig:0>8x}, "
+                f"calldata = {hexify(arg)}"
+            )
