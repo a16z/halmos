@@ -3,7 +3,7 @@
 import re
 
 from timeit import default_timer as timer
-from typing import Dict, Tuple, Any
+from typing import Dict, Tuple, Any, Union as UnionType
 
 from z3 import *
 
@@ -211,6 +211,36 @@ def hexify(x):
         return hexify(str(x))
 
 
+def render_uint(x: BitVecRef) -> str:
+    val = int_of(x)
+    return f"0x{val:0{byte_length(x) * 2}x} ({val})"
+
+
+def render_int(x: BitVecRef) -> str:
+    val = x.as_signed_long()
+    return f"0x{x.as_long():0{byte_length(x) * 2}x} ({val})"
+
+
+def render_bool(b: BitVecRef) -> str:
+    return str(b.as_long() != 0).lower()
+
+
+def render_string(s: BitVecRef) -> str:
+    str_val = bytes.fromhex(hexify(s)[2:]).decode("utf-8")
+    return f'"{str_val}"'
+
+
+def render_bytes(b: UnionType[BitVecRef, bytes]) -> str:
+    if is_bv(b):
+        return f'hex"{hex(b.as_long())[2:]}"'
+    else:
+        return f'hex"{b.hex()[2:]}"'
+
+
+def render_address(a: BitVecRef) -> str:
+    return f"0x{a.as_long():040x}"
+
+
 def stringify(symbol_name: str, val: Any):
     """
     Formats a value based on the inferred type of the variable.
@@ -233,23 +263,18 @@ def stringify(symbol_name: str, val: Any):
     type_name = tokens[-1]
 
     if type_name.startswith("uint"):
-        v = val.as_long()
-        return v if v < 2**64 else hex(v)
+        return render_uint(val)
     elif type_name.startswith("int"):
-        v = val.as_signed_long()
-        if -(2**63) <= v < 2**63:
-            return v
-        return f"0x{val.as_long():0{byte_length(val) * 2}x}"
+        return render_int(val)
     elif type_name == "bool":
-        return str(val.as_long() != 0).lower()
-    elif type_name == "string" or "string" in symbol_name:  # XXX TEMP HACK
-        str_val = bytes.fromhex(hexify(val)[2:]).decode("utf-8")
-        return f'"{str_val}"'
+        return render_bool(val)
+    elif type_name == "string":
+        return render_string(val)
     elif type_name == "bytes":
-        return f'hex"{hex(val.as_long())[2:]}"'
+        return render_bytes(val)
     elif type_name == "address":
-        return f"0x{val.as_long():040x}"
-    else:  # address, bytes32, bytes4, structs, etc.
+        return render_address(val)
+    else:  # bytes32, bytes4, structs, etc.
         return hexify(val)
 
 
@@ -285,6 +310,10 @@ def yellow(text: str) -> str:
 
 def cyan(text: str) -> str:
     return f"\033[36m{text}\033[0m"
+
+
+def magenta(text: str) -> str:
+    return f"\033[35m{text}\033[0m"
 
 
 def color_good(text: str) -> str:

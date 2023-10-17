@@ -20,24 +20,26 @@ def name_of(x: str) -> str:
     return re.sub(r"\s+", "_", x)
 
 
+def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
+    """Extracts idx-th argument of string from calldata"""
+    offset = int_of(
+        extract_bytes(calldata, 4 + arg_idx * 32, 32),
+        "symbolic offset for bytes argument",
+    )
+    length = int_of(
+        extract_bytes(calldata, 4 + offset, 32),
+        "symbolic size for bytes argument",
+    )
+    if length == 0:
+        return b""
+
+    return bv_value_to_bytes(extract_bytes(calldata, 4 + offset + 32, length))
+
+
 def extract_string_argument(calldata: BitVecRef, arg_idx: int):
     """Extracts idx-th argument of string from calldata"""
-    string_offset = int_of(
-        extract_bytes(calldata, 4 + arg_idx * 32, 32),
-        "symbolic offset for string argument",
-    )
-    string_length = int_of(
-        extract_bytes(calldata, 4 + string_offset, 32),
-        "symbolic size for string argument",
-    )
-    if string_length == 0:
-        return ""
-    string_value = int_of(
-        extract_bytes(calldata, 4 + string_offset + 32, string_length),
-        "symbolic string argument",
-    )
-    string_bytes = string_value.to_bytes(string_length, "big")
-    return string_bytes.decode("utf-8")
+    string_bytes = extract_bytes_argument(calldata, arg_idx)
+    return string_bytes.decode("utf-8") if string_bytes else ""
 
 
 def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
@@ -463,25 +465,103 @@ class hevm_cheat_code:
 
 
 class console:
-    # address constant CONSOLE_ADDRESS = address(0x000000000000000000636F6e736F6c652e6c6f67);
+    # see forge-std/console2.sol
     address: BitVecRef = con_addr(0x000000000000000000636F6E736F6C652E6C6F67)
 
-    log_uint256: int = 0xF82C50F1  # bytes4(keccak256("log(uint256)"))
-    log_uint: int = 0xF5B1BBA9  # bytes4(keccak256("log(uint256)"))
-    log_string: int = 0x41304FAC  # bytes4(keccak256("log(string)"))
+    @staticmethod
+    def log_uint256(arg: BitVec) -> None:
+        b = extract_bytes(arg, 4, 32)
+        console.log(render_uint(b))
+
+    @staticmethod
+    def log_string(arg: BitVec) -> None:
+        str_val = extract_string_argument(arg, 0)
+        console.log(str_val)
+
+    @staticmethod
+    def log_bytes(arg: BitVec) -> None:
+        b = extract_bytes_argument(arg, 0)
+        console.log(render_bytes(b))
+
+    @staticmethod
+    def log_string_address(arg: BitVec) -> None:
+        str_val = extract_string_argument(arg, 0)
+        addr = extract_bytes(arg, 36, 32)
+        console.log(f"{str_val} {render_address(addr)}")
+
+    @staticmethod
+    def log_address(arg: BitVec) -> None:
+        addr = extract_bytes(arg, 4, 32)
+        console.log(render_address(addr))
+
+    @staticmethod
+    def log_string_bool(arg: BitVec) -> None:
+        str_val = extract_string_argument(arg, 0)
+        bool_val = extract_bytes(arg, 36, 32)
+        console.log(f"{str_val} {render_bool(bool_val)}")
+
+    @staticmethod
+    def log_bool(arg: BitVec) -> None:
+        bool_val = extract_bytes(arg, 4, 32)
+        console.log(render_bool(bool_val))
+
+    @staticmethod
+    def log_string_string(arg: BitVec) -> None:
+        str1_val = extract_string_argument(arg, 0)
+        str2_val = extract_string_argument(arg, 1)
+        console.log(f"{str1_val} {str2_val}")
+
+    @staticmethod
+    def log_bytes32(arg: BitVec) -> None:
+        b = extract_bytes(arg, 4, 32)
+        console.log(hexify(b))
+
+    @staticmethod
+    def log_string_int256(arg: BitVec) -> None:
+        str_val = extract_string_argument(arg, 0)
+        int_val = extract_bytes(arg, 36, 32)
+        console.log(f"{str_val} {render_int(int_val)}")
+
+    @staticmethod
+    def log_int256(arg: BitVec) -> None:
+        int_val = extract_bytes(arg, 4, 32)
+        console.log(render_int(int_val))
+
+    @staticmethod
+    def log_string_uint256(arg: BitVec) -> None:
+        str_val = extract_string_argument(arg, 0)
+        uint_val = extract_bytes(arg, 36, 32)
+        console.log(f"{str_val} {render_uint(uint_val)}")
+
+    @staticmethod
+    def log(what: str) -> None:
+        print(f"console.log: {magenta(what)}")
 
     @staticmethod
     def handle(ex, arg: BitVec) -> None:
         funsig: int = int_of(extract_funsig(arg), "symbolic console function selector")
 
-        if funsig == console.log_uint256 or funsig == console.log_uint:
-            print(extract_bytes(arg, 4, 32))
-
-        # elif funsig == console.log_string:
+        if funsig in console.handlers:
+            console.handlers[funsig](arg)
 
         else:
-            # TODO: support other console functions
             info(
                 f"Unsupported console function: selector = 0x{funsig:0>8x}, "
                 f"calldata = {hexify(arg)}"
             )
+
+    handlers = {
+        0xF82C50F1: log_uint256,
+        0xF5B1BBA9: log_uint256,  # alias for 'log(uint)'
+        0x41304FAC: log_string,
+        0x0BE77F56: log_bytes,
+        0x319AF333: log_string_address,
+        0x2C2ECBC2: log_address,
+        0xC3B55635: log_string_bool,
+        0x32458EED: log_bool,
+        0x4B5C4277: log_string_string,
+        0x27B7CF85: log_bytes32,
+        0x3CA6268E: log_string_int256,
+        0x2D5B6CB9: log_int256,
+        0xB60E72CC: log_string_uint256,
+    }
