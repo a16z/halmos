@@ -71,6 +71,15 @@ def uint256(x: BitVecRef) -> BitVecRef:
     return simplify(ZeroExt(256 - bitsize, x))
 
 
+def int256(x: BitVecRef) -> BitVecRef:
+    bitsize = x.size()
+    if bitsize > 256:
+        raise ValueError(x)
+    if bitsize == 256:
+        return x
+    return simplify(SignExt(256 - bitsize, x))
+
+
 def uint160(x: BitVecRef) -> BitVecRef:
     bitsize = x.size()
     if bitsize > 256:

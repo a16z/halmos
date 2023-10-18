@@ -179,7 +179,7 @@ class halmos_cheat_code:
             raise HalmosException(f"bitsize larger than 256: {bits}")
 
         name = name_of(extract_string_argument(arg, 1))
-        return halmos_cheat_code.create_generic(ex, bits, name, f"int{bits}")
+        return int256(halmos_cheat_code.create_generic(ex, bits, name, f"int{bits}"))
 
     @staticmethod
     def create_int256(ex, arg):
