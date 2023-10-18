@@ -155,7 +155,7 @@ class halmos_cheat_code:
         return BitVec(label, BitVecSorts[bits])
 
     @staticmethod
-    def handle_create_uint(ex, arg):
+    def create_uint(ex, arg):
         bits = int_of(
             extract_bytes(arg, 4, 32), "symbolic bit size for halmos.createUint()"
         )
@@ -163,15 +163,15 @@ class halmos_cheat_code:
             raise HalmosException(f"bitsize larger than 256: {bits}")
 
         name = name_of(extract_string_argument(arg, 1))
-        return halmos_cheat_code.create_generic(ex, bits, name, f"uint{bits}")
+        return uint256(halmos_cheat_code.create_generic(ex, bits, name, f"uint{bits}"))
 
     @staticmethod
-    def handle_create_uint256(ex, arg):
+    def create_uint256(ex, arg):
         name = name_of(extract_string_argument(arg, 0))
         return halmos_cheat_code.create_generic(ex, 256, name, "uint256")
 
     @staticmethod
-    def handle_create_int(ex, arg):
+    def create_int(ex, arg):
         bits = int_of(
             extract_bytes(arg, 4, 32), "symbolic bit size for halmos.createUint()"
         )
@@ -182,12 +182,12 @@ class halmos_cheat_code:
         return halmos_cheat_code.create_generic(ex, bits, name, f"int{bits}")
 
     @staticmethod
-    def handle_create_int256(ex, arg):
+    def create_int256(ex, arg):
         name = name_of(extract_string_argument(arg, 0))
         return halmos_cheat_code.create_generic(ex, 256, name, "int256")
 
     @staticmethod
-    def handle_create_bytes(ex, arg):
+    def create_bytes(ex, arg):
         byte_size = int_of(
             extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createBytes()"
         )
@@ -198,7 +198,7 @@ class halmos_cheat_code:
         return Concat(con(32), con(byte_size), symbolic_bytes)
 
     @staticmethod
-    def handle_create_string(ex, arg):
+    def create_string(ex, arg):
         byte_size = int_of(
             extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createString()"
         )
@@ -209,36 +209,36 @@ class halmos_cheat_code:
         return Concat(con(32), con(byte_size), symbolic_string)
 
     @staticmethod
-    def handle_create_bytes4(ex, arg):
+    def create_bytes4(ex, arg):
         name = name_of(extract_string_argument(arg, 0))
         return uint256(halmos_cheat_code.create_generic(ex, 32, name, "bytes4"))
 
     @staticmethod
-    def handle_create_bytes32(ex, arg):
+    def create_bytes32(ex, arg):
         name = name_of(extract_string_argument(arg, 0))
         return halmos_cheat_code.create_generic(ex, 256, name, "bytes32")
 
     @staticmethod
-    def handle_create_address(ex, arg):
+    def create_address(ex, arg):
         name = name_of(extract_string_argument(arg, 0))
         return uint256(halmos_cheat_code.create_generic(ex, 160, name, "address"))
 
     @staticmethod
-    def handle_create_bool(ex, arg):
+    def create_bool(ex, arg):
         name = name_of(extract_string_argument(arg, 0))
         return uint256(halmos_cheat_code.create_generic(ex, 1, name, "bool"))
 
     handlers = {
-        0x66830DFA: handle_create_uint,  # createUint(uint256,string)
-        0xBC7BEEFC: handle_create_uint256,  # createUint256(string)
-        0x49B9C7D4: handle_create_int,  # createInt(uint256,string)
-        0xC2CE6AED: handle_create_int256,  # createInt256(string)
-        0xEEF5311D: handle_create_bytes,  # createBytes(uint256,string)
-        0xCE68656C: handle_create_string,  # createString(uint256,string)
-        0xDE143925: handle_create_bytes4,  # createBytes4(string)
-        0xBF72FA66: handle_create_bytes32,  # createBytes32(string)
-        0x3B0FA01B: handle_create_address,  # createAddress(string)
-        0x6E0BB659: handle_create_bool,  # createBool(string)
+        0x66830DFA: create_uint,  # createUint(uint256,string)
+        0xBC7BEEFC: create_uint256,  # createUint256(string)
+        0x49B9C7D4: create_int,  # createInt(uint256,string)
+        0xC2CE6AED: create_int256,  # createInt256(string)
+        0xEEF5311D: create_bytes,  # createBytes(uint256,string)
+        0xCE68656C: create_string,  # createString(uint256,string)
+        0xDE143925: create_bytes4,  # createBytes4(string)
+        0xBF72FA66: create_bytes32,  # createBytes32(string)
+        0x3B0FA01B: create_address,  # createAddress(string)
+        0x6E0BB659: create_bool,  # createBool(string)
     }
 
     @staticmethod
