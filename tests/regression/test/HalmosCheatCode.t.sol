@@ -13,6 +13,15 @@ contract HalmosCheatCodeTest is SymTest {
         assert(0 <= z && z <= type(uint8).max);
     }
 
+    function check_createInt() public {
+        int x = svm.createInt(256, 'x');
+        int y = svm.createInt(160, 'y');
+        int z = svm.createInt(8, 'z');
+        assert(type(int256).min <= x && x <= type(int256).max);
+        assert(type(int160).min <= y && y <= type(int160).max);
+        assert(type(int8).min <= z && z <= type(int8).max);
+    }
+
     function check_createBytes() public {
         bytes memory data = svm.createBytes(2, 'data');
         uint x = uint(uint8(data[0]));
@@ -21,14 +30,32 @@ contract HalmosCheatCodeTest is SymTest {
         assert(0 <= y && y <= type(uint8).max);
     }
 
+    function check_createString() public {
+        string memory data = svm.createString(5, 'str');
+        assert(bytes(data).length == 5);
+    }
+
     function check_createUint256() public {
         uint x = svm.createUint256('x');
         assert(0 <= x && x <= type(uint256).max);
     }
 
+    function check_createInt256() public {
+        int x = svm.createInt256('x');
+        assert(type(int256).min <= x && x <= type(int256).max);
+    }
+
     function check_createBytes32() public {
         bytes32 x = svm.createBytes32('x');
         assert(0 <= uint(x) && uint(x) <= type(uint256).max);
+        uint y; assembly { y := x }
+        assert(0 <= y && y <= type(uint256).max);
+    }
+
+    function check_createBytes4() public {
+        bytes4 x = svm.createBytes4('x');
+        uint256 x_uint = uint256(uint32(x));
+        assert(0 <= x_uint && x_uint <= type(uint32).max);
         uint y; assembly { y := x }
         assert(0 <= y && y <= type(uint256).max);
     }

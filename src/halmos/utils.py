@@ -3,9 +3,122 @@
 import re
 
 from timeit import default_timer as timer
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any, Union as UnionType
 
 from z3 import *
+
+from .exceptions import NotConcreteError
+
+
+Word = Any  # z3 expression (including constants)
+Byte = Any  # z3 expression (including constants)
+Bytes = Any  # z3 expression (including constants)
+Address = BitVecRef  # 160-bitvector
+
+
+# dynamic BitVecSort sizes
+class BitVecSortCache:
+    def __init__(self):
+        self.cache = {}
+        for size in (
+            1,
+            8,
+            16,
+            32,
+            64,
+            128,
+            160,
+            256,
+            264,
+            288,
+            512,
+            544,
+            800,
+            1024,
+            1056,
+        ):
+            self.cache[size] = BitVecSort(size)
+
+    def __getitem__(self, size: int) -> BitVecSort:
+        hit = self.cache.get(size)
+        return hit if hit is not None else BitVecSort(size)
+
+
+BitVecSorts = BitVecSortCache()
+
+# known, fixed BitVecSort sizes
+BitVecSort1 = BitVecSorts[1]
+BitVecSort8 = BitVecSorts[8]
+BitVecSort160 = BitVecSorts[160]
+BitVecSort256 = BitVecSorts[256]
+BitVecSort264 = BitVecSorts[264]
+BitVecSort512 = BitVecSorts[512]
+
+
+def concat(args):
+    if len(args) > 1:
+        return Concat(args)
+    else:
+        return args[0]
+
+
+def uint256(x: BitVecRef) -> BitVecRef:
+    bitsize = x.size()
+    if bitsize > 256:
+        raise ValueError(x)
+    if bitsize == 256:
+        return x
+    return simplify(ZeroExt(256 - bitsize, x))
+
+
+def int256(x: BitVecRef) -> BitVecRef:
+    bitsize = x.size()
+    if bitsize > 256:
+        raise ValueError(x)
+    if bitsize == 256:
+        return x
+    return simplify(SignExt(256 - bitsize, x))
+
+
+def uint160(x: BitVecRef) -> BitVecRef:
+    bitsize = x.size()
+    if bitsize > 256:
+        raise ValueError(x)
+    if bitsize == 160:
+        return x
+    if bitsize > 160:
+        return simplify(Extract(159, 0, x))
+    else:
+        return simplify(ZeroExt(160 - bitsize, x))
+
+
+def con(n: int, size_bits=256) -> Word:
+    return BitVecVal(n, BitVecSorts[size_bits])
+
+
+#             x  == b   if sort(x) = bool
+# int_to_bool(x) == b   if sort(x) = int
+def test(x: Word, b: bool) -> Word:
+    if is_bool(x):
+        if b:
+            return x
+        else:
+            return Not(x)
+    elif is_bv(x):
+        if b:
+            return x != con(0)
+        else:
+            return x == con(0)
+    else:
+        raise ValueError(x)
+
+
+def is_non_zero(x: Word) -> Word:
+    return test(x, True)
+
+
+def is_zero(x: Word) -> Word:
+    return test(x, False)
 
 
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
@@ -22,10 +135,96 @@ def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     return solver
 
 
+def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
+    """Extracts idx-th argument of string from calldata"""
+    offset = int_of(
+        extract_bytes(calldata, 4 + arg_idx * 32, 32),
+        "symbolic offset for bytes argument",
+    )
+    length = int_of(
+        extract_bytes(calldata, 4 + offset, 32),
+        "symbolic size for bytes argument",
+    )
+    if length == 0:
+        return b""
+
+    return bv_value_to_bytes(extract_bytes(calldata, 4 + offset + 32, length))
+
+
+def extract_string_argument(calldata: BitVecRef, arg_idx: int):
+    """Extracts idx-th argument of string from calldata"""
+    string_bytes = extract_bytes_argument(calldata, arg_idx)
+    return string_bytes.decode("utf-8") if string_bytes else ""
+
+
+def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecRef:
+    """Extract bytes from calldata. Zero-pad if out of bounds."""
+    n = data.size()
+    if n % 8 != 0:
+        raise ValueError(n)
+
+    # will extract hi - lo + 1 bits
+    hi = n - 1 - byte_offset * 8
+    lo = n - byte_offset * 8 - size_bytes * 8
+    lo = 0 if lo < 0 else lo
+
+    val = simplify(Extract(hi, lo, data))
+
+    zero_padding = size_bytes * 8 - val.size()
+    if zero_padding < 0:
+        raise ValueError(val)
+    if zero_padding > 0:
+        val = simplify(Concat(val, con(0, zero_padding)))
+
+    return val
+
+
+def extract_funsig(calldata: BitVecRef):
+    """Extracts the function signature (first 4 bytes) from calldata"""
+    return extract_bytes(calldata, 0, 4)
+
+
 def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
     if x.size() % 8 != 0:
         raise ValueError(x, x.size())
     return x.as_long().to_bytes(x.size() // 8, "big")
+
+
+def unbox_int(x: Any) -> Any:
+    """
+    Attempts to convert int-like objects to int
+    """
+    if isinstance(x, bytes):
+        return int.from_bytes(x, "big")
+
+    if is_bv_value(x):
+        return x.as_long()
+
+    return x
+
+
+def int_of(x: Any, err: str = "expected concrete value but got") -> int:
+    """
+    Converts int-like objects to int or raises NotConcreteError
+    """
+    res = unbox_int(x)
+
+    if isinstance(res, int):
+        return res
+
+    raise NotConcreteError(f"{err}: {x}")
+
+
+def byte_length(x: Any) -> int:
+    if is_bv(x):
+        if x.size() % 8 != 0:
+            raise ValueError(x)
+        return x.size() >> 3
+
+    if isinstance(x, bytes):
+        return len(x)
+
+    raise ValueError(x)
 
 
 def hexify(x):
@@ -36,11 +235,84 @@ def hexify(x):
     elif isinstance(x, bytes):
         return "0x" + x.hex()
     elif is_bv_value(x):
-        # preserving bitsize could be confusing due to some bv values given as strings; need refactoring to fix properly
-        # return hexify(x.as_long().to_bytes((x.size() + 7) // 8, 'big')) # bitsize may not be a multiple of 8
-        return hex(x.as_long())
+        # maintain the byte size of x
+        num_bytes = byte_length(x)
+        return f"0x{x.as_long():0{num_bytes * 2}x}"
     else:
         return hexify(str(x))
+
+
+def render_uint(x: BitVecRef) -> str:
+    val = int_of(x)
+    return f"0x{val:0{byte_length(x) * 2}x} ({val})"
+
+
+def render_int(x: BitVecRef) -> str:
+    val = x.as_signed_long()
+    return f"0x{x.as_long():0{byte_length(x) * 2}x} ({val})"
+
+
+def render_bool(b: BitVecRef) -> str:
+    return str(b.as_long() != 0).lower()
+
+
+def render_string(s: BitVecRef) -> str:
+    str_val = bytes.fromhex(hexify(s)[2:]).decode("utf-8")
+    return f'"{str_val}"'
+
+
+def render_bytes(b: UnionType[BitVecRef, bytes]) -> str:
+    if is_bv(b):
+        return f'hex"{hex(b.as_long())[2:]}"'
+    else:
+        return f'hex"{b.hex()[2:]}"'
+
+
+def render_address(a: BitVecRef) -> str:
+    return f"0x{a.as_long():040x}"
+
+
+def stringify(symbol_name: str, val: Any):
+    """
+    Formats a value based on the inferred type of the variable.
+
+    Expects symbol_name to be of the form 'p_<sourceVar>_<sourceType>', e.g. 'p_x_uint256'
+    """
+    if not is_bv_value(val):
+        warn(f"{val} is not a bitvector value")
+        return hexify(val)
+
+    tokens = symbol_name.split("_")
+    if len(tokens) < 3:
+        warn(f"Failed to infer type for symbol '{symbol_name}'")
+        return hexify(val)
+
+    if len(tokens) >= 4 and tokens[-1].isdigit():
+        # we may have something like p_val_bytes_01
+        # the last token being a symbol number, discard it
+        tokens.pop()
+
+    type_name = tokens[-1]
+
+    try:
+        if type_name.startswith("uint"):
+            return render_uint(val)
+        elif type_name.startswith("int"):
+            return render_int(val)
+        elif type_name == "bool":
+            return render_bool(val)
+        elif type_name == "string":
+            return render_string(val)
+        elif type_name == "bytes":
+            return render_bytes(val)
+        elif type_name == "address":
+            return render_address(val)
+        else:  # bytes32, bytes4, structs, etc.
+            return hexify(val)
+    except Exception as e:
+        # log error and move on
+        warn(f"Failed to stringify {val} of type {type_name}: {repr(e)}")
+        return hexify(val)
 
 
 def assert_address(x: BitVecRef) -> None:
@@ -75,6 +347,10 @@ def yellow(text: str) -> str:
 
 def cyan(text: str) -> str:
     return f"\033[36m{text}\033[0m"
+
+
+def magenta(text: str) -> str:
+    return f"\033[35m{text}\033[0m"
 
 
 def color_good(text: str) -> str:

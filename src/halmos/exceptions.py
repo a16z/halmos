@@ -8,6 +8,14 @@ Note: this is a modified version execution-specs' src/ethereum/<fork>/vm/excepti
 """
 
 
+class HalmosException(Exception):
+    pass
+
+
+class NotConcreteError(HalmosException):
+    pass
+
+
 class EvmException(Exception):
     """
     Base class for all EVM exceptions.
