@@ -108,4 +108,4 @@ class console:
             )
         except Exception as e:
             # we don't want to fail execution because of an issue during console.log
-            warn(f"console.handle: {repr(e)}")
+            warn(f"console.handle: {repr(e)} with arg={hexify(arg)}")

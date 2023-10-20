@@ -70,6 +70,12 @@ contract ConsoleTest is Test {
         console2.log(empty);
     }
 
+    function check_log_undecodable_string() public view {
+        bytes memory badBytes = hex"ff";
+        string memory bad = string(badBytes);
+        console2.log("this is a string that won't decode to utf-8:", bad);
+    }
+
     function check_log_unsupported() public {
         console2._sendLogPayload(abi.encodeWithSignature("doesNotExist()"));
     }
