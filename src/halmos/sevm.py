@@ -22,7 +22,8 @@ from typing import (
 )
 from z3 import *
 
-from .cheatcodes import halmos_cheat_code, hevm_cheat_code, console, Prank
+from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
+from .console import console
 from .exceptions import *
 from .utils import *
 from .warnings import (

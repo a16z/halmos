@@ -20,28 +20,6 @@ def name_of(x: str) -> str:
     return re.sub(r"\s+", "_", x)
 
 
-def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
-    """Extracts idx-th argument of string from calldata"""
-    offset = int_of(
-        extract_bytes(calldata, 4 + arg_idx * 32, 32),
-        "symbolic offset for bytes argument",
-    )
-    length = int_of(
-        extract_bytes(calldata, 4 + offset, 32),
-        "symbolic size for bytes argument",
-    )
-    if length == 0:
-        return b""
-
-    return bv_value_to_bytes(extract_bytes(calldata, 4 + offset + 32, length))
-
-
-def extract_string_argument(calldata: BitVecRef, arg_idx: int):
-    """Extracts idx-th argument of string from calldata"""
-    string_bytes = extract_bytes_argument(calldata, arg_idx)
-    return string_bytes.decode("utf-8") if string_bytes else ""
-
-
 def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
     """Extracts idx-th argument of string array from calldata"""
 
@@ -144,89 +122,85 @@ class Prank:
         return True
 
 
+def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
+    label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
+    return BitVec(label, BitVecSorts[bits])
+
+
+def create_uint(ex, arg):
+    bits = int_of(
+        extract_bytes(arg, 4, 32), "symbolic bit size for halmos.createUint()"
+    )
+    if bits > 256:
+        raise HalmosException(f"bitsize larger than 256: {bits}")
+
+    name = name_of(extract_string_argument(arg, 1))
+    return uint256(create_generic(ex, bits, name, f"uint{bits}"))
+
+
+def create_uint256(ex, arg):
+    name = name_of(extract_string_argument(arg, 0))
+    return create_generic(ex, 256, name, "uint256")
+
+
+def create_int(ex, arg):
+    bits = int_of(
+        extract_bytes(arg, 4, 32), "symbolic bit size for halmos.createUint()"
+    )
+    if bits > 256:
+        raise HalmosException(f"bitsize larger than 256: {bits}")
+
+    name = name_of(extract_string_argument(arg, 1))
+    return int256(create_generic(ex, bits, name, f"int{bits}"))
+
+
+def create_int256(ex, arg):
+    name = name_of(extract_string_argument(arg, 0))
+    return create_generic(ex, 256, name, "int256")
+
+
+def create_bytes(ex, arg):
+    byte_size = int_of(
+        extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createBytes()"
+    )
+    name = name_of(extract_string_argument(arg, 1))
+    symbolic_bytes = create_generic(ex, byte_size * 8, name, "bytes")
+    return Concat(con(32), con(byte_size), symbolic_bytes)
+
+
+def create_string(ex, arg):
+    byte_size = int_of(
+        extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createString()"
+    )
+    name = name_of(extract_string_argument(arg, 1))
+    symbolic_string = create_generic(ex, byte_size * 8, name, "string")
+    return Concat(con(32), con(byte_size), symbolic_string)
+
+
+def create_bytes4(ex, arg):
+    name = name_of(extract_string_argument(arg, 0))
+    return uint256(create_generic(ex, 32, name, "bytes4"))
+
+
+def create_bytes32(ex, arg):
+    name = name_of(extract_string_argument(arg, 0))
+    return create_generic(ex, 256, name, "bytes32")
+
+
+def create_address(ex, arg):
+    name = name_of(extract_string_argument(arg, 0))
+    return uint256(create_generic(ex, 160, name, "address"))
+
+
+def create_bool(ex, arg):
+    name = name_of(extract_string_argument(arg, 0))
+    return uint256(create_generic(ex, 1, name, "bool"))
+
+
 class halmos_cheat_code:
     # address constant SVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('svm cheat code')))));
     address: BitVecRef = con_addr(0xF3993A62377BCD56AE39D773740A5390411E8BC9)
-
-    @staticmethod
-    def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
-        label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
-        return BitVec(label, BitVecSorts[bits])
-
-    @staticmethod
-    def create_uint(ex, arg):
-        bits = int_of(
-            extract_bytes(arg, 4, 32), "symbolic bit size for halmos.createUint()"
-        )
-        if bits > 256:
-            raise HalmosException(f"bitsize larger than 256: {bits}")
-
-        name = name_of(extract_string_argument(arg, 1))
-        return uint256(halmos_cheat_code.create_generic(ex, bits, name, f"uint{bits}"))
-
-    @staticmethod
-    def create_uint256(ex, arg):
-        name = name_of(extract_string_argument(arg, 0))
-        return halmos_cheat_code.create_generic(ex, 256, name, "uint256")
-
-    @staticmethod
-    def create_int(ex, arg):
-        bits = int_of(
-            extract_bytes(arg, 4, 32), "symbolic bit size for halmos.createUint()"
-        )
-        if bits > 256:
-            raise HalmosException(f"bitsize larger than 256: {bits}")
-
-        name = name_of(extract_string_argument(arg, 1))
-        return int256(halmos_cheat_code.create_generic(ex, bits, name, f"int{bits}"))
-
-    @staticmethod
-    def create_int256(ex, arg):
-        name = name_of(extract_string_argument(arg, 0))
-        return halmos_cheat_code.create_generic(ex, 256, name, "int256")
-
-    @staticmethod
-    def create_bytes(ex, arg):
-        byte_size = int_of(
-            extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createBytes()"
-        )
-        name = name_of(extract_string_argument(arg, 1))
-        symbolic_bytes = halmos_cheat_code.create_generic(
-            ex, byte_size * 8, name, "bytes"
-        )
-        return Concat(con(32), con(byte_size), symbolic_bytes)
-
-    @staticmethod
-    def create_string(ex, arg):
-        byte_size = int_of(
-            extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createString()"
-        )
-        name = name_of(extract_string_argument(arg, 1))
-        symbolic_string = halmos_cheat_code.create_generic(
-            ex, byte_size * 8, name, "string"
-        )
-        return Concat(con(32), con(byte_size), symbolic_string)
-
-    @staticmethod
-    def create_bytes4(ex, arg):
-        name = name_of(extract_string_argument(arg, 0))
-        return uint256(halmos_cheat_code.create_generic(ex, 32, name, "bytes4"))
-
-    @staticmethod
-    def create_bytes32(ex, arg):
-        name = name_of(extract_string_argument(arg, 0))
-        return halmos_cheat_code.create_generic(ex, 256, name, "bytes32")
-
-    @staticmethod
-    def create_address(ex, arg):
-        name = name_of(extract_string_argument(arg, 0))
-        return uint256(halmos_cheat_code.create_generic(ex, 160, name, "address"))
-
-    @staticmethod
-    def create_bool(ex, arg):
-        name = name_of(extract_string_argument(arg, 0))
-        return uint256(halmos_cheat_code.create_generic(ex, 1, name, "bool"))
 
     handlers = {
         0x66830DFA: create_uint,  # createUint(uint256,string)
@@ -242,7 +216,7 @@ class halmos_cheat_code:
     }
 
     @staticmethod
-    def handle(ex, arg: BitVec) -> BitVec:
+    def handle(ex, arg: BitVecRef) -> BitVecRef:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
             return handler(ex, arg)
@@ -475,105 +449,3 @@ class hevm_cheat_code:
             # TODO: support other cheat codes
             msg = f"Unsupported cheat code: calldata = {hexify(arg)}"
             raise HalmosException(msg)
-
-
-class console:
-    # see forge-std/console2.sol
-    address: BitVecRef = con_addr(0x000000000000000000636F6E736F6C652E6C6F67)
-
-    @staticmethod
-    def log_uint256(arg: BitVec) -> None:
-        b = extract_bytes(arg, 4, 32)
-        console.log(render_uint(b))
-
-    @staticmethod
-    def log_string(arg: BitVec) -> None:
-        str_val = extract_string_argument(arg, 0)
-        console.log(str_val)
-
-    @staticmethod
-    def log_bytes(arg: BitVec) -> None:
-        b = extract_bytes_argument(arg, 0)
-        console.log(render_bytes(b))
-
-    @staticmethod
-    def log_string_address(arg: BitVec) -> None:
-        str_val = extract_string_argument(arg, 0)
-        addr = extract_bytes(arg, 36, 32)
-        console.log(f"{str_val} {render_address(addr)}")
-
-    @staticmethod
-    def log_address(arg: BitVec) -> None:
-        addr = extract_bytes(arg, 4, 32)
-        console.log(render_address(addr))
-
-    @staticmethod
-    def log_string_bool(arg: BitVec) -> None:
-        str_val = extract_string_argument(arg, 0)
-        bool_val = extract_bytes(arg, 36, 32)
-        console.log(f"{str_val} {render_bool(bool_val)}")
-
-    @staticmethod
-    def log_bool(arg: BitVec) -> None:
-        bool_val = extract_bytes(arg, 4, 32)
-        console.log(render_bool(bool_val))
-
-    @staticmethod
-    def log_string_string(arg: BitVec) -> None:
-        str1_val = extract_string_argument(arg, 0)
-        str2_val = extract_string_argument(arg, 1)
-        console.log(f"{str1_val} {str2_val}")
-
-    @staticmethod
-    def log_bytes32(arg: BitVec) -> None:
-        b = extract_bytes(arg, 4, 32)
-        console.log(hexify(b))
-
-    @staticmethod
-    def log_string_int256(arg: BitVec) -> None:
-        str_val = extract_string_argument(arg, 0)
-        int_val = extract_bytes(arg, 36, 32)
-        console.log(f"{str_val} {render_int(int_val)}")
-
-    @staticmethod
-    def log_int256(arg: BitVec) -> None:
-        int_val = extract_bytes(arg, 4, 32)
-        console.log(render_int(int_val))
-
-    @staticmethod
-    def log_string_uint256(arg: BitVec) -> None:
-        str_val = extract_string_argument(arg, 0)
-        uint_val = extract_bytes(arg, 36, 32)
-        console.log(f"{str_val} {render_uint(uint_val)}")
-
-    @staticmethod
-    def log(what: str) -> None:
-        print(f"console.log: {magenta(what)}")
-
-    handlers = {
-        0xF82C50F1: log_uint256,
-        0xF5B1BBA9: log_uint256,  # alias for 'log(uint)'
-        0x41304FAC: log_string,
-        0x0BE77F56: log_bytes,
-        0x319AF333: log_string_address,
-        0x2C2ECBC2: log_address,
-        0xC3B55635: log_string_bool,
-        0x32458EED: log_bool,
-        0x4B5C4277: log_string_string,
-        0x27B7CF85: log_bytes32,
-        0x3CA6268E: log_string_int256,
-        0x2D5B6CB9: log_int256,
-        0xB60E72CC: log_string_uint256,
-    }
-
-    @staticmethod
-    def handle(ex, arg: BitVec) -> None:
-        funsig: int = int_of(extract_funsig(arg), "symbolic console function selector")
-
-        if handler := console.handlers.get(funsig):
-            return handler(arg)
-
-        info(
-            f"Unsupported console function: selector = 0x{funsig:0>8x}, "
-            f"calldata = {hexify(arg)}"
-        )

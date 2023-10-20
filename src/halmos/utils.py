@@ -135,6 +135,28 @@ def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     return solver
 
 
+def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
+    """Extracts idx-th argument of string from calldata"""
+    offset = int_of(
+        extract_bytes(calldata, 4 + arg_idx * 32, 32),
+        "symbolic offset for bytes argument",
+    )
+    length = int_of(
+        extract_bytes(calldata, 4 + offset, 32),
+        "symbolic size for bytes argument",
+    )
+    if length == 0:
+        return b""
+
+    return bv_value_to_bytes(extract_bytes(calldata, 4 + offset + 32, length))
+
+
+def extract_string_argument(calldata: BitVecRef, arg_idx: int):
+    """Extracts idx-th argument of string from calldata"""
+    string_bytes = extract_bytes_argument(calldata, arg_idx)
+    return string_bytes.decode("utf-8") if string_bytes else ""
+
+
 def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecRef:
     """Extract bytes from calldata. Zero-pad if out of bounds."""
     n = data.size()
@@ -258,11 +280,12 @@ def stringify(symbol_name: str, val: Any):
     """
     if not is_bv_value(val):
         warn(f"{val} is not a bitvector value")
-        return str(val)
+        return hexify(val)
 
     tokens = symbol_name.split("_")
     if len(tokens) < 3:
         warn(f"Failed to infer type for symbol '{symbol_name}'")
+        return hexify(val)
 
     if len(tokens) >= 4 and tokens[-1].isdigit():
         # we may have something like p_val_bytes_01
@@ -271,19 +294,24 @@ def stringify(symbol_name: str, val: Any):
 
     type_name = tokens[-1]
 
-    if type_name.startswith("uint"):
-        return render_uint(val)
-    elif type_name.startswith("int"):
-        return render_int(val)
-    elif type_name == "bool":
-        return render_bool(val)
-    elif type_name == "string":
-        return render_string(val)
-    elif type_name == "bytes":
-        return render_bytes(val)
-    elif type_name == "address":
-        return render_address(val)
-    else:  # bytes32, bytes4, structs, etc.
+    try:
+        if type_name.startswith("uint"):
+            return render_uint(val)
+        elif type_name.startswith("int"):
+            return render_int(val)
+        elif type_name == "bool":
+            return render_bool(val)
+        elif type_name == "string":
+            return render_string(val)
+        elif type_name == "bytes":
+            return render_bytes(val)
+        elif type_name == "address":
+            return render_address(val)
+        else:  # bytes32, bytes4, structs, etc.
+            return hexify(val)
+    except Exception as e:
+        # log error and move on
+        warn(f"Failed to stringify {val} of type {type_name}: {repr(e)}")
         return hexify(val)
 
 
