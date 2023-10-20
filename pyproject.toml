@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "halmos"
-description = "Halmos: Symbolic Bounded Model Checker for Ethereum Smart Contracts Bytecode"
+description = "A symbolic testing tool for EVM smart contracts"
 readme = "README.md"
 authors = [
     { name="a16z crypto" },
@@ -37,4 +37,4 @@ target-versions = ["py38", "py39", "py310", "py311"]
 
 [tool.pytest.ini_options]
 # TODO: re-add test_traces.py when we have a better way to support it in CI
-addopts = "--ignore=tests/lib/solady/ext/woke --ignore=tests/test_traces.py"
+addopts = "--ignore=tests/lib --ignore=tests/test_traces.py"
