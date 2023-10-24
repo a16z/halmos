@@ -301,7 +301,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         symbolic=args.symbolic_storage,
         solver=solver,
     )
-    (exs, _, _) = sevm.run(ex)
+    exs = sevm.run(ex)
 
     for idx, ex in enumerate(exs):
         opcode = ex.current_opcode()
@@ -370,13 +370,15 @@ def deploy_test(
         return ex
 
     # create test contract
-    (exs, _, _) = sevm.run(ex)
+    exs = sevm.run(ex)
 
     # sanity check
-    if len(exs) != 1:
-        raise ValueError(f"constructor: # of paths: {len(exs)}")
-
-    ex = exs[0]
+    ex = None
+    for current_ex in exs:
+        if ex is not None:
+            raise ValueError(f"constructor: more than one path found")
+        ex = current_ex
+        break
 
     if args.verbose >= VERBOSITY_TRACE_CONSTRUCTOR:
         print("Constructor trace:")
@@ -434,7 +436,10 @@ def setup(
             ),
         )
 
-        (setup_exs_all, setup_steps, setup_logs) = sevm.run(setup_ex)
+        setup_exs_all = sevm.run(setup_ex)
+
+        # XXX FIXME
+        setup_logs = HalmosLogs()
 
         if setup_logs.bounded_loops:
             warn(
@@ -573,7 +578,7 @@ def run(
     solver = mk_solver(args)
     solver.add(setup_ex.solver.assertions())
 
-    (exs, steps, logs) = sevm.run(
+    exs = sevm.run(
         Exec(
             code=setup_ex.code.copy(),  # shallow copy
             storage=deepcopy(setup_ex.storage),
@@ -610,10 +615,10 @@ def run(
     execs_to_model = []
     models: List[ModelWithContext] = []
     stuck = []
+    len_exs = 0
 
     for idx, ex in enumerate(exs):
         if args.verbose >= VERBOSITY_TRACE_PATHS:
-            print(f"Path #{idx+1}/{len(exs)}:")
             print(indent_text(ex.str_path()))
 
             print("\nTrace:")
@@ -624,7 +629,17 @@ def run(
         if isinstance(error, Revert):
             returndata = ex.context.output.data
             if unbox_int(returndata) == ASSERT_FAIL:
-                execs_to_model.append((idx, ex))
+                # XXX quick exit on first cex
+                m = gen_model(args, idx, ex)
+                model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
+                if model is not None and is_valid:
+                    print(f"explored {idx} paths")
+                    print(red(f"Counterexample: {render_model(model)}"))
+
+                    # XXX if option to explore all failures...
+
+                    return TestResult(funsig, exitcode=1, num_models=1, models=[m])
+
                 continue
 
         if is_global_fail_set(ex.context):
@@ -650,7 +665,7 @@ def run(
 
     if len(execs_to_model) > 0 and args.verbose >= 1:
         print(
-            f"# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}"
+            f"# of potential paths involving assertion violations: {len(execs_to_model)} / {len_exs}"
         )
 
     if len(execs_to_model) > 1 and args.solver_parallel:
@@ -664,7 +679,13 @@ def run(
             models = list(thread_pool.map(gen_model_from_sexpr, fn_args))
 
     else:
-        models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
+        # XXX quick exit on first cex
+        for idx, ex in execs_to_model:
+            m = gen_model(args, idx, ex)
+            model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
+            if model is not None and is_valid:
+                print(red(f"Counterexample: {render_model(model)}"))
+                return TestResult(funsig, exitcode=1, num_models=1, models=[m])
 
     no_counterexample = all(m.model is None for m in models)
     passed = no_counterexample and normal > 0 and len(stuck) == 0
@@ -677,14 +698,16 @@ def run(
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {normal}/{len(exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+        f"{passfail} {funsig} (paths: {normal}/{len_exs}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
     )
     counterexamples = []
     for m in models:
         model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
         if result == unsat:
             continue
-        ex = exs[index]
+
+        # XXX can't index into exs here because it's a generator
+        # ex = exs[index]
 
         # model could be an empty dict here
         if model is not None:
@@ -700,13 +723,14 @@ def run(
         else:
             warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
 
-        if args.print_failed_states:
-            print(f"# {idx+1} / {len(exs)}")
-            print(ex)
+        # XXX need to move this where we have ex
+        # if args.print_failed_states:
+        #     print(f"# {idx+1} / {len_exs}")
+        #     print(ex)
 
         if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
             print(
-                f"Trace #{idx+1}/{len(exs)}:"
+                f"Trace #{idx+1}/{len_exs}:"
                 if args.verbose == VERBOSITY_TRACE_PATHS
                 else "Trace:"
             )
@@ -715,8 +739,12 @@ def run(
     for idx, ex, err in stuck:
         warn(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
-            print(f"\nPath #{idx+1}/{len(exs)}")
+            print(f"\nPath #{idx+1}/{len_exs}")
             render_trace(ex.context)
+
+    # XXX
+    logs = HalmosLogs()
+    steps = []
 
     if logs.bounded_loops:
         warn(
@@ -737,7 +765,7 @@ def run(
     # print post-states
     if args.print_states:
         for idx, ex in enumerate(exs):
-            print(f"# {idx+1} / {len(exs)}")
+            print(f"# {idx+1} / {len_exs}")
             print(ex)
 
     # log steps
@@ -755,7 +783,7 @@ def run(
             exitcode,
             len(counterexamples),
             counterexamples,
-            (len(exs), normal, len(stuck)),
+            (len_exs, normal, len(stuck)),
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
         )

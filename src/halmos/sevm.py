@@ -1500,7 +1500,7 @@ class SEVM:
             # TODO: check max call depth
 
             # execute external calls
-            (new_exs, new_steps, new_logs) = self.run(
+            new_exs = self.run(
                 Exec(
                     code=ex.code,
                     storage=ex.storage,
@@ -1530,7 +1530,8 @@ class SEVM:
                 )
             )
 
-            logs.extend(new_logs)
+            # XXX
+            # logs.extend(new_logs)
 
             # process result
             for new_ex in new_exs:
@@ -1546,7 +1547,7 @@ class SEVM:
                 if subcall.is_stuck():
                     # internal errors abort the current path,
                     # so we don't need to add it to the worklist
-                    out.append(new_ex)
+                    yield new_ex
                     continue
 
                 # restore vm state
@@ -1700,7 +1701,7 @@ class SEVM:
         # known call target
         to_addr = self.resolve_address_alias(ex, to)
         if to_addr is not None:
-            call_known(to_addr)
+            yield from call_known(to_addr)
             return
 
         # simple ether transfer to unknown call target
@@ -1799,7 +1800,7 @@ class SEVM:
         self.transfer_value(ex, caller, new_addr, value)
 
         # execute contract creation code
-        (new_exs, new_steps, new_logs) = self.run(
+        new_exs = self.run(
             Exec(
                 code=ex.code,
                 storage=ex.storage,
@@ -1829,7 +1830,8 @@ class SEVM:
             )
         )
 
-        logs.extend(new_logs)
+        # XXX
+        # logs.extend(new_logs)
 
         # process result
         for new_ex in new_exs:
@@ -1852,7 +1854,7 @@ class SEVM:
 
             if subcall.is_stuck():
                 # internal errors abort the current path,
-                out.append(new_ex)
+                yield new_ex
                 continue
 
             elif subcall.output.error is None:
@@ -2061,22 +2063,22 @@ class SEVM:
 
                 if opcode == EVM.STOP:
                     ex.halt()
-                    out.append(ex)
+                    yield ex
                     continue
 
                 elif opcode == EVM.INVALID:
                     ex.halt(error=InvalidOpcode(opcode))
-                    out.append(ex)
+                    yield ex
                     continue
 
                 elif opcode == EVM.REVERT:
                     ex.halt(data=ex.st.ret(), error=Revert())
-                    out.append(ex)
+                    yield ex
                     continue
 
                 elif opcode == EVM.RETURN:
                     ex.halt(data=ex.st.ret())
-                    out.append(ex)
+                    yield ex
                     continue
 
                 elif opcode == EVM.JUMPI:
@@ -2245,14 +2247,14 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
-                    self.call(ex, opcode, stack, step_id, out, logs)
+                    yield from self.call(ex, opcode, stack, step_id, out, logs)
                     continue
 
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
-                    self.create(ex, opcode, stack, step_id, out, logs)
+                    yield from self.create(ex, opcode, stack, step_id, out, logs)
                     continue
 
                 elif opcode == EVM.POP:
@@ -2394,17 +2396,18 @@ class SEVM:
 
             except EvmException as err:
                 ex.halt(error=err)
-                out.append(ex)
+                yield ex
                 continue
 
             except HalmosException as err:
                 if self.options["debug"]:
                     print(err)
                 ex.halt(data=None, error=err)
-                out.append(ex)
+                yield ex
                 continue
 
-        return (out, steps, logs)
+        # XXX
+        # return (out, steps, logs)
 
     def mk_exec(
         self,
