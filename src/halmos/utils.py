@@ -369,6 +369,10 @@ def color_info(text: str) -> str:
     return cyan(text)
 
 
+def color_debug(text: str) -> str:
+    return magenta(text)
+
+
 def error(text: str) -> None:
     print(color_error(text))
 
@@ -379,6 +383,10 @@ def warn(text: str) -> None:
 
 def info(text: str) -> None:
     print(color_info(text))
+
+
+def debug(text: str) -> None:
+    print(color_debug(text))
 
 
 def indent_text(text: str, n: int = 4) -> str:
