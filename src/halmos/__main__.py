@@ -1367,7 +1367,7 @@ def _main(_args=None) -> MainResult:
             continue
 
         methodIdentifiers = contract_json["methodIdentifiers"]
-        funsigs = [f for f in methodIdentifiers if f.startswith(args.function)]
+        funsigs = [f for f in methodIdentifiers if re.search(args.function, f)]
         num_found = len(funsigs)
 
         if num_found == 0:
