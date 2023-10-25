@@ -69,6 +69,13 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--worklist",
+        choices=["stack", "queue", "random"],
+        default="stack",
+        help="[EXPERIMENTAL] Select one of the available worklists",
+    )
+
+    parser.add_argument(
         "--symbolic-storage",
         action="store_true",
         help="set default storage values to symbolic",

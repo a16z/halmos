@@ -301,7 +301,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         symbolic=args.symbolic_storage,
         solver=solver,
     )
-    exs = sevm.run(ex)
+    exs = list(sevm.run(ex))
 
     for idx, ex in enumerate(exs):
         opcode = ex.current_opcode()
@@ -1121,6 +1121,7 @@ def mk_options(args: Namespace) -> Dict:
         "unknown_calls_return_size": args.return_size_of_unknown_calls,
         "ffi": args.ffi,
         "storage_layout": args.storage_layout,
+        "worklist": args.worklist,
     }
 
     if args.width is not None:

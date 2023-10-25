@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: AGPL-3.0
-
+import heapq
 import json
 import math
+import random
 import re
 
+from abc import ABC, abstractmethod
 from copy import deepcopy
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from functools import reduce
 from typing import (
@@ -73,6 +75,69 @@ magic_address: int = 0xAAAA0000
 create2_magic_address: int = 0xBBBB0000
 
 new_address_offset: int = 1
+
+
+class Worklist(ABC):
+    @abstractmethod
+    def put(self, item):
+        pass
+
+    @abstractmethod
+    def get(self):
+        pass
+
+    @abstractmethod
+    def __len__(self):
+        pass
+
+
+class QueueWorklist(Worklist):
+    def __init__(self):
+        self.queue = deque()
+
+    def put(self, item):
+        self.queue.append(item)
+
+    def get(self):
+        return self.queue.popleft()
+
+    def __len__(self):
+        return len(self.queue)
+
+
+class StackWorklist(Worklist):
+    def __init__(self):
+        self.stack = []
+
+    def put(self, item):
+        self.stack.append(item)
+
+    def get(self):
+        return self.stack.pop()
+
+    def __len__(self):
+        return len(self.stack)
+
+
+class RandomPriorityWorklist(Worklist):
+    def __init__(self):
+        self.heap = []
+
+    def put(self, item):
+        # The priority is negative because heapq is a min-heap,
+        # and we want to pop a random element (random priority).
+        priority = -random.random()
+        heapq.heappush(self.heap, (priority, item))
+
+    def get(self):
+        _, item = heapq.heappop(self.heap)
+        return item
+
+    def __len__(self):
+        return len(self.heap)
+
+
+WorkItem = Tuple["Exec", int]
 
 
 class Instruction:
@@ -1443,7 +1508,7 @@ class SEVM:
         self,
         ex: Exec,
         op: int,
-        stack: List[Tuple[Exec, int]],
+        work: Worklist,
         step_id: int,
         out: List[Exec],
         logs: HalmosLogs,
@@ -1581,7 +1646,7 @@ class SEVM:
 
                 # add to worklist even if it reverted during the external call
                 new_ex.next_pc()
-                stack.append((new_ex, step_id))
+                work.put((new_ex, step_id))
 
         def call_unknown() -> None:
             call_id = len(ex.calls)
@@ -1683,7 +1748,7 @@ class SEVM:
             ex.calls.append((exit_code_var, exit_code, ex.context.output.data))
 
             ex.next_pc()
-            stack.append((ex, step_id))
+            work.put((ex, step_id))
 
         # precompiles or cheatcodes
         if (
@@ -1725,7 +1790,7 @@ class SEVM:
         self,
         ex: Exec,
         op: int,
-        stack: List[Tuple[Exec, int]],
+        work: Worklist,
         step_id: int,
         out: List[Exec],
         logs: HalmosLogs,
@@ -1781,7 +1846,7 @@ class SEVM:
             subcall.output.error = AddressCollision()
             ex.context.trace.append(subcall)
 
-            stack.append((ex, step_id))
+            work.put((ex, step_id))
             return
 
         for addr in ex.code:
@@ -1875,12 +1940,12 @@ class SEVM:
 
             # add to worklist
             new_ex.next_pc()
-            stack.append((new_ex, step_id))
+            work.put((new_ex, step_id))
 
     def jumpi(
         self,
         ex: Exec,
-        stack: List[Tuple[Exec, int]],
+        work: Worklist,
         step_id: int,
         logs: HalmosLogs,
     ) -> None:
@@ -1938,7 +2003,7 @@ class SEVM:
                     True: visited[True] + 1,
                     False: visited[False],
                 }
-            stack.append((new_ex_true, step_id))
+            work.put((new_ex_true, step_id))
 
         if new_ex_false:
             if potential_true and potential_false:
@@ -1946,15 +2011,15 @@ class SEVM:
                     True: visited[True],
                     False: visited[False] + 1,
                 }
-            stack.append((new_ex_false, step_id))
+            work.put((new_ex_false, step_id))
 
-    def jump(self, ex: Exec, stack: List[Tuple[Exec, int]], step_id: int) -> None:
+    def jump(self, ex: Exec, work: Worklist, step_id: int) -> None:
         dst = ex.st.pop()
 
         # if dst is concrete, just jump
         if is_concrete(dst):
             ex.pc = int_of(dst)
-            stack.append((ex, step_id))
+            work.put((ex, step_id))
 
         # otherwise, create a new execution for feasible targets
         elif self.options["sym_jump"]:
@@ -1964,7 +2029,7 @@ class SEVM:
                     if self.options.get("debug"):
                         print(f"We can jump to {target} with model {ex.solver.model()}")
                     new_ex = self.create_branch(ex, target_reachable, target)
-                    stack.append((new_ex, step_id))
+                    work.put((new_ex, step_id))
         else:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
@@ -2021,19 +2086,36 @@ class SEVM:
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
 
+    def mk_worklist(self):
+        worklist = self.options.get("worklist", "stack")
+        print(f"Using {worklist} worklist")
+
+        if worklist == "stack":
+            return StackWorklist()
+
+        if worklist == "queue":
+            return QueueWorklist()
+
+        if worklist == "random":
+            return RandomPriorityWorklist()
+
+        raise ValueError(worklist)
+
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
         out: List[Exec] = []
         logs = HalmosLogs()
         steps: Steps = {}
         step_id: int = 0
 
-        stack: List[Tuple[Exec, int]] = [(ex0, 0)]
-        while stack:
+        work = self.mk_worklist()
+        work.put((ex0, 0))
+
+        while work:
             try:
                 if len(out) >= self.options.get("max_width", 2**64):
                     break
 
-                (ex, prev_step_id) = stack.pop()
+                (ex, prev_step_id) = work.get()
                 step_id += 1
 
                 if ex.context.depth > MAX_CALL_DEPTH:
@@ -2082,11 +2164,11 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.JUMPI:
-                    self.jumpi(ex, stack, step_id, logs)
+                    self.jumpi(ex, work, step_id, logs)
                     continue
 
                 elif opcode == EVM.JUMP:
-                    self.jump(ex, stack, step_id)
+                    self.jump(ex, work, step_id)
                     continue
 
                 elif opcode == EVM.JUMPDEST:
@@ -2247,14 +2329,14 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
-                    yield from self.call(ex, opcode, stack, step_id, out, logs)
+                    yield from self.call(ex, opcode, work, step_id, out, logs)
                     continue
 
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
-                    yield from self.create(ex, opcode, stack, step_id, out, logs)
+                    yield from self.create(ex, opcode, work, step_id, out, logs)
                     continue
 
                 elif opcode == EVM.POP:
@@ -2392,7 +2474,7 @@ class SEVM:
                     raise HalmosException(f"Unsupported opcode {hex(opcode)}")
 
                 ex.next_pc()
-                stack.append((ex, step_id))
+                work.put((ex, step_id))
 
             except EvmException as err:
                 ex.halt(error=err)
