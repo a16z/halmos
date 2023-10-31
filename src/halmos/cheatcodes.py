@@ -10,10 +10,6 @@ from z3 import *
 
 from .exceptions import FailCheatcode, HalmosException
 from .utils import *
-from .warnings import (
-    INTERNAL_ERROR,
-    warn,
-)
 
 
 def name_of(x: str) -> str:
@@ -46,22 +42,23 @@ def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
     return string_array
 
 
-def stringified_bytes_to_bytes(string_bytes: str):
+def stringified_bytes_to_bytes(hexstring: str):
     """Converts a string of bytes to a bytes memory type"""
 
-    string_bytes_len = (len(string_bytes) + 1) // 2
-    string_bytes_len_enc = hex(string_bytes_len).replace("0x", "").rjust(64, "0")
+    if hexstring.startswith("0x"):
+        hexstring = hexstring[2:]
 
-    string_bytes_len_ceil = (string_bytes_len + 31) // 32 * 32
+    hexstring_len = (len(hexstring) + 1) // 2
+    hexstring_len_enc = hex(hexstring_len)[2:].rjust(64, "0")
+    hexstring_len_ceil = (hexstring_len + 31) // 32 * 32
 
-    ret_bytes = (
+    ret_bytes = bytes.fromhex(
         "00" * 31
         + "20"
-        + string_bytes_len_enc
-        + string_bytes.ljust(string_bytes_len_ceil * 2, "0")
+        + hexstring_len_enc
+        + hexstring.ljust(hexstring_len_ceil * 2, "0")
     )
-    ret_len = len(ret_bytes) // 2
-    ret_bytes = bytes.fromhex(ret_bytes)
+    ret_len = len(ret_bytes)
 
     return BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
 
@@ -425,25 +422,34 @@ class hevm_cheat_code:
             if not sevm.options.get("ffi"):
                 error_msg = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
                 raise HalmosException(error_msg)
-            cmd = extract_string_array_argument(arg, 0)
-            process = Popen(cmd, stdout=PIPE, stderr=PIPE)
 
+            cmd = extract_string_array_argument(arg, 0)
+
+            debug = sevm.options.get("debug", False)
+            verbose = sevm.options.get("verbose", 0)
+            if debug or verbose:
+                print(f"[vm.ffi] {cmd}")
+
+            process = Popen(cmd, stdout=PIPE, stderr=PIPE)
             (stdout, stderr) = process.communicate()
 
             if stderr:
-                warn(
-                    INTERNAL_ERROR,
-                    f"An exception has occurred during the usage of the ffi cheatcode:\n{stderr.decode('utf-8')}",
-                )
+                stderr_str = stderr.decode("utf-8")
+                print(f"[vm.ffi] {cmd}, stderr: {red(stderr_str)}")
 
-            out_bytes = stdout.decode("utf-8")
+            out_str = stdout.decode("utf-8").strip()
 
-            if not out_bytes.startswith("0x"):
-                out_bytes = out_bytes.strip().encode("utf-8").hex()
+            if debug:
+                print(f"[vm.ffi] {cmd}, stdout: {green(out_str)}")
+
+            if decode_hex(out_str) is not None:
+                # encode hex strings as is for compatibility with foundry's ffi
+                pass
             else:
-                out_bytes = out_bytes.strip().replace("0x", "")
+                # encode non-hex strings as hex
+                out_str = out_str.encode("utf-8").hex()
 
-            return stringified_bytes_to_bytes(out_bytes)
+            return stringified_bytes_to_bytes(out_str)
 
         else:
             # TODO: support other cheat codes
