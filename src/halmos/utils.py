@@ -3,7 +3,7 @@
 import re
 
 from timeit import default_timer as timer
-from typing import Dict, Tuple, Any, Union as UnionType
+from typing import Dict, Tuple, Any, Optional, Union as UnionType
 
 from z3 import *
 
@@ -225,6 +225,16 @@ def byte_length(x: Any) -> int:
         return len(x)
 
     raise ValueError(x)
+
+
+def decode_hex(hexstring: str) -> Optional[bytes]:
+    if hexstring.startswith("0x"):
+        hexstring = hexstring[2:]
+    try:
+        # not checking if length is even because fromhex accepts spaces
+        return bytes.fromhex(hexstring)
+    except ValueError:
+        return None
 
 
 def hexify(x):

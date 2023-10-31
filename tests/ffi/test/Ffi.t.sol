@@ -19,6 +19,18 @@ contract FfiTest is Test {
         assert(expected == output);
     }
 
+    function check_ImplicitHexStringOutput() public {
+        string[] memory inputs = new string[](3);
+        inputs[0] = "echo";
+        inputs[1] = "-n";
+        inputs[2] = " 4243 ";
+
+        bytes memory res = vm.ffi(inputs);
+        assertEq(res.length, 2);
+        assert(res[0] == 0x42);
+        assert(res[1] == 0x43);
+    }
+
     function check_StringOutput() public {
         string memory str = "arbitrary string";
 
