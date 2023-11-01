@@ -289,7 +289,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         data=[],
     )
 
-    sevm = SEVM(options)
+    sevm = SEVM(options, solver)
     ex = sevm.mk_exec(
         code={this: contract},
         storage={this: {}},
@@ -299,7 +299,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
-        solver=solver,
+        path=[],
     )
     (exs, _, _) = sevm.run(ex)
 
@@ -350,7 +350,7 @@ def deploy_test(
         this=this,
         pgm=None,  # to be added
         symbolic=False,
-        solver=mk_solver(args),
+        path=[],
     )
 
     # deploy libraries and resolve library placeholders in hexcode
@@ -413,7 +413,7 @@ def setup(
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
-    sevm = SEVM(mk_options(args))
+    sevm = SEVM(mk_options(args), mk_solver(args))
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
     setup_timer.create_subtimer("run")
@@ -460,8 +460,9 @@ def setup(
             error = setup_ex.context.output.error
 
             if error is None:
+                setup_ex.solver.reset()
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
-                res = setup_ex.solver.check()
+                res = setup_ex.solver.check(*setup_ex.path)
                 if res != unsat:
                     setup_exs.append(setup_ex)
             else:
@@ -568,10 +569,8 @@ def run(
     timer.create_subtimer("paths")
 
     options = mk_options(args)
-    sevm = SEVM(options)
-
     solver = mk_solver(args)
-    solver.add(setup_ex.solver.assertions())
+    sevm = SEVM(options, solver)
 
     (exs, steps, logs) = sevm.run(
         Exec(
@@ -591,7 +590,7 @@ def run(
             symbolic=args.symbolic_storage,
             prank=Prank(),  # prank is reset after setUp()
             #
-            solver=solver,
+            solver=sevm.solver,
             path=setup_ex.path.copy(),
             alias=setup_ex.alias.copy(),
             #
@@ -643,7 +642,7 @@ def run(
         print(f"Generating SMT queries in {dirname}")
         for idx, ex in execs_to_model:
             fname = f"{dirname}/{idx+1}.smt2"
-            query = ex.solver.to_smt2()
+            query = to_smt2(ex)
             with open(fname, "w") as f:
                 f.write("(set-logic QF_AUFBV)\n")
                 f.write(query)
@@ -658,7 +657,7 @@ def run(
             print(f"Spawning {len(execs_to_model)} parallel assertion solvers")
 
         fn_args = [
-            GenModelArgs(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model
+            GenModelArgs(args, idx, to_smt2(ex)) for idx, ex in execs_to_model
         ]
         with ThreadPoolExecutor() as thread_pool:
             models = list(thread_pool.map(gen_model_from_sexpr, fn_args))
@@ -943,11 +942,23 @@ class GenModelArgs:
     sexpr: str
 
 
+def copy_model(model: Model) -> Dict:
+    return { decl: model[decl] for decl in model }
+
+
+def to_smt2(ex: Exec) -> str:
+    ex.solver.reset()
+    ex.solver.add(*ex.path)
+    query = ex.solver.to_smt2()
+    ex.solver.reset()
+    return query
+
+
 def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
     solver = mk_solver(args, ctx=Context(), assertion=True)
     solver.from_string(query)
     result = solver.check()
-    model = solver.model() if result == sat else None
+    model = copy_model(solver.model()) if result == sat else None
     return result, model
 
 
@@ -985,14 +996,15 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
     if args.verbose >= 1:
         print(f"Checking path condition (path id: {idx+1})")
 
+    ex.solver.reset()
     ex.solver.set(timeout=args.solver_timeout_assertion)
-    res = ex.solver.check()
-    model = ex.solver.model() if res == sat else None
+    res = ex.solver.check(*ex.path)
+    model = copy_model(ex.solver.model()) if res == sat else None
 
     if res == sat and not is_model_valid(model):
         if args.verbose >= 1:
             print(f"  Checking again with refinement")
-        res, model = solve(refine(ex.solver.to_smt2()), args)
+        res, model = solve(refine(to_smt2(ex)), args)
 
     if args.solver_subprocess and is_unknown(res, model):
         if args.verbose >= 1:
@@ -1000,7 +1012,7 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
         fname = f"/tmp/{uuid.uuid4().hex}.smt2"
         if args.verbose >= 1:
             print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
-        query = refine(ex.solver.to_smt2())
+        query = refine(to_smt2(ex))
         with open(fname, "w") as f:
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)

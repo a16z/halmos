@@ -27,7 +27,7 @@ from halmos.sevm import (
 
 from halmos.__main__ import mk_block
 
-from test_fixtures import args, options, sevm
+from test_fixtures import args, options, sevm, solver
 
 caller = BitVec("msg_sender", 160)
 
@@ -36,15 +36,6 @@ this = BitVec("this_address", 160)
 balance = Array("balance_0", BitVecSort(160), BitVecSort(256))
 
 callvalue = BitVec("msg_value", 256)
-
-
-@pytest.fixture
-def solver(args):
-    solver = SolverFor(
-        "QF_AUFBV"
-    )  # quantifier-free bitvector + array theory; https://smtlib.cs.uiowa.edu/logics.shtml
-    solver.set(timeout=args.solver_timeout_branching)
-    return solver
 
 
 @pytest.fixture
@@ -64,7 +55,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         this=this,
         pgm=bytecode,
         symbolic=True,
-        solver=solver,
+        path=[],
     )
 
 

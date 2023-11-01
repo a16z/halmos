@@ -609,7 +609,7 @@ class Exec:  # an execution path
 
     # path
     solver: Solver
-    path: List[Any]  # path conditions
+    path: List  # path conditions
     alias: Dict[Address, Address]  # address aliases
 
     # internal bookkeeping
@@ -706,9 +706,6 @@ class Exec:  # an execution path
             ]
         )
 
-    def str_solver(self) -> str:
-        return "\n".join([str(cond) for cond in self.solver.assertions()])
-
     def str_path(self) -> str:
         return "".join(
             map(
@@ -762,11 +759,7 @@ class Exec:  # an execution path
         self.pc = self.pgm.next_pc(self.pc)
 
     def check(self, cond: Any) -> Any:
-        self.solver.push()
-        self.solver.add(simplify(cond))
-        result = self.solver.check()
-        self.solver.pop()
-        return result
+        return self.solver.check(*self.path, simplify(cond))
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
@@ -791,7 +784,7 @@ class Exec:  # an execution path
         assert_address(addr)
         value = self.select(self.balance, addr, self.balances)
         # practical assumption on the max balance per account
-        self.solver.add(ULT(value, con(2**96)))
+        self.path.append(ULT(value, con(2**96)))
         return value
 
     def balance_update(self, addr: Word, value: Word) -> None:
@@ -801,7 +794,7 @@ class Exec:  # an execution path
             f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
-        self.solver.add(new_balance_var == new_balance)
+        self.path.append(new_balance_var == new_balance)
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
 
@@ -815,7 +808,7 @@ class Exec:  # an execution path
         sha3_expr = f_sha3(data)
 
         # assume hash values are sufficiently smaller than the uint max
-        self.solver.add(ULE(sha3_expr, con(2**256 - 2**64)))
+        self.path.append(ULE(sha3_expr, con(2**256 - 2**64)))
 
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
@@ -838,7 +831,7 @@ class Exec:  # an execution path
             if prev_sha3_expr.decl().name() == sha3_decl_name:
                 # inputs have the same size: assume different inputs
                 # lead to different outputs
-                self.solver.add(
+                self.path.append(
                     Implies(
                         sha3_expr.arg(0) != prev_sha3_expr.arg(0),
                         sha3_expr != prev_sha3_expr,
@@ -846,9 +839,9 @@ class Exec:  # an execution path
                 )
             else:
                 # inputs have different sizes: assume the outputs are different
-                self.solver.add(sha3_expr != prev_sha3_expr)
+                self.path.append(sha3_expr != prev_sha3_expr)
 
-        self.solver.add(sha3_expr != con(0))
+        self.path.append(sha3_expr != con(0))
         self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
@@ -982,7 +975,7 @@ class SolidityStorage(Storage):
         else:
             if not ex.symbolic:
                 # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-                ex.solver.add(
+                ex.path.append(
                     Select(cls.empty(addr, slot, len(keys)), concat(keys)) == con(0)
                 )
             return ex.select(
@@ -1005,7 +998,7 @@ class SolidityStorage(Storage):
                 BitVecSort256,
             )
             new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
-            ex.solver.add(new_storage_var == new_storage)
+            ex.path.append(new_storage_var == new_storage)
             ex.storage[addr][slot][len(keys)] = new_storage_var
             ex.storages[new_storage_var] = new_storage
 
@@ -1076,7 +1069,7 @@ class GenericStorage(Storage):
         cls.init(ex, addr, loc)
         if not ex.symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-            ex.solver.add(Select(cls.empty(addr, loc), loc) == con(0))
+            ex.path.append(Select(cls.empty(addr, loc), loc) == con(0))
         return ex.select(ex.storage[addr][loc.size()], loc, ex.storages)
 
     @classmethod
@@ -1089,7 +1082,7 @@ class GenericStorage(Storage):
             BitVecSort256,
         )
         new_storage = Store(ex.storage[addr][loc.size()], loc, val)
-        ex.solver.add(new_storage_var == new_storage)
+        ex.path.append(new_storage_var == new_storage)
         ex.storage[addr][loc.size()] = new_storage_var
         ex.storages[new_storage_var] = new_storage
 
@@ -1215,10 +1208,12 @@ class HalmosLogs:
 
 class SEVM:
     options: Dict
+    solver: Solver
     storage_model: Type[SomeStorage]
 
-    def __init__(self, options: Dict) -> None:
+    def __init__(self, options: Dict, solver: Solver) -> None:
         self.options = options
+        self.solver = solver
 
         is_generic = self.options["storage_layout"] == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
@@ -1249,13 +1244,13 @@ class SEVM:
 
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_div(x, y)
-        ex.solver.add(ULE(term, x))  # (x / y) <= x
+        ex.path.append(ULE(term, x))  # (x / y) <= x
         return term
 
     def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_mod[x.size()](x, y)
-        ex.solver.add(ULE(term, y))  # (x % y) <= y
-        # ex.solver.add(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
+        ex.path.append(ULE(term, y))  # (x % y) <= y
+        # ex.path.append(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
         return term
 
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
@@ -1409,7 +1404,7 @@ class SEVM:
                             f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}"
                         )
                     ex.alias[target] = addr
-                    ex.solver.add(target == addr)
+                    ex.path.append(target == addr)
                     break
 
         return ex.alias.get(target)
@@ -1429,8 +1424,7 @@ class SEVM:
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
-        ex.solver.add(balance_cond)
-        ex.path.append(str(balance_cond))
+        ex.path.append(balance_cond)
 
         # conditional transfer
         if condition is not None:
@@ -1608,7 +1602,7 @@ class SEVM:
                 )
                 exit_code = f_call(con(call_id), gas, to, fund)
             exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
-            ex.solver.add(exit_code_var == exit_code)
+            ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
             # transfer msg.value
@@ -1635,26 +1629,26 @@ class SEVM:
 
             # ecrecover
             if eq(to, con_addr(1)):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
 
             # identity
             if eq(to, con_addr(4)):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
                 ret = arg
 
             # halmos cheat code
             if eq(to, halmos_cheat_code.address):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
                 ret = halmos_cheat_code.handle(ex, arg)
 
             # vm cheat code
             if eq(to, hevm_cheat_code.address):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
                 ret = hevm_cheat_code.handle(self, ex, arg)
 
             # console
             if eq(to, console.address):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
                 console.handle(ex, arg)
 
             # store return value
@@ -1784,7 +1778,7 @@ class SEVM:
             return
 
         for addr in ex.code:
-            ex.solver.add(new_addr != addr)  # ensure new address is fresh
+            ex.path.append(new_addr != addr)  # ensure new address is fresh
 
         # backup current state
         orig_code = ex.code.copy()
@@ -1920,14 +1914,12 @@ class SEVM:
                 new_ex_true = self.create_branch(ex, cond_true, target)
             else:
                 new_ex_true = ex
-                new_ex_true.solver.add(cond_true)
-                new_ex_true.path.append(str(cond_true))
+                new_ex_true.path.append(cond_true)
                 new_ex_true.pc = target
 
         if follow_false:
             new_ex_false = ex
-            new_ex_false.solver.add(cond_false)
-            new_ex_false.path.append(str(cond_false))
+            new_ex_false.path.append(cond_false)
             new_ex_false.next_pc()
 
         if new_ex_true:
@@ -1967,13 +1959,8 @@ class SEVM:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
-        new_solver = create_solver(
-            timeout=self.options["timeout"], max_memory=self.options["max_memory"]
-        )
-        new_solver.add(ex.solver.assertions())
-        new_solver.add(cond)
         new_path = ex.path.copy()
-        new_path.append(str(cond))
+        new_path.append(cond)
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
             storage=deepcopy(ex.storage),
@@ -1991,7 +1978,7 @@ class SEVM:
             symbolic=ex.symbolic,
             prank=deepcopy(ex.prank),
             #
-            solver=new_solver,
+            solver=ex.solver,
             path=new_path,
             alias=ex.alias.copy(),
             #
@@ -2194,7 +2181,7 @@ class SEVM:
                             or eq(account, halmos_cheat_code.address)
                             or eq(account, console.address)
                         ):
-                            ex.solver.add(codesize > 0)
+                            ex.path.append(codesize > 0)
                     ex.st.push(codesize)
                 # TODO: define f_extcodehash for known addresses in advance
                 elif opcode == EVM.EXTCODEHASH:
@@ -2421,7 +2408,7 @@ class SEVM:
         #
         pgm,
         symbolic,
-        solver,
+        path,
     ) -> Exec:
         return Exec(
             code=code,
@@ -2440,8 +2427,8 @@ class SEVM:
             symbolic=symbolic,
             prank=Prank(),
             #
-            solver=solver,
-            path=[],
+            solver=self.solver,
+            path=path,
             alias={},
             #
             log=[],
