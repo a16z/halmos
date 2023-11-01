@@ -759,7 +759,15 @@ class Exec:  # an execution path
         self.pc = self.pgm.next_pc(self.pc)
 
     def check(self, cond: Any) -> Any:
-        return self.solver.check(*self.path, simplify(cond))
+        cond = simplify(cond)
+
+        if is_true(cond):
+            return sat
+
+        if is_false(cond):
+            return unsat
+
+        return self.solver.check(*self.path, cond)
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
