@@ -453,12 +453,7 @@ def setup(
 
         for idx, setup_ex in enumerate(setup_exs_all):
             if args.verbose >= VERBOSITY_TRACE_SETUP:
-                num_traces = len(setup_exs_all)
-                print(
-                    f"{setup_sig} trace #{idx+1}/{num_traces}:"
-                    if num_traces > 1
-                    else f"{setup_sig} trace:"
-                )
+                print(f"{setup_sig} trace #{idx+1}:")
                 render_trace(setup_ex.context)
 
             opcode = setup_ex.current_opcode()
