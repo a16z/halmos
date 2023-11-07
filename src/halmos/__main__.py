@@ -299,7 +299,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
-        path=[],
+        path=Path(),
     )
     (exs, _, _) = sevm.run(ex)
 
@@ -350,7 +350,7 @@ def deploy_test(
         this=this,
         pgm=None,  # to be added
         symbolic=False,
-        path=[],
+        path=Path(),
     )
 
     # deploy libraries and resolve library placeholders in hexcode
@@ -436,6 +436,12 @@ def setup(
 
         (setup_exs_all, setup_steps, setup_logs) = sevm.run(setup_ex)
 
+#       print(f"#")
+#       print(f"#")
+#       print(f"# end of setup: #paths: {len(setup_exs_all)}")
+#       print(f"#")
+#       print(f"#")
+
         if setup_logs.bounded_loops:
             warn(
                 LOOP_BOUND,
@@ -462,7 +468,7 @@ def setup(
             if error is None:
                 setup_ex.solver.reset()
                 setup_ex.solver.set(timeout=args.solver_timeout_assertion)
-                res = setup_ex.solver.check(*setup_ex.path)
+                res = setup_ex.solver.check(*setup_ex.path.conditions)
                 if res != unsat:
                     setup_exs.append(setup_ex)
             else:
@@ -591,7 +597,7 @@ def run(
             prank=Prank(),  # prank is reset after setUp()
             #
             solver=sevm.solver,
-            path=setup_ex.path.copy(),
+            path=deepcopy(setup_ex.path),
             alias=setup_ex.alias.copy(),
             #
             cnts=deepcopy(setup_ex.cnts),
@@ -948,7 +954,7 @@ def copy_model(model: Model) -> Dict:
 
 def to_smt2(ex: Exec) -> str:
     ex.solver.reset()
-    ex.solver.add(*ex.path)
+    ex.solver.add(*ex.path.conditions)
     query = ex.solver.to_smt2()
     ex.solver.reset()
     return query
@@ -998,7 +1004,7 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
 
     ex.solver.reset()
     ex.solver.set(timeout=args.solver_timeout_assertion)
-    res = ex.solver.check(*ex.path)
+    res = ex.solver.check(*ex.path.conditions)
     model = copy_model(ex.solver.model()) if res == sat else None
 
     if res == sat and not is_model_valid(model):

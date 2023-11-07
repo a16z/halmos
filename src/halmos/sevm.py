@@ -585,6 +585,55 @@ class CodeIterator:
         return insn
 
 
+class Path:
+    conditions: List
+    related: Dict[int, Set[int]]  # a condition -> a set of previous conditions that are related to the condition
+#   cond_to_vars: Dict[int, Set[Any]]  # a condition -> a set of variables that appear in the condition
+    var_to_conds: Dict[Any, Set[int]]  # a variable -> a set of conditions in which the variable appears
+
+    def __init__(self):
+        self.conditions = []
+        self.related = {}
+#       self.cond_to_vars = {}
+        self.var_to_conds = defaultdict(set)
+
+    def __deepcopy__(self, memo):
+        path = Path()
+        path.conditions = self.conditions.copy()
+        path.related = self.related.copy()
+#       path.cond_to_vars = self.cond_to_vars.copy()
+        path.var_to_conds = deepcopy(self.var_to_conds)
+        return path
+
+    def append(self, cond):
+        idx = len(self.conditions)
+
+        self.conditions.append(cond)
+
+        var_set = z3util.get_vars(cond)
+
+        self.related[idx] = self._get_related(var_set)
+
+#       self.cond_to_vars[idx] = var_set
+
+        for var in var_set:
+            self.var_to_conds[var].add(idx)
+
+    def _get_related(self, var_set) -> Set[int]:
+        conds = set()
+        for var in var_set:
+            conds.update(self.var_to_conds[var])
+
+        result = set(conds)
+        for cond in conds:
+            result.update(self.related[cond])
+
+        return result
+
+    def get_related(self, cond) -> Set[int]:
+        return self._get_related(z3util.get_vars(cond))
+
+
 class Exec:  # an execution path
     # network
     code: Dict[Address, Contract]
@@ -609,7 +658,7 @@ class Exec:  # an execution path
 
     # path
     solver: Solver
-    path: List  # path conditions
+    path: Path  # path conditions
     alias: Dict[Address, Address]  # address aliases
 
     # internal bookkeeping
@@ -710,7 +759,7 @@ class Exec:  # an execution path
         return "".join(
             map(
                 lambda x: "- " + str(x) + "\n",
-                filter(lambda x: str(x) != "True", self.path),
+                filter(lambda x: str(x) != "True", self.path.conditions),
             )
         )
 
@@ -767,7 +816,12 @@ class Exec:  # an execution path
         if is_false(cond):
             return unsat
 
-        return self.solver.check(*self.path, cond)
+#       conds = self.path.conditions
+        conds = [self.path.conditions[idx] for idx in self.path.get_related(cond)]
+
+        result = self.solver.check(*conds, cond)
+#       print(f"check: {result}: {cond}: {conds}")
+        return result
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
@@ -1967,7 +2021,7 @@ class SEVM:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
-        new_path = ex.path.copy()
+        new_path = deepcopy(ex.path)
         new_path.append(cond)
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
