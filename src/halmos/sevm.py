@@ -866,6 +866,9 @@ class Exec:  # an execution path
 #           for i in range(size_conditions - size_assertions):
 #               self.solver.add(self.path.conditions[size_assertions + i])
 
+#       if len(self.solver.assertions()) != len(self.path.conditions):
+#           raise ValueError("size check", self.solver.assertions(), self.path.conditions)
+
         result = self.solver.check(cond)
 
 #       conds = self.path.conditions
@@ -1328,10 +1331,12 @@ class SEVM:
     options: Dict
     solver: Solver
     storage_model: Type[SomeStorage]
+    logs: HalmosLogs
 
     def __init__(self, options: Dict, solver: Solver) -> None:
         self.options = options
         self.solver = solver
+        self.logs = HalmosLogs()
 
         is_generic = self.options["storage_layout"] == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
@@ -1558,7 +1563,7 @@ class SEVM:
         stack: List[Tuple[Exec, int]],
         step_id: int,
 #       out: List[Exec],
-        logs: HalmosLogs,
+#       logs: HalmosLogs,
     ) -> None:
         gas = ex.st.pop()
         to = uint160(ex.st.pop())
@@ -1839,7 +1844,7 @@ class SEVM:
         # uninterpreted unknown calls
         funsig = extract_funsig(arg)
         if funsig in self.options["unknown_calls"]:
-            logs.add_uninterpreted_unknown_call(funsig, to, arg)
+            self.logs.add_uninterpreted_unknown_call(funsig, to, arg)
             call_unknown()
             return
 
@@ -2025,7 +2030,7 @@ class SEVM:
         ex: Exec,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-        logs: HalmosLogs,
+#       logs: HalmosLogs,
     ) -> None:
         jid = ex.jumpi_id()
 
@@ -2051,7 +2056,7 @@ class SEVM:
             follow_true = visited[True] < self.options["max_loop"]
             follow_false = visited[False] < self.options["max_loop"]
             if not (follow_true and follow_false):
-                logs.bounded_loops.append(jid)
+                self.logs.bounded_loops.append(jid)
         else:
             # for constant-bounded loops
             follow_true = potential_true
@@ -2165,7 +2170,7 @@ class SEVM:
 
     def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
         out: List[Exec] = []
-        logs = HalmosLogs()
+#       logs = HalmosLogs()
         steps: Steps = {}
         step_id: int = 0
 
@@ -2226,7 +2231,8 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.JUMPI:
-                    self.jumpi(ex, stack, step_id, logs)
+#                   self.jumpi(ex, stack, step_id, logs)
+                    self.jumpi(ex, stack, step_id)
                     continue
 
                 elif opcode == EVM.JUMP:
@@ -2392,7 +2398,7 @@ class SEVM:
                     EVM.STATICCALL,
                 ]:
 #                   self.call(ex, opcode, stack, step_id, out, logs)
-                    self.call(ex, opcode, stack, step_id,      logs)
+                    self.call(ex, opcode, stack, step_id)
                     continue
 
                 elif opcode == EVM.SHA3:
@@ -2400,7 +2406,7 @@ class SEVM:
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
 #                   self.create(ex, opcode, stack, step_id, out, logs)
-                    self.create(ex, opcode, stack, step_id           )
+                    self.create(ex, opcode, stack, step_id)
                     continue
 
                 elif opcode == EVM.POP:
@@ -2562,7 +2568,8 @@ class SEVM:
 
                 continue
 
-        return (out, steps, logs)
+#       return (out, steps, logs)
+        return (out, steps)
 
     def mk_exec(
         self,
