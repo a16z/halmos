@@ -623,10 +623,14 @@ class Path:
         conds = set()
         for var in var_set:
             conds.update(self.var_to_conds[var])
+#           if len(conds) > 20:
+#               return conds
 
         result = set(conds)
         for cond in conds:
             result.update(self.related[cond])
+#           if len(result) > 20:
+#               return result
 
         return result
 
@@ -819,8 +823,12 @@ class Exec:  # an execution path
 #       conds = self.path.conditions
         conds = [self.path.conditions[idx] for idx in self.path.get_related(cond)]
 
+#       if len(conds) > 20:
+#           return unknown
+
         result = self.solver.check(*conds, cond)
 #       print(f"check: {result}: {cond}: {conds}")
+#       print(f"-- check: {result}: {len(conds)}")
         return result
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
