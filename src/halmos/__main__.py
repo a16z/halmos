@@ -578,6 +578,11 @@ def run(
     solver = mk_solver(args)
     sevm = SEVM(options, solver)
 
+    path = Path()
+    path.solver = sevm.solver
+    for cond in setup_ex.path.conditions:
+        path.append(cond)
+
     (exs, steps, logs) = sevm.run(
         Exec(
 #           pending=False,
@@ -600,7 +605,8 @@ def run(
             prank=Prank(),  # prank is reset after setUp()
             #
             solver=sevm.solver,
-            path=deepcopy(setup_ex.path),
+#           path=deepcopy(setup_ex.path),
+            path=path,
             alias=setup_ex.alias.copy(),
             #
             cnts=deepcopy(setup_ex.cnts),
