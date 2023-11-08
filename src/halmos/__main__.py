@@ -301,7 +301,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         symbolic=args.symbolic_storage,
         path=Path(),
     )
-    (exs, _) = sevm.run(ex)
+    exs = sevm.run(ex)
 
     for idx, ex in enumerate(exs):
         opcode = ex.current_opcode()
@@ -370,7 +370,7 @@ def deploy_test(
         return ex
 
     # create test contract
-    (exs, _) = sevm.run(ex)
+    exs = sevm.run(ex)
 
     # sanity check
     if len(exs) != 1:
@@ -434,8 +434,8 @@ def setup(
             ),
         )
 
-        (setup_exs_all, setup_steps) = sevm.run(setup_ex)
-        setup_logs = sevm.logs
+        setup_exs_all = sevm.run(setup_ex)
+        (setup_logs, setup_steps) = (sevm.logs, sevm.steps)
 
 #       print(f"#")
 #       print(f"#")
@@ -585,7 +585,7 @@ def run(
         path.append(cond)
 
 #   (exs, steps, logs) = sevm.run(
-    (exs, steps) = sevm.run(
+    exs = sevm.run(
         Exec(
 #           pending=False,
             #
@@ -619,7 +619,7 @@ def run(
         )
     )
 
-    logs = sevm.logs
+    (logs, steps) = (sevm.logs, sevm.steps)
 
     timer.create_subtimer("models")
 

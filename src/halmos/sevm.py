@@ -1332,11 +1332,13 @@ class SEVM:
     solver: Solver
     storage_model: Type[SomeStorage]
     logs: HalmosLogs
+    steps: Steps
 
     def __init__(self, options: Dict, solver: Solver) -> None:
         self.options = options
         self.solver = solver
         self.logs = HalmosLogs()
+        self.steps: Steps = {}
 
         is_generic = self.options["storage_layout"] == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
@@ -2168,10 +2170,11 @@ class SEVM:
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
 
-    def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
+#   def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
+    def run(self, ex0: Exec) -> List[Exec]:
         out: List[Exec] = []
 #       logs = HalmosLogs()
-        steps: Steps = {}
+#       steps: Steps = {}
         step_id: int = 0
 
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
@@ -2201,12 +2204,12 @@ class SEVM:
 
                 if self.options.get("log"):
                     if opcode == EVM.JUMPI:
-                        steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
+                        self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
                     # elif opcode == EVM.CALL:
-                    #     steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
+                    #     self.steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
                     else:
-                        # steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
-                        steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
+                        # self.steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
+                        self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
                 if self.options.get("print_steps"):
                     print(ex)
@@ -2569,7 +2572,7 @@ class SEVM:
                 continue
 
 #       return (out, steps, logs)
-        return (out, steps)
+        return out
 
     def mk_exec(
         self,
