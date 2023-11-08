@@ -587,6 +587,7 @@ def run(
             block=deepcopy(setup_ex.block),
             #
             context=CallContext(message=message),
+            continuation=None,
             this=setup_ex.this,
             #
             pgm=setup_ex.code[setup_ex.this],

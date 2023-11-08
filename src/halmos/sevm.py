@@ -649,6 +649,7 @@ class Exec:  # an execution path
 
     # tx
     context: CallContext
+    continuation: Any  # parent continuation
 
     # vm state
     this: Address  # current account address
@@ -679,6 +680,7 @@ class Exec:  # an execution path
         #
         self.block = kwargs["block"]
         self.context = kwargs["context"]
+        self.continuation = kwargs["continuation"]
         #
         self.this = kwargs["this"]
         self.pgm = kwargs["pgm"]
@@ -1509,7 +1511,7 @@ class SEVM:
         op: int,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-        out: List[Exec],
+#       out: List[Exec],
         logs: HalmosLogs,
     ) -> None:
         gas = ex.st.pop()
@@ -1563,9 +1565,11 @@ class SEVM:
 
             # TODO: check max call depth
 
-            # execute external calls
-            (new_exs, new_steps, new_logs) = self.run(
-                Exec(
+#           # execute external calls
+#           (new_exs, new_steps, new_logs) = self.run(
+
+            if True:
+                sub_ex = Exec(
                     code=ex.code,
                     storage=ex.storage,
                     balance=ex.balance,
@@ -1573,6 +1577,7 @@ class SEVM:
                     block=ex.block,
                     #
                     context=CallContext(message=message, depth=ex.context.depth + 1),
+                    continuation=None,  # TBA
                     this=message.target,
                     #
                     pgm=ex.code[to],
@@ -1592,12 +1597,15 @@ class SEVM:
                     balances=ex.balances,
                     calls=ex.calls,
                 )
-            )
 
-            logs.extend(new_logs)
+#           )
 
-            # process result
-            for new_ex in new_exs:
+#           logs.extend(new_logs)
+
+#           # process result
+#           for new_ex in new_exs:
+
+            def continuation(new_ex, stack, step_id, out):
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
                 subcall = new_ex.context
@@ -1607,11 +1615,14 @@ class SEVM:
                 new_ex.context.trace.append(subcall)
                 new_ex.this = ex.this
 
+                new_ex.continuation = ex.continuation
+
                 if subcall.is_stuck():
                     # internal errors abort the current path,
                     # so we don't need to add it to the worklist
                     out.append(new_ex)
-                    continue
+#                   continue
+                    return
 
                 # restore vm state
                 new_ex.pgm = ex.pgm
@@ -1645,6 +1656,11 @@ class SEVM:
                 # add to worklist even if it reverted during the external call
                 new_ex.next_pc()
                 stack.append((new_ex, step_id))
+
+            sub_ex.continuation = continuation
+
+            stack.append((sub_ex, step_id))
+
 
         def call_unknown() -> None:
             call_id = len(ex.calls)
@@ -1790,8 +1806,8 @@ class SEVM:
         op: int,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-        out: List[Exec],
-        logs: HalmosLogs,
+#       out: List[Exec],
+#       logs: HalmosLogs,
     ) -> None:
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())
@@ -1862,9 +1878,11 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, caller, new_addr, value)
 
-        # execute contract creation code
-        (new_exs, new_steps, new_logs) = self.run(
-            Exec(
+#       # execute contract creation code
+#       (new_exs, new_steps, new_logs) = self.run(
+
+        if True:
+            sub_ex = Exec(
                 code=ex.code,
                 storage=ex.storage,
                 balance=ex.balance,
@@ -1872,6 +1890,7 @@ class SEVM:
                 block=ex.block,
                 #
                 context=CallContext(message=message, depth=ex.context.depth + 1),
+                continuation=None,  # TBA
                 this=new_addr,
                 #
                 pgm=create_code,
@@ -1891,18 +1910,23 @@ class SEVM:
                 balances=ex.balances,
                 calls=ex.calls,
             )
-        )
 
-        logs.extend(new_logs)
+#       )
 
-        # process result
-        for new_ex in new_exs:
+#       logs.extend(new_logs)
+
+#       # process result
+#       for new_ex in new_exs:
+
+        def continuation(new_ex, stack, step_id, out):
             subcall = new_ex.context
 
             # continue execution in the context of the parent
             # pessimistic copy because the subcall results may diverge
             new_ex.context = deepcopy(ex.context)
             new_ex.context.trace.append(subcall)
+
+            new_ex.continuation = ex.continuation
 
             new_ex.this = ex.this
 
@@ -1917,7 +1941,8 @@ class SEVM:
             if subcall.is_stuck():
                 # internal errors abort the current path,
                 out.append(new_ex)
-                continue
+#               continue
+                return
 
             elif subcall.output.error is None:
                 # new contract code, will revert if data is None
@@ -1938,6 +1963,12 @@ class SEVM:
             # add to worklist
             new_ex.next_pc()
             stack.append((new_ex, step_id))
+
+
+        sub_ex.continuation = continuation
+
+        stack.append((sub_ex, step_id))
+
 
     def jumpi(
         self,
@@ -2039,6 +2070,7 @@ class SEVM:
             block=deepcopy(ex.block),
             #
             context=deepcopy(ex.context),
+            continuation=ex.continuation,
             this=ex.this,
             #
             pgm=ex.pgm,
@@ -2116,24 +2148,23 @@ class SEVM:
                 if self.options.get("print_steps"):
                     print(ex)
 
-                if opcode == EVM.STOP:
-                    ex.halt()
-                    out.append(ex)
-                    continue
+                if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
+                    if opcode == EVM.STOP:
+                        ex.halt()
+                    elif opcode == EVM.INVALID:
+                        ex.halt(error=InvalidOpcode(opcode))
+                    elif opcode == EVM.REVERT:
+                        ex.halt(data=ex.st.ret(), error=Revert())
+                    elif opcode == EVM.RETURN:
+                        ex.halt(data=ex.st.ret())
+                    else:
+                        raise ValueError(opcode)
 
-                elif opcode == EVM.INVALID:
-                    ex.halt(error=InvalidOpcode(opcode))
-                    out.append(ex)
-                    continue
+                    if ex.continuation is None:
+                        out.append(ex)
+                    else:
+                        ex.continuation(ex, stack, step_id, out)
 
-                elif opcode == EVM.REVERT:
-                    ex.halt(data=ex.st.ret(), error=Revert())
-                    out.append(ex)
-                    continue
-
-                elif opcode == EVM.RETURN:
-                    ex.halt(data=ex.st.ret())
-                    out.append(ex)
                     continue
 
                 elif opcode == EVM.JUMPI:
@@ -2302,14 +2333,16 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
-                    self.call(ex, opcode, stack, step_id, out, logs)
+#                   self.call(ex, opcode, stack, step_id, out, logs)
+                    self.call(ex, opcode, stack, step_id,      logs)
                     continue
 
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
-                    self.create(ex, opcode, stack, step_id, out, logs)
+#                   self.create(ex, opcode, stack, step_id, out, logs)
+                    self.create(ex, opcode, stack, step_id           )
                     continue
 
                 elif opcode == EVM.POP:
@@ -2488,6 +2521,7 @@ class SEVM:
             block=block,
             #
             context=context,
+            continuation=None,  # top-level; no continuation
             #
             this=this,
             pgm=pgm,
