@@ -23,6 +23,7 @@ from halmos.sevm import (
     iter_bytes,
     wload,
     wstore,
+    Path,
 )
 
 from halmos.__main__ import mk_block
@@ -55,7 +56,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         this=this,
         pgm=bytecode,
         symbolic=True,
-        path=[],
+        path=Path(),
     )
 
 

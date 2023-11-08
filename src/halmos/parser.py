@@ -178,7 +178,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--solver-timeout-branching",
         metavar="TIMEOUT",
         type=int,
-        default=1000,
+        default=1,
         help="set timeout (in milliseconds) for solving branching conditions; 0 means no timeout (default: %(default)s)",
     )
     group_solver.add_argument(

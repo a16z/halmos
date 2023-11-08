@@ -586,59 +586,85 @@ class CodeIterator:
 
 
 class Path:
+    solver: Solver
+    num_scopes: int
     conditions: List
-    related: Dict[int, Set[int]]  # a condition -> a set of previous conditions that are related to the condition
+    pending: List
+#   related: Dict[int, Set[int]]  # a condition -> a set of previous conditions that are related to the condition
 #   cond_to_vars: Dict[int, Set[Any]]  # a condition -> a set of variables that appear in the condition
-    var_to_conds: Dict[Any, Set[int]]  # a variable -> a set of conditions in which the variable appears
+#   var_to_conds: Dict[Any, Set[int]]  # a variable -> a set of conditions in which the variable appears
 
     def __init__(self):
+        self.solver = None
+        self.num_scopes = None
         self.conditions = []
-        self.related = {}
+        self.pending = []
+#       self.related = {}
 #       self.cond_to_vars = {}
-        self.var_to_conds = defaultdict(set)
+#       self.var_to_conds = defaultdict(set)
 
     def __deepcopy__(self, memo):
+        if len(self.pending) > 0:
+            raise ValueError("deepcopy pending path", self)
         path = Path()
+        path.solver = self.solver
+        path.num_scopes = self.num_scopes
         path.conditions = self.conditions.copy()
-        path.related = self.related.copy()
+#       path.related = self.related.copy()
 #       path.cond_to_vars = self.cond_to_vars.copy()
-        path.var_to_conds = deepcopy(self.var_to_conds)
+#       path.var_to_conds = deepcopy(self.var_to_conds)
         return path
 
-    def append(self, cond):
-        idx = len(self.conditions)
+    def resolve_pending(self, solver):
+        if solver.num_scopes() < self.num_scopes:
+            raise ValueError("invalid num_scopes", solver.num_scopes(), self.num_scopes)
 
+#       while len(solver.assertions()) > len(self.conditions):
+        while solver.num_scopes() > self.num_scopes:
+            solver.pop()
+
+        for cond in self.pending:
+            self.append(cond)
+
+        self.pending = []
+
+    def append(self, cond):
+#       idx = len(self.conditions)
+
+        self.solver.add(cond)
         self.conditions.append(cond)
 
-        var_set = z3util.get_vars(cond)
+#       var_set = z3util.get_vars(cond)
 
-        self.related[idx] = self._get_related(var_set)
+#       self.related[idx] = self._get_related(var_set)
 
 #       self.cond_to_vars[idx] = var_set
 
-        for var in var_set:
-            self.var_to_conds[var].add(idx)
+#       for var in var_set:
+#           self.var_to_conds[var].add(idx)
 
-    def _get_related(self, var_set) -> Set[int]:
-        conds = set()
-        for var in var_set:
-            conds.update(self.var_to_conds[var])
+#   def _get_related(self, var_set) -> Set[int]:
+#       conds = set()
+#       for var in var_set:
+#           conds.update(self.var_to_conds[var])
 #           if len(conds) > 20:
 #               return conds
 
-        result = set(conds)
-        for cond in conds:
-            result.update(self.related[cond])
+#       result = set(conds)
+#       for cond in conds:
+#           result.update(self.related[cond])
 #           if len(result) > 20:
 #               return result
 
-        return result
+#       return result
 
-    def get_related(self, cond) -> Set[int]:
-        return self._get_related(z3util.get_vars(cond))
+#   def get_related(self, cond) -> Set[int]:
+#       return self._get_related(z3util.get_vars(cond))
 
 
 class Exec:  # an execution path
+#   pending: bool
+
     # network
     code: Dict[Address, Contract]
     storage: Dict[Address, Dict[int, Any]]  # address -> { storage slot -> value }
@@ -674,6 +700,8 @@ class Exec:  # an execution path
     calls: List[Any]  # external calls
 
     def __init__(self, **kwargs) -> None:
+#       self.pending = kwargs["pending"]
+        #
         self.code = kwargs["code"]
         self.storage = kwargs["storage"]
         self.balance = kwargs["balance"]
@@ -700,6 +728,8 @@ class Exec:  # an execution path
         self.storages = kwargs["storages"]
         self.balances = kwargs["balances"]
         self.calls = kwargs["calls"]
+
+        self.path.solver = self.solver
 
         assert_address(self.context.message.target)
         assert_address(self.context.message.caller)
@@ -822,13 +852,29 @@ class Exec:  # an execution path
         if is_false(cond):
             return unsat
 
+#       size_assertions = len(self.solver.assertions())
+#       size_conditions = len(self.path.conditions)
+
+#       if size_assertions > size_conditions:
+#           raise ValueError("size check", self.solver.assertions(), self.path.conditions)
+
+#       if size_assertions < size_conditions:
+#           for i in range(size_assertions):
+#               if not eq(self.solver.assertions()[i], self.path.conditions[i]):
+#                   raise ValueError("eq check", i, self.solver.assertions(), self.path.conditions)
+
+#           for i in range(size_conditions - size_assertions):
+#               self.solver.add(self.path.conditions[size_assertions + i])
+
+        result = self.solver.check(cond)
+
 #       conds = self.path.conditions
-        conds = [self.path.conditions[idx] for idx in self.path.get_related(cond)]
+#       conds = [self.path.conditions[idx] for idx in self.path.get_related(cond)]
 
 #       if len(conds) > 20:
 #           return unknown
 
-        result = self.solver.check(*conds, cond)
+#       result = self.solver.check(*conds, cond)
 #       print(f"check: {result}: {cond}: {conds}")
 #       print(f"-- check: {result}: {len(conds)}")
         return result
@@ -1570,6 +1616,8 @@ class SEVM:
 
             if True:
                 sub_ex = Exec(
+#                   pending=False,
+                    #
                     code=ex.code,
                     storage=ex.storage,
                     balance=ex.balance,
@@ -1883,6 +1931,8 @@ class SEVM:
 
         if True:
             sub_ex = Exec(
+#               pending=False,
+                #
                 code=ex.code,
                 storage=ex.storage,
                 balance=ex.balance,
@@ -2061,8 +2111,13 @@ class SEVM:
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
         new_path = deepcopy(ex.path)
-        new_path.append(cond)
+        new_path.pending.append(cond)
+        new_path.num_scopes = ex.solver.num_scopes()
+        ex.solver.push()
+
         new_ex = Exec(
+#           pending=True,
+            #
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
             storage=deepcopy(ex.storage),
             balance=ex.balance,
@@ -2122,6 +2177,9 @@ class SEVM:
 
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
+
+                if len(ex.path.pending) > 0:
+                    ex.path.resolve_pending(ex.solver)
 
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
@@ -2484,14 +2542,24 @@ class SEVM:
 
             except EvmException as err:
                 ex.halt(error=err)
-                out.append(ex)
+#               out.append(ex)
+                if ex.continuation is None:
+                    out.append(ex)
+                else:
+                    ex.continuation(ex, stack, step_id, out)
+
                 continue
 
             except HalmosException as err:
                 if self.options["debug"]:
                     print(err)
                 ex.halt(data=None, error=err)
-                out.append(ex)
+#               out.append(ex)
+                if ex.continuation is None:
+                    out.append(ex)
+                else:
+                    ex.continuation(ex, stack, step_id, out)
+
                 continue
 
         return (out, steps, logs)
@@ -2514,6 +2582,8 @@ class SEVM:
         path,
     ) -> Exec:
         return Exec(
+#           pending=False,
+            #
             code=code,
             storage=storage,
             balance=balance,

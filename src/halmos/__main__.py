@@ -580,6 +580,8 @@ def run(
 
     (exs, steps, logs) = sevm.run(
         Exec(
+#           pending=False,
+            #
             code=setup_ex.code.copy(),  # shallow copy
             storage=deepcopy(setup_ex.storage),
             balance=setup_ex.balance,  # TODO: add callvalue
