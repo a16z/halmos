@@ -58,6 +58,10 @@ f_gasprice = Function("gasprice", BitVecSort256)
 f_origin = Function("origin", BitVecSort160)
 
 # uninterpreted arithmetic
+# f_mul = {
+#     256: Function("evm_bvmul", BitVecSort256, BitVecSort256, BitVecSort256),
+#     512: Function("evm_bvmul_512", BitVecSort512, BitVecSort512, BitVecSort512),
+# }
 f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
     256: Function("evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
@@ -67,6 +71,37 @@ f_mod = {
 f_sdiv = Function("evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_smod = Function("evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
 f_exp = Function("evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
+
+# xx = BitVec("xx", BitVecSort256)
+# yy = BitVec("yy", BitVecSort256)
+# 
+# f_mul_def = [
+#     ForAll([xx, yy], f_mul[256](xx, yy) == xx * yy),
+# ]
+# f_div_def = [
+#     ForAll([xx, yy], Implies(yy != con(0), f_div(xx, yy) == UDiv(xx, yy))),
+#     ForAll(xx, f_div(xx, con(0)) == con(0)),
+# ]
+# f_mod_def = [
+#     ForAll([xx, yy], Implies(yy != con(0), f_mod[256](xx, yy) == URem(xx, yy))),
+#     ForAll(xx, f_mod[256](xx, con(0)) == con(0)),
+# ]
+# f_sdiv_def = [
+#     ForAll([xx, yy], Implies(yy != con(0), f_sdiv(xx, yy) == xx / yy)),
+#     ForAll(xx, f_sdiv(xx, con(0)) == con(0)),
+# ]
+# f_smod_def = [
+#     ForAll([xx, yy], Implies(yy != con(0), f_smod(xx, yy) == SRem(xx, yy))),
+#     ForAll(xx, f_smod(xx, con(0)) == con(0)),
+# ]
+
+# ss = Solver()
+# ss.add(*f_mul_def)
+# ss.add(*f_div_def)
+# ss.add(*f_mod_def)
+# ss.add(*f_sdiv_def)
+# ss.add(*f_smod_def)
+# f_axioms = ss.to_smt2()
 
 magic_address: int = 0xAAAA0000
 
@@ -1367,6 +1402,9 @@ class SEVM:
                         return x
         return None
 
+#   def mk_mul(self, x: Any, y: Any) -> Any:
+#       return f_mul[x.size()](x, y)
+
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_div(x, y)
         ex.path.append(ULE(term, x))  # (x / y) <= x
@@ -1377,6 +1415,34 @@ class SEVM:
         ex.path.append(ULE(term, y))  # (x % y) <= y
         # ex.path.append(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
         return term
+
+#   def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
+#       (quotient, _) = self.mk_div_mod(ex, x, y)
+#       return quotient
+
+#   def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
+#       (_, remainder) = self.mk_div_mod(ex, x, y)
+#       return remainder
+
+#   def mk_div_mod(self, ex: Exec, x, y) -> Tuple:
+#       q = f_div(x, y)            # quotient
+#       r = f_mod[x.size()](x, y)  # remainder
+
+#       zero = con(0, x.size())
+
+#       # x == q * y + r
+#   #   ex.path.append(Implies(y != zero, x == self.arith(ex, EVM.MUL, y, q) + r))
+#       ex.path.append(Implies(y != zero, x == (q * y) + r))
+#       ex.path.append(BVMulNoOverflow(q, y, False))
+#       ex.path.append(BVAddNoOverflow(q * y, r, False))
+
+#       ex.path.append(                   ULE(q, x))   # (x / y) <= x
+#       ex.path.append(Implies(y != zero, ULT(r, y)))  # (x % y) < y if y != 0
+
+#       ex.path.append(Implies(y == zero, q == zero))  # x / 0 == 0
+#       ex.path.append(Implies(y == zero, r == zero))  # x % 0 == 0
+
+#       return (q, r)
 
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
         w1 = b2i(w1)
@@ -1391,13 +1457,47 @@ class SEVM:
         if op == EVM.MUL:
             return w1 * w2
 
+        #   if is_bv_value(w1) and is_bv_value(w2):
+        #       return w1 * w2
+
+        #   if is_bv_value(w1):
+        #       i1: int = w1.as_long()
+        #       if i1 == 0:
+        #           return w1
+
+        #       if i1 == 1:
+        #           return w2
+
+        #       if is_power_of_two(i1):
+        #           return w2 << int(math.log(i1, 2))
+
+        #       return w1 * w2
+
+        #   if is_bv_value(w2):
+        #       i2: int = w2.as_long()
+        #       if i2 == 0:
+        #           return w2
+
+        #       if i2 == 1:
+        #           return w1
+
+        #       if is_power_of_two(i2):
+        #           return w1 << int(math.log(i2, 2))
+
+        #       return w1 * w2
+
+        #   return self.mk_mul(w1, w2)
+
         if op == EVM.DIV:
             div_for_overflow_check = self.div_xy_y(w1, w2)
             if div_for_overflow_check is not None:  # xy/x or xy/y
                 return div_for_overflow_check
 
             if is_bv_value(w1) and is_bv_value(w2):
-                return UDiv(w1, w2)  # unsigned div (bvudiv)
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return UDiv(w1, w2)  # unsigned div (bvudiv)
 
             if is_bv_value(w2):
                 # concrete denominator case
@@ -1415,7 +1515,10 @@ class SEVM:
 
         if op == EVM.MOD:
             if is_bv_value(w1) and is_bv_value(w2):
-                return URem(w1, w2)  # bvurem
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return URem(w1, w2)  # bvurem
 
             if is_bv_value(w2):
                 i2: int = int(str(w2))
@@ -1430,7 +1533,10 @@ class SEVM:
 
         if op == EVM.SDIV:
             if is_bv_value(w1) and is_bv_value(w2):
-                return w1 / w2  # bvsdiv
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return w1 / w2  # bvsdiv
 
             if is_bv_value(w2):
                 # concrete denominator case
@@ -1446,7 +1552,10 @@ class SEVM:
 
         if op == EVM.SMOD:
             if is_bv_value(w1) and is_bv_value(w2):
-                return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
 
             # TODO: if is_bv_value(w2):
 
@@ -1470,6 +1579,7 @@ class SEVM:
                     exp = w1
                     for _ in range(i2 - 1):
                         exp = exp * w1
+#                       exp = self.arith(ex, EVM.MUL, exp, w1)
                     return exp
 
             return f_exp(w1, w2)

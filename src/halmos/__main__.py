@@ -639,6 +639,7 @@ def run(
 
     def future_callback(future_model):
         m = future_model.result()
+        models.append(m)
 
         model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
         if result == unsat:
@@ -650,7 +651,7 @@ def run(
                 print(red(f"Counterexample: {render_model(model)}"))
                 counterexamples.append(model)
 #               print("---- found ---")
-                models.append(m)
+#               models.append(m)
 #               cex_found = True
             else:
                 warn(
@@ -733,6 +734,7 @@ def run(
 #               execs_to_model.append((idx, ex))
                 print(f"checking path id: {idx+1}")
                 future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
+#               future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, to_smt2(ex)))
                 future_model.add_done_callback(future_callback)
                 future_models.append(future_model)
                 continue
@@ -741,6 +743,7 @@ def run(
 #           execs_to_model.append((idx, ex))
             print(f"checking path id: {idx+1}")
             future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
+#           future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, to_smt2(ex)))
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
             continue
@@ -768,7 +771,9 @@ def run(
     #           print(f"all done")
                 break
     #       if cex_found:
-            if len(models) > 0:
+
+            if len(counterexamples) > 0:
+
     #           print(f"cex found")
     #           thread_pool.shutdown(wait=False, cancel_futures=True)
     #           for fm in future_models:
@@ -1111,6 +1116,7 @@ class GenModelArgs:
     args: Namespace
     idx: int
     sexpr: str
+#   sexpr: Tuple[str, str]
 
 
 def copy_model(model: Model) -> Dict:
@@ -1125,9 +1131,36 @@ def copy_model(model: Model) -> Dict:
 #     return query
 
 
-def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
-    solver = mk_solver(args, ctx=Context(), assertion=True)
+# def to_smt2(ex: Exec) -> Tuple[str, str]:
+#     query = ex.solver.to_smt2()
+# 
+#     ex.solver.push()
+#     ex.solver.add(*f_mul_def)
+#     ex.solver.add(*f_div_def)
+#     ex.solver.add(*f_mod_def)
+#     ex.solver.add(*f_sdiv_def)
+#     ex.solver.add(*f_smod_def)
+#     refined = ex.solver.to_smt2()
+#     ex.solver.pop()
+# 
+#     print("<<<<")
+#     print(query)
+#     print("----")
+#     print(refined)
+#     print(">>>>")
+# 
+#     return (query, refined)
+
+
+def solve(query: str, args: Namespace, logic="QF_AUFBV") -> Tuple[CheckSatResult, Model]:
+#   print(query)
+
+    solver = mk_solver(args, logic=logic, ctx=Context(), assertion=True)
     solver.from_string(query)
+
+    if logic is None:
+        solver.set(mbqi=True)
+
     result = solver.check()
     model = copy_model(solver.model()) if result == sat else None
     return result, model
@@ -1135,10 +1168,19 @@ def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
 
 def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
     args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
+
+    if args.verbose >= 1:
+        print(f"Checking path condition (path id: {idx+1})")
     res, model = solve(sexpr, args)
+#   res, model = solve(sexpr[0], args)
 
     if res == sat and not is_model_valid(model):
+        print(model)
+        if args.verbose >= 1:
+            print(f"  Checking again with refinement")
         res, model = solve(refine(sexpr), args)
+#       res, model = solve(sexpr[1], args, logic=None)
+#       res, model = solve(sexpr[1], args)
 
     # TODO: handle args.solver_subprocess
 
@@ -1172,33 +1214,33 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
     res = ex.solver.check(*ex.path.conditions)
     model = copy_model(ex.solver.model()) if res == sat else None
 
-    if res == sat and not is_model_valid(model):
-        if args.verbose >= 1:
-            print(f"  Checking again with refinement")
-        res, model = solve(refine(to_smt2(ex)), args)
+#   if res == sat and not is_model_valid(model):
+#       if args.verbose >= 1:
+#           print(f"  Checking again with refinement")
+#       res, model = solve(refine(to_smt2(ex)), args)
 
-    if args.solver_subprocess and is_unknown(res, model):
-        if args.verbose >= 1:
-            print(f"  Checking again in an external process")
-        fname = f"/tmp/{uuid.uuid4().hex}.smt2"
-        if args.verbose >= 1:
-            print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
-        query = refine(to_smt2(ex))
-        with open(fname, "w") as f:
-            f.write("(set-logic QF_AUFBV)\n")
-            f.write(query)
-        cmd = args.solver_subprocess_command.split() + [fname]
-        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
-        res_str_head = res_str.split("\n", 1)[0]
-        with open(f"{fname}.out", "w") as f:
-            f.write(res_str)
-        if args.verbose >= 1:
-            print(f"    {res_str_head}")
-        if res_str_head == "unsat":
-            res = unsat
-        elif res_str_head == "sat":
-            res = sat
-            model = f"{fname}.out"
+#   if args.solver_subprocess and is_unknown(res, model):
+#       if args.verbose >= 1:
+#           print(f"  Checking again in an external process")
+#       fname = f"/tmp/{uuid.uuid4().hex}.smt2"
+#       if args.verbose >= 1:
+#           print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
+#       query = refine(to_smt2(ex))
+#       with open(fname, "w") as f:
+#           f.write("(set-logic QF_AUFBV)\n")
+#           f.write(query)
+#       cmd = args.solver_subprocess_command.split() + [fname]
+#       res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+#       res_str_head = res_str.split("\n", 1)[0]
+#       with open(f"{fname}.out", "w") as f:
+#           f.write(res_str)
+#       if args.verbose >= 1:
+#           print(f"    {res_str_head}")
+#       if res_str_head == "unsat":
+#           res = unsat
+#       elif res_str_head == "sat":
+#           res = sat
+#           model = f"{fname}.out"
 
     return package_result(model, idx, res, args)
 
