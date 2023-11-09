@@ -9,6 +9,7 @@ import re
 import signal
 import traceback
 
+from time import sleep
 from argparse import Namespace
 from dataclasses import dataclass, asdict
 from importlib import metadata
@@ -301,7 +302,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         symbolic=args.symbolic_storage,
         path=Path(),
     )
-    exs = sevm.run(ex)
+    exs = list(sevm.run(ex))
 
     for idx, ex in enumerate(exs):
         opcode = ex.current_opcode()
@@ -370,7 +371,7 @@ def deploy_test(
         return ex
 
     # create test contract
-    exs = sevm.run(ex)
+    exs = list(sevm.run(ex))
 
     # sanity check
     if len(exs) != 1:
@@ -434,7 +435,7 @@ def setup(
             ),
         )
 
-        setup_exs_all = sevm.run(setup_ex)
+        setup_exs_all = list(sevm.run(setup_ex))
         (setup_logs, setup_steps) = (sevm.logs, sevm.steps)
 
 #       print(f"#")
@@ -621,7 +622,7 @@ def run(
 
     (logs, steps) = (sevm.logs, sevm.steps)
 
-    timer.create_subtimer("models")
+#   timer.create_subtimer("models")
 
     # check assertion violations
     normal = 0
@@ -629,9 +630,96 @@ def run(
     models: List[ModelWithContext] = []
     stuck = []
 
+    thread_pool = ThreadPoolExecutor()
+    future_models = []
+#   future_done = set()
+    execs = []
+    counterexamples = []
+#   cex_found = False
+
+    def future_callback(future_model):
+        m = future_model.result()
+
+        model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
+        if result == unsat:
+            return
+
+        # model could be an empty dict here
+        if model is not None:
+            if is_valid:
+                print(red(f"Counterexample: {render_model(model)}"))
+                counterexamples.append(model)
+#               print("---- found ---")
+                models.append(m)
+#               cex_found = True
+            else:
+                warn(
+                    COUNTEREXAMPLE_INVALID,
+                    f"Counterexample (potentially invalid): {render_model(model)}",
+                )
+                counterexamples.append(model)
+        else:
+            warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
+
+        if args.print_failed_states:
+            print(f"# {idx+1}")
+            print(execs[index])
+
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            print(
+                f"Trace #{idx+1}:"
+                if args.verbose == VERBOSITY_TRACE_PATHS
+                else "Trace:"
+            )
+            render_trace(execs[index].context)
+
+
     for idx, ex in enumerate(exs):
+        execs.append(ex)
+
+#       for future_model in future_models:
+#           if future_model.done() and future_model not in future_done:
+#               future_done.add(future_model)
+
+#               mm = future_model.result()
+#               model, is_valid, index, result = mm.model, mm.is_valid, mm.index, mm.result
+#               if result == unsat:
+#                   continue
+
+#               # model could be an empty dict here
+#               if model is not None:
+#                   if is_valid:
+#                       print(red(f"Counterexample: {render_model(model)}"))
+#                       counterexamples.append(model)
+#                       cex_found = True
+#                       break
+#                   else:
+#                       warn(
+#                           COUNTEREXAMPLE_INVALID,
+#                           f"Counterexample (potentially invalid): {render_model(model)}",
+#                       )
+#                       counterexamples.append(model)
+#               else:
+#                   warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
+
+#               if args.print_failed_states:
+#                   print(f"# {idx+1} / {len(exs)}")
+#                   print(execs[index])
+
+#               if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+#                   print(
+#                       f"Trace #{idx+1}/{len(exs)}:"
+#                       if args.verbose == VERBOSITY_TRACE_PATHS
+#                       else "Trace:"
+#                   )
+#                   render_trace(execs[index].context)
+
+#       if cex_found:
+#           break
+
         if args.verbose >= VERBOSITY_TRACE_PATHS:
-            print(f"Path #{idx+1}/{len(exs)}:")
+#           print(f"Path #{idx+1}/{len(exs)}:")
+            print(f"Path #{idx+1}:")
             print(indent_text(ex.str_path()))
 
             print("\nTrace:")
@@ -642,11 +730,19 @@ def run(
         if isinstance(error, Revert):
             returndata = ex.context.output.data
             if unbox_int(returndata) == ASSERT_FAIL:
-                execs_to_model.append((idx, ex))
+#               execs_to_model.append((idx, ex))
+                print(f"checking path id: {idx+1}")
+                future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
+                future_model.add_done_callback(future_callback)
+                future_models.append(future_model)
                 continue
 
         if is_global_fail_set(ex.context):
-            execs_to_model.append((idx, ex))
+#           execs_to_model.append((idx, ex))
+            print(f"checking path id: {idx+1}")
+            future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
+            future_model.add_done_callback(future_callback)
+            future_models.append(future_model)
             continue
 
         if ex.context.is_stuck():
@@ -655,34 +751,86 @@ def run(
         elif not error:
             normal += 1
 
-    if len(execs_to_model) > 0 and args.dump_smt_queries:
-        dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
-        os.makedirs(dirname)
-        print(f"Generating SMT queries in {dirname}")
-        for idx, ex in execs_to_model:
-            fname = f"{dirname}/{idx+1}.smt2"
-            query = to_smt2(ex)
-            with open(fname, "w") as f:
-                f.write("(set-logic QF_AUFBV)\n")
-                f.write(query)
+    timer.create_subtimer("models")
 
-    if len(execs_to_model) > 0 and args.verbose >= 1:
+#   print(f"total number of paths: {len(execs)}")
+
+    if len(future_models) > 0 and args.verbose >= 1:
         print(
-            f"# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}"
+            f"# of potential paths involving assertion violations: {len(future_models)} / {len(execs)}"
         )
 
-    if len(execs_to_model) > 1 and args.solver_parallel:
-        if args.verbose >= 1:
-            print(f"Spawning {len(execs_to_model)} parallel assertion solvers")
+    if args.early_exit:
 
-        fn_args = [
-            GenModelArgs(args, idx, to_smt2(ex)) for idx, ex in execs_to_model
-        ]
-        with ThreadPoolExecutor() as thread_pool:
-            models = list(thread_pool.map(gen_model_from_sexpr, fn_args))
+        while True:
+    #       print(f"polling")
+            if all([ fm.done() for fm in future_models ]):
+    #           print(f"all done")
+                break
+    #       if cex_found:
+            if len(models) > 0:
+    #           print(f"cex found")
+    #           thread_pool.shutdown(wait=False, cancel_futures=True)
+    #           for fm in future_models:
+    #               try:
+    #                   fm.cancel()
+    #                   mm = fm.result(timeout=0)
+    #                   models.append(mm)
+    #                   print(mm)
+    #               except Exception as exc:
+    #                   print(exc)
+    #                   pass
+                break
+            sleep(1)
+
+    #     for fm in future_models:
+    #         try:
+    #             print(f"finish future")
+    #             fm.cancel()
+    #             mm = fm.result(timeout=0)
+    # #           models.append(mm)
+    # #           print(mm)
+    #         except Exception as exc:
+    #             print(exc)
+    #             pass
+
+    #   print(f"shutdown")
+        thread_pool.shutdown(wait=False, cancel_futures=True)
 
     else:
-        models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
+        thread_pool.shutdown(wait=True)
+
+
+#   models = [ fm.result() for fm in future_models ]
+
+#   if len(execs_to_model) > 0 and args.dump_smt_queries:
+#       dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
+#       os.makedirs(dirname)
+#       print(f"Generating SMT queries in {dirname}")
+#       for idx, ex in execs_to_model:
+#           fname = f"{dirname}/{idx+1}.smt2"
+#           query = to_smt2(ex)
+#           with open(fname, "w") as f:
+#               f.write("(set-logic QF_AUFBV)\n")
+#               f.write(query)
+
+#   if len(execs_to_model) > 0 and args.verbose >= 1:
+#       print(
+#           f"# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}"
+#       )
+
+#   if len(execs_to_model) > 1 and args.solver_parallel:
+#       if args.verbose >= 1:
+#           print(f"Spawning {len(execs_to_model)} parallel assertion solvers")
+
+#       fn_args = [
+#           GenModelArgs(args, idx, to_smt2(ex)) for idx, ex in execs_to_model
+#       ]
+#       with ThreadPoolExecutor() as thread_pool:
+#           models = list(thread_pool.map(gen_model_from_sexpr, fn_args))
+
+#   else:
+#       models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
 
     no_counterexample = all(m.model is None for m in models)
     passed = no_counterexample and normal > 0 and len(stuck) == 0
@@ -695,45 +843,47 @@ def run(
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {normal}/{len(exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+#       f"{passfail} {funsig} (paths: {normal}/{len(exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+        f"{passfail} {funsig} (paths: {normal}/{len(execs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
     )
-    counterexamples = []
-    for m in models:
-        model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
-        if result == unsat:
-            continue
-        ex = exs[index]
+#   counterexamples = []
+#   for m in models:
+#       model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
+#       if result == unsat:
+#           continue
+#       ex = exs[index]
 
-        # model could be an empty dict here
-        if model is not None:
-            if is_valid:
-                print(red(f"Counterexample: {render_model(model)}"))
-                counterexamples.append(model)
-            else:
-                warn(
-                    COUNTEREXAMPLE_INVALID,
-                    f"Counterexample (potentially invalid): {render_model(model)}",
-                )
-                counterexamples.append(model)
-        else:
-            warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
+#       # model could be an empty dict here
+#       if model is not None:
+#           if is_valid:
+#               print(red(f"Counterexample: {render_model(model)}"))
+#               counterexamples.append(model)
+#           else:
+#               warn(
+#                   COUNTEREXAMPLE_INVALID,
+#                   f"Counterexample (potentially invalid): {render_model(model)}",
+#               )
+#               counterexamples.append(model)
+#       else:
+#           warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
 
-        if args.print_failed_states:
-            print(f"# {idx+1} / {len(exs)}")
-            print(ex)
+#       if args.print_failed_states:
+#           print(f"# {idx+1} / {len(exs)}")
+#           print(ex)
 
-        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-            print(
-                f"Trace #{idx+1}/{len(exs)}:"
-                if args.verbose == VERBOSITY_TRACE_PATHS
-                else "Trace:"
-            )
-            render_trace(ex.context)
+#       if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+#           print(
+#               f"Trace #{idx+1}/{len(exs)}:"
+#               if args.verbose == VERBOSITY_TRACE_PATHS
+#               else "Trace:"
+#           )
+#           render_trace(ex.context)
 
     for idx, ex, err in stuck:
         warn(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
-            print(f"\nPath #{idx+1}/{len(exs)}")
+#           print(f"\nPath #{idx+1}/{len(exs)}")
+            print(f"\nPath #{idx+1}")
             render_trace(ex.context)
 
     if logs.bounded_loops:
@@ -754,8 +904,9 @@ def run(
 
     # print post-states
     if args.print_states:
-        for idx, ex in enumerate(exs):
-            print(f"# {idx+1} / {len(exs)}")
+#       for idx, ex in enumerate(exs):
+        for idx, ex in enumerate(execs):
+            print(f"# {idx+1} / {len(execs)}")
             print(ex)
 
     # log steps
@@ -773,7 +924,8 @@ def run(
             exitcode,
             len(counterexamples),
             counterexamples,
-            (len(exs), normal, len(stuck)),
+#           (len(exs), normal, len(stuck)),
+            (len(execs), normal, len(stuck)),
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
         )
@@ -965,12 +1117,12 @@ def copy_model(model: Model) -> Dict:
     return { decl: model[decl] for decl in model }
 
 
-def to_smt2(ex: Exec) -> str:
-    ex.solver.reset()
-    ex.solver.add(*ex.path.conditions)
-    query = ex.solver.to_smt2()
-    ex.solver.reset()
-    return query
+# def to_smt2(ex: Exec) -> str:
+#     ex.solver.reset()
+#     ex.solver.add(*ex.path.conditions)
+#     query = ex.solver.to_smt2()
+#     ex.solver.reset()
+#     return query
 
 
 def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:

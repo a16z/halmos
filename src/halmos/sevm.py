@@ -2171,8 +2171,9 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
 #   def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
-    def run(self, ex0: Exec) -> List[Exec]:
+    def run(self, ex0: Exec) -> Iterator[Exec]:
         out: List[Exec] = []
+        yielded: int = 0
 #       logs = HalmosLogs()
 #       steps: Steps = {}
         step_id: int = 0
@@ -2180,6 +2181,10 @@ class SEVM:
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
         while stack:
             try:
+                while len(out) > yielded:
+                    yield out[yielded]
+                    yielded += 1
+
                 if len(out) >= self.options.get("max_width", 2**64):
                     break
 
@@ -2571,8 +2576,12 @@ class SEVM:
 
                 continue
 
+        while len(out) > yielded:
+            yield out[yielded]
+            yielded += 1
+
 #       return (out, steps, logs)
-        return out
+#       return out
 
     def mk_exec(
         self,

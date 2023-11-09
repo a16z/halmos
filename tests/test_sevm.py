@@ -87,7 +87,7 @@ def o(opcode):
 )
 def test_run(hexcode, stack, pc, opcode: int, sevm, solver, storage):
     ex = mk_ex(hexcode, sevm, solver, storage, caller, this)
-    exs = sevm.run(ex)
+    exs = list(sevm.run(ex))
     assert len(exs) == 1
     ex: Exec = exs[0]
     assert str(ex.st.stack) == stack
@@ -278,7 +278,7 @@ def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     # reversed because in the tests the stack is written with the top on the left
     # but in the internal state, the top of the stack is the last element of the list
     ex.st.stack.extend(reversed(params))
-    exs = sevm.run(ex)
+    exs = list(sevm.run(ex))
     assert len(exs) == 1
     ex = exs[0]
     assert ex.st.stack.pop() == simplify(output)
@@ -311,7 +311,7 @@ def test_opcode_stack(hexcode, stack_in, stack_out, sevm: SEVM, solver, storage)
     # reversed because in the tests the stack is written with the top on the left
     # but in the internal state, the top of the stack is the last element of the list
     ex.st.stack.extend(reversed(stack_in))
-    exs = sevm.run(ex)
+    exs = list(sevm.run(ex))
     assert len(exs) == 1
     ex = exs[0]
     assert ex.st.stack == list(reversed(stack_out))
@@ -324,7 +324,7 @@ def test_stack_underflow_pop(sevm: SEVM, solver, storage):
     # TODO: from the outside, we should get an execution with failed=True
     # TODO: from the outside, we should get an specific exception like StackUnderflowError
     with pytest.raises(Exception):
-        sevm.run(ex)
+        list(sevm.run(ex))
 
 
 def test_iter_bytes_bv_val():

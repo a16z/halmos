@@ -146,6 +146,11 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="turn unknown counterexample warnings to errors",
     )
+    group_debug.add_argument(
+        "--early-exit",
+        action="store_true",
+        help="stop after a counterexample is found",
+    )
 
     group_debug.add_argument(
         "--dump-smt-queries",
