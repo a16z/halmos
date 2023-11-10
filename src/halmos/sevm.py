@@ -1467,6 +1467,9 @@ class SEVM:
         if target in ex.code:
             return target
 
+        # set new timeout temporarily for this task
+        self.solver.set(timeout=max(1000, self.options["timeout"]))
+
         if target not in ex.alias:
             for addr in ex.code:
                 if ex.check(target != addr) == unsat:  # target == addr
@@ -1477,6 +1480,9 @@ class SEVM:
                     ex.alias[target] = addr
                     ex.path.append(target == addr)
                     break
+
+        # reset timeout
+        self.solver.set(timeout=self.options["timeout"])
 
         return ex.alias.get(target)
 
