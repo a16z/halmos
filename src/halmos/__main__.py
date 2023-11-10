@@ -733,8 +733,8 @@ def run(
             if unbox_int(returndata) == ASSERT_FAIL:
 #               execs_to_model.append((idx, ex))
                 print(f"checking path id: {idx+1}")
-                future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
-#               future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, to_smt2(ex)))
+#               future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
+                future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, to_smt2(ex)))
                 future_model.add_done_callback(future_callback)
                 future_models.append(future_model)
                 continue
@@ -742,8 +742,8 @@ def run(
         if is_global_fail_set(ex.context):
 #           execs_to_model.append((idx, ex))
             print(f"checking path id: {idx+1}")
-            future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
-#           future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, to_smt2(ex)))
+#           future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
+            future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, to_smt2(ex)))
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
             continue
@@ -1150,6 +1150,14 @@ def copy_model(model: Model) -> Dict:
 #     print(">>>>")
 # 
 #     return (query, refined)
+
+
+def to_smt2(ex: Exec) -> Tuple[str, str]:
+    ex.solver.push()
+    ex.solver.add(*ex.path.conditions)
+    query = ex.solver.to_smt2()
+    ex.solver.pop()
+    return query
 
 
 def solve(query: str, args: Namespace, logic="QF_AUFBV") -> Tuple[CheckSatResult, Model]:

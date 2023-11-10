@@ -623,8 +623,14 @@ class CodeIterator:
 class Path:
     solver: Solver
     num_scopes: int
+
     conditions: List
     pending: List
+#   hard: List
+
+    defs: Dict  # var -> term
+    consts: Dict  # term -> const
+
 #   related: Dict[int, Set[int]]  # a condition -> a set of previous conditions that are related to the condition
 #   cond_to_vars: Dict[int, Set[Any]]  # a condition -> a set of variables that appear in the condition
 #   var_to_conds: Dict[Any, Set[int]]  # a variable -> a set of conditions in which the variable appears
@@ -632,8 +638,14 @@ class Path:
     def __init__(self):
         self.solver = None
         self.num_scopes = None
+
         self.conditions = []
         self.pending = []
+#       self.hard = []
+
+        self.defs = {}
+        self.consts = {}
+
 #       self.related = {}
 #       self.cond_to_vars = {}
 #       self.var_to_conds = defaultdict(set)
@@ -641,13 +653,21 @@ class Path:
     def __deepcopy__(self, memo):
         if len(self.pending) > 0:
             raise ValueError("deepcopy pending path", self)
+
         path = Path()
         path.solver = self.solver
         path.num_scopes = self.num_scopes
+
         path.conditions = self.conditions.copy()
+#       path.hard = self.hard.copy()
+
+        path.defs = self.defs.copy()
+        path.consts = self.consts.copy()
+
 #       path.related = self.related.copy()
 #       path.cond_to_vars = self.cond_to_vars.copy()
 #       path.var_to_conds = deepcopy(self.var_to_conds)
+
         return path
 
     def resolve_pending(self, solver):
@@ -663,11 +683,121 @@ class Path:
 
         self.pending = []
 
+#   def is_var_like(self, term) -> bool:
+#       if z3util.is_expr_var(term):
+#           return True
+
+#       if is_const(term):
+#           return False
+
+#       decl = term.decl()
+#       if decl.kind() == Z3_OP_EXTRACT:
+#           if z3util.is_expr_var(term.arg(0)):
+#               return True
+
+#       return False
+
+    def add_defs(self, cond):
+        var, const, expr = None, None, None
+
+        if is_eq(cond):  # equality term
+            left, right = cond.arg(0), cond.arg(1)
+
+            if z3util.is_expr_var(left):  # x = ...
+                var, expr = left, right
+            elif z3util.is_expr_var(right):  # ... = x
+                var, expr = right, left
+
+            elif z3util.is_expr_val(left):  # c = ...
+                const, expr = left, right
+            elif z3util.is_expr_val(right):  # ... = c
+                const, expr = right, left
+
+        if var is not None:
+            if var in self.defs:
+                raise ValueError("existing def", var, expr, self.defs)
+            if var in z3util.get_vars(expr):
+            #   raise ValueError("recursive def", var, expr, self.defs)
+                return
+            self.defs[var] = expr
+            print(cyan(f"def: {var} -> {expr}"))
+            return
+
+        if const is not None:
+            if expr in self.consts:
+                if not eq(const, self.consts[expr]):
+                    raise ValueError("conflicting const", expr, const, self.consts)
+                return
+            self.consts[expr] = const
+
+    def simplify(self, cond, constant_propagation=False):
+        cond0 = cond
+
+        cond = simplify(cond)  # z3 simplify
+
+        cond1 = cond
+
+        def apply(term):
+            if is_const(term):
+                if z3util.is_expr_var(term):  # variable
+                    return self.defs.get(term, term)
+                else:  # literal
+                    return term
+
+            # application
+            if constant_propagation and term in self.consts:
+                return self.consts[term]
+
+            decl = term.decl()
+            children = [apply(subterm) for subterm in term.children()]
+            return decl(*children)
+
+        prev = cond
+        cond = apply(cond)
+        while not eq(cond, prev):
+            prev = cond
+            cond = apply(cond)
+
+        cond2 = cond
+
+        cond = simplify(cond)  # z3 simplify
+
+#       print(yellow(f"simplify: {cond0} -> {cond1} -> {cond2} -> {cond}"))
+#       print(yellow(f"simplify: {hexify(cond0)}"))
+#       print(yellow(f"          {hexify(cond)}"))
+
+        return cond
+
     def append(self, cond):
 #       idx = len(self.conditions)
 
-        self.solver.add(cond)
+        cond = self.simplify(cond)
+
+        self.add_defs(cond)
+
+#       print(yellow(f"{' '*self.solver.num_scopes()}+ {cond}"))
+
+        if is_true(cond):
+            return
+
+        if is_false(cond):
+            self.solver.add(cond)
+
         self.conditions.append(cond)
+
+
+#       result = self.solver.check(cond)
+
+#       if result == sat:
+#           self.solver.add(cond)
+#       elif result == unknown:
+#           print(yellow(f"info: hard: {cond}: {len(self.solver.assertions())}"))
+#           self.hard.append(cond)
+#       else:  # result == unsat
+#           print(cyan(f"warn: unsat: {cond}: {len(self.solver.assertions())}"))
+#           self.solver.add(cond)
+
+
 
 #       var_set = z3util.get_vars(cond)
 
@@ -879,7 +1009,7 @@ class Exec:  # an execution path
         self.pc = self.pgm.next_pc(self.pc)
 
     def check(self, cond: Any) -> Any:
-        cond = simplify(cond)
+        cond = self.path.simplify(cond, constant_propagation=True)
 
         if is_true(cond):
             return sat
@@ -946,13 +1076,16 @@ class Exec:  # an execution path
     def balance_update(self, addr: Word, value: Word) -> None:
         assert_address(addr)
         assert_uint256(value)
-        new_balance_var = Array(
-            f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
-        )
-        new_balance = Store(self.balance, addr, value)
-        self.path.append(new_balance_var == new_balance)
-        self.balance = new_balance_var
-        self.balances[new_balance_var] = new_balance
+
+        self.balance = Store(self.balance, addr, value)
+
+#       new_balance_var = Array(
+#           f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
+#       )
+#       new_balance = Store(self.balance, addr, value)
+#       self.path.append(new_balance_var == new_balance)
+#       self.balance = new_balance_var
+#       self.balances[new_balance_var] = new_balance
 
     def sha3(self) -> None:
         loc: int = self.st.mloc()
@@ -1148,15 +1281,18 @@ class SolidityStorage(Storage):
         if len(keys) == 0:
             ex.storage[addr][slot][0] = val
         else:
-            new_storage_var = Array(
-                f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(ex.storages):>02}",
-                BitVecSorts[len(keys) * 256],
-                BitVecSort256,
-            )
-            new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
-            ex.path.append(new_storage_var == new_storage)
-            ex.storage[addr][slot][len(keys)] = new_storage_var
-            ex.storages[new_storage_var] = new_storage
+
+            ex.storage[addr][slot][len(keys)] = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
+
+#           new_storage_var = Array(
+#               f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(ex.storages):>02}",
+#               BitVecSorts[len(keys) * 256],
+#               BitVecSort256,
+#           )
+#           new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
+#           ex.path.append(new_storage_var == new_storage)
+#           ex.storage[addr][slot][len(keys)] = new_storage_var
+#           ex.storages[new_storage_var] = new_storage
 
     @classmethod
     def decode(cls, loc: Any) -> Any:
@@ -1232,15 +1368,18 @@ class GenericStorage(Storage):
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
         loc = cls.decode(loc)
         cls.init(ex, addr, loc)
-        new_storage_var = Array(
-            f"storage_{id_str(addr)}_{loc.size()}_{1+len(ex.storages):>02}",
-            BitVecSorts[loc.size()],
-            BitVecSort256,
-        )
-        new_storage = Store(ex.storage[addr][loc.size()], loc, val)
-        ex.path.append(new_storage_var == new_storage)
-        ex.storage[addr][loc.size()] = new_storage_var
-        ex.storages[new_storage_var] = new_storage
+
+        ex.storage[addr][loc.size()] = Store(ex.storage[addr][loc.size()], loc, val)
+
+#       new_storage_var = Array(
+#           f"storage_{id_str(addr)}_{loc.size()}_{1+len(ex.storages):>02}",
+#           BitVecSorts[loc.size()],
+#           BitVecSort256,
+#       )
+#       new_storage = Store(ex.storage[addr][loc.size()], loc, val)
+#       ex.path.append(new_storage_var == new_storage)
+#       ex.storage[addr][loc.size()] = new_storage_var
+#       ex.storages[new_storage_var] = new_storage
 
     @classmethod
     def decode(cls, loc: Any) -> Any:
@@ -1852,8 +1991,12 @@ class SEVM:
                     BitVecSort256,
                 )
                 exit_code = f_call(con(call_id), gas, to, fund)
-            exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
-            ex.path.append(exit_code_var == exit_code)
+
+#           exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
+#           ex.path.append(exit_code_var == exit_code)
+
+            exit_code_var = exit_code
+
             ex.st.push(exit_code_var)
 
             # transfer msg.value
@@ -2152,8 +2295,8 @@ class SEVM:
 
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
-        cond_true = simplify(is_non_zero(cond))
-        cond_false = simplify(is_zero(cond))
+        cond_true = ex.path.simplify(is_non_zero(cond))
+        cond_false = ex.path.simplify(is_zero(cond))
 
         potential_true: bool = ex.check(cond_true) != unsat
         potential_false: bool = ex.check(cond_false) != unsat
