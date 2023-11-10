@@ -632,7 +632,7 @@ class Path:
     consts: Dict  # term -> const
 
 #   related: Dict[int, Set[int]]  # a condition -> a set of previous conditions that are related to the condition
-#   cond_to_vars: Dict[int, Set[Any]]  # a condition -> a set of variables that appear in the condition
+# # cond_to_vars: Dict[int, Set[Any]]  # a condition -> a set of variables that appear in the condition
 #   var_to_conds: Dict[Any, Set[int]]  # a variable -> a set of conditions in which the variable appears
 
     def __init__(self):
@@ -647,7 +647,7 @@ class Path:
         self.consts = {}
 
 #       self.related = {}
-#       self.cond_to_vars = {}
+#   #   self.cond_to_vars = {}
 #       self.var_to_conds = defaultdict(set)
 
     def __deepcopy__(self, memo):
@@ -665,7 +665,7 @@ class Path:
         path.consts = self.consts.copy()
 
 #       path.related = self.related.copy()
-#       path.cond_to_vars = self.cond_to_vars.copy()
+#   #   path.cond_to_vars = self.cond_to_vars.copy()
 #       path.var_to_conds = deepcopy(self.var_to_conds)
 
         return path
@@ -785,7 +785,6 @@ class Path:
 
         self.conditions.append(cond)
 
-
 #       result = self.solver.check(cond)
 
 #       if result == sat:
@@ -797,13 +796,11 @@ class Path:
 #           print(cyan(f"warn: unsat: {cond}: {len(self.solver.assertions())}"))
 #           self.solver.add(cond)
 
-
-
 #       var_set = z3util.get_vars(cond)
 
 #       self.related[idx] = self._get_related(var_set)
 
-#       self.cond_to_vars[idx] = var_set
+#   #   self.cond_to_vars[idx] = var_set
 
 #       for var in var_set:
 #           self.var_to_conds[var].add(idx)
@@ -812,14 +809,14 @@ class Path:
 #       conds = set()
 #       for var in var_set:
 #           conds.update(self.var_to_conds[var])
-#           if len(conds) > 20:
-#               return conds
+#       #   if len(conds) > 20:
+#       #       return conds
 
 #       result = set(conds)
 #       for cond in conds:
 #           result.update(self.related[cond])
-#           if len(result) > 20:
-#               return result
+#       #   if len(result) > 20:
+#       #       return result
 
 #       return result
 
