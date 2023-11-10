@@ -1153,10 +1153,11 @@ def copy_model(model: Model) -> Dict:
 
 
 def to_smt2(ex: Exec) -> Tuple[str, str]:
-    ex.solver.push()
-    ex.solver.add(*ex.path.conditions)
+#   ex.solver.push()
+#   ex.solver.add(*ex.path.conditions)
+#   ex.solver.add(*ex.path.hard)
     query = ex.solver.to_smt2()
-    ex.solver.pop()
+#   ex.solver.pop()
     return query
 
 
@@ -1183,7 +1184,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 #   res, model = solve(sexpr[0], args)
 
     if res == sat and not is_model_valid(model):
-        print(model)
+#       print(model)
         if args.verbose >= 1:
             print(f"  Checking again with refinement")
         res, model = solve(refine(sexpr), args)

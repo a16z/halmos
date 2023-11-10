@@ -716,11 +716,13 @@ class Path:
         if var is not None:
             if var in self.defs:
                 raise ValueError("existing def", var, expr, self.defs)
-            if var in z3util.get_vars(expr):
+
+            if str(var) in [str(var_) for var_ in z3util.get_vars(expr)]:
             #   raise ValueError("recursive def", var, expr, self.defs)
                 return
+
             self.defs[var] = expr
-            print(cyan(f"def: {var} -> {expr}"))
+#           print(cyan(f"def: {var} -> {expr}"))
             return
 
         if const is not None:
@@ -780,8 +782,10 @@ class Path:
         if is_true(cond):
             return
 
-        if is_false(cond):
-            self.solver.add(cond)
+#       if is_false(cond):
+#           self.solver.add(cond)
+
+        self.solver.add(cond)
 
         self.conditions.append(cond)
 
