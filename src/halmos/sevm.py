@@ -703,10 +703,10 @@ class Path:
         if is_eq(cond):  # equality term
             left, right = cond.arg(0), cond.arg(1)
 
-            if z3util.is_expr_var(left):  # x = ...
-                var, expr = left, right
-            elif z3util.is_expr_var(right):  # ... = x
-                var, expr = right, left
+            if z3util.is_expr_var(left) and z3util.is_expr_val(right):  # x == c
+                var, const = left, right
+            elif z3util.is_expr_val(left) and z3util.is_expr_var(right):  # c == x
+                var, const = right, left
 
             elif z3util.is_expr_val(left):  # c = ...
                 const, expr = left, right
@@ -715,17 +715,17 @@ class Path:
 
         if var is not None:
             if var in self.defs:
-                raise ValueError("existing def", var, expr, self.defs)
+                raise ValueError("existing def", var, const, self.defs)
 
-            if str(var) in [str(var_) for var_ in z3util.get_vars(expr)]:
-            #   raise ValueError("recursive def", var, expr, self.defs)
-                return
+        #   if str(var) in [str(var_) for var_ in z3util.get_vars(expr)]:
+        #   #   raise ValueError("recursive def", var, expr, self.defs)
+        #       return
 
-            self.defs[var] = expr
-#           print(cyan(f"def: {var} -> {expr}"))
+            self.defs[var] = const
+#           print(cyan(f"def: {var} -> {const}"))
             return
 
-        if const is not None:
+        if expr is not None:
             if expr in self.consts:
                 if not eq(const, self.consts[expr]):
                     raise ValueError("conflicting const", expr, const, self.consts)
@@ -1078,15 +1078,15 @@ class Exec:  # an execution path
         assert_address(addr)
         assert_uint256(value)
 
-        self.balance = Store(self.balance, addr, value)
+#       self.balance = Store(self.balance, addr, value)
 
-#       new_balance_var = Array(
-#           f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
-#       )
-#       new_balance = Store(self.balance, addr, value)
-#       self.path.append(new_balance_var == new_balance)
-#       self.balance = new_balance_var
-#       self.balances[new_balance_var] = new_balance
+        new_balance_var = Array(
+            f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
+        )
+        new_balance = Store(self.balance, addr, value)
+        self.path.append(new_balance_var == new_balance)
+        self.balance = new_balance_var
+        self.balances[new_balance_var] = new_balance
 
     def sha3(self) -> None:
         loc: int = self.st.mloc()
@@ -1283,17 +1283,17 @@ class SolidityStorage(Storage):
             ex.storage[addr][slot][0] = val
         else:
 
-            ex.storage[addr][slot][len(keys)] = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
+#           ex.storage[addr][slot][len(keys)] = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
 
-#           new_storage_var = Array(
-#               f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(ex.storages):>02}",
-#               BitVecSorts[len(keys) * 256],
-#               BitVecSort256,
-#           )
-#           new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
-#           ex.path.append(new_storage_var == new_storage)
-#           ex.storage[addr][slot][len(keys)] = new_storage_var
-#           ex.storages[new_storage_var] = new_storage
+            new_storage_var = Array(
+                f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(ex.storages):>02}",
+                BitVecSorts[len(keys) * 256],
+                BitVecSort256,
+            )
+            new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
+            ex.path.append(new_storage_var == new_storage)
+            ex.storage[addr][slot][len(keys)] = new_storage_var
+            ex.storages[new_storage_var] = new_storage
 
     @classmethod
     def decode(cls, loc: Any) -> Any:
@@ -1370,17 +1370,17 @@ class GenericStorage(Storage):
         loc = cls.decode(loc)
         cls.init(ex, addr, loc)
 
-        ex.storage[addr][loc.size()] = Store(ex.storage[addr][loc.size()], loc, val)
+#       ex.storage[addr][loc.size()] = Store(ex.storage[addr][loc.size()], loc, val)
 
-#       new_storage_var = Array(
-#           f"storage_{id_str(addr)}_{loc.size()}_{1+len(ex.storages):>02}",
-#           BitVecSorts[loc.size()],
-#           BitVecSort256,
-#       )
-#       new_storage = Store(ex.storage[addr][loc.size()], loc, val)
-#       ex.path.append(new_storage_var == new_storage)
-#       ex.storage[addr][loc.size()] = new_storage_var
-#       ex.storages[new_storage_var] = new_storage
+        new_storage_var = Array(
+            f"storage_{id_str(addr)}_{loc.size()}_{1+len(ex.storages):>02}",
+            BitVecSorts[loc.size()],
+            BitVecSort256,
+        )
+        new_storage = Store(ex.storage[addr][loc.size()], loc, val)
+        ex.path.append(new_storage_var == new_storage)
+        ex.storage[addr][loc.size()] = new_storage_var
+        ex.storages[new_storage_var] = new_storage
 
     @classmethod
     def decode(cls, loc: Any) -> Any:
@@ -1993,10 +1993,10 @@ class SEVM:
                 )
                 exit_code = f_call(con(call_id), gas, to, fund)
 
-#           exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
-#           ex.path.append(exit_code_var == exit_code)
+#           exit_code_var = exit_code
 
-            exit_code_var = exit_code
+            exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
+            ex.path.append(exit_code_var == exit_code)
 
             ex.st.push(exit_code_var)
 
