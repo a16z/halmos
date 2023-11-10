@@ -590,18 +590,12 @@ class Path:
     num_scopes: int
     conditions: List
     pending: List
-#   related: Dict[int, Set[int]]  # a condition -> a set of previous conditions that are related to the condition
-#   cond_to_vars: Dict[int, Set[Any]]  # a condition -> a set of variables that appear in the condition
-#   var_to_conds: Dict[Any, Set[int]]  # a variable -> a set of conditions in which the variable appears
 
     def __init__(self):
         self.solver = None
         self.num_scopes = None
         self.conditions = []
         self.pending = []
-#       self.related = {}
-#       self.cond_to_vars = {}
-#       self.var_to_conds = defaultdict(set)
 
     def __deepcopy__(self, memo):
         if len(self.pending) > 0:
@@ -610,16 +604,12 @@ class Path:
         path.solver = self.solver
         path.num_scopes = self.num_scopes
         path.conditions = self.conditions.copy()
-#       path.related = self.related.copy()
-#       path.cond_to_vars = self.cond_to_vars.copy()
-#       path.var_to_conds = deepcopy(self.var_to_conds)
         return path
 
     def resolve_pending(self, solver):
         if solver.num_scopes() < self.num_scopes:
             raise ValueError("invalid num_scopes", solver.num_scopes(), self.num_scopes)
 
-#       while len(solver.assertions()) > len(self.conditions):
         while solver.num_scopes() > self.num_scopes:
             solver.pop()
 
@@ -629,11 +619,7 @@ class Path:
         self.pending = []
 
     def append(self, cond):
-#       idx = len(self.conditions)
-
         cond = simplify(cond)
-
-#       print(yellow(f"{' '*self.solver.num_scopes()}+ {cond}"))
 
         if is_true(cond):
             return
@@ -641,37 +627,8 @@ class Path:
         self.solver.add(cond)
         self.conditions.append(cond)
 
-#       var_set = z3util.get_vars(cond)
-
-#       self.related[idx] = self._get_related(var_set)
-
-#       self.cond_to_vars[idx] = var_set
-
-#       for var in var_set:
-#           self.var_to_conds[var].add(idx)
-
-#   def _get_related(self, var_set) -> Set[int]:
-#       conds = set()
-#       for var in var_set:
-#           conds.update(self.var_to_conds[var])
-#           if len(conds) > 20:
-#               return conds
-
-#       result = set(conds)
-#       for cond in conds:
-#           result.update(self.related[cond])
-#           if len(result) > 20:
-#               return result
-
-#       return result
-
-#   def get_related(self, cond) -> Set[int]:
-#       return self._get_related(z3util.get_vars(cond))
-
 
 class Exec:  # an execution path
-#   pending: bool
-
     # network
     code: Dict[Address, Contract]
     storage: Dict[Address, Dict[int, Any]]  # address -> { storage slot -> value }
@@ -707,8 +664,6 @@ class Exec:  # an execution path
     calls: List[Any]  # external calls
 
     def __init__(self, **kwargs) -> None:
-#       self.pending = kwargs["pending"]
-        #
         self.code = kwargs["code"]
         self.storage = kwargs["storage"]
         self.balance = kwargs["balance"]
@@ -859,35 +814,7 @@ class Exec:  # an execution path
         if is_false(cond):
             return unsat
 
-#       size_assertions = len(self.solver.assertions())
-#       size_conditions = len(self.path.conditions)
-
-#       if size_assertions > size_conditions:
-#           raise ValueError("size check", self.solver.assertions(), self.path.conditions)
-
-#       if size_assertions < size_conditions:
-#           for i in range(size_assertions):
-#               if not eq(self.solver.assertions()[i], self.path.conditions[i]):
-#                   raise ValueError("eq check", i, self.solver.assertions(), self.path.conditions)
-
-#           for i in range(size_conditions - size_assertions):
-#               self.solver.add(self.path.conditions[size_assertions + i])
-
-#       if len(self.solver.assertions()) != len(self.path.conditions):
-#           raise ValueError("size check", self.solver.assertions(), self.path.conditions)
-
-        result = self.solver.check(cond)
-
-#       conds = self.path.conditions
-#       conds = [self.path.conditions[idx] for idx in self.path.get_related(cond)]
-
-#       if len(conds) > 20:
-#           return unknown
-
-#       result = self.solver.check(*conds, cond)
-#       print(f"check: {result}: {cond}: {conds}")
-#       print(f"-- check: {result}: {len(conds)}")
-        return result
+        return self.solver.check(cond)
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
@@ -1336,8 +1263,8 @@ class HalmosLogs:
 
 class SEVM:
     options: Dict
-    solver: Solver
     storage_model: Type[SomeStorage]
+    solver: Solver
     logs: HalmosLogs
     steps: Steps
 
@@ -1583,8 +1510,6 @@ class SEVM:
         op: int,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-#       out: List[Exec],
-#       logs: HalmosLogs,
     ) -> None:
         gas = ex.st.pop()
         to = uint160(ex.st.pop())
@@ -1636,14 +1561,8 @@ class SEVM:
             )
 
             # TODO: check max call depth
-
-#           # execute external calls
-#           (new_exs, new_steps, new_logs) = self.run(
-
             if True:
                 sub_ex = Exec(
-#                   pending=False,
-                    #
                     code=ex.code,
                     storage=ex.storage,
                     balance=ex.balance,
@@ -1672,13 +1591,6 @@ class SEVM:
                     calls=ex.calls,
                 )
 
-#           )
-
-#           logs.extend(new_logs)
-
-#           # process result
-#           for new_ex in new_exs:
-
             def continuation(new_ex, stack, step_id, out):
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
@@ -1695,7 +1607,6 @@ class SEVM:
                     # internal errors abort the current path,
                     # so we don't need to add it to the worklist
                     out.append(new_ex)
-#                   continue
                     return
 
                 # restore vm state
@@ -1734,7 +1645,6 @@ class SEVM:
             sub_ex.continuation = continuation
 
             stack.append((sub_ex, step_id))
-
 
         def call_unknown() -> None:
             call_id = len(ex.calls)
@@ -1880,8 +1790,6 @@ class SEVM:
         op: int,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-#       out: List[Exec],
-#       logs: HalmosLogs,
     ) -> None:
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())
@@ -1952,13 +1860,8 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, caller, new_addr, value)
 
-#       # execute contract creation code
-#       (new_exs, new_steps, new_logs) = self.run(
-
         if True:
             sub_ex = Exec(
-#               pending=False,
-                #
                 code=ex.code,
                 storage=ex.storage,
                 balance=ex.balance,
@@ -1987,13 +1890,6 @@ class SEVM:
                 calls=ex.calls,
             )
 
-#       )
-
-#       logs.extend(new_logs)
-
-#       # process result
-#       for new_ex in new_exs:
-
         def continuation(new_ex, stack, step_id, out):
             subcall = new_ex.context
 
@@ -2017,7 +1913,6 @@ class SEVM:
             if subcall.is_stuck():
                 # internal errors abort the current path,
                 out.append(new_ex)
-#               continue
                 return
 
             elif subcall.output.error is None:
@@ -2040,18 +1935,15 @@ class SEVM:
             new_ex.next_pc()
             stack.append((new_ex, step_id))
 
-
         sub_ex.continuation = continuation
 
         stack.append((sub_ex, step_id))
-
 
     def jumpi(
         self,
         ex: Exec,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-#       logs: HalmosLogs,
     ) -> None:
         jid = ex.jumpi_id()
 
@@ -2139,11 +2031,10 @@ class SEVM:
         new_path = deepcopy(ex.path)
         new_path.pending.append(cond)
         new_path.num_scopes = ex.solver.num_scopes()
+
         ex.solver.push()
 
         new_ex = Exec(
-#           pending=True,
-            #
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
             storage=deepcopy(ex.storage),
             balance=ex.balance,
@@ -2189,12 +2080,9 @@ class SEVM:
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
 
-#   def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
     def run(self, ex0: Exec) -> Iterator[Exec]:
         out: List[Exec] = []
         yielded: int = 0
-#       logs = HalmosLogs()
-#       steps: Steps = {}
         step_id: int = 0
 
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
@@ -2258,7 +2146,6 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.JUMPI:
-#                   self.jumpi(ex, stack, step_id, logs)
                     self.jumpi(ex, stack, step_id)
                     continue
 
@@ -2424,7 +2311,6 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
-#                   self.call(ex, opcode, stack, step_id, out, logs)
                     self.call(ex, opcode, stack, step_id)
                     continue
 
@@ -2432,7 +2318,6 @@ class SEVM:
                     ex.sha3()
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
-#                   self.create(ex, opcode, stack, step_id, out, logs)
                     self.create(ex, opcode, stack, step_id)
                     continue
 
@@ -2575,7 +2460,6 @@ class SEVM:
 
             except EvmException as err:
                 ex.halt(error=err)
-#               out.append(ex)
                 if ex.continuation is None:
                     out.append(ex)
                 else:
@@ -2587,7 +2471,6 @@ class SEVM:
                 if self.options["debug"]:
                     print(err)
                 ex.halt(data=None, error=err)
-#               out.append(ex)
                 if ex.continuation is None:
                     out.append(ex)
                 else:
@@ -2598,9 +2481,6 @@ class SEVM:
         while len(out) > yielded:
             yield out[yielded]
             yielded += 1
-
-#       return (out, steps, logs)
-#       return out
 
     def mk_exec(
         self,
@@ -2620,8 +2500,6 @@ class SEVM:
         path,
     ) -> Exec:
         return Exec(
-#           pending=False,
-            #
             code=code,
             storage=storage,
             balance=balance,
