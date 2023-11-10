@@ -631,6 +631,13 @@ class Path:
     def append(self, cond):
 #       idx = len(self.conditions)
 
+        cond = simplify(cond)
+
+#       print(yellow(f"{' '*self.solver.num_scopes()}+ {cond}"))
+
+        if is_true(cond):
+            return
+
         self.solver.add(cond)
         self.conditions.append(cond)
 
@@ -1397,7 +1404,10 @@ class SEVM:
                 return div_for_overflow_check
 
             if is_bv_value(w1) and is_bv_value(w2):
-                return UDiv(w1, w2)  # unsigned div (bvudiv)
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return UDiv(w1, w2)  # unsigned div (bvudiv)
 
             if is_bv_value(w2):
                 # concrete denominator case
@@ -1415,7 +1425,10 @@ class SEVM:
 
         if op == EVM.MOD:
             if is_bv_value(w1) and is_bv_value(w2):
-                return URem(w1, w2)  # bvurem
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return URem(w1, w2)  # bvurem
 
             if is_bv_value(w2):
                 i2: int = int(str(w2))
@@ -1430,7 +1443,10 @@ class SEVM:
 
         if op == EVM.SDIV:
             if is_bv_value(w1) and is_bv_value(w2):
-                return w1 / w2  # bvsdiv
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return w1 / w2  # bvsdiv
 
             if is_bv_value(w2):
                 # concrete denominator case
@@ -1446,7 +1462,10 @@ class SEVM:
 
         if op == EVM.SMOD:
             if is_bv_value(w1) and is_bv_value(w2):
-                return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
 
             # TODO: if is_bv_value(w2):
 

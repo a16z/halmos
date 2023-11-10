@@ -639,6 +639,7 @@ def run(
 
     def future_callback(future_model):
         m = future_model.result()
+        models.append(m)
 
         model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
         if result == unsat:
@@ -650,7 +651,7 @@ def run(
                 print(red(f"Counterexample: {render_model(model)}"))
                 counterexamples.append(model)
 #               print("---- found ---")
-                models.append(m)
+#               models.append(m)
 #               cex_found = True
             else:
                 warn(
@@ -768,7 +769,9 @@ def run(
     #           print(f"all done")
                 break
     #       if cex_found:
-            if len(models) > 0:
+
+            if len(counterexamples) > 0:
+
     #           print(f"cex found")
     #           thread_pool.shutdown(wait=False, cancel_futures=True)
     #           for fm in future_models:
@@ -1135,9 +1138,15 @@ def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
 
 def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
     args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
+
+    if args.verbose >= 1:
+        print(f"Checking path condition (path id: {idx+1})")
     res, model = solve(sexpr, args)
 
     if res == sat and not is_model_valid(model):
+#       print(model)
+        if args.verbose >= 1:
+            print(f"  Checking again with refinement")
         res, model = solve(refine(sexpr), args)
 
     # TODO: handle args.solver_subprocess
