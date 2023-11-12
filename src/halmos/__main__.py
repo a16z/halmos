@@ -290,7 +290,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         data=[],
     )
 
-    sevm = SEVM(options, solver)
+    sevm = SEVM(options)
     ex = sevm.mk_exec(
         code={this: contract},
         storage={this: {}},
@@ -300,7 +300,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
-        path=Path(),
+        path=Path(solver),
     )
     exs = list(sevm.run(ex))
 
@@ -351,7 +351,7 @@ def deploy_test(
         this=this,
         pgm=None,  # to be added
         symbolic=False,
-        path=Path(),
+        path=Path(mk_solver(args)),
     )
 
     # deploy libraries and resolve library placeholders in hexcode
@@ -414,7 +414,7 @@ def setup(
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
-    sevm = SEVM(mk_options(args), mk_solver(args))
+    sevm = SEVM(mk_options(args))
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
     setup_timer.create_subtimer("run")
@@ -462,9 +462,9 @@ def setup(
             error = setup_ex.context.output.error
 
             if error is None:
-                setup_ex.solver.reset()
-                setup_ex.solver.set(timeout=args.solver_timeout_assertion)
-                res = setup_ex.solver.check(*setup_ex.path.conditions)
+                setup_ex.path.solver.reset()
+                setup_ex.path.solver.set(timeout=args.solver_timeout_assertion)
+                res = setup_ex.path.solver.check(*setup_ex.path.conditions)
                 if res != unsat:
                     setup_exs.append(setup_ex)
             else:
@@ -571,13 +571,11 @@ def run(
     timer.create_subtimer("paths")
 
     options = mk_options(args)
-    solver = mk_solver(args)
-    sevm = SEVM(options, solver)
+    sevm = SEVM(options)
 
-    path = Path()
-    path.solver = sevm.solver
-    for cond in setup_ex.path.conditions:
-        path.append(cond)
+    solver = mk_solver(args)
+    path = Path(solver)
+    path.extend(setup_ex.path.conditions)
 
     exs = sevm.run(
         Exec(
@@ -598,7 +596,6 @@ def run(
             symbolic=args.symbolic_storage,
             prank=Prank(),  # prank is reset after setUp()
             #
-            solver=sevm.solver,
             path=path,
             alias=setup_ex.alias.copy(),
             #
@@ -675,7 +672,7 @@ def run(
             or is_global_fail_set(ex.context)
         ):
             print(f"Found potential path (id: {idx+1})")
-            future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.solver.to_smt2()))
+            future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.path.solver.to_smt2()))
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
             continue
@@ -1013,10 +1010,10 @@ def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
     if args.verbose >= 1:
         print(f"Checking path condition (path id: {idx+1})")
 
-    ex.solver.reset()
-    ex.solver.set(timeout=args.solver_timeout_assertion)
-    res = ex.solver.check(*ex.path.conditions)
-    model = copy_model(ex.solver.model()) if res == sat else None
+    ex.path.solver.reset()
+    ex.path.solver.set(timeout=args.solver_timeout_assertion)
+    res = ex.path.solver.check(*ex.path.conditions)
+    model = copy_model(ex.path.solver.model()) if res == sat else None
 
     if res == sat and not is_model_valid(model):
         if args.verbose >= 1:

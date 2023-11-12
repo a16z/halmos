@@ -56,7 +56,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         this=this,
         pgm=bytecode,
         symbolic=True,
-        path=Path(),
+        path=Path(solver),
     )
 
 

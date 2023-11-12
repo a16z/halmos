@@ -22,8 +22,8 @@ def options(args):
 
 
 @pytest.fixture
-def sevm(options, solver):
-    return SEVM(options, solver)
+def sevm(options):
+    return SEVM(options)
 
 
 @pytest.fixture

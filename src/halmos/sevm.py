@@ -591,31 +591,29 @@ class Path:
     conditions: List
     pending: List
 
-    def __init__(self):
-        self.solver = None
-        self.num_scopes = None
+    def __init__(self, solver: Solver):
+        self.solver = solver
+        self.num_scopes = 0
         self.conditions = []
         self.pending = []
 
     def __deepcopy__(self, memo):
         if len(self.pending) > 0:
             raise ValueError("deepcopy pending path", self)
-        path = Path()
-        path.solver = self.solver
+
+        path = Path(self.solver)
         path.num_scopes = self.num_scopes
         path.conditions = self.conditions.copy()
         return path
 
-    def resolve_pending(self, solver):
-        if solver.num_scopes() < self.num_scopes:
-            raise ValueError("invalid num_scopes", solver.num_scopes(), self.num_scopes)
+    def resolve_pending(self):
+        if self.solver.num_scopes() < self.num_scopes:
+            raise ValueError("invalid num_scopes", self.solver.num_scopes(), self.num_scopes)
 
-        while solver.num_scopes() > self.num_scopes:
-            solver.pop()
+        while self.solver.num_scopes() > self.num_scopes:
+            self.solver.pop()
 
-        for cond in self.pending:
-            self.append(cond)
-
+        self.extend(self.pending)
         self.pending = []
 
     def append(self, cond):
@@ -626,6 +624,10 @@ class Path:
 
         self.solver.add(cond)
         self.conditions.append(cond)
+
+    def extend(self, conds):
+        for cond in conds:
+            self.append(cond)
 
 
 class Exec:  # an execution path
@@ -652,7 +654,6 @@ class Exec:  # an execution path
     addresses_to_delete: Set[Address]
 
     # path
-    solver: Solver
     path: Path  # path conditions
     alias: Dict[Address, Address]  # address aliases
 
@@ -681,7 +682,6 @@ class Exec:  # an execution path
         self.prank = kwargs["prank"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
         #
-        self.solver = kwargs["solver"]
         self.path = kwargs["path"]
         self.alias = kwargs["alias"]
         #
@@ -690,8 +690,6 @@ class Exec:  # an execution path
         self.storages = kwargs["storages"]
         self.balances = kwargs["balances"]
         self.calls = kwargs["calls"]
-
-        self.path.solver = self.solver
 
         assert_address(self.context.message.target)
         assert_address(self.context.message.caller)
@@ -814,7 +812,7 @@ class Exec:  # an execution path
         if is_false(cond):
             return unsat
 
-        return self.solver.check(cond)
+        return self.path.solver.check(cond)
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
@@ -1264,13 +1262,11 @@ class HalmosLogs:
 class SEVM:
     options: Dict
     storage_model: Type[SomeStorage]
-    solver: Solver
     logs: HalmosLogs
     steps: Steps
 
-    def __init__(self, options: Dict, solver: Solver) -> None:
+    def __init__(self, options: Dict) -> None:
         self.options = options
-        self.solver = solver
         self.logs = HalmosLogs()
         self.steps: Steps = {}
 
@@ -1468,7 +1464,7 @@ class SEVM:
             return target
 
         # set new timeout temporarily for this task
-        self.solver.set(timeout=max(1000, self.options["timeout"]))
+        ex.path.solver.set(timeout=max(1000, self.options["timeout"]))
 
         if target not in ex.alias:
             for addr in ex.code:
@@ -1482,7 +1478,7 @@ class SEVM:
                     break
 
         # reset timeout
-        self.solver.set(timeout=self.options["timeout"])
+        ex.path.solver.set(timeout=self.options["timeout"])
 
         return ex.alias.get(target)
 
@@ -1586,7 +1582,6 @@ class SEVM:
                     symbolic=ex.symbolic,
                     prank=Prank(),
                     #
-                    solver=ex.solver,
                     path=ex.path,
                     alias=ex.alias,
                     #
@@ -1885,7 +1880,6 @@ class SEVM:
                 symbolic=False,
                 prank=Prank(),
                 #
-                solver=ex.solver,
                 path=ex.path,
                 alias=ex.alias,
                 #
@@ -2027,7 +2021,7 @@ class SEVM:
                 target_reachable = simplify(dst == target)
                 if ex.check(target_reachable) != unsat:  # jump
                     if self.options.get("debug"):
-                        print(f"We can jump to {target} with model {ex.solver.model()}")
+                        print(f"We can jump to {target} with model {ex.path.solver.model()}")
                     new_ex = self.create_branch(ex, target_reachable, target)
                     stack.append((new_ex, step_id))
         else:
@@ -2036,9 +2030,9 @@ class SEVM:
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
         new_path = deepcopy(ex.path)
         new_path.pending.append(cond)
-        new_path.num_scopes = ex.solver.num_scopes()
+        new_path.num_scopes = ex.path.solver.num_scopes()
 
-        ex.solver.push()
+        ex.path.solver.push()
 
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
@@ -2058,7 +2052,6 @@ class SEVM:
             symbolic=ex.symbolic,
             prank=deepcopy(ex.prank),
             #
-            solver=ex.solver,
             path=new_path,
             alias=ex.alias.copy(),
             #
@@ -2105,7 +2098,7 @@ class SEVM:
                 step_id += 1
 
                 if len(ex.path.pending) > 0:
-                    ex.path.resolve_pending(ex.solver)
+                    ex.path.resolve_pending()
 
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
@@ -2523,7 +2516,6 @@ class SEVM:
             symbolic=symbolic,
             prank=Prank(),
             #
-            solver=self.solver,
             path=path,
             alias={},
             #
