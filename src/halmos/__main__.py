@@ -438,36 +438,21 @@ def setup(
             ),
         )
 
-        setup_exs_all = list(sevm.run(setup_ex))
-        (setup_logs, setup_steps) = (sevm.logs, sevm.steps)
-
-        if setup_logs.bounded_loops:
-            warn(
-                LOOP_BOUND,
-                f"{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
-            )
-            if args.debug:
-                print("\n".join(setup_logs.bounded_loops))
-
+        setup_exs_all = sevm.run(setup_ex)
         setup_exs = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
             if args.verbose >= VERBOSITY_TRACE_SETUP:
-                num_traces = len(setup_exs_all)
-                print(
-                    f"{setup_sig} trace #{idx+1}/{num_traces}:"
-                    if num_traces > 1
-                    else f"{setup_sig} trace:"
-                )
+                print(f"{setup_sig} trace #{idx+1}:")
                 render_trace(setup_ex.context)
 
             opcode = setup_ex.current_opcode()
             error = setup_ex.context.output.error
 
             if error is None:
-                setup_ex.path.solver.reset()
                 setup_ex.path.solver.set(timeout=args.solver_timeout_assertion)
-                res = setup_ex.path.solver.check(*setup_ex.path.conditions)
+                res = setup_ex.path.solver.check()
+                setup_ex.path.solver.set(timeout=args.solver_timeout_branching)
                 if res != unsat:
                     setup_exs.append(setup_ex)
             else:
@@ -501,6 +486,14 @@ def setup(
 
         if args.print_setup_states:
             print(setup_ex)
+
+        if sevm.logs.bounded_loops:
+            warn(
+                LOOP_BOUND,
+                f"{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
+            )
+            if args.debug:
+                print("\n".join(sevm.logs.bounded_loops))
 
     if args.reset_bytecode:
         for assign in [x.split("=") for x in args.reset_bytecode.split(",")]:
