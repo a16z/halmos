@@ -641,7 +641,7 @@ class Exec:  # an execution path
 
     # tx
     context: CallContext
-    continuation: Any  # parent continuation
+    callback: Any  # to be called when returning back to the parent context
 
     # vm state
     this: Address  # current account address
@@ -670,8 +670,9 @@ class Exec:  # an execution path
         self.balance = kwargs["balance"]
         #
         self.block = kwargs["block"]
+        #
         self.context = kwargs["context"]
-        self.continuation = kwargs["continuation"]
+        self.callback = kwargs["callback"]
         #
         self.this = kwargs["this"]
         self.pgm = kwargs["pgm"]
@@ -1563,36 +1564,8 @@ class SEVM:
             )
 
             # TODO: check max call depth
-            if True:
-                sub_ex = Exec(
-                    code=ex.code,
-                    storage=ex.storage,
-                    balance=ex.balance,
-                    #
-                    block=ex.block,
-                    #
-                    context=CallContext(message=message, depth=ex.context.depth + 1),
-                    continuation=None,  # TBA
-                    this=message.target,
-                    #
-                    pgm=ex.code[to],
-                    pc=0,
-                    st=State(),
-                    jumpis={},
-                    symbolic=ex.symbolic,
-                    prank=Prank(),
-                    #
-                    path=ex.path,
-                    alias=ex.alias,
-                    #
-                    cnts=ex.cnts,
-                    sha3s=ex.sha3s,
-                    storages=ex.storages,
-                    balances=ex.balances,
-                    calls=ex.calls,
-                )
 
-            def continuation(new_ex, stack, step_id, out):
+            def callback(new_ex, stack, step_id, out):
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
                 subcall = new_ex.context
@@ -1602,7 +1575,7 @@ class SEVM:
                 new_ex.context.trace.append(subcall)
                 new_ex.this = ex.this
 
-                new_ex.continuation = ex.continuation
+                new_ex.callback = ex.callback
 
                 if subcall.is_stuck():
                     # internal errors abort the current path,
@@ -1643,7 +1616,33 @@ class SEVM:
                 new_ex.next_pc()
                 stack.append((new_ex, step_id))
 
-            sub_ex.continuation = continuation
+            sub_ex = Exec(
+                code=ex.code,
+                storage=ex.storage,
+                balance=ex.balance,
+                #
+                block=ex.block,
+                #
+                context=CallContext(message=message, depth=ex.context.depth + 1),
+                callback=callback,
+                this=message.target,
+                #
+                pgm=ex.code[to],
+                pc=0,
+                st=State(),
+                jumpis={},
+                symbolic=ex.symbolic,
+                prank=Prank(),
+                #
+                path=ex.path,
+                alias=ex.alias,
+                #
+                cnts=ex.cnts,
+                sha3s=ex.sha3s,
+                storages=ex.storages,
+                balances=ex.balances,
+                calls=ex.calls,
+            )
 
             stack.append((sub_ex, step_id))
 
@@ -1861,36 +1860,7 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, caller, new_addr, value)
 
-        if True:
-            sub_ex = Exec(
-                code=ex.code,
-                storage=ex.storage,
-                balance=ex.balance,
-                #
-                block=ex.block,
-                #
-                context=CallContext(message=message, depth=ex.context.depth + 1),
-                continuation=None,  # TBA
-                this=new_addr,
-                #
-                pgm=create_code,
-                pc=0,
-                st=State(),
-                jumpis={},
-                symbolic=False,
-                prank=Prank(),
-                #
-                path=ex.path,
-                alias=ex.alias,
-                #
-                cnts=ex.cnts,
-                sha3s=ex.sha3s,
-                storages=ex.storages,
-                balances=ex.balances,
-                calls=ex.calls,
-            )
-
-        def continuation(new_ex, stack, step_id, out):
+        def callback(new_ex, stack, step_id, out):
             subcall = new_ex.context
 
             # continue execution in the context of the parent
@@ -1898,7 +1868,7 @@ class SEVM:
             new_ex.context = deepcopy(ex.context)
             new_ex.context.trace.append(subcall)
 
-            new_ex.continuation = ex.continuation
+            new_ex.callback = ex.callback
 
             new_ex.this = ex.this
 
@@ -1935,7 +1905,33 @@ class SEVM:
             new_ex.next_pc()
             stack.append((new_ex, step_id))
 
-        sub_ex.continuation = continuation
+        sub_ex = Exec(
+            code=ex.code,
+            storage=ex.storage,
+            balance=ex.balance,
+            #
+            block=ex.block,
+            #
+            context=CallContext(message=message, depth=ex.context.depth + 1),
+            callback=callback,
+            this=new_addr,
+            #
+            pgm=create_code,
+            pc=0,
+            st=State(),
+            jumpis={},
+            symbolic=False,
+            prank=Prank(),
+            #
+            path=ex.path,
+            alias=ex.alias,
+            #
+            cnts=ex.cnts,
+            sha3s=ex.sha3s,
+            storages=ex.storages,
+            balances=ex.balances,
+            calls=ex.calls,
+        )
 
         stack.append((sub_ex, step_id))
 
@@ -2042,7 +2038,7 @@ class SEVM:
             block=deepcopy(ex.block),
             #
             context=deepcopy(ex.context),
-            continuation=ex.continuation,
+            callback=ex.callback,
             this=ex.this,
             #
             pgm=ex.pgm,
@@ -2137,10 +2133,10 @@ class SEVM:
                     else:
                         raise ValueError(opcode)
 
-                    if ex.continuation is None:
+                    if ex.callback is None:
                         out.append(ex)
                     else:
-                        ex.continuation(ex, stack, step_id, out)
+                        ex.callback(ex, stack, step_id, out)
 
                     continue
 
@@ -2459,10 +2455,10 @@ class SEVM:
 
             except EvmException as err:
                 ex.halt(error=err)
-                if ex.continuation is None:
+                if ex.callback is None:
                     out.append(ex)
                 else:
-                    ex.continuation(ex, stack, step_id, out)
+                    ex.callback(ex, stack, step_id, out)
 
                 continue
 
@@ -2470,10 +2466,10 @@ class SEVM:
                 if self.options["debug"]:
                     print(err)
                 ex.halt(data=None, error=err)
-                if ex.continuation is None:
+                if ex.callback is None:
                     out.append(ex)
                 else:
-                    ex.continuation(ex, stack, step_id, out)
+                    ex.callback(ex, stack, step_id, out)
 
                 continue
 
@@ -2506,7 +2502,7 @@ class SEVM:
             block=block,
             #
             context=context,
-            continuation=None,  # top-level; no continuation
+            callback=None,  # top-level; no callback
             #
             this=this,
             pgm=pgm,
