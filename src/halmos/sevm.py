@@ -1565,7 +1565,7 @@ class SEVM:
 
             # TODO: check max call depth
 
-            def callback(new_ex, stack, step_id, out):
+            def callback(new_ex, stack, step_id):
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
                 subcall = new_ex.context
@@ -1580,7 +1580,7 @@ class SEVM:
                 if subcall.is_stuck():
                     # internal errors abort the current path,
                     # so we don't need to add it to the worklist
-                    out.append(new_ex)
+                    yield new_ex
                     return
 
                 # restore vm state
@@ -1860,7 +1860,7 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, caller, new_addr, value)
 
-        def callback(new_ex, stack, step_id, out):
+        def callback(new_ex, stack, step_id):
             subcall = new_ex.context
 
             # continue execution in the context of the parent
@@ -1882,7 +1882,7 @@ class SEVM:
 
             if subcall.is_stuck():
                 # internal errors abort the current path,
-                out.append(new_ex)
+                yield new_ex
                 return
 
             elif subcall.output.error is None:
@@ -2076,20 +2076,11 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
-        out: List[Exec] = []
-        yielded: int = 0
         step_id: int = 0
 
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
         while stack:
             try:
-                while len(out) > yielded:
-                    yield out[yielded]
-                    yielded += 1
-
-                if len(out) >= self.options.get("max_width", 2**64):
-                    break
-
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
 
@@ -2134,9 +2125,9 @@ class SEVM:
                         raise ValueError(opcode)
 
                     if ex.callback is None:
-                        out.append(ex)
+                        yield ex
                     else:
-                        ex.callback(ex, stack, step_id, out)
+                        yield from ex.callback(ex, stack, step_id)
 
                     continue
 
@@ -2455,27 +2446,26 @@ class SEVM:
 
             except EvmException as err:
                 ex.halt(error=err)
+
                 if ex.callback is None:
-                    out.append(ex)
+                    yield ex
                 else:
-                    ex.callback(ex, stack, step_id, out)
+                    yield from ex.callback(ex, stack, step_id)
 
                 continue
 
             except HalmosException as err:
                 if self.options["debug"]:
                     print(err)
+
                 ex.halt(data=None, error=err)
+
                 if ex.callback is None:
-                    out.append(ex)
+                    yield ex
                 else:
-                    ex.callback(ex, stack, step_id, out)
+                    yield from ex.callback(ex, stack, step_id)
 
                 continue
-
-        while len(out) > yielded:
-            yield out[yielded]
-            yielded += 1
 
     def mk_exec(
         self,

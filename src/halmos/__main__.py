@@ -675,13 +675,15 @@ def run(
             future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.path.solver.to_smt2()))
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
-            continue
 
-        if ex.context.is_stuck():
+        elif ex.context.is_stuck():
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
 
         elif not error:
             normal += 1
+
+        if len(result_exs) >= args.width:
+            break
 
     timer.create_subtimer("models")
 

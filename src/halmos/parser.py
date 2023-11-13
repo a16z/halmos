@@ -35,7 +35,11 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         help="set loop unrolling bounds (default: %(default)s)",
     )
     parser.add_argument(
-        "--width", metavar="MAX_WIDTH", type=int, help="set the max number of paths"
+        "--width",
+        metavar="MAX_WIDTH",
+        type=int,
+        default=2**64,
+        help="set the max number of paths (default: %(default)s)"
     )
     parser.add_argument(
         "--depth", metavar="MAX_DEPTH", type=int, help="set the max path length"
