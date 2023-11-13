@@ -302,9 +302,12 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         symbolic=args.symbolic_storage,
         path=Path(solver),
     )
-    exs = list(sevm.run(ex))
+    exs = sevm.run(ex)
+    result_exs = []
 
     for idx, ex in enumerate(exs):
+        result_exs.append(ex)
+
         opcode = ex.current_opcode()
         error = ex.context.output.error
         returndata = ex.context.output.data
@@ -317,14 +320,14 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         else:
             print(f"Final opcode: {mnemonic(opcode)})")
             print(f"Return data: {returndata}")
-            model_with_context = gen_model(args, idx, ex)
+            model_with_context = gen_model_from_sexpr(GenModelArgs(args, idx, ex.path.solver.to_smt2()))
             print(f"Input example: {model_with_context.model}")
 
         if args.print_states:
-            print(f"# {idx+1} / {len(exs)}")
+            print(f"# {idx+1}")
             print(ex)
 
-    return exs
+    return result_exs
 
 
 def deploy_test(
@@ -977,14 +980,42 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
     if args.verbose >= 1:
         print(f"Checking path condition (path id: {idx+1})")
+
     res, model = solve(sexpr, args)
 
     if res == sat and not is_model_valid(model):
         if args.verbose >= 1:
             print(f"  Checking again with refinement")
+
         res, model = solve(refine(sexpr), args)
 
-    # TODO: handle args.solver_subprocess
+    if args.solver_subprocess and is_unknown(res, model):
+        fname = f"/tmp/{uuid.uuid4().hex}.smt2"
+
+        if args.verbose >= 1:
+            print(f"  Checking again in an external process")
+            print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
+
+        query = refine(sexpr)
+        with open(fname, "w") as f:
+            f.write("(set-logic QF_AUFBV)\n")
+            f.write(query)
+
+        cmd = args.solver_subprocess_command.split() + [fname]
+        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+        res_str_head = res_str.split("\n", 1)[0]
+
+        with open(f"{fname}.out", "w") as f:
+            f.write(res_str)
+
+        if args.verbose >= 1:
+            print(f"    {res_str_head}")
+
+        if res_str_head == "unsat":
+            res = unsat
+        elif res_str_head == "sat":
+            res = sat
+            model = f"{fname}.out"
 
     return package_result(model, idx, res, args)
 
@@ -1005,47 +1036,6 @@ def refine(query: str) -> str:
         r"(declare-fun dummy_\1\2",
         query,
     )
-
-
-# TODO: remove
-def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
-    if args.verbose >= 1:
-        print(f"Checking path condition (path id: {idx+1})")
-
-    ex.path.solver.reset()
-    ex.path.solver.set(timeout=args.solver_timeout_assertion)
-    res = ex.path.solver.check(*ex.path.conditions)
-    model = copy_model(ex.path.solver.model()) if res == sat else None
-
-    if res == sat and not is_model_valid(model):
-        if args.verbose >= 1:
-            print(f"  Checking again with refinement")
-        res, model = solve(refine(to_smt2(ex)), args)
-
-    if args.solver_subprocess and is_unknown(res, model):
-        if args.verbose >= 1:
-            print(f"  Checking again in an external process")
-        fname = f"/tmp/{uuid.uuid4().hex}.smt2"
-        if args.verbose >= 1:
-            print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
-        query = refine(to_smt2(ex))
-        with open(fname, "w") as f:
-            f.write("(set-logic QF_AUFBV)\n")
-            f.write(query)
-        cmd = args.solver_subprocess_command.split() + [fname]
-        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
-        res_str_head = res_str.split("\n", 1)[0]
-        with open(f"{fname}.out", "w") as f:
-            f.write(res_str)
-        if args.verbose >= 1:
-            print(f"    {res_str_head}")
-        if res_str_head == "unsat":
-            res = unsat
-        elif res_str_head == "sat":
-            res = sat
-            model = f"{fname}.out"
-
-    return package_result(model, idx, res, args)
 
 
 def package_result(
