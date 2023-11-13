@@ -542,6 +542,8 @@ def run(
     if args.verbose >= 1:
         print(f"Executing {funname}")
 
+    dump_dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
+
     #
     # calldata
     #
@@ -650,7 +652,6 @@ def run(
             )
             render_trace(result_exs[index].context)
 
-
     for idx, ex in enumerate(exs):
         result_exs.append(ex)
 
@@ -667,10 +668,23 @@ def run(
             (isinstance(error, Revert) and unbox_int(ex.context.output.data) == ASSERT_FAIL)
             or is_global_fail_set(ex.context)
         ):
-            print(f"Found potential path (id: {idx+1})")
-            future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, ex.path.solver.to_smt2()))
+            if args.verbose >= 1:
+                print(f"Found potential path (id: {idx+1})")
+
+            query = ex.path.solver.to_smt2()
+
+            future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, query))
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
+
+            if args.dump_smt_queries:
+                if not os.path.isdir(dump_dirname):
+                    os.makedirs(dump_dirname)
+                    print(f"Generating SMT queries in {dump_dirname}")
+
+                with open(f"{dump_dirname}/{idx+1}.smt2", "w") as f:
+                    f.write("(set-logic QF_AUFBV)\n")
+                    f.write(query)
 
         elif ex.context.is_stuck():
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
@@ -698,18 +712,6 @@ def run(
 
     else:
         thread_pool.shutdown(wait=True)
-
-# TODO:
-#   if len(execs_to_model) > 0 and args.dump_smt_queries:
-#       dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
-#       os.makedirs(dirname)
-#       print(f"Generating SMT queries in {dirname}")
-#       for idx, ex in execs_to_model:
-#           fname = f"{dirname}/{idx+1}.smt2"
-#           query = to_smt2(ex)
-#           with open(fname, "w") as f:
-#               f.write("(set-logic QF_AUFBV)\n")
-#               f.write(query)
 
     no_counterexample = all(m.model is None for m in models)
     passed = no_counterexample and normal > 0 and len(stuck) == 0
