@@ -225,6 +225,13 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="run assertion solvers in parallel",
     )
+    group_solver.add_argument(
+        "--solver-threads",
+        metavar="N",
+        type=int,
+        default=min(32, os.cpu_count() + 4), # the default value of max_workers for ThreadPoolExecutor
+        help=f"set the number of threads for parallel solvers (default: %(default)s)",
+    )
 
     # internal options
     group_internal = parser.add_argument_group("Internal options")

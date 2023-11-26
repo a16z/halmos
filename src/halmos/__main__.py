@@ -613,7 +613,7 @@ def run(
     models: List[ModelWithContext] = []
     stuck = []
 
-    thread_pool = ThreadPoolExecutor()
+    thread_pool = ThreadPoolExecutor(max_workers=args.solver_threads)
     result_exs = []
     future_models = []
     counterexamples = []
