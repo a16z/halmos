@@ -608,7 +608,9 @@ class Path:
 
     def resolve_pending(self):
         if self.solver.num_scopes() < self.num_scopes:
-            raise ValueError("invalid num_scopes", self.solver.num_scopes(), self.num_scopes)
+            raise ValueError(
+                "invalid num_scopes", self.solver.num_scopes(), self.num_scopes
+            )
 
         while self.solver.num_scopes() > self.num_scopes:
             self.solver.pop()
@@ -2017,7 +2019,9 @@ class SEVM:
                 target_reachable = simplify(dst == target)
                 if ex.check(target_reachable) != unsat:  # jump
                     if self.options.get("debug"):
-                        print(f"We can jump to {target} with model {ex.path.solver.model()}")
+                        print(
+                            f"We can jump to {target} with model {ex.path.solver.model()}"
+                        )
                     new_ex = self.create_branch(ex, target_reachable, target)
                     stack.append((new_ex, step_id))
         else:

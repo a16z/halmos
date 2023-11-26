@@ -39,7 +39,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         metavar="MAX_WIDTH",
         type=int,
         default=2**64,
-        help="set the max number of paths (default: %(default)s)"
+        help="set the max number of paths (default: %(default)s)",
     )
     parser.add_argument(
         "--depth", metavar="MAX_DEPTH", type=int, help="set the max path length"
@@ -229,7 +229,9 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--solver-threads",
         metavar="N",
         type=int,
-        default=min(32, os.cpu_count() + 4), # the default value of max_workers for ThreadPoolExecutor
+        # the default value of max_workers for ThreadPoolExecutor
+        # TODO: set default value := total physical memory size / average z3 memory footprint
+        default=min(32, os.cpu_count() + 4),
         help=f"set the number of threads for parallel solvers (default: %(default)s)",
     )
 

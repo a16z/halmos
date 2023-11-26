@@ -320,7 +320,9 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         else:
             print(f"Final opcode: {mnemonic(opcode)})")
             print(f"Return data: {returndata}")
-            model_with_context = gen_model_from_sexpr(GenModelArgs(args, idx, ex.path.solver.to_smt2()))
+            model_with_context = gen_model_from_sexpr(
+                GenModelArgs(args, idx, ex.path.solver.to_smt2())
+            )
             print(f"Input example: {model_with_context.model}")
 
         if args.print_states:
@@ -665,15 +667,17 @@ def run(
         error = ex.context.output.error
 
         if (
-            (isinstance(error, Revert) and unbox_int(ex.context.output.data) == ASSERT_FAIL)
-            or is_global_fail_set(ex.context)
-        ):
+            isinstance(error, Revert)
+            and unbox_int(ex.context.output.data) == ASSERT_FAIL
+        ) or is_global_fail_set(ex.context):
             if args.verbose >= 1:
                 print(f"Found potential path (id: {idx+1})")
 
             query = ex.path.solver.to_smt2()
 
-            future_model = thread_pool.submit(gen_model_from_sexpr, GenModelArgs(args, idx, query))
+            future_model = thread_pool.submit(
+                gen_model_from_sexpr, GenModelArgs(args, idx, query)
+            )
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
 
@@ -703,8 +707,8 @@ def run(
         )
 
     if args.early_exit:
-        while (
-            not (len(counterexamples) > 0 or all([ fm.done() for fm in future_models ]))
+        while not (
+            len(counterexamples) > 0 or all([fm.done() for fm in future_models])
         ):
             time.sleep(1)
 
@@ -959,7 +963,7 @@ class GenModelArgs:
 
 
 def copy_model(model: Model) -> Dict:
-    return { decl: model[decl] for decl in model }
+    return {decl: model[decl] for decl in model}
 
 
 def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
