@@ -1211,6 +1211,53 @@ class GenericStorage(Storage):
         return simplify(res)
 
 
+class ArrayStorage(Storage):
+    @classmethod
+    def empty(cls, addr: BitVecRef) -> ArrayRef:
+        return Array(
+            f"storage_{id_str(addr)}_00",
+            BitVecSort256,
+            BitVecSort256,
+        )
+
+    @classmethod
+    def init(cls, ex: Exec, addr: Any) -> None:
+        assert_address(addr)
+        if "storage" not in ex.storage[addr]:
+            ex.storage[addr]["storage"] = cls.empty(addr)
+
+    @classmethod
+    def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
+        loc = cls.decode(ex, loc)
+        cls.init(ex, addr)
+        if not ex.symbolic:
+            # generate emptyness axiom for each array index, instead of using quantified formula; see init()
+            ex.path.append(Select(cls.empty(addr), loc) == con(0))
+        return ex.select(ex.storage[addr]["storage"], loc, ex.storages)
+
+    @classmethod
+    def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        loc = cls.decode(ex, loc)
+        cls.init(ex, addr)
+        new_storage_var = Array(
+            f"storage_{id_str(addr)}_{1+len(ex.storages):>02}",
+            BitVecSort256,
+            BitVecSort256,
+        )
+        new_storage = Store(ex.storage[addr]["storage"], loc, val)
+        ex.path.append(new_storage_var == new_storage)
+        ex.storage[addr]["storage"] = new_storage_var
+        ex.storages[new_storage_var] = new_storage
+
+    @classmethod
+    def decode(cls, ex: Exec, loc: Any) -> Any:
+        if is_bv_value(loc):
+            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
+            if preimage:  # loc == hash(preimage) + delta
+                return ex.sha3_data(con(preimage), 32) + con(delta)
+        return loc
+
+
 SomeStorage = TypeVar("SomeStorage", bound=Storage)
 
 
@@ -1298,8 +1345,13 @@ class SEVM:
         self.logs = HalmosLogs()
         self.steps: Steps = {}
 
-        is_generic = self.options["storage_layout"] == "generic"
-        self.storage_model = GenericStorage if is_generic else SolidityStorage
+        storage_layout = self.options["storage_layout"]
+        if storage_layout == "generic":
+            self.storage_model = GenericStorage
+        elif storage_layout == "array":
+            self.storage_model = ArrayStorage
+        else:
+            self.storage_model = SolidityStorage
 
     def div_xy_y(self, w1: Word, w2: Word) -> Word:
         # return the number of bits required to represent the given value. default = 256
