@@ -891,6 +891,9 @@ class Exec:  # an execution path
         # assume hash values are sufficiently smaller than the uint max
         self.path.append(ULE(sha3_expr, con(2**256 - 2**64)))
 
+        # assume hash values are sufficiently larger
+        self.path.append(UGE(sha3_expr, con(2**64)))
+
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
 
