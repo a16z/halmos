@@ -1000,24 +1000,57 @@ class Exec:  # an execution path
 class Storage:
     @classmethod
     def normalize(cls, expr: Any) -> Any:
+
         # Concat(Extract(255, 8, bvadd(x, y)), bvadd(Extract(7, 0, x), Extract(7, 0, y))) => x + y
-        if expr.decl().name() == "concat" and expr.num_args() == 2:
-            arg0 = expr.arg(0)  # Extract(255, 8, bvadd(x, y))
-            arg1 = expr.arg(1)  # bvadd(Extract(7, 0, x), Extract(7, 0, y))
+        # Concat(Extract(255, 8, bvadd(x, y)), bvadd(      x mod 256 , Extract(7, 0, y))) => x + y  if 0 <= x < 255
+        def normalize_extract(arg0, arg1):
             if (
                 arg0.decl().name() == "extract"
                 and arg0.num_args() == 1
                 and arg0.params() == [255, 8]
             ):
                 arg00 = arg0.arg(0)  # bvadd(x, y)
-                if arg00.decl().name() == "bvadd":
-                    x = arg00.arg(0)
-                    y = arg00.arg(1)
-                    if arg1.decl().name() == "bvadd" and arg1.num_args() == 2:
-                        if eq(arg1.arg(0), simplify(Extract(7, 0, x))) and eq(
-                            arg1.arg(1), simplify(Extract(7, 0, y))
-                        ):
-                            return x + y
+
+            #   print(f">>>> {simplify(Concat(Extract(255, 8, arg00), Extract(7, 0, arg00)))}")
+            #   print(f"<<<< {simplify(Concat(arg0, arg1))}")
+
+                if eq(simplify(Concat(Extract(255, 8, arg00), Extract(7, 0, arg00))), simplify(Concat(arg0, arg1))):
+                    return arg00
+
+            #   if arg00.decl().name() == "bvadd":
+            #       x = arg00.arg(0)
+            #       y = arg00.arg(1)
+            #       if arg1.decl().name() == "bvadd" and arg1.num_args() == 2:
+            #           if eq(arg1.arg(1), simplify(Extract(7, 0, y))):
+            #               term = arg1.arg(0)
+            #               if (
+            #                   # bvadd(Extract(7, 0, x), Extract(7, 0, y))
+            #                   eq(term, simplify(Extract(7, 0, x))) or
+            #                   # bvadd(              x , Extract(7, 0, y)) and 0 <= x < 255
+            #                   (eq(term, x) and is_bv_value(x) and 0 <= x.as_long() < 255)
+            #               ):
+            #                   return x + y
+            return None
+
+        if expr.decl().name() == "concat" and expr.num_args() >= 2:
+            new_concat_args = []
+            i = 0
+            while i < expr.num_args() - 1:
+                arg0 = expr.arg(i)
+                arg1 = expr.arg(i+1)
+
+                arg0_arg1 = normalize_extract(arg0, arg1)
+                if arg0_arg1 is None:
+                    new_concat_args.append(arg0)
+                    i += 1
+                    if i == expr.num_args() - 1:
+                        new_concat_args.append(arg1)
+                else:
+                    new_concat_args.append(arg0_arg1)
+                    i += 2
+
+            return concat(new_concat_args)
+
         return expr
 
 
@@ -1179,7 +1212,11 @@ class GenericStorage(Storage):
             lo = cls.decode(simplify(Extract(255, 0, args)))
             return cls.simple_hash(Concat(hi, lo))
         elif loc.decl().name().startswith("sha3_"):
-            return cls.simple_hash(cls.decode(loc.arg(0)))
+            arg = cls.normalize(loc.arg(0))
+            if arg.decl().name() == "concat":
+                return cls.simple_hash(concat([cls.decode(arg.arg(i)) for i in range(arg.num_args())]))
+            else:
+                return cls.simple_hash(cls.decode(arg))
         elif loc.decl().name() == "bvadd":
             args = loc.children()
             if len(args) < 2:
