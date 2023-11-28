@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from functools import reduce
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterator,
     List,
@@ -586,8 +587,13 @@ class CodeIterator:
 
 
 class Path:
+    # a Path object represents a prefix of the path currently being executed
+    # initially, it's an empty path at the beginning of execution
+
     solver: Solver
     num_scopes: int
+    # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
+    # TODO: separate these two types of constraints, so that we can display only branching conditions to users
     conditions: List
     pending: List
 
@@ -598,20 +604,41 @@ class Path:
         self.pending = []
 
     def __deepcopy__(self, memo):
-        if len(self.pending) > 0:
-            raise ValueError("deepcopy pending path", self)
+        raise NotImplementedError(f"use the branch() method instead of deepcopy()")
 
+    def branch(self, cond):
+        if len(self.pending) > 0:
+            raise ValueError("branching from an inactive path", self)
+
+        # create a new path that shares the same solver instance to minimize memory usage
+        # note: sharing the solver instance complicates the use of randomized path exploration approaches, which can be more efficient for quickly finding bugs.
+        # currently, a dfs-based path exploration is employed, which is suitable for scenarios where exploring all paths is necessary, e.g., when proving the absence of bugs.
         path = Path(self.solver)
-        path.num_scopes = self.num_scopes
+
+        # create a new scope within the solver, and save the current scope
+        # the solver will roll back to this scope later when the new path is activated
+        path.num_scopes = self.solver.num_scopes()
+        self.solver.push()
+
+        # shallow copy because existing conditions won't change
+        # note: deep copy would be needed later for advanced query optimizations (eg, constant propagation)
         path.conditions = self.conditions.copy()
+
+        # store the branching condition aside until the new path is activated.
+        path.pending.append(cond)
+
         return path
 
-    def resolve_pending(self):
+    def is_activated(self) -> bool:
+        return len(self.pending) == 0
+
+    def activate(self):
         if self.solver.num_scopes() < self.num_scopes:
             raise ValueError(
                 "invalid num_scopes", self.solver.num_scopes(), self.num_scopes
             )
 
+        # TODO: use solver.pop(N)
         while self.solver.num_scopes() > self.num_scopes:
             self.solver.pop()
 
@@ -643,7 +670,7 @@ class Exec:  # an execution path
 
     # tx
     context: CallContext
-    callback: Any  # to be called when returning back to the parent context
+    callback: Optional[Callable]  # to be called when returning back to parent context
 
     # vm state
     this: Address  # current account address
@@ -2028,12 +2055,7 @@ class SEVM:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
-        new_path = deepcopy(ex.path)
-        new_path.pending.append(cond)
-        new_path.num_scopes = ex.path.solver.num_scopes()
-
-        ex.path.solver.push()
-
+        new_path = ex.path.branch(cond)
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
             storage=deepcopy(ex.storage),
@@ -2083,13 +2105,24 @@ class SEVM:
         step_id: int = 0
 
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
+
+        def finalize(ex: Exec):
+            # if it's at the top-level, there is no callback; yield the current execution state
+            if ex.callback is None:
+                yield ex
+
+            # otherwise, execute the callback to return to the parent execution context
+            # note: `yield from` is used as the callback may yield the current execution state that got stuck
+            else:
+                yield from ex.callback(ex, stack, step_id)
+
         while stack:
             try:
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
 
-                if len(ex.path.pending) > 0:
-                    ex.path.resolve_pending()
+                if not ex.path.is_activated():
+                    ex.path.activate()
 
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
@@ -2104,6 +2137,7 @@ class SEVM:
                 ):
                     continue
 
+                # TODO: clean up
                 if self.options.get("log"):
                     if opcode == EVM.JUMPI:
                         self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
@@ -2128,11 +2162,7 @@ class SEVM:
                     else:
                         raise ValueError(opcode)
 
-                    if ex.callback is None:
-                        yield ex
-                    else:
-                        yield from ex.callback(ex, stack, step_id)
-
+                    yield from finalize(ex)
                     continue
 
                 elif opcode == EVM.JUMPI:
@@ -2450,12 +2480,7 @@ class SEVM:
 
             except EvmException as err:
                 ex.halt(error=err)
-
-                if ex.callback is None:
-                    yield ex
-                else:
-                    yield from ex.callback(ex, stack, step_id)
-
+                yield from finalize(ex)
                 continue
 
             except HalmosException as err:
@@ -2463,12 +2488,7 @@ class SEVM:
                     print(err)
 
                 ex.halt(data=None, error=err)
-
-                if ex.callback is None:
-                    yield ex
-                else:
-                    yield from ex.callback(ex, stack, step_id)
-
+                yield from finalize(ex)
                 continue
 
     def mk_exec(
