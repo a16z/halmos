@@ -1053,29 +1053,35 @@ class Storage:
 
 class SolidityStorage(Storage):
     @classmethod
-    def empty(cls, addr: BitVecRef, slot: int, len_keys: int) -> ArrayRef:
+    def empty(cls, addr: BitVecRef, slot: int, keys: Tuple) -> ArrayRef:
+        num_keys = len(keys)
+        size_keys = cls.bitsize(keys)
         return Array(
-            f"storage_{id_str(addr)}_{slot}_{len_keys}_00",
-            BitVecSorts[len_keys * 256],
+            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
+            BitVecSorts[size_keys],
             BitVecSort256,
         )
 
     @classmethod
-    def init(cls, ex: Exec, addr: Any, slot: int, keys) -> None:
+    def init(cls, ex: Exec, addr: Any, slot: int, keys: Tuple) -> None:
         assert_address(addr)
+        num_keys = len(keys)
+        size_keys = cls.bitsize(keys)
         if slot not in ex.storage[addr]:
             ex.storage[addr][slot] = {}
-        if len(keys) not in ex.storage[addr][slot]:
-            if len(keys) == 0:
+        if num_keys not in ex.storage[addr][slot]:
+            ex.storage[addr][slot][num_keys] = {}
+        if size_keys not in ex.storage[addr][slot][num_keys]:
+            if size_keys == 0:
                 if ex.symbolic:
-                    label = f"storage_{id_str(addr)}_{slot}_{len(keys)}_00"
-                    ex.storage[addr][slot][len(keys)] = BitVec(label, BitVecSort256)
+                    label = f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00"
+                    ex.storage[addr][slot][num_keys][size_keys] = BitVec(label, BitVecSort256)
                 else:
-                    ex.storage[addr][slot][len(keys)] = con(0)
+                    ex.storage[addr][slot][num_keys][size_keys] = con(0)
             else:
-                # do not use z3 const array `K(BitVecSort(len(keys)*256), con(0))` when not ex.symbolic
+                # do not use z3 const array `K(BitVecSort(size_keys), con(0))` when not ex.symbolic
                 # instead use normal smt array, and generate emptyness axiom; see load()
-                ex.storage[addr][slot][len(keys)] = cls.empty(addr, slot, len(keys))
+                ex.storage[addr][slot][num_keys][size_keys] = cls.empty(addr, slot, keys)
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
@@ -1084,16 +1090,18 @@ class SolidityStorage(Storage):
             raise ValueError(offsets)
         slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
         cls.init(ex, addr, slot, keys)
-        if len(keys) == 0:
-            return ex.storage[addr][slot][0]
+        num_keys = len(keys)
+        size_keys = cls.bitsize(keys)
+        if num_keys == 0:
+            return ex.storage[addr][slot][num_keys][size_keys]
         else:
             if not ex.symbolic:
                 # generate emptyness axiom for each array index, instead of using quantified formula; see init()
                 ex.path.append(
-                    Select(cls.empty(addr, slot, len(keys)), concat(keys)) == con(0)
+                    Select(cls.empty(addr, slot, keys), concat(keys)) == con(0)
                 )
             return ex.select(
-                ex.storage[addr][slot][len(keys)], concat(keys), ex.storages
+                ex.storage[addr][slot][num_keys][size_keys], concat(keys), ex.storages
             )
 
     @classmethod
@@ -1103,17 +1111,19 @@ class SolidityStorage(Storage):
             raise ValueError(offsets)
         slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
         cls.init(ex, addr, slot, keys)
-        if len(keys) == 0:
-            ex.storage[addr][slot][0] = val
+        num_keys = len(keys)
+        size_keys = cls.bitsize(keys)
+        if num_keys == 0:
+            ex.storage[addr][slot][num_keys][size_keys] = val
         else:
             new_storage_var = Array(
-                f"storage_{id_str(addr)}_{slot}_{len(keys)}_{1+len(ex.storages):>02}",
-                BitVecSorts[len(keys) * 256],
+                f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{1+len(ex.storages):>02}",
+                BitVecSorts[size_keys],
                 BitVecSort256,
             )
-            new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
+            new_storage = Store(ex.storage[addr][slot][num_keys][size_keys], concat(keys), val)
             ex.path.append(new_storage_var == new_storage)
-            ex.storage[addr][slot][len(keys)] = new_storage_var
+            ex.storage[addr][slot][num_keys][size_keys] = new_storage_var
             ex.storages[new_storage_var] = new_storage
 
     @classmethod
@@ -1127,6 +1137,13 @@ class SolidityStorage(Storage):
         elif loc.decl().name() == "sha3_256":  # a[i] : hash(a)+i
             base = loc.arg(0)
             return cls.decode(base) + (con(0),)
+        elif loc.decl().name().startswith("sha3_"):  # m[k] : hash(k.m) where |k| > 256-bit
+            sha3_input = cls.normalize(loc.arg(0))
+            if sha3_input.decl().name() == "concat" and sha3_input.num_args() == 2:
+                offset = simplify(sha3_input.arg(0))
+                base = simplify(sha3_input.arg(1))
+                if offset.size() > 256 and base.size() == 256:
+                    return cls.decode(base) + (offset, con(0))
         elif loc.decl().name() == "bvadd":
             #   # when len(args) == 2
             #   arg0 = cls.decode(loc.arg(0))
@@ -1156,10 +1173,18 @@ class SolidityStorage(Storage):
                 return (con(preimage), con(delta))
             else:
                 return (loc,)
-        elif is_bv(loc):
+
+        if is_bv(loc):
             return (loc,)
         else:
             raise ValueError(loc)
+
+    @classmethod
+    def bitsize(cls, keys: Tuple) -> int:
+        size = sum([key.size() for key in keys])
+        if len(keys) > 0 and size == 0:
+            raise ValueError(keys)
+        return size
 
 
 class GenericStorage(Storage):
