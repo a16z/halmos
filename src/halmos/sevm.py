@@ -638,9 +638,7 @@ class Path:
                 "invalid num_scopes", self.solver.num_scopes(), self.num_scopes
             )
 
-        # TODO: use solver.pop(N)
-        while self.solver.num_scopes() > self.num_scopes:
-            self.solver.pop()
+        self.solver.pop(self.solver.num_scopes() - self.num_scopes)
 
         self.extend(self.pending)
         self.pending = []
