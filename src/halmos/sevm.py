@@ -1227,11 +1227,11 @@ class GenericStorage(Storage):
             lo = cls.decode(simplify(Extract(255, 0, args)))
             return cls.simple_hash(Concat(hi, lo))
         elif loc.decl().name().startswith("sha3_"):
-            arg = cls.normalize(loc.arg(0))
-            if arg.decl().name() == "concat":
-                return cls.simple_hash(concat([cls.decode(arg.arg(i)) for i in range(arg.num_args())]))
+            sha3_input = cls.normalize(loc.arg(0))
+            if sha3_input.decl().name() == "concat":
+                return cls.simple_hash(concat([cls.decode(sha3_input.arg(i)) for i in range(sha3_input.num_args())]))
             else:
-                return cls.simple_hash(cls.decode(arg))
+                return cls.simple_hash(cls.decode(sha3_input))
         elif loc.decl().name() == "bvadd":
             args = loc.children()
             if len(args) < 2:
@@ -1243,7 +1243,8 @@ class GenericStorage(Storage):
                 return cls.add_all([cls.simple_hash(con(preimage)), con(delta)])
             else:
                 return loc
-        elif is_bv(loc):
+
+        if is_bv(loc):
             return loc
         else:
             raise ValueError(loc)
