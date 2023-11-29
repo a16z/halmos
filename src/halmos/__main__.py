@@ -714,7 +714,7 @@ def run(
 
     if len(future_models) > 0 and args.verbose >= 1:
         print(
-            f"# of potential paths involving assertion violations: {len(future_models)} / {len(result_exs)}"
+            f"# of potential paths involving assertion violations: {len(future_models)} / {len(result_exs)}  (--solver-threads {args.solver_threads})"
         )
 
     if args.early_exit:
