@@ -997,56 +997,49 @@ class Exec:  # an execution path
 class Storage:
     @classmethod
     def normalize(cls, expr: Any) -> Any:
-
         # Concat(Extract(255, 8, bvadd(x, y)), bvadd(Extract(7, 0, x), Extract(7, 0, y))) => x + y
-        # Concat(Extract(255, 8, bvadd(x, y)), bvadd(      x mod 256 , Extract(7, 0, y))) => x + y  if 0 <= x < 255
         def normalize_extract(arg0, arg1):
             if (
                 arg0.decl().name() == "extract"
                 and arg0.num_args() == 1
                 and arg0.params() == [255, 8]
             ):
-                arg00 = arg0.arg(0)  # bvadd(x, y)
+                target = arg0.arg(0)  # bvadd(x, y)
 
-            #   print(f">>>> {simplify(Concat(Extract(255, 8, arg00), Extract(7, 0, arg00)))}")
-            #   print(f"<<<< {simplify(Concat(arg0, arg1))}")
+                target_equivalent = Concat(Extract(255, 8, target), Extract(7, 0, target))
 
-                if eq(simplify(Concat(Extract(255, 8, arg00), Extract(7, 0, arg00))), simplify(Concat(arg0, arg1))):
-                    return arg00
+                given = Concat(arg0, arg1)
 
-            #   if arg00.decl().name() == "bvadd":
-            #       x = arg00.arg(0)
-            #       y = arg00.arg(1)
-            #       if arg1.decl().name() == "bvadd" and arg1.num_args() == 2:
-            #           if eq(arg1.arg(1), simplify(Extract(7, 0, y))):
-            #               term = arg1.arg(0)
-            #               if (
-            #                   # bvadd(Extract(7, 0, x), Extract(7, 0, y))
-            #                   eq(term, simplify(Extract(7, 0, x))) or
-            #                   # bvadd(              x , Extract(7, 0, y)) and 0 <= x < 255
-            #                   (eq(term, x) and is_bv_value(x) and 0 <= x.as_long() < 255)
-            #               ):
-            #                   return x + y
+                if eq(simplify(given), simplify(target_equivalent)):
+                    return target
+
             return None
 
         if expr.decl().name() == "concat" and expr.num_args() >= 2:
-            new_concat_args = []
+            new_args = []
+
             i = 0
-            while i < expr.num_args() - 1:
+            n = expr.num_args()
+
+            # apply normalize_extract for each pair of adjacent arguments
+            while i < n - 1:
                 arg0 = expr.arg(i)
                 arg1 = expr.arg(i+1)
 
                 arg0_arg1 = normalize_extract(arg0, arg1)
-                if arg0_arg1 is None:
-                    new_concat_args.append(arg0)
+
+                if arg0_arg1 is None:  # not simplified
+                    new_args.append(arg0)
                     i += 1
-                    if i == expr.num_args() - 1:
-                        new_concat_args.append(arg1)
-                else:
-                    new_concat_args.append(arg0_arg1)
+                else:  # simplified into a single term
+                    new_args.append(arg0_arg1)
                     i += 2
 
-            return concat(new_concat_args)
+            # handle the last element
+            if i == n - 1:
+                new_args.append(expr.arg(i))
+
+            return concat(new_args)
 
         return expr
 
