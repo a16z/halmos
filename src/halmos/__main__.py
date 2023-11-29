@@ -441,7 +441,8 @@ def setup(
         )
 
         setup_exs_all = sevm.run(setup_ex)
-        setup_exs = []
+
+        setup_exs_no_error = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
             if args.verbose >= VERBOSITY_TRACE_SETUP:
@@ -452,11 +453,8 @@ def setup(
             error = setup_ex.context.output.error
 
             if error is None:
-                setup_ex.path.solver.set(timeout=args.solver_timeout_assertion)
-                res = setup_ex.path.solver.check()
-                setup_ex.path.solver.set(timeout=args.solver_timeout_branching)
-                if res != unsat:
-                    setup_exs.append(setup_ex)
+                setup_exs_no_error.append((setup_ex, setup_ex.path.solver.to_smt2()))
+
             else:
                 if opcode not in [EVM.REVERT, EVM.INVALID]:
                     warn(
@@ -471,6 +469,19 @@ def setup(
                 ):
                     print(f"{setup_sig} trace:")
                     render_trace(setup_ex.context)
+
+        setup_exs = []
+
+        if len(setup_exs_no_error) > 1:
+            for setup_ex, query in setup_exs_no_error:
+                res, _ = solve(query, args)
+                if res != unsat:
+                    setup_exs.append(setup_ex)
+                    if len(setup_exs) > 1:
+                        break
+
+        elif len(setup_exs_no_error) == 1:
+            setup_exs.append(setup_exs_no_error[0][0])
 
         if len(setup_exs) == 0:
             raise HalmosException(f"No successful path found in {setup_sig}")
