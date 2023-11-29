@@ -1240,14 +1240,10 @@ class GenericStorage(Storage):
         elif loc.decl().name().startswith("sha3_"):
             sha3_input = cls.normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat":
-                return cls.simple_hash(
-                    concat(
-                        [
-                            cls.decode(sha3_input.arg(i))
-                            for i in range(sha3_input.num_args())
-                        ]
-                    )
-                )
+                decoded_sha3_input_args = [
+                    cls.decode(sha3_input.arg(i)) for i in range(sha3_input.num_args())
+                ]
+                return cls.simple_hash(concat(decoded_sha3_input_args))
             else:
                 return cls.simple_hash(cls.decode(sha3_input))
         elif loc.decl().name() == "bvadd":
