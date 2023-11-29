@@ -1006,7 +1006,9 @@ class Storage:
             ):
                 target = arg0.arg(0)  # bvadd(x, y)
 
-                target_equivalent = Concat(Extract(255, 8, target), Extract(7, 0, target))
+                target_equivalent = Concat(
+                    Extract(255, 8, target), Extract(7, 0, target)
+                )
 
                 given = Concat(arg0, arg1)
 
@@ -1024,7 +1026,7 @@ class Storage:
             # apply normalize_extract for each pair of adjacent arguments
             while i < n - 1:
                 arg0 = expr.arg(i)
-                arg1 = expr.arg(i+1)
+                arg1 = expr.arg(i + 1)
 
                 arg0_arg1 = normalize_extract(arg0, arg1)
 
@@ -1068,13 +1070,17 @@ class SolidityStorage(Storage):
             if size_keys == 0:
                 if ex.symbolic:
                     label = f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00"
-                    ex.storage[addr][slot][num_keys][size_keys] = BitVec(label, BitVecSort256)
+                    ex.storage[addr][slot][num_keys][size_keys] = BitVec(
+                        label, BitVecSort256
+                    )
                 else:
                     ex.storage[addr][slot][num_keys][size_keys] = con(0)
             else:
                 # do not use z3 const array `K(BitVecSort(size_keys), con(0))` when not ex.symbolic
                 # instead use normal smt array, and generate emptyness axiom; see load()
-                ex.storage[addr][slot][num_keys][size_keys] = cls.empty(addr, slot, keys)
+                ex.storage[addr][slot][num_keys][size_keys] = cls.empty(
+                    addr, slot, keys
+                )
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
@@ -1114,7 +1120,9 @@ class SolidityStorage(Storage):
                 BitVecSorts[size_keys],
                 BitVecSort256,
             )
-            new_storage = Store(ex.storage[addr][slot][num_keys][size_keys], concat(keys), val)
+            new_storage = Store(
+                ex.storage[addr][slot][num_keys][size_keys], concat(keys), val
+            )
             ex.path.append(new_storage_var == new_storage)
             ex.storage[addr][slot][num_keys][size_keys] = new_storage_var
             ex.storages[new_storage_var] = new_storage
@@ -1122,15 +1130,18 @@ class SolidityStorage(Storage):
     @classmethod
     def decode(cls, loc: Any) -> Any:
         loc = cls.normalize(loc)
-        if loc.decl().name() == "sha3_512":  # m[k] : hash(k.m)
+        # m[k] : hash(k.m)
+        if loc.decl().name() == "sha3_512":
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
             return cls.decode(base) + (offset, con(0))
-        elif loc.decl().name() == "sha3_256":  # a[i] : hash(a)+i
+        # a[i] : hash(a) + i
+        elif loc.decl().name() == "sha3_256":
             base = loc.arg(0)
             return cls.decode(base) + (con(0),)
-        elif loc.decl().name().startswith("sha3_"):  # m[k] : hash(k.m) where |k| != 256-bit
+        # m[k] : hash(k.m)  where |k| != 256-bit
+        elif loc.decl().name().startswith("sha3_"):
             sha3_input = cls.normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat" and sha3_input.num_args() == 2:
                 offset = simplify(sha3_input.arg(0))
@@ -1229,7 +1240,14 @@ class GenericStorage(Storage):
         elif loc.decl().name().startswith("sha3_"):
             sha3_input = cls.normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat":
-                return cls.simple_hash(concat([cls.decode(sha3_input.arg(i)) for i in range(sha3_input.num_args())]))
+                return cls.simple_hash(
+                    concat(
+                        [
+                            cls.decode(sha3_input.arg(i))
+                            for i in range(sha3_input.num_args())
+                        ]
+                    )
+                )
             else:
                 return cls.simple_hash(cls.decode(sha3_input))
         elif loc.decl().name() == "bvadd":
