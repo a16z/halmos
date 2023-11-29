@@ -57,7 +57,7 @@ def test_main(cmd, expected_path, halmos_options):
 @pytest.mark.parametrize(
     "cmd",
     [
-        ["--root", "tests", "--contract", "SetupFailTest"],
+        ["--root", "tests/regression", "--contract", "SetupFailTest"],
     ],
     ids=("SetupFailTest",),
 )

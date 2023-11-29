@@ -8,6 +8,7 @@ import json
 import re
 import signal
 import traceback
+import time
 
 from argparse import Namespace
 from dataclasses import dataclass, asdict
@@ -299,11 +300,14 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
-        solver=solver,
+        path=Path(solver),
     )
-    (exs, _, _) = sevm.run(ex)
+    exs = sevm.run(ex)
+    result_exs = []
 
     for idx, ex in enumerate(exs):
+        result_exs.append(ex)
+
         opcode = ex.current_opcode()
         error = ex.context.output.error
         returndata = ex.context.output.data
@@ -316,14 +320,16 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         else:
             print(f"Final opcode: {mnemonic(opcode)})")
             print(f"Return data: {returndata}")
-            model_with_context = gen_model(args, idx, ex)
+            model_with_context = gen_model_from_sexpr(
+                GenModelArgs(args, idx, ex.path.solver.to_smt2())
+            )
             print(f"Input example: {model_with_context.model}")
 
         if args.print_states:
-            print(f"# {idx+1} / {len(exs)}")
+            print(f"# {idx+1}")
             print(ex)
 
-    return exs
+    return result_exs
 
 
 def deploy_test(
@@ -350,7 +356,7 @@ def deploy_test(
         this=this,
         pgm=None,  # to be added
         symbolic=False,
-        solver=mk_solver(args),
+        path=Path(mk_solver(args)),
     )
 
     # deploy libraries and resolve library placeholders in hexcode
@@ -370,7 +376,7 @@ def deploy_test(
         return ex
 
     # create test contract
-    (exs, _, _) = sevm.run(ex)
+    exs = list(sevm.run(ex))
 
     # sanity check
     if len(exs) != 1:
@@ -434,36 +440,21 @@ def setup(
             ),
         )
 
-        (setup_exs_all, setup_steps, setup_logs) = sevm.run(setup_ex)
+        setup_exs_all = sevm.run(setup_ex)
 
-        if setup_logs.bounded_loops:
-            warn(
-                LOOP_BOUND,
-                f"{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
-            )
-            if args.debug:
-                print("\n".join(setup_logs.bounded_loops))
-
-        setup_exs = []
+        setup_exs_no_error = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
             if args.verbose >= VERBOSITY_TRACE_SETUP:
-                num_traces = len(setup_exs_all)
-                print(
-                    f"{setup_sig} trace #{idx+1}/{num_traces}:"
-                    if num_traces > 1
-                    else f"{setup_sig} trace:"
-                )
+                print(f"{setup_sig} trace #{idx+1}:")
                 render_trace(setup_ex.context)
 
             opcode = setup_ex.current_opcode()
             error = setup_ex.context.output.error
 
             if error is None:
-                setup_ex.solver.set(timeout=args.solver_timeout_assertion)
-                res = setup_ex.solver.check()
-                if res != unsat:
-                    setup_exs.append(setup_ex)
+                setup_exs_no_error.append((setup_ex, setup_ex.path.solver.to_smt2()))
+
             else:
                 if opcode not in [EVM.REVERT, EVM.INVALID]:
                     warn(
@@ -478,6 +469,19 @@ def setup(
                 ):
                     print(f"{setup_sig} trace:")
                     render_trace(setup_ex.context)
+
+        setup_exs = []
+
+        if len(setup_exs_no_error) > 1:
+            for setup_ex, query in setup_exs_no_error:
+                res, _ = solve(query, args)
+                if res != unsat:
+                    setup_exs.append(setup_ex)
+                    if len(setup_exs) > 1:
+                        break
+
+        elif len(setup_exs_no_error) == 1:
+            setup_exs.append(setup_exs_no_error[0][0])
 
         if len(setup_exs) == 0:
             raise HalmosException(f"No successful path found in {setup_sig}")
@@ -495,6 +499,14 @@ def setup(
 
         if args.print_setup_states:
             print(setup_ex)
+
+        if sevm.logs.bounded_loops:
+            warn(
+                LOOP_BOUND,
+                f"{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
+            )
+            if args.debug:
+                print("\n".join(sevm.logs.bounded_loops))
 
     if args.reset_bytecode:
         for assign in [x.split("=") for x in args.reset_bytecode.split(",")]:
@@ -543,6 +555,8 @@ def run(
     if args.verbose >= 1:
         print(f"Executing {funname}")
 
+    dump_dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
+
     #
     # calldata
     #
@@ -571,9 +585,10 @@ def run(
     sevm = SEVM(options)
 
     solver = mk_solver(args)
-    solver.add(setup_ex.solver.assertions())
+    path = Path(solver)
+    path.extend(setup_ex.path.conditions)
 
-    (exs, steps, logs) = sevm.run(
+    exs = sevm.run(
         Exec(
             code=setup_ex.code.copy(),  # shallow copy
             storage=deepcopy(setup_ex.storage),
@@ -582,6 +597,7 @@ def run(
             block=deepcopy(setup_ex.block),
             #
             context=CallContext(message=message),
+            callback=None,
             this=setup_ex.this,
             #
             pgm=setup_ex.code[setup_ex.this],
@@ -591,8 +607,7 @@ def run(
             symbolic=args.symbolic_storage,
             prank=Prank(),  # prank is reset after setUp()
             #
-            solver=solver,
-            path=setup_ex.path.copy(),
+            path=path,
             alias=setup_ex.alias.copy(),
             #
             cnts=deepcopy(setup_ex.cnts),
@@ -603,7 +618,7 @@ def run(
         )
     )
 
-    timer.create_subtimer("models")
+    (logs, steps) = (sevm.logs, sevm.steps)
 
     # check assertion violations
     normal = 0
@@ -611,80 +626,18 @@ def run(
     models: List[ModelWithContext] = []
     stuck = []
 
-    for idx, ex in enumerate(exs):
-        if args.verbose >= VERBOSITY_TRACE_PATHS:
-            print(f"Path #{idx+1}/{len(exs)}:")
-            print(indent_text(ex.str_path()))
-
-            print("\nTrace:")
-            render_trace(ex.context)
-
-        error = ex.context.output.error
-
-        if isinstance(error, Revert):
-            returndata = ex.context.output.data
-            if unbox_int(returndata) == ASSERT_FAIL:
-                execs_to_model.append((idx, ex))
-                continue
-
-        if is_global_fail_set(ex.context):
-            execs_to_model.append((idx, ex))
-            continue
-
-        if ex.context.is_stuck():
-            stuck.append((idx, ex, ex.context.get_stuck_reason()))
-
-        elif not error:
-            normal += 1
-
-    if len(execs_to_model) > 0 and args.dump_smt_queries:
-        dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
-        os.makedirs(dirname)
-        print(f"Generating SMT queries in {dirname}")
-        for idx, ex in execs_to_model:
-            fname = f"{dirname}/{idx+1}.smt2"
-            query = ex.solver.to_smt2()
-            with open(fname, "w") as f:
-                f.write("(set-logic QF_AUFBV)\n")
-                f.write(query)
-
-    if len(execs_to_model) > 0 and args.verbose >= 1:
-        print(
-            f"# of potential paths involving assertion violations: {len(execs_to_model)} / {len(exs)}"
-        )
-
-    if len(execs_to_model) > 1 and args.solver_parallel:
-        if args.verbose >= 1:
-            print(f"Spawning {len(execs_to_model)} parallel assertion solvers")
-
-        fn_args = [
-            GenModelArgs(args, idx, ex.solver.to_smt2()) for idx, ex in execs_to_model
-        ]
-        with ThreadPoolExecutor() as thread_pool:
-            models = list(thread_pool.map(gen_model_from_sexpr, fn_args))
-
-    else:
-        models = [gen_model(args, idx, ex) for idx, ex in execs_to_model]
-
-    no_counterexample = all(m.model is None for m in models)
-    passed = no_counterexample and normal > 0 and len(stuck) == 0
-    if args.error_unknown:
-        passed = passed and all(m.result == unsat for m in models)
-    passfail = color_good("[PASS]") if passed else color_warn("[FAIL]")
-
-    timer.stop()
-    time_info = timer.report(include_subtimers=args.statistics)
-
-    # print result
-    print(
-        f"{passfail} {funsig} (paths: {normal}/{len(exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
-    )
+    thread_pool = ThreadPoolExecutor(max_workers=args.solver_threads)
+    result_exs = []
+    future_models = []
     counterexamples = []
-    for m in models:
+
+    def future_callback(future_model):
+        m = future_model.result()
+        models.append(m)
+
         model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
         if result == unsat:
-            continue
-        ex = exs[index]
+            return
 
         # model could be an empty dict here
         if model is not None:
@@ -701,21 +654,98 @@ def run(
             warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
 
         if args.print_failed_states:
-            print(f"# {idx+1} / {len(exs)}")
-            print(ex)
+            print(f"# {idx+1}")
+            print(result_exs[index])
 
         if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
             print(
-                f"Trace #{idx+1}/{len(exs)}:"
+                f"Trace #{idx+1}:"
                 if args.verbose == VERBOSITY_TRACE_PATHS
                 else "Trace:"
             )
+            render_trace(result_exs[index].context)
+
+    for idx, ex in enumerate(exs):
+        result_exs.append(ex)
+
+        if args.verbose >= VERBOSITY_TRACE_PATHS:
+            print(f"Path #{idx+1}:")
+            print(indent_text(ex.str_path()))
+
+            print("\nTrace:")
             render_trace(ex.context)
+
+        error = ex.context.output.error
+
+        if (
+            isinstance(error, Revert)
+            and unbox_int(ex.context.output.data) == ASSERT_FAIL
+        ) or is_global_fail_set(ex.context):
+            if args.verbose >= 1:
+                print(f"Found potential path (id: {idx+1})")
+
+            query = ex.path.solver.to_smt2()
+
+            future_model = thread_pool.submit(
+                gen_model_from_sexpr, GenModelArgs(args, idx, query)
+            )
+            future_model.add_done_callback(future_callback)
+            future_models.append(future_model)
+
+            if args.dump_smt_queries:
+                if not os.path.isdir(dump_dirname):
+                    os.makedirs(dump_dirname)
+                    print(f"Generating SMT queries in {dump_dirname}")
+
+                with open(f"{dump_dirname}/{idx+1}.smt2", "w") as f:
+                    f.write("(set-logic QF_AUFBV)\n")
+                    f.write(query)
+
+        elif ex.context.is_stuck():
+            stuck.append((idx, ex, ex.context.get_stuck_reason()))
+
+        elif not error:
+            normal += 1
+
+        if len(result_exs) >= args.width:
+            break
+
+    timer.create_subtimer("models")
+
+    if len(future_models) > 0 and args.verbose >= 1:
+        print(
+            f"# of potential paths involving assertion violations: {len(future_models)} / {len(result_exs)}"
+        )
+
+    if args.early_exit:
+        while not (
+            len(counterexamples) > 0 or all([fm.done() for fm in future_models])
+        ):
+            time.sleep(1)
+
+        thread_pool.shutdown(wait=False, cancel_futures=True)
+
+    else:
+        thread_pool.shutdown(wait=True)
+
+    no_counterexample = all(m.model is None for m in models)
+    passed = no_counterexample and normal > 0 and len(stuck) == 0
+    if args.error_unknown:
+        passed = passed and all(m.result == unsat for m in models)
+    passfail = color_good("[PASS]") if passed else color_warn("[FAIL]")
+
+    timer.stop()
+    time_info = timer.report(include_subtimers=args.statistics)
+
+    # print result
+    print(
+        f"{passfail} {funsig} (paths: {normal}/{len(result_exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+    )
 
     for idx, ex, err in stuck:
         warn(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
-            print(f"\nPath #{idx+1}/{len(exs)}")
+            print(f"\nPath #{idx+1}")
             render_trace(ex.context)
 
     if logs.bounded_loops:
@@ -736,8 +766,8 @@ def run(
 
     # print post-states
     if args.print_states:
-        for idx, ex in enumerate(exs):
-            print(f"# {idx+1} / {len(exs)}")
+        for idx, ex in enumerate(result_exs):
+            print(f"# {idx+1} / {len(result_exs)}")
             print(ex)
 
     # log steps
@@ -755,7 +785,7 @@ def run(
             exitcode,
             len(counterexamples),
             counterexamples,
-            (len(exs), normal, len(stuck)),
+            (len(result_exs), normal, len(stuck)),
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
         )
@@ -943,22 +973,59 @@ class GenModelArgs:
     sexpr: str
 
 
+def copy_model(model: Model) -> Dict:
+    return {decl: model[decl] for decl in model}
+
+
 def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
     solver = mk_solver(args, ctx=Context(), assertion=True)
     solver.from_string(query)
     result = solver.check()
-    model = solver.model() if result == sat else None
+    model = copy_model(solver.model()) if result == sat else None
     return result, model
 
 
 def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
     args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
+
+    if args.verbose >= 1:
+        print(f"Checking path condition (path id: {idx+1})")
+
     res, model = solve(sexpr, args)
 
     if res == sat and not is_model_valid(model):
+        if args.verbose >= 1:
+            print(f"  Checking again with refinement")
+
         res, model = solve(refine(sexpr), args)
 
-    # TODO: handle args.solver_subprocess
+    if args.solver_subprocess and is_unknown(res, model):
+        fname = f"/tmp/{uuid.uuid4().hex}.smt2"
+
+        if args.verbose >= 1:
+            print(f"  Checking again in an external process")
+            print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
+
+        query = refine(sexpr)
+        with open(fname, "w") as f:
+            f.write("(set-logic QF_AUFBV)\n")
+            f.write(query)
+
+        cmd = args.solver_subprocess_command.split() + [fname]
+        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+        res_str_head = res_str.split("\n", 1)[0]
+
+        with open(f"{fname}.out", "w") as f:
+            f.write(res_str)
+
+        if args.verbose >= 1:
+            print(f"    {res_str_head}")
+
+        if res_str_head == "unsat":
+            res = unsat
+        elif res_str_head == "sat":
+            res = sat
+            model = f"{fname}.out"
 
     return package_result(model, idx, res, args)
 
@@ -979,45 +1046,6 @@ def refine(query: str) -> str:
         r"(declare-fun dummy_\1\2",
         query,
     )
-
-
-def gen_model(args: Namespace, idx: int, ex: Exec) -> ModelWithContext:
-    if args.verbose >= 1:
-        print(f"Checking path condition (path id: {idx+1})")
-
-    ex.solver.set(timeout=args.solver_timeout_assertion)
-    res = ex.solver.check()
-    model = ex.solver.model() if res == sat else None
-
-    if res == sat and not is_model_valid(model):
-        if args.verbose >= 1:
-            print(f"  Checking again with refinement")
-        res, model = solve(refine(ex.solver.to_smt2()), args)
-
-    if args.solver_subprocess and is_unknown(res, model):
-        if args.verbose >= 1:
-            print(f"  Checking again in an external process")
-        fname = f"/tmp/{uuid.uuid4().hex}.smt2"
-        if args.verbose >= 1:
-            print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
-        query = refine(ex.solver.to_smt2())
-        with open(fname, "w") as f:
-            f.write("(set-logic QF_AUFBV)\n")
-            f.write(query)
-        cmd = args.solver_subprocess_command.split() + [fname]
-        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
-        res_str_head = res_str.split("\n", 1)[0]
-        with open(f"{fname}.out", "w") as f:
-            f.write(res_str)
-        if args.verbose >= 1:
-            print(f"    {res_str_head}")
-        if res_str_head == "unsat":
-            res = unsat
-        elif res_str_head == "sat":
-            res = sat
-            model = f"{fname}.out"
-
-    return package_result(model, idx, res, args)
 
 
 def package_result(

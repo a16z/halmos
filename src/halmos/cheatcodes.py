@@ -304,8 +304,7 @@ class hevm_cheat_code:
             and funsig == hevm_cheat_code.assume_sig
         ):
             assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
-            ex.solver.add(assume_cond)
-            ex.path.append(str(assume_cond))
+            ex.path.append(assume_cond)
 
         # vm.getCode(string)
         elif funsig == hevm_cheat_code.get_code_sig:

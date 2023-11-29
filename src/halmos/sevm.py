@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from functools import reduce
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterator,
     List,
@@ -585,6 +586,77 @@ class CodeIterator:
         return insn
 
 
+class Path:
+    # a Path object represents a prefix of the path currently being executed
+    # initially, it's an empty path at the beginning of execution
+
+    solver: Solver
+    num_scopes: int
+    # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
+    # TODO: separate these two types of constraints, so that we can display only branching conditions to users
+    conditions: List
+    pending: List
+
+    def __init__(self, solver: Solver):
+        self.solver = solver
+        self.num_scopes = 0
+        self.conditions = []
+        self.pending = []
+
+    def __deepcopy__(self, memo):
+        raise NotImplementedError(f"use the branch() method instead of deepcopy()")
+
+    def branch(self, cond):
+        if len(self.pending) > 0:
+            raise ValueError("branching from an inactive path", self)
+
+        # create a new path that shares the same solver instance to minimize memory usage
+        # note: sharing the solver instance complicates the use of randomized path exploration approaches, which can be more efficient for quickly finding bugs.
+        # currently, a dfs-based path exploration is employed, which is suitable for scenarios where exploring all paths is necessary, e.g., when proving the absence of bugs.
+        path = Path(self.solver)
+
+        # create a new scope within the solver, and save the current scope
+        # the solver will roll back to this scope later when the new path is activated
+        path.num_scopes = self.solver.num_scopes()
+        self.solver.push()
+
+        # shallow copy because existing conditions won't change
+        # note: deep copy would be needed later for advanced query optimizations (eg, constant propagation)
+        path.conditions = self.conditions.copy()
+
+        # store the branching condition aside until the new path is activated.
+        path.pending.append(cond)
+
+        return path
+
+    def is_activated(self) -> bool:
+        return len(self.pending) == 0
+
+    def activate(self):
+        if self.solver.num_scopes() < self.num_scopes:
+            raise ValueError(
+                "invalid num_scopes", self.solver.num_scopes(), self.num_scopes
+            )
+
+        self.solver.pop(self.solver.num_scopes() - self.num_scopes)
+
+        self.extend(self.pending)
+        self.pending = []
+
+    def append(self, cond):
+        cond = simplify(cond)
+
+        if is_true(cond):
+            return
+
+        self.solver.add(cond)
+        self.conditions.append(cond)
+
+    def extend(self, conds):
+        for cond in conds:
+            self.append(cond)
+
+
 class Exec:  # an execution path
     # network
     code: Dict[Address, Contract]
@@ -596,6 +668,7 @@ class Exec:  # an execution path
 
     # tx
     context: CallContext
+    callback: Optional[Callable]  # to be called when returning back to parent context
 
     # vm state
     this: Address  # current account address
@@ -608,8 +681,7 @@ class Exec:  # an execution path
     addresses_to_delete: Set[Address]
 
     # path
-    solver: Solver
-    path: List[Any]  # path conditions
+    path: Path  # path conditions
     alias: Dict[Address, Address]  # address aliases
 
     # internal bookkeeping
@@ -625,7 +697,9 @@ class Exec:  # an execution path
         self.balance = kwargs["balance"]
         #
         self.block = kwargs["block"]
+        #
         self.context = kwargs["context"]
+        self.callback = kwargs["callback"]
         #
         self.this = kwargs["this"]
         self.pgm = kwargs["pgm"]
@@ -636,7 +710,6 @@ class Exec:  # an execution path
         self.prank = kwargs["prank"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
         #
-        self.solver = kwargs["solver"]
         self.path = kwargs["path"]
         self.alias = kwargs["alias"]
         #
@@ -706,14 +779,11 @@ class Exec:  # an execution path
             ]
         )
 
-    def str_solver(self) -> str:
-        return "\n".join([str(cond) for cond in self.solver.assertions()])
-
     def str_path(self) -> str:
         return "".join(
             map(
                 lambda x: "- " + str(x) + "\n",
-                filter(lambda x: str(x) != "True", self.path),
+                filter(lambda x: str(x) != "True", self.path.conditions),
             )
         )
 
@@ -762,11 +832,15 @@ class Exec:  # an execution path
         self.pc = self.pgm.next_pc(self.pc)
 
     def check(self, cond: Any) -> Any:
-        self.solver.push()
-        self.solver.add(simplify(cond))
-        result = self.solver.check()
-        self.solver.pop()
-        return result
+        cond = simplify(cond)
+
+        if is_true(cond):
+            return sat
+
+        if is_false(cond):
+            return unsat
+
+        return self.path.solver.check(cond)
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
@@ -791,7 +865,7 @@ class Exec:  # an execution path
         assert_address(addr)
         value = self.select(self.balance, addr, self.balances)
         # practical assumption on the max balance per account
-        self.solver.add(ULT(value, con(2**96)))
+        self.path.append(ULT(value, con(2**96)))
         return value
 
     def balance_update(self, addr: Word, value: Word) -> None:
@@ -801,7 +875,7 @@ class Exec:  # an execution path
             f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
-        self.solver.add(new_balance_var == new_balance)
+        self.path.append(new_balance_var == new_balance)
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
 
@@ -815,7 +889,7 @@ class Exec:  # an execution path
         sha3_expr = f_sha3(data)
 
         # assume hash values are sufficiently smaller than the uint max
-        self.solver.add(ULE(sha3_expr, con(2**256 - 2**64)))
+        self.path.append(ULE(sha3_expr, con(2**256 - 2**64)))
 
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
@@ -838,7 +912,7 @@ class Exec:  # an execution path
             if prev_sha3_expr.decl().name() == sha3_decl_name:
                 # inputs have the same size: assume different inputs
                 # lead to different outputs
-                self.solver.add(
+                self.path.append(
                     Implies(
                         sha3_expr.arg(0) != prev_sha3_expr.arg(0),
                         sha3_expr != prev_sha3_expr,
@@ -846,9 +920,9 @@ class Exec:  # an execution path
                 )
             else:
                 # inputs have different sizes: assume the outputs are different
-                self.solver.add(sha3_expr != prev_sha3_expr)
+                self.path.append(sha3_expr != prev_sha3_expr)
 
-        self.solver.add(sha3_expr != con(0))
+        self.path.append(sha3_expr != con(0))
         self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
@@ -982,7 +1056,7 @@ class SolidityStorage(Storage):
         else:
             if not ex.symbolic:
                 # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-                ex.solver.add(
+                ex.path.append(
                     Select(cls.empty(addr, slot, len(keys)), concat(keys)) == con(0)
                 )
             return ex.select(
@@ -1005,7 +1079,7 @@ class SolidityStorage(Storage):
                 BitVecSort256,
             )
             new_storage = Store(ex.storage[addr][slot][len(keys)], concat(keys), val)
-            ex.solver.add(new_storage_var == new_storage)
+            ex.path.append(new_storage_var == new_storage)
             ex.storage[addr][slot][len(keys)] = new_storage_var
             ex.storages[new_storage_var] = new_storage
 
@@ -1076,7 +1150,7 @@ class GenericStorage(Storage):
         cls.init(ex, addr, loc)
         if not ex.symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-            ex.solver.add(Select(cls.empty(addr, loc), loc) == con(0))
+            ex.path.append(Select(cls.empty(addr, loc), loc) == con(0))
         return ex.select(ex.storage[addr][loc.size()], loc, ex.storages)
 
     @classmethod
@@ -1089,7 +1163,7 @@ class GenericStorage(Storage):
             BitVecSort256,
         )
         new_storage = Store(ex.storage[addr][loc.size()], loc, val)
-        ex.solver.add(new_storage_var == new_storage)
+        ex.path.append(new_storage_var == new_storage)
         ex.storage[addr][loc.size()] = new_storage_var
         ex.storages[new_storage_var] = new_storage
 
@@ -1216,9 +1290,13 @@ class HalmosLogs:
 class SEVM:
     options: Dict
     storage_model: Type[SomeStorage]
+    logs: HalmosLogs
+    steps: Steps
 
     def __init__(self, options: Dict) -> None:
         self.options = options
+        self.logs = HalmosLogs()
+        self.steps: Steps = {}
 
         is_generic = self.options["storage_layout"] == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
@@ -1249,13 +1327,13 @@ class SEVM:
 
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_div(x, y)
-        ex.solver.add(ULE(term, x))  # (x / y) <= x
+        ex.path.append(ULE(term, x))  # (x / y) <= x
         return term
 
     def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_mod[x.size()](x, y)
-        ex.solver.add(ULE(term, y))  # (x % y) <= y
-        # ex.solver.add(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
+        ex.path.append(ULE(term, y))  # (x % y) <= y
+        # ex.path.append(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
         return term
 
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
@@ -1277,7 +1355,10 @@ class SEVM:
                 return div_for_overflow_check
 
             if is_bv_value(w1) and is_bv_value(w2):
-                return UDiv(w1, w2)  # unsigned div (bvudiv)
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return UDiv(w1, w2)  # unsigned div (bvudiv)
 
             if is_bv_value(w2):
                 # concrete denominator case
@@ -1295,7 +1376,10 @@ class SEVM:
 
         if op == EVM.MOD:
             if is_bv_value(w1) and is_bv_value(w2):
-                return URem(w1, w2)  # bvurem
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return URem(w1, w2)  # bvurem
 
             if is_bv_value(w2):
                 i2: int = int(str(w2))
@@ -1310,7 +1394,10 @@ class SEVM:
 
         if op == EVM.SDIV:
             if is_bv_value(w1) and is_bv_value(w2):
-                return w1 / w2  # bvsdiv
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return w1 / w2  # bvsdiv
 
             if is_bv_value(w2):
                 # concrete denominator case
@@ -1326,7 +1413,10 @@ class SEVM:
 
         if op == EVM.SMOD:
             if is_bv_value(w1) and is_bv_value(w2):
-                return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
+                if w2.as_long() == 0:
+                    return w2
+                else:
+                    return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
 
             # TODO: if is_bv_value(w2):
 
@@ -1401,6 +1491,9 @@ class SEVM:
         if target in ex.code:
             return target
 
+        # set new timeout temporarily for this task
+        ex.path.solver.set(timeout=max(1000, self.options["timeout"]))
+
         if target not in ex.alias:
             for addr in ex.code:
                 if ex.check(target != addr) == unsat:  # target == addr
@@ -1409,8 +1502,11 @@ class SEVM:
                             f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}"
                         )
                     ex.alias[target] = addr
-                    ex.solver.add(target == addr)
+                    ex.path.append(target == addr)
                     break
+
+        # reset timeout
+        ex.path.solver.set(timeout=self.options["timeout"])
 
         return ex.alias.get(target)
 
@@ -1429,8 +1525,7 @@ class SEVM:
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
-        ex.solver.add(balance_cond)
-        ex.path.append(str(balance_cond))
+        ex.path.append(balance_cond)
 
         # conditional transfer
         if condition is not None:
@@ -1445,8 +1540,6 @@ class SEVM:
         op: int,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-        out: List[Exec],
-        logs: HalmosLogs,
     ) -> None:
         gas = ex.st.pop()
         to = uint160(ex.st.pop())
@@ -1499,41 +1592,7 @@ class SEVM:
 
             # TODO: check max call depth
 
-            # execute external calls
-            (new_exs, new_steps, new_logs) = self.run(
-                Exec(
-                    code=ex.code,
-                    storage=ex.storage,
-                    balance=ex.balance,
-                    #
-                    block=ex.block,
-                    #
-                    context=CallContext(message=message, depth=ex.context.depth + 1),
-                    this=message.target,
-                    #
-                    pgm=ex.code[to],
-                    pc=0,
-                    st=State(),
-                    jumpis={},
-                    symbolic=ex.symbolic,
-                    prank=Prank(),
-                    #
-                    solver=ex.solver,
-                    path=ex.path,
-                    alias=ex.alias,
-                    #
-                    cnts=ex.cnts,
-                    sha3s=ex.sha3s,
-                    storages=ex.storages,
-                    balances=ex.balances,
-                    calls=ex.calls,
-                )
-            )
-
-            logs.extend(new_logs)
-
-            # process result
-            for new_ex in new_exs:
+            def callback(new_ex, stack, step_id):
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
                 subcall = new_ex.context
@@ -1543,11 +1602,13 @@ class SEVM:
                 new_ex.context.trace.append(subcall)
                 new_ex.this = ex.this
 
+                new_ex.callback = ex.callback
+
                 if subcall.is_stuck():
                     # internal errors abort the current path,
                     # so we don't need to add it to the worklist
-                    out.append(new_ex)
-                    continue
+                    yield new_ex
+                    return
 
                 # restore vm state
                 new_ex.pgm = ex.pgm
@@ -1582,6 +1643,36 @@ class SEVM:
                 new_ex.next_pc()
                 stack.append((new_ex, step_id))
 
+            sub_ex = Exec(
+                code=ex.code,
+                storage=ex.storage,
+                balance=ex.balance,
+                #
+                block=ex.block,
+                #
+                context=CallContext(message=message, depth=ex.context.depth + 1),
+                callback=callback,
+                this=message.target,
+                #
+                pgm=ex.code[to],
+                pc=0,
+                st=State(),
+                jumpis={},
+                symbolic=ex.symbolic,
+                prank=Prank(),
+                #
+                path=ex.path,
+                alias=ex.alias,
+                #
+                cnts=ex.cnts,
+                sha3s=ex.sha3s,
+                storages=ex.storages,
+                balances=ex.balances,
+                calls=ex.calls,
+            )
+
+            stack.append((sub_ex, step_id))
+
         def call_unknown() -> None:
             call_id = len(ex.calls)
 
@@ -1608,7 +1699,7 @@ class SEVM:
                 )
                 exit_code = f_call(con(call_id), gas, to, fund)
             exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
-            ex.solver.add(exit_code_var == exit_code)
+            ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code_var)
 
             # transfer msg.value
@@ -1635,26 +1726,26 @@ class SEVM:
 
             # ecrecover
             if eq(to, con_addr(1)):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
 
             # identity
             if eq(to, con_addr(4)):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
                 ret = arg
 
             # halmos cheat code
             if eq(to, halmos_cheat_code.address):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
                 ret = halmos_cheat_code.handle(ex, arg)
 
             # vm cheat code
             if eq(to, hevm_cheat_code.address):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
                 ret = hevm_cheat_code.handle(self, ex, arg)
 
             # console
             if eq(to, console.address):
-                ex.solver.add(exit_code_var != con(0))
+                ex.path.append(exit_code_var != con(0))
                 console.handle(ex, arg)
 
             # store return value
@@ -1711,7 +1802,7 @@ class SEVM:
         # uninterpreted unknown calls
         funsig = extract_funsig(arg)
         if funsig in self.options["unknown_calls"]:
-            logs.add_uninterpreted_unknown_call(funsig, to, arg)
+            self.logs.add_uninterpreted_unknown_call(funsig, to, arg)
             call_unknown()
             return
 
@@ -1726,8 +1817,6 @@ class SEVM:
         op: int,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-        out: List[Exec],
-        logs: HalmosLogs,
     ) -> None:
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())
@@ -1784,7 +1873,7 @@ class SEVM:
             return
 
         for addr in ex.code:
-            ex.solver.add(new_addr != addr)  # ensure new address is fresh
+            ex.path.append(new_addr != addr)  # ensure new address is fresh
 
         # backup current state
         orig_code = ex.code.copy()
@@ -1798,47 +1887,15 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, caller, new_addr, value)
 
-        # execute contract creation code
-        (new_exs, new_steps, new_logs) = self.run(
-            Exec(
-                code=ex.code,
-                storage=ex.storage,
-                balance=ex.balance,
-                #
-                block=ex.block,
-                #
-                context=CallContext(message=message, depth=ex.context.depth + 1),
-                this=new_addr,
-                #
-                pgm=create_code,
-                pc=0,
-                st=State(),
-                jumpis={},
-                symbolic=False,
-                prank=Prank(),
-                #
-                solver=ex.solver,
-                path=ex.path,
-                alias=ex.alias,
-                #
-                cnts=ex.cnts,
-                sha3s=ex.sha3s,
-                storages=ex.storages,
-                balances=ex.balances,
-                calls=ex.calls,
-            )
-        )
-
-        logs.extend(new_logs)
-
-        # process result
-        for new_ex in new_exs:
+        def callback(new_ex, stack, step_id):
             subcall = new_ex.context
 
             # continue execution in the context of the parent
             # pessimistic copy because the subcall results may diverge
             new_ex.context = deepcopy(ex.context)
             new_ex.context.trace.append(subcall)
+
+            new_ex.callback = ex.callback
 
             new_ex.this = ex.this
 
@@ -1852,8 +1909,8 @@ class SEVM:
 
             if subcall.is_stuck():
                 # internal errors abort the current path,
-                out.append(new_ex)
-                continue
+                yield new_ex
+                return
 
             elif subcall.output.error is None:
                 # new contract code, will revert if data is None
@@ -1875,12 +1932,41 @@ class SEVM:
             new_ex.next_pc()
             stack.append((new_ex, step_id))
 
+        sub_ex = Exec(
+            code=ex.code,
+            storage=ex.storage,
+            balance=ex.balance,
+            #
+            block=ex.block,
+            #
+            context=CallContext(message=message, depth=ex.context.depth + 1),
+            callback=callback,
+            this=new_addr,
+            #
+            pgm=create_code,
+            pc=0,
+            st=State(),
+            jumpis={},
+            symbolic=False,
+            prank=Prank(),
+            #
+            path=ex.path,
+            alias=ex.alias,
+            #
+            cnts=ex.cnts,
+            sha3s=ex.sha3s,
+            storages=ex.storages,
+            balances=ex.balances,
+            calls=ex.calls,
+        )
+
+        stack.append((sub_ex, step_id))
+
     def jumpi(
         self,
         ex: Exec,
         stack: List[Tuple[Exec, int]],
         step_id: int,
-        logs: HalmosLogs,
     ) -> None:
         jid = ex.jumpi_id()
 
@@ -1906,7 +1992,7 @@ class SEVM:
             follow_true = visited[True] < self.options["max_loop"]
             follow_false = visited[False] < self.options["max_loop"]
             if not (follow_true and follow_false):
-                logs.bounded_loops.append(jid)
+                self.logs.bounded_loops.append(jid)
         else:
             # for constant-bounded loops
             follow_true = potential_true
@@ -1920,14 +2006,12 @@ class SEVM:
                 new_ex_true = self.create_branch(ex, cond_true, target)
             else:
                 new_ex_true = ex
-                new_ex_true.solver.add(cond_true)
-                new_ex_true.path.append(str(cond_true))
+                new_ex_true.path.append(cond_true)
                 new_ex_true.pc = target
 
         if follow_false:
             new_ex_false = ex
-            new_ex_false.solver.add(cond_false)
-            new_ex_false.path.append(str(cond_false))
+            new_ex_false.path.append(cond_false)
             new_ex_false.next_pc()
 
         if new_ex_true:
@@ -1960,20 +2044,16 @@ class SEVM:
                 target_reachable = simplify(dst == target)
                 if ex.check(target_reachable) != unsat:  # jump
                     if self.options.get("debug"):
-                        print(f"We can jump to {target} with model {ex.solver.model()}")
+                        print(
+                            f"We can jump to {target} with model {ex.path.solver.model()}"
+                        )
                     new_ex = self.create_branch(ex, target_reachable, target)
                     stack.append((new_ex, step_id))
         else:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
-        new_solver = create_solver(
-            timeout=self.options["timeout"], max_memory=self.options["max_memory"]
-        )
-        new_solver.add(ex.solver.assertions())
-        new_solver.add(cond)
-        new_path = ex.path.copy()
-        new_path.append(str(cond))
+        new_path = ex.path.branch(cond)
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
             storage=deepcopy(ex.storage),
@@ -1982,6 +2062,7 @@ class SEVM:
             block=deepcopy(ex.block),
             #
             context=deepcopy(ex.context),
+            callback=ex.callback,
             this=ex.this,
             #
             pgm=ex.pgm,
@@ -1991,7 +2072,6 @@ class SEVM:
             symbolic=ex.symbolic,
             prank=deepcopy(ex.prank),
             #
-            solver=new_solver,
             path=new_path,
             alias=ex.alias.copy(),
             #
@@ -2019,20 +2099,28 @@ class SEVM:
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
 
-    def run(self, ex0: Exec) -> Tuple[List[Exec], Steps, HalmosLogs]:
-        out: List[Exec] = []
-        logs = HalmosLogs()
-        steps: Steps = {}
+    def run(self, ex0: Exec) -> Iterator[Exec]:
         step_id: int = 0
 
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
+
+        def finalize(ex: Exec):
+            # if it's at the top-level, there is no callback; yield the current execution state
+            if ex.callback is None:
+                yield ex
+
+            # otherwise, execute the callback to return to the parent execution context
+            # note: `yield from` is used as the callback may yield the current execution state that got stuck
+            else:
+                yield from ex.callback(ex, stack, step_id)
+
         while stack:
             try:
-                if len(out) >= self.options.get("max_width", 2**64):
-                    break
-
                 (ex, prev_step_id) = stack.pop()
                 step_id += 1
+
+                if not ex.path.is_activated():
+                    ex.path.activate()
 
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
@@ -2047,40 +2135,36 @@ class SEVM:
                 ):
                     continue
 
+                # TODO: clean up
                 if self.options.get("log"):
                     if opcode == EVM.JUMPI:
-                        steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
+                        self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
                     # elif opcode == EVM.CALL:
-                    #     steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
+                    #     self.steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
                     else:
-                        # steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
-                        steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
+                        # self.steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
+                        self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
                 if self.options.get("print_steps"):
                     print(ex)
 
-                if opcode == EVM.STOP:
-                    ex.halt()
-                    out.append(ex)
-                    continue
+                if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
+                    if opcode == EVM.STOP:
+                        ex.halt()
+                    elif opcode == EVM.INVALID:
+                        ex.halt(error=InvalidOpcode(opcode))
+                    elif opcode == EVM.REVERT:
+                        ex.halt(data=ex.st.ret(), error=Revert())
+                    elif opcode == EVM.RETURN:
+                        ex.halt(data=ex.st.ret())
+                    else:
+                        raise ValueError(opcode)
 
-                elif opcode == EVM.INVALID:
-                    ex.halt(error=InvalidOpcode(opcode))
-                    out.append(ex)
-                    continue
-
-                elif opcode == EVM.REVERT:
-                    ex.halt(data=ex.st.ret(), error=Revert())
-                    out.append(ex)
-                    continue
-
-                elif opcode == EVM.RETURN:
-                    ex.halt(data=ex.st.ret())
-                    out.append(ex)
+                    yield from finalize(ex)
                     continue
 
                 elif opcode == EVM.JUMPI:
-                    self.jumpi(ex, stack, step_id, logs)
+                    self.jumpi(ex, stack, step_id)
                     continue
 
                 elif opcode == EVM.JUMP:
@@ -2194,7 +2278,7 @@ class SEVM:
                             or eq(account, halmos_cheat_code.address)
                             or eq(account, console.address)
                         ):
-                            ex.solver.add(codesize > 0)
+                            ex.path.append(codesize > 0)
                     ex.st.push(codesize)
                 # TODO: define f_extcodehash for known addresses in advance
                 elif opcode == EVM.EXTCODEHASH:
@@ -2245,14 +2329,14 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
-                    self.call(ex, opcode, stack, step_id, out, logs)
+                    self.call(ex, opcode, stack, step_id)
                     continue
 
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
-                    self.create(ex, opcode, stack, step_id, out, logs)
+                    self.create(ex, opcode, stack, step_id)
                     continue
 
                 elif opcode == EVM.POP:
@@ -2394,17 +2478,16 @@ class SEVM:
 
             except EvmException as err:
                 ex.halt(error=err)
-                out.append(ex)
+                yield from finalize(ex)
                 continue
 
             except HalmosException as err:
                 if self.options["debug"]:
                     print(err)
-                ex.halt(data=None, error=err)
-                out.append(ex)
-                continue
 
-        return (out, steps, logs)
+                ex.halt(data=None, error=err)
+                yield from finalize(ex)
+                continue
 
     def mk_exec(
         self,
@@ -2421,7 +2504,7 @@ class SEVM:
         #
         pgm,
         symbolic,
-        solver,
+        path,
     ) -> Exec:
         return Exec(
             code=code,
@@ -2431,6 +2514,7 @@ class SEVM:
             block=block,
             #
             context=context,
+            callback=None,  # top-level; no callback
             #
             this=this,
             pgm=pgm,
@@ -2440,8 +2524,7 @@ class SEVM:
             symbolic=symbolic,
             prank=Prank(),
             #
-            solver=solver,
-            path=[],
+            path=path,
             alias={},
             #
             log=[],

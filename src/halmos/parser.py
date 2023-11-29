@@ -35,7 +35,11 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         help="set loop unrolling bounds (default: %(default)s)",
     )
     parser.add_argument(
-        "--width", metavar="MAX_WIDTH", type=int, help="set the max number of paths"
+        "--width",
+        metavar="MAX_WIDTH",
+        type=int,
+        default=2**64,
+        help="set the max number of paths (default: %(default)s)",
     )
     parser.add_argument(
         "--depth", metavar="MAX_DEPTH", type=int, help="set the max path length"
@@ -146,6 +150,11 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="turn unknown counterexample warnings to errors",
     )
+    group_debug.add_argument(
+        "--early-exit",
+        action="store_true",
+        help="stop after a counterexample is found",
+    )
 
     group_debug.add_argument(
         "--dump-smt-queries",
@@ -215,6 +224,15 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--solver-parallel",
         action="store_true",
         help="run assertion solvers in parallel",
+    )
+    group_solver.add_argument(
+        "--solver-threads",
+        metavar="N",
+        type=int,
+        # the default value of max_workers for ThreadPoolExecutor
+        # TODO: set default value := total physical memory size / average z3 memory footprint
+        default=min(32, os.cpu_count() + 4),
+        help=f"set the number of threads for parallel solvers (default: %(default)s)",
     )
 
     # internal options
