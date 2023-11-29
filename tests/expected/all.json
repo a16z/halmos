@@ -1592,6 +1592,37 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Storage3.t.sol:Storage3Test": [
+            {
+                "name": "check_set((bytes1,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256))",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Storage4.t.sol:Storage4Test": [
+            {
+                "name": "check_add_1(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_add_2(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Store.t.sol:StoreTest": [
             {
                 "name": "check_store_Array(uint256,uint256)",
