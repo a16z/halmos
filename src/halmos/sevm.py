@@ -1130,12 +1130,12 @@ class SolidityStorage(Storage):
         elif loc.decl().name() == "sha3_256":  # a[i] : hash(a)+i
             base = loc.arg(0)
             return cls.decode(base) + (con(0),)
-        elif loc.decl().name().startswith("sha3_"):  # m[k] : hash(k.m) where |k| > 256-bit
+        elif loc.decl().name().startswith("sha3_"):  # m[k] : hash(k.m) where |k| != 256-bit
             sha3_input = cls.normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat" and sha3_input.num_args() == 2:
                 offset = simplify(sha3_input.arg(0))
                 base = simplify(sha3_input.arg(1))
-                if offset.size() > 256 and base.size() == 256:
+                if offset.size() != 256 and base.size() == 256:
                     return cls.decode(base) + (offset, con(0))
         elif loc.decl().name() == "bvadd":
             #   # when len(args) == 2
