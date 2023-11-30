@@ -33,6 +33,7 @@ contract CurveTokenV3Test is ERC20Test {
     CurveTokenV3 token_;
     address minter;
 
+    /// @custom:halmos --solver-timeout-branching 1000
     function setUp() public override {
         token = address(new EmptyContract());
         // Source of Deployed Bytecode: https://etherscan.io/address/0x06325440D014e39736583c165C2963BA99fAf14E#code

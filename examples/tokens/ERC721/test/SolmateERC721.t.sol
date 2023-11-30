@@ -7,6 +7,8 @@ import {SolmateERC721} from "../src/SolmateERC721.sol";
 
 /// @custom:halmos --solver-timeout-assertion 0
 contract SolmateERC721Test is ERC721Test {
+
+    /// @custom:halmos --solver-timeout-branching 1000
     function setUp() public override {
         deployer = address(0x1000);
 

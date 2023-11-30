@@ -24,6 +24,7 @@ contract DEIStablecoinTest is ERC20Test {
     DEIStablecoin token_;
     address lossless;
 
+    /// @custom:halmos --solver-timeout-branching 1000
     function setUp() public override {
         token = address(new EmptyContract());
         // Source of Deployed Bytecode: https://etherscan.io/address/0x63c28e2ff796e1480eb9ac8c3c55dcb9ae7b3df6#code
