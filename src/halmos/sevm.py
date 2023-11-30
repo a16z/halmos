@@ -76,6 +76,9 @@ create2_magic_address: int = 0xBBBB0000
 new_address_offset: int = 1
 
 
+def debug_trace(indent, msg):
+    return f"[trace] {'-' * indent} {msg}"
+
 class Instruction:
     pc: int
     opcode: int
@@ -2078,15 +2081,24 @@ class SEVM:
         if follow_true:
             if follow_false:
                 new_ex_true = self.create_branch(ex, cond_true, target)
+                if self.options["debug"]:
+                    if not is_true(cond_true):
+                        print(debug_trace(ex.context.depth, f"branching: {cond_true}"))
             else:
                 new_ex_true = ex
                 new_ex_true.path.append(cond_true)
                 new_ex_true.pc = target
+                if self.options["debug"]:
+                    if not is_true(cond_true):
+                        print(debug_trace(ex.context.depth, f"assume: {cond_true}"))
 
         if follow_false:
             new_ex_false = ex
             new_ex_false.path.append(cond_false)
             new_ex_false.next_pc()
+            if self.options["debug"]:
+                if not is_true(cond_false):
+                    print(debug_trace(ex.context.depth, f"assume: {cond_false}"))
 
         if new_ex_true:
             if potential_true and potential_false:
@@ -2196,6 +2208,9 @@ class SEVM:
                 if not ex.path.is_activated():
                     ex.path.activate()
 
+                    if self.options["debug"]:
+                        print(debug_trace(ex.context.depth, f"backtracking: {ex.path.conditions[-1]}"))
+
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
 
@@ -2233,6 +2248,9 @@ class SEVM:
                         ex.halt(data=ex.st.ret())
                     else:
                         raise ValueError(opcode)
+
+                    if self.options["debug"]:
+                        print(debug_trace(ex.context.depth, f"halt: {mnemonic(opcode)}"))
 
                     yield from finalize(ex)
                     continue
@@ -2403,6 +2421,9 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
+                    if self.options["debug"]:
+                        print(debug_trace(ex.context.depth, f"call: {mnemonic(opcode)}"))
+
                     self.call(ex, opcode, stack, step_id)
                     continue
 
@@ -2410,6 +2431,9 @@ class SEVM:
                     ex.sha3()
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
+                    if self.options["debug"]:
+                        print(debug_trace(ex.context.depth, f"create: {mnemonic(opcode)}"))
+
                     self.create(ex, opcode, stack, step_id)
                     continue
 
@@ -2551,6 +2575,9 @@ class SEVM:
                 stack.append((ex, step_id))
 
             except EvmException as err:
+                if self.options["debug"]:
+                    print(debug_trace(ex.context.depth, f"evm exception"))
+
                 ex.halt(error=err)
                 yield from finalize(ex)
                 continue
@@ -2558,6 +2585,9 @@ class SEVM:
             except HalmosException as err:
                 if self.options["debug"]:
                     print(err)
+
+                if self.options["debug"]:
+                    print(debug_trace(ex.context.depth, f"halmos exception"))
 
                 ex.halt(data=None, error=err)
                 yield from finalize(ex)

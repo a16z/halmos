@@ -376,6 +376,8 @@ def deploy_test(
         return ex
 
     # create test contract
+    if args.debug:
+        print(f"[trace] deploy test")
     exs = list(sevm.run(ex))
 
     # sanity check
@@ -439,6 +441,9 @@ def setup(
                 data=calldata,
             ),
         )
+
+        if args.debug:
+            print(f"[trace] setup")
 
         setup_exs_all = sevm.run(setup_ex)
 
@@ -587,6 +592,9 @@ def run(
     solver = mk_solver(args)
     path = Path(solver)
     path.extend(setup_ex.path.conditions)
+
+    if args.debug:
+        print(f"[trace] run")
 
     exs = sevm.run(
         Exec(
