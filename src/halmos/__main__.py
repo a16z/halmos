@@ -419,6 +419,10 @@ def setup(
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
+    args = extend_args(
+        args, f"--solver-timeout-branching {args.solver_timeout_branching_setup}"
+    )
+
     sevm = SEVM(mk_options(args))
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
