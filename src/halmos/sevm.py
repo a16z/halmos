@@ -270,9 +270,7 @@ def normalize(expr: Any) -> Any:
 
             # this form triggers the partial inward-propagation of extracts in simplify()
             # that is, `Extract(7, 0, op(x, y))` => `op(Extract(7, 0, x), Extract(7, 0, y))`, followed by further simplification
-            target_equivalent = Concat(
-                Extract(255, 8, target), Extract(7, 0, target)
-            )
+            target_equivalent = Concat(Extract(255, 8, target), Extract(7, 0, target))
 
             given = Concat(arg0, arg1)
 
