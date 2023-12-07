@@ -934,11 +934,18 @@ class Exec:  # an execution path
     def sha3(self) -> None:
         loc: int = self.st.mloc()
         size: int = int_of(self.st.pop(), "symbolic SHA3 data size")
-        self.st.push(self.sha3_data(wload(self.st.memory, loc, size), size))
+        if size > 0:
+            sha3_image = self.sha3_data(wload(self.st.memory, loc, size), size)
+        else:
+            sha3_image = self.sha3_data(None, size)
+        self.st.push(sha3_image)
 
     def sha3_data(self, data: Bytes, size: int) -> Word:
-        f_sha3 = Function("sha3_" + str(size * 8), BitVecSorts[size * 8], BitVecSort256)
-        sha3_expr = f_sha3(data)
+        if size > 0:
+            f_sha3 = Function(f"sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256)
+            sha3_expr = f_sha3(data)
+        else:
+            sha3_expr = BitVec("sha3_0", BitVecSort256)
 
         # assume hash values are sufficiently smaller than the uint max
         self.path.append(ULE(sha3_expr, con(2**256 - 2**64)))
