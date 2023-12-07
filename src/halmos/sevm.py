@@ -1711,8 +1711,8 @@ class SEVM:
 
                 if not subcall_success:
                     # revert network states
-                    new_ex.code = orig_code
-                    new_ex.storage = orig_storage
+                    new_ex.code = orig_code.copy()
+                    new_ex.storage = deepcopy(orig_storage)
                     new_ex.balance = orig_balance
 
                 # add to worklist even if it reverted during the external call
@@ -2000,8 +2000,8 @@ class SEVM:
                 new_ex.st.push(con(0))
 
                 # revert network states
-                new_ex.code = orig_code
-                new_ex.storage = orig_storage
+                new_ex.code = orig_code.copy()
+                new_ex.storage = deepcopy(orig_storage)
                 new_ex.balance = orig_balance
 
             # add to worklist
