@@ -942,7 +942,7 @@ class Exec:  # an execution path
 
     def sha3_data(self, data: Bytes, size: int) -> Word:
         if size > 0:
-            f_sha3 = Function("sha3_" + str(size * 8), BitVecSorts[size * 8], BitVecSort256)
+            f_sha3 = Function(f"sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256)
             sha3_expr = f_sha3(data)
         else:
             sha3_expr = BitVec("sha3_0", BitVecSort256)
