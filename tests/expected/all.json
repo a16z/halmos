@@ -1427,6 +1427,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Sha3.t.sol:Sha3Test": [
+            {
+                "name": "check_hash()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_no_hash_collision_assumption()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/SignExtend.t.sol:SignExtendTest": [
             {
                 "name": "check_SIGNEXTEND(int16)",
