@@ -20,7 +20,7 @@ classifiers = [
     "License :: OSI Approved :: GNU Affero General Public License v3",
     "Operating System :: OS Independent",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 dependencies = [
     "z3-solver",
 ]
@@ -33,7 +33,7 @@ halmos = "halmos.__main__:main"
 "Homepage" = "https://github.com/a16z/halmos"
 
 [tool.black]
-target-versions = ["py38", "py39", "py310", "py311"]
+target-versions = ["py39", "py310", "py311"]
 
 [tool.pytest.ini_options]
 # TODO: re-add test_traces.py when we have a better way to support it in CI
