@@ -21,7 +21,8 @@ from typing import (
     TypeVar,
     Union as UnionType,
 )
-from z3 import *
+import z3
+from .bv import *
 
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 from .console import console
@@ -642,14 +643,14 @@ class Path:
     # a Path object represents a prefix of the path currently being executed
     # initially, it's an empty path at the beginning of execution
 
-    solver: Solver
+    solver: z3.Solver
     num_scopes: int
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
     # TODO: separate these two types of constraints, so that we can display only branching conditions to users
     conditions: List
     pending: List
 
-    def __init__(self, solver: Solver):
+    def __init__(self, solver: z3.Solver):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = []
@@ -701,7 +702,7 @@ class Path:
         if is_true(cond):
             return
 
-        self.solver.add(cond)
+        self.solver.add(cond.smt)
         self.conditions.append(cond)
 
     def extend(self, conds):
@@ -887,12 +888,12 @@ class Exec:  # an execution path
         cond = simplify(cond)
 
         if is_true(cond):
-            return sat
+            return z3.sat
 
         if is_false(cond):
-            return unsat
+            return z3.unsat
 
-        return self.path.solver.check(cond)
+        return self.path.solver.check(cond.smt)
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
@@ -903,9 +904,9 @@ class Exec:  # an execution path
                 val0 = store.arg(2)
                 if eq(key, key0):  # structural equality
                     return val0
-                if self.check(key == key0) == unsat:  # key != key0
+                if self.check(key == key0) == z3.unsat:  # key != key0
                     return self.select(base, key, arrays)
-                if self.check(key != key0) == unsat:  # key == key0
+                if self.check(key != key0) == z3.unsat:  # key == key0
                     return val0
         # empty array
         elif not self.symbolic and re.search(r"^storage_.+_00$", str(array)):
@@ -1388,7 +1389,7 @@ class SEVM:
             if (
                 w.decl().name() == "concat"
                 and is_bv_value(w.arg(0))
-                and int(str(w.arg(0))) == 0
+                and w.arg(0).as_long() == 0
             ):
                 return 256 - w.arg(0).size()
             return 256
@@ -1453,7 +1454,7 @@ class SEVM:
                     return w1
 
                 if is_power_of_two(i2):
-                    return LShR(w1, int(math.log(i2, 2)))
+                    return LShR(w1, con(int(math.log(i2, 2))))
 
             return self.mk_div(ex, w1, w2)
 
@@ -1465,7 +1466,7 @@ class SEVM:
                     return URem(w1, w2)  # bvurem
 
             if is_bv_value(w2):
-                i2: int = int(str(w2))
+                i2: int = w2.as_long()
                 if i2 == 0 or i2 == 1:
                     return con(0, w2.size())
 
@@ -1507,12 +1508,12 @@ class SEVM:
 
         if op == EVM.EXP:
             if is_bv_value(w1) and is_bv_value(w2):
-                i1: int = int(str(w1))  # must be concrete
-                i2: int = int(str(w2))  # must be concrete
+                i1: int = w1.as_long()  # must be concrete
+                i2: int = w2.as_long()  # must be concrete
                 return con(i1**i2)
 
             if is_bv_value(w2):
-                i2: int = int(str(w2))
+                i2: int = w2.as_long()
                 if i2 == 0:
                     return con(1)
 
@@ -1579,7 +1580,7 @@ class SEVM:
 
         if target not in ex.alias:
             for addr in ex.code:
-                if ex.check(target != addr) == unsat:  # target == addr
+                if ex.check(target != addr) == z3.unsat:  # target == addr
                     if self.options.get("debug"):
                         print(
                             f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}"
@@ -2062,8 +2063,8 @@ class SEVM:
         cond_true = simplify(is_non_zero(cond))
         cond_false = simplify(is_zero(cond))
 
-        potential_true: bool = ex.check(cond_true) != unsat
-        potential_false: bool = ex.check(cond_false) != unsat
+        potential_true: bool = ex.check(cond_true) != z3.unsat
+        potential_false: bool = ex.check(cond_false) != z3.unsat
 
         # note: both may be false if the previous path condition was considered unknown but turns out to be unsat later
 
@@ -2125,7 +2126,7 @@ class SEVM:
         elif self.options["sym_jump"]:
             for target in ex.pgm.valid_jump_destinations():
                 target_reachable = simplify(dst == target)
-                if ex.check(target_reachable) != unsat:  # jump
+                if ex.check(target_reachable) != z3.unsat:  # jump
                     if self.options.get("debug"):
                         print(
                             f"We can jump to {target} with model {ex.path.solver.model()}"
@@ -2332,7 +2333,7 @@ class SEVM:
                         err_msg = "symbolic CALLDATALOAD offset"
                         offset: int = int_of(ex.st.pop(), err_msg)
                         data = padded_slice(calldata, offset, 32, default=con(0, 8))
-                        ex.st.push(Concat(data))
+                        ex.st.push(Concat(*data))
 
                 elif opcode == EVM.CALLDATASIZE:
                     cd = ex.calldata()
@@ -2361,7 +2362,7 @@ class SEVM:
                             or eq(account, halmos_cheat_code.address)
                             or eq(account, console.address)
                         ):
-                            ex.path.append(codesize > 0)
+                            ex.path.append(codesize > con(0))
                     ex.st.push(codesize)
                 # TODO: define f_extcodehash for known addresses in advance
                 elif opcode == EVM.EXTCODEHASH:

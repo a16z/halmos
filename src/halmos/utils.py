@@ -5,7 +5,8 @@ import re
 from timeit import default_timer as timer
 from typing import Dict, Tuple, Any, Optional, Union as UnionType
 
-from z3 import *
+import z3
+from .bv import *
 
 from .exceptions import NotConcreteError
 
@@ -57,7 +58,7 @@ BitVecSort512 = BitVecSorts[512]
 
 def concat(args):
     if len(args) > 1:
-        return Concat(args)
+        return Concat(*args)
     else:
         return args[0]
 
@@ -123,7 +124,7 @@ def is_zero(x: Word) -> Word:
 
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
-    solver = SolverFor(logic, ctx=ctx)
+    solver = z3.SolverFor(logic, ctx=ctx)
 
     # set timeout
     solver.set(timeout=timeout)
@@ -184,7 +185,7 @@ def extract_funsig(calldata: BitVecRef):
     return extract_bytes(calldata, 0, 4)
 
 
-def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
+def bv_value_to_bytes(x: BitVecRef) -> bytes:
     if x.size() % 8 != 0:
         raise ValueError(x, x.size())
     return x.as_long().to_bytes(x.size() // 8, "big")

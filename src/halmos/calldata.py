@@ -7,7 +7,7 @@ from typing import List, Dict
 from argparse import Namespace
 from functools import reduce
 
-from z3 import *
+from .bv import *
 
 from .sevm import con, concat
 

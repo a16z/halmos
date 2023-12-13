@@ -6,7 +6,7 @@ import re
 from subprocess import Popen, PIPE
 from typing import List, Dict, Set, Tuple, Any
 
-from z3 import *
+from .bv import *
 
 from .exceptions import FailCheatcode, HalmosException
 from .utils import *
@@ -295,7 +295,7 @@ class hevm_cheat_code:
 
         # vm.fail()
         # BitVecVal(hevm_cheat_code.fail_payload, 800)
-        if arg == hevm_cheat_code.fail_payload:
+        if eq(arg, con(hevm_cheat_code.fail_payload, 800)):
             raise FailCheatcode()
 
         # vm.assume(bool)

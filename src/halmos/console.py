@@ -1,4 +1,4 @@
-from z3 import BitVecRef
+from .bv import BitVecRef
 
 from .utils import *
 

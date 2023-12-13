@@ -16,6 +16,8 @@ from importlib import metadata
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
+import z3
+
 from .sevm import *
 from .utils import (
     create_solver,
@@ -39,7 +41,7 @@ from .parser import mk_arg_parser
 from .calldata import Calldata
 
 StrModel = Dict[str, str]
-AnyModel = UnionType[Model, StrModel]
+AnyModel = UnionType[z3.Model, StrModel]
 
 arg_parser = mk_arg_parser()
 
@@ -475,7 +477,7 @@ def setup(
         if len(setup_exs_no_error) > 1:
             for setup_ex, query in setup_exs_no_error:
                 res, _ = solve(query, args)
-                if res != unsat:
+                if res != z3.unsat:
                     setup_exs.append(setup_ex)
                     if len(setup_exs) > 1:
                         break
@@ -526,7 +528,7 @@ class ModelWithContext:
     model: Optional[UnionType[StrModel, str]]
     is_valid: Optional[bool]
     index: int
-    result: CheckSatResult
+    result: z3.CheckSatResult
 
 
 @dataclass(frozen=True)
@@ -636,7 +638,7 @@ def run(
         models.append(m)
 
         model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
-        if result == unsat:
+        if result == z3.unsat:
             return
 
         # model could be an empty dict here
@@ -731,7 +733,7 @@ def run(
     no_counterexample = all(m.model is None for m in models)
     passed = no_counterexample and normal > 0 and len(stuck) == 0
     if args.error_unknown:
-        passed = passed and all(m.result == unsat for m in models)
+        passed = passed and all(m.result == z3.unsat for m in models)
     passfail = color_good("[PASS]") if passed else color_warn("[FAIL]")
 
     timer.stop()
@@ -973,15 +975,15 @@ class GenModelArgs:
     sexpr: str
 
 
-def copy_model(model: Model) -> Dict:
+def copy_model(model: z3.Model) -> Dict:
     return {decl: model[decl] for decl in model}
 
 
-def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
-    solver = mk_solver(args, ctx=Context(), assertion=True)
+def solve(query: str, args: Namespace) -> Tuple[z3.CheckSatResult, z3.Model]:
+    solver = mk_solver(args, ctx=z3.Context(), assertion=True)
     solver.from_string(query)
     result = solver.check()
-    model = copy_model(solver.model()) if result == sat else None
+    model = copy_model(solver.model()) if result == z3.sat else None
     return result, model
 
 
@@ -993,7 +995,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
     res, model = solve(sexpr, args)
 
-    if res == sat and not is_model_valid(model):
+    if res == z3.sat and not is_model_valid(model):
         if args.verbose >= 1:
             print(f"  Checking again with refinement")
 
@@ -1022,16 +1024,16 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
             print(f"    {res_str_head}")
 
         if res_str_head == "unsat":
-            res = unsat
+            res = z3.unsat
         elif res_str_head == "sat":
-            res = sat
+            res = z3.sat
             model = f"{fname}.out"
 
     return package_result(model, idx, res, args)
 
 
-def is_unknown(result: CheckSatResult, model: Model) -> bool:
-    return result == unknown or (result == sat and not is_model_valid(model))
+def is_unknown(result: z3.CheckSatResult, model: z3.Model) -> bool:
+    return result == z3.unknown or (result == z3.sat and not is_model_valid(model))
 
 
 def refine(query: str) -> str:
@@ -1049,17 +1051,17 @@ def refine(query: str) -> str:
 
 
 def package_result(
-    model: Optional[UnionType[Model, str]],
+    model: Optional[UnionType[z3.Model, str]],
     idx: int,
-    result: CheckSatResult,
+    result: z3.CheckSatResult,
     args: Namespace,
 ) -> ModelWithContext:
-    if result == unsat:
+    if result == z3.unsat:
         if args.verbose >= 1:
             print(f"  Invalid path; ignored (path id: {idx+1})")
         return ModelWithContext(None, None, idx, result)
 
-    if result == sat:
+    if result == z3.sat:
         if args.verbose >= 1:
             print(f"  Valid path; counterexample generated (path id: {idx+1})")
 
@@ -1090,7 +1092,7 @@ def is_model_valid(model: AnyModel) -> bool:
     return True
 
 
-def to_str_model(model: Model, print_full_model: bool) -> StrModel:
+def to_str_model(model: z3.Model, print_full_model: bool) -> StrModel:
     def select(var):
         name = str(var)
         return name.startswith("p_") or name.startswith("halmos_")
@@ -1303,9 +1305,9 @@ def _main(_args=None) -> MainResult:
     # z3 global options
     #
 
-    set_option(max_width=240)
-    set_option(max_lines=10**8)
-    # set_option(max_depth=1000)
+    z3.set_option(max_width=240)
+    z3.set_option(max_lines=10**8)
+    # z3.set_option(max_depth=1000)
 
     #
     # command line arguments
