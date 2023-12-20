@@ -647,16 +647,24 @@ class Path:
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
     # TODO: separate these two types of constraints, so that we can display only branching conditions to users
     conditions: List
+    branching: List  # indexes of conditions
     pending: List
 
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = []
+        self.branching = []
         self.pending = []
 
     def __deepcopy__(self, memo):
         raise NotImplementedError(f"use the branch() method instead of deepcopy()")
+
+    def __str__(self) -> str:
+        branching_conds = [self.conditions[idx] for idx in self.branching]
+        return "".join(
+            [f"- {cond}\n" for cond in branching_conds if str(cond) != "True"]
+        )
 
     def branch(self, cond):
         if len(self.pending) > 0:
@@ -692,10 +700,10 @@ class Path:
 
         self.solver.pop(self.solver.num_scopes() - self.num_scopes)
 
-        self.extend(self.pending)
+        self.extend(self.pending, branching=True)
         self.pending = []
 
-    def append(self, cond):
+    def append(self, cond, branching=False):
         cond = simplify(cond)
 
         if is_true(cond):
@@ -704,9 +712,16 @@ class Path:
         self.solver.add(cond)
         self.conditions.append(cond)
 
-    def extend(self, conds):
+        if branching:
+            self.branching.append(len(self.conditions) - 1)
+
+    def extend(self, conds, branching=False):
         for cond in conds:
-            self.append(cond)
+            self.append(cond, branching=branching)
+
+    def extend_path(self, path):
+        # branching conditions are not preserved
+        self.extend(path.conditions)
 
 
 class Exec:  # an execution path
@@ -831,14 +846,6 @@ class Exec:  # an execution path
             ]
         )
 
-    def str_path(self) -> str:
-        return "".join(
-            map(
-                lambda x: "- " + str(x) + "\n",
-                filter(lambda x: str(x) != "True", self.path.conditions),
-            )
-        )
-
     def __str__(self) -> str:
         output = self.context.output.data
         return hexify(
@@ -854,7 +861,7 @@ class Exec:  # an execution path
                             self.storage,
                         )
                     ),
-                    f"Path:\n{self.str_path()}",
+                    f"Path:\n{self.path}",
                     f"Aliases:\n",
                     "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
                     f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
@@ -2089,12 +2096,12 @@ class SEVM:
                 new_ex_true = self.create_branch(ex, cond_true, target)
             else:
                 new_ex_true = ex
-                new_ex_true.path.append(cond_true)
+                new_ex_true.path.append(cond_true, branching=True)
                 new_ex_true.pc = target
 
         if follow_false:
             new_ex_false = ex
-            new_ex_false.path.append(cond_false)
+            new_ex_false.path.append(cond_false, branching=True)
             new_ex_false.next_pc()
 
         if new_ex_true:
