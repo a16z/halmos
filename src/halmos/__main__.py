@@ -256,7 +256,9 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
         # TODO: select verbosity level to render full initcode
         # initcode_str = rendered_initcode(context)
         initcode_str = f"<{byte_length(message.data)} bytes of initcode>"
-        print(f"{indent}{call_scheme_str}{addr_str}::{initcode_str}{value_str}", file=file)
+        print(
+            f"{indent}{call_scheme_str}{addr_str}::{initcode_str}{value_str}", file=file
+        )
 
     else:
         calldata = (
