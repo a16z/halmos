@@ -662,7 +662,9 @@ class Path:
 
     def __str__(self) -> str:
         branching_conds = [self.conditions[idx] for idx in self.branching]
-        return "".join([f"- {cond}\n" for cond in branching_conds if str(cond) != "True"])
+        return "".join(
+            [f"- {cond}\n" for cond in branching_conds if str(cond) != "True"]
+        )
 
     def branch(self, cond):
         if len(self.pending) > 0:
