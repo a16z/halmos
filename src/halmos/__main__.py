@@ -696,7 +696,8 @@ def run(
             if args.verbose >= 1:
                 print(f"Found potential path (id: {idx+1})")
 
-            traces[idx] = rendered_trace(ex.context)
+            if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+                traces[idx] = rendered_trace(ex.context)
 
             query = ex.path.solver.to_smt2()
 
@@ -717,7 +718,8 @@ def run(
 
         elif ex.context.is_stuck():
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
-            traces[idx] = rendered_trace(ex.context)
+            if args.print_blocked_states:
+                traces[idx] = rendered_trace(ex.context)
 
         elif not error:
             normal += 1
