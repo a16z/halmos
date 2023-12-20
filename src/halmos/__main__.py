@@ -597,7 +597,7 @@ def run(
 
     solver = mk_solver(args)
     path = Path(solver)
-    path.extend(setup_ex.path.conditions)
+    path.extend_path(setup_ex.path)
 
     exs = sevm.run(
         Exec(
@@ -682,7 +682,7 @@ def run(
 
         if args.verbose >= VERBOSITY_TRACE_PATHS:
             print(f"Path #{idx+1}:")
-            print(indent_text(ex.str_path()))
+            print(indent_text(str(ex.path)))
 
             print("\nTrace:")
             render_trace(ex.context)
