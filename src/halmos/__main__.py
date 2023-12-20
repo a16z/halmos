@@ -230,11 +230,9 @@ def rendered_log(log: EventLog) -> str:
 
 
 def rendered_trace(context: CallContext) -> str:
-    output = io.StringIO()
-    render_trace(context, file=output)
-    result = output.getvalue()
-    output.close()
-    return result
+    with io.StringIO() as output:
+        render_trace(context, file=output)
+        return output.getvalue()
 
 
 def render_trace(context: CallContext, file=sys.stdout) -> None:
