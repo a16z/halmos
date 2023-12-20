@@ -188,7 +188,7 @@ def rendered_initcode(context: CallContext) -> str:
     return f"{initcode_str}({color_info(args_str)})"
 
 
-def render_output(context: CallContext) -> None:
+def render_output(context: CallContext, file=sys.stdout) -> None:
     output = context.output
     returndata_str = "0x"
     failed = output.error is not None
@@ -212,7 +212,8 @@ def render_output(context: CallContext) -> None:
     color = red if failed else green
     indent = context.depth * "    "
     print(
-        f"{indent}{color('↩ ')}{ret_scheme_str}{color(returndata_str)}{color(error_str)}"
+        f"{indent}{color('↩ ')}{ret_scheme_str}{color(returndata_str)}{color(error_str)}",
+        file=file,
     )
 
 
@@ -228,7 +229,15 @@ def rendered_log(log: EventLog) -> str:
     return f"{opcode_str}({args_str})"
 
 
-def render_trace(context: CallContext) -> None:
+def rendered_trace(context: CallContext) -> str:
+    output = io.StringIO()
+    render_trace(context, file=output)
+    result = output.getvalue()
+    output.close()
+    return result
+
+
+def render_trace(context: CallContext, file=sys.stdout) -> None:
     # TODO: label for known addresses
     # TODO: decode calldata
     # TODO: decode logs
@@ -247,7 +256,7 @@ def render_trace(context: CallContext) -> None:
         # TODO: select verbosity level to render full initcode
         # initcode_str = rendered_initcode(context)
         initcode_str = f"<{byte_length(message.data)} bytes of initcode>"
-        print(f"{indent}{call_scheme_str}{addr_str}::{initcode_str}{value_str}")
+        print(f"{indent}{call_scheme_str}{addr_str}::{initcode_str}{value_str}", file=file)
 
     else:
         calldata = (
@@ -258,21 +267,21 @@ def render_trace(context: CallContext) -> None:
 
         call_str = f"{addr_str}::{calldata}"
         static_str = yellow(" [static]") if message.is_static else ""
-        print(f"{indent}{call_scheme_str}{call_str}{static_str}{value_str}")
+        print(f"{indent}{call_scheme_str}{call_str}{static_str}{value_str}", file=file)
 
     log_indent = (context.depth + 1) * "    "
     for trace_element in context.trace:
         if isinstance(trace_element, CallContext):
-            render_trace(trace_element)
+            render_trace(trace_element, file=file)
         elif isinstance(trace_element, EventLog):
-            print(f"{log_indent}{rendered_log(trace_element)}")
+            print(f"{log_indent}{rendered_log(trace_element)}", file=file)
         else:
             raise HalmosException(f"unexpected trace element: {trace_element}")
 
-    render_output(context)
+    render_output(context, file=file)
 
     if context.depth == 1:
-        print()
+        print(file=file)
 
 
 def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
@@ -630,6 +639,7 @@ def run(
     result_exs = []
     future_models = []
     counterexamples = []
+    traces = {}
 
     def future_callback(future_model):
         m = future_model.result()
@@ -663,7 +673,7 @@ def run(
                 if args.verbose == VERBOSITY_TRACE_PATHS
                 else "Trace:"
             )
-            render_trace(result_exs[index].context)
+            print(traces[index], end="")
 
     for idx, ex in enumerate(exs):
         result_exs.append(ex)
@@ -684,6 +694,8 @@ def run(
             if args.verbose >= 1:
                 print(f"Found potential path (id: {idx+1})")
 
+            traces[idx] = rendered_trace(ex.context)
+
             query = ex.path.solver.to_smt2()
 
             future_model = thread_pool.submit(
@@ -703,6 +715,7 @@ def run(
 
         elif ex.context.is_stuck():
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
+            traces[idx] = rendered_trace(ex.context)
 
         elif not error:
             normal += 1
@@ -746,7 +759,7 @@ def run(
         warn(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
             print(f"\nPath #{idx+1}")
-            render_trace(ex.context)
+            print(traces[idx], end="")
 
     if logs.bounded_loops:
         warn(
