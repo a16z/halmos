@@ -776,7 +776,7 @@ def run(
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {normal}/{len(result_exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+        f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
     )
 
     for idx, ex, err in stuck:
