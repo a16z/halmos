@@ -4,7 +4,7 @@
         "test/Ffi.t.sol:FfiTest": [
             {
                 "name": "check_Failure()",
-                "exitcode": 2,
+                "exitcode": 5,
                 "num_models": null,
                 "models": null,
                 "num_paths": null,

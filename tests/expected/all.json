@@ -408,7 +408,7 @@
             },
             {
                 "name": "check_call0_halmos_exception()",
-                "exitcode": 1,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -435,7 +435,7 @@
             },
             {
                 "name": "check_call1_halmos_exception(uint256)",
-                "exitcode": 1,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -462,7 +462,7 @@
             },
             {
                 "name": "check_create_halmos_exception()",
-                "exitcode": 1,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -693,7 +693,7 @@
             },
             {
                 "name": "check_create2_collision_basic(uint256,uint256,bytes32)",
-                "exitcode": 1,
+                "exitcode": 4,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -827,7 +827,7 @@
         "test/HalmosCheatCode.t.sol:HalmosCheatCodeTest": [
             {
                 "name": "check_FailUnknownCheatcode()",
-                "exitcode": 1,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -1755,7 +1755,7 @@
             },
             {
                 "name": "check_unknown_not_allowed(address)",
-                "exitcode": 1,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -1800,7 +1800,7 @@
             },
             {
                 "name": "check_unknown_send_fail(address)",
-                "exitcode": 1,
+                "exitcode": 4,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -1820,7 +1820,7 @@
         "test/UnsupportedOpcode.t.sol:X": [
             {
                 "name": "check_unsupported_opcode()",
-                "exitcode": 1,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -1831,7 +1831,7 @@
         "test/UnsupportedOpcode.t.sol:Y": [
             {
                 "name": "check_unsupported_opcode()",
-                "exitcode": 1,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -1842,7 +1842,7 @@
         "test/UnsupportedOpcode.t.sol:Z": [
             {
                 "name": "check_unsupported_opcode()",
-                "exitcode": 1,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
