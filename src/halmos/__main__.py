@@ -1311,6 +1311,12 @@ class MainResult:
 
 
 def _main(_args=None) -> MainResult:
+    print("************************")
+    print("************************")
+    print("****  NEW VERSION  *****")
+    print("************************")
+    print("************************")
+
     timer = NamedTimer("total")
     timer.create_subtimer("build")
 
