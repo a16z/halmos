@@ -61,10 +61,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r ./halmos/requirements.txt
+        run: python -m pip install -r ./halmos/requirements.txt
 
       - name: Install Halmos
-        run: pip install -e ./halmos
+        run: python -m pip install -e ./halmos
 
       - name: Test external repo
         run: ${{ matrix.cmd }} -v -st --error-unknown --solver-timeout-assertion 0 --solver-threads 2
