@@ -13,6 +13,8 @@ import time
 from argparse import Namespace
 from dataclasses import dataclass, asdict
 from importlib import metadata
+from enum import Enum
+from collections import Counter
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
@@ -541,12 +543,21 @@ class ModelWithContext:
 @dataclass(frozen=True)
 class TestResult:
     name: str  # test function name
-    exitcode: int  # 0: passed, 1: failed, 2: setup failed, ...
+    exitcode: int
     num_models: int = None
     models: List[ModelWithContext] = None
     num_paths: Tuple[int, int, int] = None  # number of paths: [total, success, blocked]
     time: Tuple[int, int, int] = None  # time: [total, paths, models]
     num_bounded_loops: int = None  # number of incomplete loops
+
+
+class Exitcode(Enum):
+    PASS = 0
+    COUNTEREXAMPLE = 1
+    TIMEOUT = 2
+    STUCK = 3
+    REVERT_ALL = 4
+    EXCEPTION = 5
 
 
 def is_global_fail_set(context: CallContext) -> bool:
@@ -743,11 +754,22 @@ def run(
     else:
         thread_pool.shutdown(wait=True)
 
-    no_counterexample = all(m.model is None for m in models)
-    passed = no_counterexample and normal > 0 and len(stuck) == 0
-    if args.error_unknown:
-        passed = passed and all(m.result == unsat for m in models)
-    passfail = color_good("[PASS]") if passed else color_warn("[FAIL]")
+    counter = Counter(str(m.result) for m in models)
+    if counter["sat"] > 0:
+        passfail = color_warn("[FAIL]")
+        exitcode = Exitcode.COUNTEREXAMPLE.value
+    elif counter["unknown"] > 0:
+        passfail = color_warn("[FAIL]") + color_debug("[timeout]")
+        exitcode = Exitcode.TIMEOUT.value
+    elif len(stuck) > 0:
+        passfail = color_warn("[FAIL]") + color_debug("[execution blocked]")
+        exitcode = Exitcode.STUCK.value
+    elif normal == 0:
+        passfail = color_warn("[FAIL]") + color_debug("[revert all]")
+        exitcode = Exitcode.REVERT_ALL.value
+    else:
+        passfail = color_good("[PASS]")
+        exitcode = Exitcode.PASS.value
 
     timer.stop()
     time_info = timer.report(include_subtimers=args.statistics)
@@ -791,7 +813,6 @@ def run(
             json.dump(steps, json_file)
 
     # return test result
-    exitcode = 0 if passed else 1
     if args.minimal_json_output:
         return TestResult(funsig, exitcode, len(counterexamples))
     else:
@@ -844,11 +865,11 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.args,
         )
     except Exception as err:
-        print(f"{yellow('[SKIP]')} {fn_args.fun_info.sig}")
+        print(f"{color_warn('[FAIL]')}{color_debug('[exception]')} {fn_args.fun_info.sig}")
         error(f"{type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
-        return [TestResult(fn_args.fun_info.sig, 2)]
+        return [TestResult(fn_args.fun_info.sig, Exitcode.EXCEPTION.value)]
 
     return [test_result]
 
@@ -960,11 +981,11 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             )
             test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
         except Exception as err:
-            print(f"{color_warn('[SKIP]')} {funsig}")
+            print(f"{color_warn('[FAIL]')}{color_debug('[exception]')} {funsig}")
             print(color_warn(f"{type(err).__name__}: {err}"))
             if args.debug:
                 traceback.print_exc()
-            test_results.append(TestResult(funsig, 2))
+            test_results.append(TestResult(funsig, Exitcode.EXCEPTION.value))
             continue
 
         test_results.append(test_result)
