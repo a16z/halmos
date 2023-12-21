@@ -22,6 +22,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--match-contract",
+        "--mc",
         metavar="CONTRACT_NAME_REGEX",
         default="",
         help="run tests in contracts matching the given regex. Ignored if the --contract name is given. (default: '%(default)s')",
@@ -34,6 +35,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--match-test",
+        "--mt",
         metavar="FUNCTION_NAME_REGEX",
         default="^check_",
         help="run tests matching the given regex. The --function prefix is automatically added, unless the regex starts with '^'. (default: '%(default)s')",
