@@ -18,13 +18,27 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--contract",
         metavar="CONTRACT_NAME",
-        help="run tests in the given contract only",
+        help="run tests in the given contract. Shortcut for `--match-contract '^{NAME}$'`.",
+    )
+    parser.add_argument(
+        "--match-contract",
+        "--mc",
+        metavar="CONTRACT_NAME_REGEX",
+        default="",
+        help="run tests in contracts matching the given regex. Ignored if the --contract name is given. (default: '%(default)s')",
     )
     parser.add_argument(
         "--function",
         metavar="FUNCTION_NAME_PREFIX",
         default="check_",
-        help="run tests matching the given prefix only (default: %(default)s)",
+        help="run tests matching the given prefix. Shortcut for `--match-test '^{PREFIX}'`. (default: '%(default)s')",
+    )
+    parser.add_argument(
+        "--match-test",
+        "--mt",
+        metavar="FUNCTION_NAME_REGEX",
+        default="",
+        help="run tests matching the given regex. The --function prefix is automatically added, unless the regex starts with '^'. (default: '%(default)s')",
     )
 
     parser.add_argument(
@@ -55,7 +69,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         metavar="SELECTOR1,SELECTOR2,...",
         # onERC721Received, IERC1271.isValidSignature
         default="0x150b7a02,0x1626ba7e",
-        help="use uninterpreted abstractions for unknown external calls with the given function signatures (default: %(default)s)",
+        help="use uninterpreted abstractions for unknown external calls with the given function signatures (default: '%(default)s')",
     )
     parser.add_argument(
         "--return-size-of-unknown-calls",
@@ -164,7 +178,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--forge-build-out",
         metavar="DIRECTORY_NAME",
         default="out",
-        help="forge build artifacts directory name (default: %(default)s)",
+        help="forge build artifacts directory name (default: '%(default)s')",
     )
 
     # smt solver options
@@ -213,7 +227,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--solver-subprocess-command",
         metavar="COMMAND",
         default="z3 -model",
-        help="use the given command for the subprocess solver (requires --solver-subprocess) (default: %(default)s)",
+        help="use the given command for the subprocess solver (requires --solver-subprocess) (default: '%(default)s')",
     )
     group_solver.add_argument(
         "--solver-parallel",

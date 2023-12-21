@@ -1328,6 +1328,20 @@ def build_output_iterator(build_out: Dict):
                 yield (build_out_map, filename, contract_name)
 
 
+def contract_regex(args):
+    if args.contract:
+        return f"^{args.contract}$"
+    else:
+        return args.match_contract
+
+
+def test_regex(args):
+    if args.match_test.startswith("^"):
+        return args.match_test
+    else:
+        return f"^{args.function}.*{args.match_test}"
+
+
 @dataclass(frozen=True)
 class MainResult:
     exitcode: int
@@ -1427,7 +1441,7 @@ def _main(_args=None) -> MainResult:
     #
 
     for build_out_map, filename, contract_name in build_output_iterator(build_out):
-        if args.contract and args.contract != contract_name:
+        if not re.search(contract_regex(args), contract_name):
             continue
 
         (contract_json, contract_type, natspec) = build_out_map[filename][contract_name]
@@ -1435,7 +1449,7 @@ def _main(_args=None) -> MainResult:
             continue
 
         methodIdentifiers = contract_json["methodIdentifiers"]
-        funsigs = [f for f in methodIdentifiers if f.startswith(args.function)]
+        funsigs = [f for f in methodIdentifiers if re.search(test_regex(args), f)]
         num_found = len(funsigs)
 
         if num_found == 0:
@@ -1489,9 +1503,11 @@ def _main(_args=None) -> MainResult:
         print(f"\n[time] {timer.report()}")
 
     if total_found == 0:
-        error_msg = f"Error: No tests with the prefix `{args.function}`"
-        if args.contract is not None:
-            error_msg += f" in {args.contract}"
+        error_msg = (
+            f"Error: No tests with"
+            + f" --match-contract '{contract_regex(args)}'"
+            + f" --match-test '{test_regex(args)}'"
+        )
         print(color_warn(error_msg))
         return MainResult(1)
 
