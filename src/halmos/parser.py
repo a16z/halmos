@@ -37,7 +37,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         "--match-test",
         "--mt",
         metavar="FUNCTION_NAME_REGEX",
-        default="^check_",
+        default="",
         help="run tests matching the given regex. The --function prefix is automatically added, unless the regex starts with '^'. (default: '%(default)s')",
     )
 
