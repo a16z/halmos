@@ -23,6 +23,7 @@ from halmos.sevm import (
     iter_bytes,
     wload,
     wstore,
+    wstore_bytes,
     Path,
 )
 
@@ -392,3 +393,19 @@ def test_wload_bad_byte():
 
     with pytest.raises(ValueError):
         wload([512], 0, 1, prefer_concrete=False)
+
+
+def test_wstore_bytes_concrete():
+    mem = [0] * 4
+    wstore_bytes(mem, 0, 4, bytes.fromhex("12345678"))
+    assert mem == [0x12, 0x34, 0x56, 0x78]
+
+
+def test_wstore_bytes_concolic():
+    mem1 = [0] * 4
+    wstore(mem1, 0, 4, con(0x12345678, 32))
+
+    mem2 = [0] * 4
+    wstore_bytes(mem2, 0, 4, mem1)
+
+    assert mem2 == [0x12, 0x34, 0x56, 0x78]
