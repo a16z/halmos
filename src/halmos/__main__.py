@@ -759,13 +759,13 @@ def run(
         passfail = color_warn("[FAIL]")
         exitcode = Exitcode.COUNTEREXAMPLE.value
     elif counter["unknown"] > 0:
-        passfail = color_warn("[FAIL]") + color_debug("[timeout]")
+        passfail = color_warn("[TIMEOUT]")
         exitcode = Exitcode.TIMEOUT.value
     elif len(stuck) > 0:
-        passfail = color_warn("[FAIL]") + color_debug("[execution blocked]")
+        passfail = color_warn("[ERROR]")
         exitcode = Exitcode.STUCK.value
     elif normal == 0:
-        passfail = color_warn("[FAIL]") + color_debug("[revert all]")
+        passfail = color_warn("[REVERT]")
         exitcode = Exitcode.REVERT_ALL.value
     else:
         passfail = color_good("[PASS]")
@@ -865,7 +865,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.args,
         )
     except Exception as err:
-        print(f"{color_warn('[FAIL]')}{color_debug('[exception]')} {fn_args.fun_info.sig}")
+        print(f"{color_warn('[ERROR]')} {fn_args.fun_info.sig}")
         error(f"{type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
@@ -981,7 +981,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             )
             test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
         except Exception as err:
-            print(f"{color_warn('[FAIL]')}{color_debug('[exception]')} {funsig}")
+            print(f"{color_warn('[ERROR]')} {funsig}")
             print(color_warn(f"{type(err).__name__}: {err}"))
             if args.debug:
                 traceback.print_exc()
