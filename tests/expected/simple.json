@@ -82,7 +82,7 @@
         "test/Vault.t.sol:VaultTest": [
             {
                 "name": "check_deposit(uint256)",
-                "exitcode": 1,
+                "exitcode": 2,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,

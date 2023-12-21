@@ -23,6 +23,7 @@ COUNTEREXAMPLE_UNKNOWN = ErrorCode("counterexample-unknown")
 INTERNAL_ERROR = ErrorCode("internal-error")
 UNSUPPORTED_OPCODE = ErrorCode("unsupported-opcode")
 LIBRARY_PLACEHOLDER = ErrorCode("library-placeholder")
+REVERT_ALL = ErrorCode("revert-all")
 
 LOOP_BOUND = ErrorCode("loop-bound")
 UNINTERPRETED_UNKNOWN_CALLS = ErrorCode("uninterpreted-unknown-calls")
