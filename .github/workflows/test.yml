@@ -42,7 +42,7 @@ jobs:
           pip install pytest
 
       - name: Install Halmos
-        run: pip install -e .
+        run: pip install --upgrade --upgrade-strategy eager -e .
 
       - name: Run pytest
         run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-v -st --error-unknown ${{ matrix.parallel }} --storage-layout ${{ matrix.storage-layout }} --solver-timeout-assertion 0" -s --log-cli-level=

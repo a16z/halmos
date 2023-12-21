@@ -44,7 +44,7 @@ jobs:
           pip install pytest
 
       - name: Install Halmos
-        run: pip install -e .
+        run: pip install --upgrade --upgrade-strategy eager -e .
 
       - name: Run pytest
         run: pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="-v -st --error-unknown --solver-timeout-assertion 0 --solver-threads 2" -s --log-cli-level=
