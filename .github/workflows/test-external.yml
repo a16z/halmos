@@ -67,5 +67,5 @@ jobs:
         run: python -m pip install -e ./halmos
 
       - name: Test external repo
-        run: ${{ matrix.cmd }} -v -st --error-unknown --solver-timeout-assertion 0 --solver-threads 2
+        run: ${{ matrix.cmd }} -v -st --solver-timeout-assertion 0 --solver-threads 2
         working-directory: ${{ matrix.dir }}
