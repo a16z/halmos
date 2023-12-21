@@ -767,7 +767,10 @@ def run(
     elif normal == 0:
         passfail = color_warn("[ERROR]")
         exitcode = Exitcode.REVERT_ALL.value
-        warn(REVERT_ALL, f"{funsig}: all paths have been reverted; the setup state or inputs may have been too restrictive.")
+        warn(
+            REVERT_ALL,
+            f"{funsig}: all paths have been reverted; the setup state or inputs may have been too restrictive.",
+        )
     else:
         passfail = color_good("[PASS]")
         exitcode = Exitcode.PASS.value
