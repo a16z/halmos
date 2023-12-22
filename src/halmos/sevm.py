@@ -253,9 +253,20 @@ def wstore_bytes(
         raise ValueError(size, arr)
     wextend(mem, loc, size)
     for i in range(size):
-        if not eq(arr[i].sort(), BitVecSort8):
-            raise ValueError(arr)
-        mem[loc + i] = arr[i]
+        val = arr[i]
+        if not is_byte(val):
+            raise ValueError(val)
+
+        mem[loc + i] = val
+
+
+def is_byte(x: Any) -> bool:
+    if is_bv(x):
+        return eq(x.sort(), BitVecSort8)
+    elif isinstance(x, int):
+        return 0 <= x < 256
+    else:
+        return False
 
 
 def normalize(expr: Any) -> Any:
