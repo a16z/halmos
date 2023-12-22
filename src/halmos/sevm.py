@@ -246,10 +246,6 @@ def wstore_partial(
         raise ValueError(data)
 
 
-def is_byte(x: Any) -> bool:
-    return x in range(0, 256) or (is_bv(x) and eq(x.sort(), BitVecSort8))
-
-
 def wstore_bytes(
     mem: List[UnionType[int, BitVecRef]], loc: int, size: int, arr: List[Byte]
 ) -> None:
@@ -262,6 +258,15 @@ def wstore_bytes(
             raise ValueError(val)
 
         mem[loc + i] = val
+
+
+def is_byte(x: Any) -> bool:
+    if is_bv(x):
+        return eq(x.sort(), BitVecSort8)
+    elif isinstance(x, int):
+        return 0 <= x < 256
+    else:
+        return False
 
 
 def normalize(expr: Any) -> Any:
