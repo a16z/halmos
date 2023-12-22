@@ -7,7 +7,7 @@ from typing import Dict, Tuple, Any, Optional, Union as UnionType
 
 from z3 import *
 
-from .exceptions import NotConcreteError
+from .exceptions import NotConcreteError, HalmosException
 
 
 Word = Any  # z3 expression (including constants)
@@ -148,7 +148,8 @@ def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
     if length == 0:
         return b""
 
-    return bv_value_to_bytes(extract_bytes(calldata, 4 + offset + 32, length))
+    bytes = extract_bytes(calldata, 4 + offset + 32, length)
+    return bv_value_to_bytes(bytes) if is_bv_value(bytes) else bytes
 
 
 def extract_string_argument(calldata: BitVecRef, arg_idx: int):
@@ -215,16 +216,16 @@ def int_of(x: Any, err: str = "expected concrete value but got") -> int:
     raise NotConcreteError(f"{err}: {x}")
 
 
-def byte_length(x: Any) -> int:
+def byte_length(x: Any, strict=True) -> int:
     if is_bv(x):
-        if x.size() % 8 != 0:
-            raise ValueError(x)
-        return x.size() >> 3
+        if x.size() % 8 != 0 and strict:
+            raise HalmosException(f"byte_length({x}) with bit size {x.size()}")
+        return math.ceil(x.size() / 8)
 
     if isinstance(x, bytes):
         return len(x)
 
-    raise ValueError(x)
+    raise HalmosException(f"byte_length({x}) of type {type(x)}")
 
 
 def decode_hex(hexstring: str) -> Optional[bytes]:
@@ -246,24 +247,32 @@ def hexify(x):
         return "0x" + x.hex()
     elif is_bv_value(x):
         # maintain the byte size of x
-        num_bytes = byte_length(x)
+        num_bytes = byte_length(x, strict=False)
         return f"0x{x.as_long():0{num_bytes * 2}x}"
+    elif is_app(x):
+        return f"{str(x.decl())}({', '.join(map(hexify, x.children()))})"
     else:
         return hexify(str(x))
 
 
 def render_uint(x: BitVecRef) -> str:
-    val = int_of(x)
-    return f"0x{val:0{byte_length(x) * 2}x} ({val})"
+    if is_bv_value(x):
+        val = int_of(x)
+        return f"0x{val:0{byte_length(x, strict=False) * 2}x} ({val})"
+
+    return hexify(x)
 
 
 def render_int(x: BitVecRef) -> str:
-    val = x.as_signed_long()
-    return f"0x{x.as_long():0{byte_length(x) * 2}x} ({val})"
+    if is_bv_value(x):
+        val = x.as_signed_long()
+        return f"0x{x.as_long():0{byte_length(x, strict=False) * 2}x} ({val})"
+
+    return hexify(x)
 
 
 def render_bool(b: BitVecRef) -> str:
-    return str(b.as_long() != 0).lower()
+    return str(b.as_long() != 0).lower() if is_bv_value(b) else hexify(b)
 
 
 def render_string(s: BitVecRef) -> str:
@@ -273,13 +282,16 @@ def render_string(s: BitVecRef) -> str:
 
 def render_bytes(b: UnionType[BitVecRef, bytes]) -> str:
     if is_bv(b):
-        return f'hex"{hex(b.as_long())[2:]}"'
+        return hexify(b) + f" ({byte_length(b, strict=False)} bytes)"
     else:
         return f'hex"{b.hex()[2:]}"'
 
 
 def render_address(a: BitVecRef) -> str:
-    return f"0x{a.as_long():040x}"
+    if is_bv_value(a):
+        return f"0x{a.as_long():040x}"
+
+    return hexify(a)
 
 
 def stringify(symbol_name: str, val: Any):
