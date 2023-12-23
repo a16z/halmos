@@ -83,6 +83,10 @@ def test_rendered_calldata_symbolic():
     assert rendered_calldata([con(1, 8), con(2, 8), con(3, 8)]) == "0x010203"
 
 
+def test_rendered_calldata_symbolic_singleton():
+    assert rendered_calldata([con(0x42, 8)]) == "0x42"
+
+
 def test_rendered_calldata_concrete():
     assert rendered_calldata([1, 2, 3]) == "0x010203"
 

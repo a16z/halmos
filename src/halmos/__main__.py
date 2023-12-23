@@ -241,7 +241,7 @@ def rendered_calldata(calldata: List[Byte]) -> str:
     if any(is_bv(x) for x in calldata):
         # make sure every byte is wrapped
         calldata_bv = [x if is_bv(x) else con(x, 8) for x in calldata]
-        return hexify(simplify(Concat(calldata_bv)))
+        return hexify(simplify(concat(calldata_bv)))
 
     return "0x" + bytes(calldata).hex() if calldata else "0x"
 
