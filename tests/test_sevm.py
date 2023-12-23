@@ -2,6 +2,7 @@ import pytest
 
 from z3 import *
 
+from halmos.exceptions import OutOfGasError
 from halmos.utils import EVM
 
 from halmos.sevm import (
@@ -326,6 +327,17 @@ def test_stack_underflow_pop(sevm: SEVM, solver, storage):
     # TODO: from the outside, we should get an specific exception like StackUnderflowError
     with pytest.raises(Exception):
         list(sevm.run(ex))
+
+
+def test_large_memory_offset(sevm: SEVM, solver, storage):
+    # check that we get an exception when popping from an empty stack
+    for op in [o(EVM.MLOAD), o(EVM.MSTORE), o(EVM.MSTORE8)]:
+        ex = mk_ex(op, sevm, solver, storage, caller, this)
+        ex.st.stack.append(con(42))  # value, ignored by MLOAD
+        ex.st.stack.append(con(2**64))  # offset too big to fit in memory
+
+    exs = list(sevm.run(ex))
+    assert len(exs) == 1 and isinstance(exs[0].context.output.error, OutOfGasError)
 
 
 def test_iter_bytes_bv_val():

@@ -4,7 +4,8 @@ import json
 from typing import Dict
 from dataclasses import asdict
 
-from halmos.__main__ import _main
+from halmos.__main__ import _main, rendered_calldata
+from halmos.sevm import con
 
 from test_fixtures import halmos_options
 
@@ -76,3 +77,23 @@ def assert_eq(m1: Dict, m2: Dict) -> int:
             assert r1["name"] == r2["name"]
             assert r1["exitcode"] == r2["exitcode"], f"{c} {r1['name']}"
             assert r1["num_models"] == r2["num_models"], f"{c} {r1['name']}"
+
+
+def test_rendered_calldata_symbolic():
+    assert rendered_calldata([con(1, 8), con(2, 8), con(3, 8)]) == "0x010203"
+
+
+def test_rendered_calldata_symbolic_singleton():
+    assert rendered_calldata([con(0x42, 8)]) == "0x42"
+
+
+def test_rendered_calldata_concrete():
+    assert rendered_calldata([1, 2, 3]) == "0x010203"
+
+
+def test_rendered_calldata_mixed():
+    assert rendered_calldata([con(1, 8), 2, con(3, 8)]) == "0x010203"
+
+
+def test_rendered_calldata_empty():
+    assert rendered_calldata([]) == "0x"
