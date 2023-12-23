@@ -13,3 +13,6 @@
 [submodule "tests/lib/solady"]
 	path = tests/lib/solady
 	url = https://github.com/Vectorized/solady
+[submodule "tests/lib/multicaller"]
+	path = tests/lib/multicaller
+	url = https://github.com/Vectorized/multicaller
