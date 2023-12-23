@@ -39,6 +39,8 @@ Steps = Dict[int, Dict[str, Any]]  # execution tree
 EMPTY_BYTES = b""
 MAX_CALL_DEPTH = 1024
 
+# TODO: make this configurable
+MAX_MEMORY_SIZE = 2**20
 
 # symbolic states
 # calldataload(index)
@@ -170,6 +172,10 @@ def instruction_length(opcode: Any) -> int:
 
 
 def wextend(mem: List[UnionType[int, BitVecRef]], loc: int, size: int) -> None:
+    new_msize = loc + size
+    if new_msize > MAX_MEMORY_SIZE:
+        raise OutOfGasError(f"memory offset {new_msize} exceeds max memory")
+
     mem.extend([0] * (loc + size - len(mem)))
 
 
