@@ -237,6 +237,15 @@ def rendered_trace(context: CallContext) -> str:
         return output.getvalue()
 
 
+def rendered_calldata(calldata: List[Byte]) -> str:
+    if any(is_bv(x) for x in calldata):
+        # make sure every byte is wrapped
+        calldata_bv = [x if is_bv(x) else con(x, 8) for x in calldata]
+        return hexify(simplify(concat(calldata_bv)))
+
+    return "0x" + bytes(calldata).hex() if calldata else "0x"
+
+
 def render_trace(context: CallContext, file=sys.stdout) -> None:
     # TODO: label for known addresses
     # TODO: decode calldata
@@ -261,12 +270,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
         )
 
     else:
-        calldata = (
-            hexify(simplify(Concat(message.data)))
-            if any(is_bv(x) for x in message.data)
-            else bytes(message.data).hex() or "0x"
-        )
-
+        calldata = rendered_calldata(message.data)
         call_str = f"{addr_str}::{calldata}"
         static_str = yellow(" [static]") if message.is_static else ""
         print(f"{indent}{call_scheme_str}{call_str}{static_str}{value_str}", file=file)
@@ -1421,6 +1425,8 @@ def _main(_args=None) -> MainResult:
         result = MainResult(exitcode, test_results_map)
 
         if args.json_output:
+            if args.debug:
+                debug(f"Writing output to {args.json_output}")
             with open(args.json_output, "w") as json_file:
                 json.dump(asdict(result), json_file, indent=4)
 
@@ -1428,7 +1434,7 @@ def _main(_args=None) -> MainResult:
 
     def on_signal(signum, frame):
         if args.debug:
-            debug(f"Signal {signum} received. Dumping {test_results_map}...")
+            debug(f"Signal {signum} received")
         exitcode = 128 + signum
         on_exit(exitcode)
         sys.exit(exitcode)
