@@ -186,9 +186,7 @@ def extract_funsig(calldata: BitVecRef):
 
 
 def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
-    if x.size() % 8 != 0:
-        raise ValueError(x, x.size())
-    return x.as_long().to_bytes(x.size() // 8, "big")
+    return x.as_long().to_bytes(byte_length(x, strict=True), "big")
 
 
 def unbox_int(x: Any) -> Any:
@@ -228,12 +226,15 @@ def byte_length(x: Any, strict=True) -> int:
     raise HalmosException(f"byte_length({x}) of type {type(x)}")
 
 
+def stripped(hexstring: str) -> str:
+    """Remove 0x prefix from hexstring"""
+    return hexstring[2:] if hexstring.startswith("0x") else hexstring
+
+
 def decode_hex(hexstring: str) -> Optional[bytes]:
-    if hexstring.startswith("0x"):
-        hexstring = hexstring[2:]
     try:
         # not checking if length is even because fromhex accepts spaces
-        return bytes.fromhex(hexstring)
+        return bytes.fromhex(stripped(hexstring))
     except ValueError:
         return None
 
@@ -276,7 +277,7 @@ def render_bool(b: BitVecRef) -> str:
 
 
 def render_string(s: BitVecRef) -> str:
-    str_val = bytes.fromhex(hexify(s)[2:]).decode("utf-8")
+    str_val = bytes.fromhex(stripped(hexify(s))).decode("utf-8")
     return f'"{str_val}"'
 
 
@@ -284,7 +285,7 @@ def render_bytes(b: UnionType[BitVecRef, bytes]) -> str:
     if is_bv(b):
         return hexify(b) + f" ({byte_length(b, strict=False)} bytes)"
     else:
-        return f'hex"{b.hex()[2:]}"'
+        return f'hex"{stripped(b.hex())}"'
 
 
 def render_address(a: BitVecRef) -> str:
