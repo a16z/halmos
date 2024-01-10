@@ -551,14 +551,11 @@ class Contract:
         if len(hexcode) % 2 != 0:
             raise ValueError(hexcode)
 
-        if hexcode.startswith("0x"):
-            hexcode = hexcode[2:]
-
         if "__" in hexcode:
             warn(LIBRARY_PLACEHOLDER, f"contract hexcode contains library placeholder")
 
         try:
-            return Contract(bytes.fromhex(hexcode))
+            return Contract(bytes.fromhex(stripped(hexcode)))
         except ValueError as e:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
@@ -1069,7 +1066,7 @@ class Exec:  # an execution path
                 )
 
                 placeholder = lib_references[lib]["placeholder"]
-                hex_address = hex(address.as_long())[2:].zfill(40)
+                hex_address = stripped(hex(address.as_long())).zfill(40)
 
                 creation_hexcode = creation_hexcode.replace(placeholder, hex_address)
                 deployed_hexcode = deployed_hexcode.replace(placeholder, hex_address)

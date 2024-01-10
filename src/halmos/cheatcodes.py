@@ -45,11 +45,9 @@ def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
 def stringified_bytes_to_bytes(hexstring: str):
     """Converts a string of bytes to a bytes memory type"""
 
-    if hexstring.startswith("0x"):
-        hexstring = hexstring[2:]
-
+    hexstring = stripped(hexstring)
     hexstring_len = (len(hexstring) + 1) // 2
-    hexstring_len_enc = hex(hexstring_len)[2:].rjust(64, "0")
+    hexstring_len_enc = stripped(hex(hexstring_len)).rjust(64, "0")
     hexstring_len_ceil = (hexstring_len + 31) // 32 * 32
 
     ret_bytes = bytes.fromhex(
@@ -308,7 +306,7 @@ class hevm_cheat_code:
 
         # vm.getCode(string)
         elif funsig == hevm_cheat_code.get_code_sig:
-            calldata = bytes.fromhex(hex(arg.as_long())[2:])
+            calldata = bv_value_to_bytes(arg)
             path_len = int.from_bytes(calldata[36:68], "big")
             path = calldata[68 : 68 + path_len].decode("utf-8")
 
