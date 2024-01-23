@@ -562,7 +562,7 @@ class Contract:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
     def decode_instruction(self, pc: int) -> Instruction:
-        opcode = int_of(self[pc])
+        opcode = int_of(self[pc], f"symbolic opcode at pc={pc}")
 
         if EVM.PUSH1 <= opcode <= EVM.PUSH32:
             operand = self.slice(pc + 1, pc + opcode - EVM.PUSH0 + 1)
@@ -592,10 +592,9 @@ class Contract:
         return bytes(data)
 
     @cache
-    def __getitem__(self, offset: int) -> UnionType[int, BitVecRef]:
+    def __getitem__(self, key: int) -> UnionType[int, BitVecRef]:
         """Returns the byte at the given offset."""
-        if not isinstance(offset, int):
-            raise ValueError("unexpected program offset {offset!r}")
+        offset = int_of(key, "symbolic index into contract bytecode {offset!r}")
 
         # support for negative indexing, e.g. contract[-1]
         if offset < 0:
@@ -639,6 +638,9 @@ class CodeIterator:
     def __next__(self) -> Instruction:
         """Returns a tuple of (pc, opcode)"""
         if self.pc >= len(self.contract):
+            raise StopIteration
+
+        if self.is_symbolic and is_bv(self.contract[self.pc]):
             raise StopIteration
 
         insn = self.contract.decode_instruction(self.pc)
