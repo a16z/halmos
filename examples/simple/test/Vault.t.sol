@@ -26,6 +26,7 @@ contract VaultTest is SymTest {
         vault.setTotalShares(svm.createUint256("S1"));
     }
 
+    /// need to set a timeout for this test, the solver can run for hours
     /// @custom:halmos --solver-timeout-assertion 10000
     function check_deposit(uint assets) public {
         uint A1 = vault.totalAssets();
