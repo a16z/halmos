@@ -1021,6 +1021,7 @@ def solve(
         with open(dump_filename, "w") as f:
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)
+            f.write("(get-model)\n")
 
     solver = mk_solver(args, ctx=Context(), assertion=True)
     solver.from_string(query)
