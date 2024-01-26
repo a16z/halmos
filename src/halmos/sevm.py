@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import json
 import math
 import re
 
@@ -534,7 +533,23 @@ class Contract:
         self._rawcode = rawcode
 
     def __init_jumpdests(self):
-        self.jumpdests = set((insn.pc for insn in self if insn.opcode == EVM.JUMPDEST))
+        pc = 0
+        jumpdests = set()
+        n = len(self)
+        while pc < n:
+            # TODO: this is fine when the code is concrete (just a bytes object)
+            # but when the code is a mix of concrete and symbolic (e.g. a Concat() of bytes and BitVecs),
+            # this will result in somewhat expensive Extract() operations
+            opcode = self[pc]
+            if not is_concrete(opcode):
+                break
+
+            opcode_int = int_of(opcode)
+            if opcode_int == EVM.JUMPDEST:
+                jumpdests.add(pc)
+            pc += instruction_length(opcode_int)
+
+        self.jumpdests = jumpdests
 
     def __iter__(self):
         return CodeIterator(self)
