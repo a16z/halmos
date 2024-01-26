@@ -6,7 +6,7 @@ import re
 from copy import deepcopy
 from collections import defaultdict
 from dataclasses import dataclass, field
-from functools import cache, reduce
+from functools import reduce, lru_cache
 from typing import (
     Any,
     Callable,
@@ -591,7 +591,7 @@ class Contract:
         data = padded_slice(self._rawcode, start, size, default=0)
         return bytes(data)
 
-    @cache
+    @lru_cache(maxsize=256)
     def __getitem__(self, key: int) -> UnionType[int, BitVecRef]:
         """Returns the byte at the given offset."""
         offset = int_of(key, "symbolic index into contract bytecode {offset!r}")
