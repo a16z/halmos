@@ -2,7 +2,7 @@ import pytest
 
 from z3 import *
 
-from halmos.exceptions import OutOfGasError
+from halmos.exceptions import OutOfGasError, InvalidJumpDestError
 from halmos.utils import EVM
 
 from halmos.sevm import (
@@ -421,3 +421,19 @@ def test_wstore_bytes_concolic():
     wstore_bytes(mem2, 0, 4, mem1)
 
     assert mem2 == [0x12, 0x34, 0x56, 0x78]
+
+
+def test_illegal_jump(sevm: SEVM, solver, storage):
+    # PUSH2 0x5b00
+    # PUSH1 0x1
+    # JUMP
+    hexcode = bytes.fromhex("615b00600156")
+    ex = mk_ex(hexcode, sevm, solver, storage, caller, this)
+    exs = list(sevm.run(ex))
+
+    assert isinstance(exs[0].context.output.error, InvalidJumpDestError)
+
+
+def test_illegal_jumpi(sevm: SEVM, solver, storage):
+    # TODO
+    pass

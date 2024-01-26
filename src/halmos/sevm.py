@@ -167,7 +167,7 @@ def mnemonic(opcode) -> str:
 
 
 def instruction_length(opcode: Any) -> int:
-    opcode = int_of(opcode)
+    opcode = int_of(opcode, "can not determine instruction length for symbolic opcode")
     return (opcode - EVM.PUSH0 + 1) if EVM.PUSH1 <= opcode <= EVM.PUSH32 else 1
 
 
@@ -534,11 +534,7 @@ class Contract:
         self._rawcode = rawcode
 
     def __init_jumpdests(self):
-        self.jumpdests = set()
-
-        for insn in iter(self):
-            if insn.opcode == EVM.JUMPDEST:
-                self.jumpdests.add(insn.pc)
+        self.jumpdests = set((insn.pc for insn in self if insn.opcode == EVM.JUMPDEST))
 
     def __iter__(self):
         return CodeIterator(self)
@@ -560,7 +556,7 @@ class Contract:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
     def decode_instruction(self, pc: int) -> Instruction:
-        opcode = int_of(self[pc])
+        opcode = int_of(self[pc], f"symbolic opcode at pc={pc} in {self._rawcode}")
 
         if EVM.PUSH1 <= opcode <= EVM.PUSH32:
             operand = self[pc + 1 : pc + opcode - EVM.PUSH0 + 1]
@@ -644,6 +640,9 @@ class CodeIterator:
     def __next__(self) -> Instruction:
         """Returns a tuple of (pc, opcode)"""
         if self.pc >= len(self.contract):
+            raise StopIteration
+
+        if self.is_symbolic and is_bv(self.contract[self.pc]):
             raise StopIteration
 
         insn = self.contract.decode_instruction(self.pc)
@@ -2140,6 +2139,9 @@ class SEVM:
         # if dst is concrete, just jump
         if is_concrete(dst):
             ex.pc = int_of(dst)
+            if not ex.pc in ex.pgm.valid_jump_destinations():
+                raise InvalidJumpDestError(ex.pc, ex.pgm.valid_jump_destinations())
+
             stack.append((ex, step_id))
 
         # otherwise, create a new execution for feasible targets
