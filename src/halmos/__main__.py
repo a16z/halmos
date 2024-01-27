@@ -335,7 +335,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         else:
             print(f"Final opcode: {mnemonic(opcode)})")
             print(f"Return data: {returndata}")
-            dump_dirname = f"/tmp/halmos-{uuid.uuid4()}"
+            dump_dirname = f"/tmp/halmos-{uuid.uuid4().hex}"
             model_with_context = gen_model_from_sexpr(
                 GenModelArgs(args, idx, ex.path.solver.to_smt2(), dump_dirname)
             )
