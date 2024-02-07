@@ -335,8 +335,9 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         else:
             print(f"Final opcode: {mnemonic(opcode)})")
             print(f"Return data: {returndata}")
+            dump_dirname = f"/tmp/halmos-{uuid.uuid4().hex}"
             model_with_context = gen_model_from_sexpr(
-                GenModelArgs(args, idx, ex.path.solver.to_smt2())
+                GenModelArgs(args, idx, ex.path.solver.to_smt2(), dump_dirname)
             )
             print(f"Input example: {model_with_context.model}")
 
@@ -579,7 +580,7 @@ def run(
     if args.verbose >= 1:
         print(f"Executing {funname}")
 
-    dump_dirname = f"/tmp/{funname}.{uuid.uuid4().hex}"
+    dump_dirname = f"/tmp/{funname}-{uuid.uuid4().hex}"
 
     #
     # calldata
@@ -715,19 +716,10 @@ def run(
             query = ex.path.solver.to_smt2()
 
             future_model = thread_pool.submit(
-                gen_model_from_sexpr, GenModelArgs(args, idx, query)
+                gen_model_from_sexpr, GenModelArgs(args, idx, query, dump_dirname)
             )
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
-
-            if args.dump_smt_queries:
-                if not os.path.isdir(dump_dirname):
-                    os.makedirs(dump_dirname)
-                    print(f"Generating SMT queries in {dump_dirname}")
-
-                with open(f"{dump_dirname}/{idx+1}.smt2", "w") as f:
-                    f.write("(set-logic QF_AUFBV)\n")
-                    f.write(query)
 
         elif ex.context.is_stuck():
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
@@ -1015,13 +1007,22 @@ class GenModelArgs:
     args: Namespace
     idx: int
     sexpr: str
+    dump_dirname: Optional[str] = None
 
 
 def copy_model(model: Model) -> Dict:
     return {decl: model[decl] for decl in model}
 
 
-def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
+def solve(
+    query: str, args: Namespace, dump_filename: Optional[str] = None
+) -> Tuple[CheckSatResult, Model]:
+    if dump_filename:
+        with open(dump_filename, "w") as f:
+            f.write("(set-logic QF_AUFBV)\n")
+            f.write(query)
+            f.write("(get-model)\n")
+
     solver = mk_solver(args, ctx=Context(), assertion=True)
     solver.from_string(query)
     result = solver.check()
@@ -1032,16 +1033,27 @@ def solve(query: str, args: Namespace) -> Tuple[CheckSatResult, Model]:
 def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
     args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
 
+    dump_dirname = fn_args.dump_dirname if args.dump_smt_queries else None
+    dump_filename = f"{dump_dirname}/{idx+1}.smt2" if dump_dirname else None
+    if dump_dirname:
+        if not os.path.isdir(dump_dirname):
+            os.makedirs(dump_dirname)
+            print(f"Generating SMT queries in {dump_dirname}")
+
     if args.verbose >= 1:
         print(f"Checking path condition (path id: {idx+1})")
 
-    res, model = solve(sexpr, args)
+    res, model = solve(sexpr, args, dump_filename)
 
     if res == sat and not is_model_valid(model):
         if args.verbose >= 1:
             print(f"  Checking again with refinement")
 
-        res, model = solve(refine(sexpr), args)
+        res, model = solve(
+            refine(sexpr),
+            args,
+            dump_filename.replace(".smt2", ".refined.smt2") if dump_filename else None,
+        )
 
     if args.solver_subprocess and is_unknown(res, model):
         fname = f"/tmp/{uuid.uuid4().hex}.smt2"
