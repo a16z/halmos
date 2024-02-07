@@ -1,13 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import json
 import math
 import re
 
 from copy import deepcopy
 from collections import defaultdict
 from dataclasses import dataclass, field
-from functools import reduce
+from functools import reduce, lru_cache
 from typing import (
     Any,
     Callable,
@@ -533,6 +532,9 @@ class Contract:
 
         self._rawcode = rawcode
 
+        # cache length since it doesn't change after initialization
+        self._length = byte_length(rawcode)
+
     def __init_jumpdests(self):
         self.jumpdests = set()
 
@@ -560,10 +562,10 @@ class Contract:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
     def decode_instruction(self, pc: int) -> Instruction:
-        opcode = int_of(self[pc])
+        opcode = int_of(self[pc], f"symbolic opcode at pc={pc}")
 
         if EVM.PUSH1 <= opcode <= EVM.PUSH32:
-            operand = self[pc + 1 : pc + opcode - EVM.PUSH0 + 1]
+            operand = self.slice(pc + 1, pc + opcode - EVM.PUSH0 + 1)
             return Instruction(opcode, pc=pc, operand=operand)
 
         return Instruction(opcode, pc=pc)
@@ -572,16 +574,10 @@ class Contract:
         opcode = self[pc]
         return pc + instruction_length(opcode)
 
-    def __getslice__(self, slice):
-        step = 1 if slice.step is None else slice.step
-        if step != 1:
-            return ValueError(f"slice step must be 1 but got {slice}")
-
+    def slice(self, start, stop) -> UnionType[bytes, BitVecRef]:
         # symbolic
         if is_bv(self._rawcode):
-            extracted = extract_bytes(
-                self._rawcode, slice.start, slice.stop - slice.start
-            )
+            extracted = extract_bytes(self._rawcode, start, stop - start)
 
             # check if that part of the code is concrete
             if is_bv_value(extracted):
@@ -591,16 +587,14 @@ class Contract:
                 return extracted
 
         # concrete
-        size = slice.stop - slice.start
-        data = padded_slice(self._rawcode, slice.start, size, default=0)
+        size = stop - start
+        data = padded_slice(self._rawcode, start, size, default=0)
         return bytes(data)
 
-    def __getitem__(self, key) -> UnionType[int, BitVecRef]:
+    @lru_cache(maxsize=256)
+    def __getitem__(self, key: int) -> UnionType[int, BitVecRef]:
         """Returns the byte at the given offset."""
-        if isinstance(key, slice):
-            return self.__getslice__(key)
-
-        offset = int_of(key, "symbolic index into contract bytecode")
+        offset = int_of(key, "symbolic index into contract bytecode {offset!r}")
 
         # support for negative indexing, e.g. contract[-1]
         if offset < 0:
@@ -622,7 +616,7 @@ class Contract:
 
     def __len__(self) -> int:
         """Returns the length of the bytecode in bytes."""
-        return byte_length(self._rawcode)
+        return self._length
 
     def valid_jump_destinations(self) -> set:
         """Returns the set of valid jump destinations."""
@@ -644,6 +638,9 @@ class CodeIterator:
     def __next__(self) -> Instruction:
         """Returns a tuple of (pc, opcode)"""
         if self.pc >= len(self.contract):
+            raise StopIteration
+
+        if self.is_symbolic and is_bv(self.contract[self.pc]):
             raise StopIteration
 
         insn = self.contract.decode_instruction(self.pc)
@@ -1047,8 +1044,7 @@ class Exec:  # an execution path
         if pc < 0:
             raise ValueError(pc)
 
-        opcode = unbox_int(self.pgm[pc])
-        return opcode == EVM.JUMPDEST
+        return pc in self.pgm.valid_jump_destinations()
 
     def jumpi_id(self) -> str:
         return f"{self.pc}:" + ",".join(
@@ -2507,7 +2503,7 @@ class SEVM:
                     size: int = int_of(ex.st.pop(), "symbolic CODECOPY size")
                     wextend(ex.st.memory, loc, size)
 
-                    codeslice = ex.pgm[offset : offset + size]
+                    codeslice = ex.pgm.slice(offset, offset + size)
 
                     actual_size = byte_length(codeslice)
                     if actual_size != size:
