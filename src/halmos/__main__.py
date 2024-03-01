@@ -1399,6 +1399,7 @@ def _main(_args=None) -> MainResult:
     build_cmd = [
         "forge",  # shutil.which('forge')
         "build",
+        "--build-info",
         "--root",
         args.root,
         "--extra-output",
