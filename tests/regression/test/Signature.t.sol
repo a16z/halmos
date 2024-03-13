@@ -23,6 +23,8 @@ contract SymAccount is SymTest {
 }
 
 contract SignatureTest is SymTest, Test {
+    uint256 constant private ECRECOVER_PRECOMPILE = 1;
+
     function check_isValidSignatureNow(bytes32 hash, bytes memory signature) public {
         address signer = address(new SymAccount());
         if (!SignatureChecker.isValidSignatureNow(signer, hash, signature)) revert();
@@ -50,5 +52,24 @@ contract SignatureTest is SymTest, Test {
         address signer = ecrecover(hash, v, r, s);
         if (signer == address(0)) revert();
         assert(true);
+    }
+
+    function check_vmaddr_consistent(uint256 privateKey) public {
+        address addr1 = vm.addr(privateKey);
+        address addr1Bis = vm.addr(privateKey);
+
+        assertEq(addr1, addr1Bis);
+    }
+
+    function check_vmaddr_noCollision(
+        uint256 privateKey1,
+        uint256 privateKey2
+    ) public {
+        vm.assume(privateKey1 != privateKey2);
+
+        address addr1 = vm.addr(privateKey1);
+        address addr2 = vm.addr(privateKey2);
+
+        assertNotEq(addr1, addr2);
     }
 }

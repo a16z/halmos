@@ -287,6 +287,12 @@ class hevm_cheat_code:
     # bytes4(keccak256("ffi(string[])"))
     ffi_sig: int = 0x89160467
 
+    # addr(uint256)
+    addr_sig: int = 0xFFA18649
+
+    # maps addr to private key for known associations
+    known_keys = dict()
+
     @staticmethod
     def handle(sevm, ex, arg: BitVec) -> BitVec:
         funsig: int = int_of(extract_funsig(arg), "symbolic hevm cheatcode")
@@ -447,6 +453,32 @@ class hevm_cheat_code:
                 out_str = out_str.encode("utf-8").hex()
 
             return stringified_bytes_to_bytes(out_str)
+
+        elif funsig == hevm_cheat_code.addr_sig:
+            private_key = extract_bytes(arg, 4, 32)
+
+            # TODO: check (or assume?) private_key is valid
+            #  - less than curve order
+            #  - not zero
+
+            # check if this private key has an existing address associated with it
+            known_keys = hevm_cheat_code.known_keys
+            addr = known_keys.get(private_key, None)
+            if addr is None:
+                # if not, create a new address
+                len_keys = len(known_keys)
+                addr_name = f"addr_{private_key.decl().name()}_{len_keys}"
+                addr = BitVec(addr_name, 160)
+
+                # mark the addresses as distinct
+                for other_key, other_addr in known_keys.items():
+                    distinct = Implies(private_key != other_key, addr != other_addr)
+                    ex.path.append(distinct)
+
+                # associate the new address with the private key
+                known_keys[private_key] = addr
+
+            return uint256(addr)
 
         else:
             # TODO: support other cheat codes

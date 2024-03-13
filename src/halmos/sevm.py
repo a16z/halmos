@@ -1828,6 +1828,9 @@ class SEVM:
             if eq(to, con_addr(1)):
                 ex.path.append(exit_code_var != con(0))
 
+                # TODO: explicitly return 32 bytes of data
+                # TODO: must tie the returned address to the input data
+
             # identity
             if eq(to, con_addr(4)):
                 ex.path.append(exit_code_var != con(0))
