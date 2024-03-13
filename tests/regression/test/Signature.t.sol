@@ -3,6 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 import {Test} from "forge-std/Test.sol";
+import {console2} from "forge-std/console2.sol";
 
 import {SignatureChecker} from "openzeppelin/utils/cryptography/SignatureChecker.sol";
 import {ECDSA} from "openzeppelin/utils/cryptography/ECDSA.sol";
@@ -56,12 +57,12 @@ contract SignatureTest is SymTest, Test {
 
     function check_vmaddr_consistent(uint256 privateKey) public {
         address addr1 = vm.addr(privateKey);
-        address addr1Bis = vm.addr(privateKey);
+        address addr2 = vm.addr(privateKey);
 
-        assertEq(addr1, addr1Bis);
+        assertEq(addr1, addr2);
     }
 
-    function check_vmaddr_noCollision(
+    function check_vmaddr_noCollision_symbolic(
         uint256 privateKey1,
         uint256 privateKey2
     ) public {
@@ -71,5 +72,109 @@ contract SignatureTest is SymTest, Test {
         address addr2 = vm.addr(privateKey2);
 
         assertNotEq(addr1, addr2);
+    }
+
+    function check_vmaddr_noCollision_concrete(
+        uint256 privateKey1,
+        uint256 privateKey2
+    ) public {
+        assertNotEq(vm.addr(42), vm.addr(43));
+    }
+
+    /// FIXME: this returns a counterexample, but it shouldn't
+    // function check_vmaddr_concreteKey() public {
+    //     address addr = vm.addr(0x42);
+    //     assertEq(0x6f4c950442e1Af093BcfF730381E63Ae9171b87a);
+    // }
+
+    /// FIXME: this returns a counterexample, but it shouldn't
+    // function check_vmaddr_saneAddressConstraints(uint256 privateKey) public {
+    //     address addr = vm.addr(privateKey);
+    //     assertNotEq(addr, address(0));
+    //     assertNotEq(addr, address(this));
+    // }
+
+    /// we expect a counterexample for this test
+    /// the addresses match if the private keys are equal
+    function check_vmaddr_canFindKeyForAddr_symbolic(
+        uint256 privateKey1,
+        uint256 privateKey2
+    ) public {
+        address addr1 = vm.addr(privateKey1);
+        address addr2 = vm.addr(privateKey2);
+
+        assertNotEq(addr1, addr2);
+    }
+
+    /// we expect a counterexample for this test
+    /// the addresses match if the private keys are equal
+    function check_vmaddr_canFindKeyForAddr_mixed(
+        uint256 privateKey
+    ) public {
+        address addr1 = vm.addr(0x42);
+        address addr2 = vm.addr(privateKey);
+
+        assertNotEq(addr1, addr2);
+    }
+
+    /// we expect a counterexample (the key for a given address which is ofc nonsense)
+    /// that's because we only add constraints about the relations between
+    /// different vm.addr() calls, but not about specific addresses
+    function check_vmaddr_canFindKeyForAddr_concrete(uint256 privateKey) public {
+        address addr = vm.addr(privateKey);
+        assertNotEq(addr, address(0x42));
+    }
+
+    function check_vmsign_consistent(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey, digest);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey, digest);
+
+        assertEq(v1, v2);
+        assertEq(r1, r2);
+        assertEq(s1, s2);
+    }
+
+    function check_vmsign_noDigestCollision(
+        uint256 privateKey,
+        bytes32 digest1,
+        bytes32 digest2
+    ) public {
+        vm.assume(digest1 != digest2);
+
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey, digest1);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey, digest2);
+
+        assertNotEq(r1, r2);
+        assertNotEq(s1, s2);
+    }
+
+    function check_vmsign_noKeyCollision(
+        uint256 privateKey1,
+        uint256 privateKey2,
+        bytes32 digest
+    ) public {
+        vm.assume(privateKey1 != privateKey2);
+
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey1, digest);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey2, digest);
+
+        assertNotEq(r1, r2);
+        assertNotEq(s1, s2);
+    }
+
+    /// we expect a counterexample for this test
+    /// the signatures match if the private keys are equal
+    function check_vmsign_canFindKeyForGivenSig(
+        uint256 privateKey1,
+        uint256 privateKey2,
+        bytes32 digest
+    ) public {
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey1, digest);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey2, digest);
+
+        assertNotEq(r1, r2);
     }
 }

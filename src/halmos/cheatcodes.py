@@ -290,8 +290,8 @@ class hevm_cheat_code:
     # addr(uint256)
     addr_sig: int = 0xFFA18649
 
-    # maps addr to private key for known associations
-    known_keys = dict()
+    # sign(uint256,bytes32)
+    sign_sig: int = 0xE341EAA4
 
     @staticmethod
     def handle(sevm, ex, arg: BitVec) -> BitVec:
@@ -457,12 +457,16 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.addr_sig:
             private_key = extract_bytes(arg, 4, 32)
 
+            # TODO: handle concrete private key (return directly the corresponding address)
             # TODO: check (or assume?) private_key is valid
             #  - less than curve order
             #  - not zero
+            # TODO: add constraints that the generated addresses are reasonable
+            #  - not zero
+            #  - not the address of a known contract
 
             # check if this private key has an existing address associated with it
-            known_keys = hevm_cheat_code.known_keys
+            known_keys = ex.known_keys
             addr = known_keys.get(private_key, None)
             if addr is None:
                 # if not, create a new address
@@ -479,6 +483,40 @@ class hevm_cheat_code:
                 known_keys[private_key] = addr
 
             return uint256(addr)
+
+        elif funsig == hevm_cheat_code.sign_sig:
+            private_key = extract_bytes(arg, 4, 32)
+            digest = extract_bytes(arg, 4 + 32, 32)
+
+            # TODO: handle concrete private key + digest (generate concrete signature)
+            # TODO: do we want to constrain v to {27, 28}?
+
+            # check for an existing signature
+            known_sigs = ex.known_sigs
+            (v, r, s) = known_sigs.get((private_key, digest), (None, None, None))
+            if (v, r, s) == (None, None, None):
+                # if not, create a new signature
+                len_sigs = len(known_sigs)
+                v = uint256(BitVec(f"v_{len_sigs}", 8))
+                r = BitVec(f"r_{len_sigs}", 256)
+                s = BitVec(f"s_{len_sigs}", 256)
+
+                # mark the signatures as distinct
+                for (other_key, other_digest), (
+                    _,
+                    other_r,
+                    other_s,
+                ) in known_sigs.items():
+                    distinct = Implies(
+                        Or(private_key != other_key, digest != other_digest),
+                        And(r != other_r, s != other_s),
+                    )
+                    ex.path.append(distinct)
+
+                # associate the new signature with the private key and digest
+                known_sigs[(private_key, digest)] = (v, r, s)
+
+            return Concat(v, r, s)
 
         else:
             # TODO: support other cheat codes

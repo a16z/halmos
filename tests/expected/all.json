@@ -1496,6 +1496,33 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_vmaddr_canFindKeyForAddr_concrete(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmaddr_canFindKeyForAddr_mixed(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmaddr_canFindKeyForAddr_symbolic(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_vmaddr_consistent(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
@@ -1505,7 +1532,52 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_vmaddr_noCollision(uint256,uint256)",
+                "name": "check_vmaddr_noCollision_concrete(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmaddr_noCollision_symbolic(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmsign_canFindKeyForGivenSig(uint256,uint256,bytes32)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmsign_consistent(uint256,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmsign_noDigestCollision(uint256,bytes32,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmsign_noKeyCollision(uint256,uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
