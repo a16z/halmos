@@ -12,6 +12,19 @@ from .exceptions import FailCheatcode, HalmosException
 from .utils import *
 
 
+# f_vmaddr(key) -> address
+f_vmaddr = Function("f_vmaddr", BitVecSort256, BitVecSort160)
+
+# f_sign_v(key, digest) -> v
+f_sign_v = Function("f_sign_v", BitVecSort256, BitVecSort256, BitVecSort8)
+
+# f_sign_r(key, digest) -> r
+f_sign_r = Function("f_sign_r", BitVecSort256, BitVecSort256, BitVecSort256)
+
+# f_sign_s(key, digest) -> s
+f_sign_s = Function("f_sign_s", BitVecSort256, BitVecSort256, BitVecSort256)
+
+
 def name_of(x: str) -> str:
     return re.sub(r"\s+", "_", x)
 
@@ -470,9 +483,7 @@ class hevm_cheat_code:
             addr = known_keys.get(private_key, None)
             if addr is None:
                 # if not, create a new address
-                len_keys = len(known_keys)
-                addr_name = f"addr_{private_key.decl().name()}_{len_keys}"
-                addr = BitVec(addr_name, 160)
+                addr = f_vmaddr(private_key)
 
                 # mark the addresses as distinct
                 for other_key, other_addr in known_keys.items():
@@ -485,7 +496,7 @@ class hevm_cheat_code:
             return uint256(addr)
 
         elif funsig == hevm_cheat_code.sign_sig:
-            private_key = extract_bytes(arg, 4, 32)
+            key = extract_bytes(arg, 4, 32)
             digest = extract_bytes(arg, 4 + 32, 32)
 
             # TODO: handle concrete private key + digest (generate concrete signature)
@@ -493,13 +504,10 @@ class hevm_cheat_code:
 
             # check for an existing signature
             known_sigs = ex.known_sigs
-            (v, r, s) = known_sigs.get((private_key, digest), (None, None, None))
+            (v, r, s) = known_sigs.get((key, digest), (None, None, None))
             if (v, r, s) == (None, None, None):
                 # if not, create a new signature
-                len_sigs = len(known_sigs)
-                v = uint256(BitVec(f"v_{len_sigs}", 8))
-                r = BitVec(f"r_{len_sigs}", 256)
-                s = BitVec(f"s_{len_sigs}", 256)
+                v, r, s = (f(key, digest) for f in (f_sign_v, f_sign_r, f_sign_s))
 
                 # mark the signatures as distinct
                 for (other_key, other_digest), (
@@ -508,15 +516,15 @@ class hevm_cheat_code:
                     other_s,
                 ) in known_sigs.items():
                     distinct = Implies(
-                        Or(private_key != other_key, digest != other_digest),
+                        Or(key != other_key, digest != other_digest),
                         And(r != other_r, s != other_s),
                     )
                     ex.path.append(distinct)
 
                 # associate the new signature with the private key and digest
-                known_sigs[(private_key, digest)] = (v, r, s)
+                known_sigs[(key, digest)] = (v, r, s)
 
-            return Concat(v, r, s)
+            return Concat(uint256(v), r, s)
 
         else:
             # TODO: support other cheat codes
