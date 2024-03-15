@@ -92,6 +92,16 @@ def uint160(x: BitVecRef) -> BitVecRef:
         return simplify(ZeroExt(160 - bitsize, x))
 
 
+def uint8(x: BitVecRef) -> BitVecRef:
+    bitsize = x.size()
+    if bitsize == 8:
+        return x
+    if bitsize > 8:
+        return simplify(Extract(7, 0, x))
+    else:
+        return simplify(ZeroExt(8 - bitsize, x))
+
+
 def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, BitVecSorts[size_bits])
 

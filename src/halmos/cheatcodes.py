@@ -501,6 +501,7 @@ class hevm_cheat_code:
 
             # TODO: handle concrete private key + digest (generate concrete signature)
             # TODO: do we want to constrain v to {27, 28}?
+            # TODO: do we want to constrain r and s to be less than curve order?
 
             # check for an existing signature
             known_sigs = ex.known_sigs

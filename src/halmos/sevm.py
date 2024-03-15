@@ -59,6 +59,11 @@ f_gasprice = Function("gasprice", BitVecSort256)
 # origin()
 f_origin = Function("origin", BitVecSort160)
 
+# ecrecover(digest, v, r, s)
+f_ecrecover = Function(
+    "ecrecover", BitVecSort256, BitVecSort8, BitVecSort256, BitVecSort256, BitVecSort160
+)
+
 # uninterpreted arithmetic
 f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
@@ -1832,28 +1837,54 @@ class SEVM:
 
             # ecrecover
             if eq(to, con_addr(1)):
-                ex.path.append(exit_code_var != con(0))
+                # TODO: explicitly return empty data in case of an error
+                # TODO: validate input and fork on error?
+                # - v in [27, 28]
+                # - r, s in [1, secp256k1n)
 
-                # TODO: explicitly return 32 bytes of data
-                # TODO: must tie the returned address to the input data
+                # call never fails, errors result in empty returndata
+                ex.path.append(exit_code_var != 0)
+
+                digest = extract_bytes(arg, 0, 32)
+                v = uint8(extract_bytes(arg, 32, 32))
+                r = extract_bytes(arg, 64, 32)
+                s = extract_bytes(arg, 96, 32)
+
+                output = f_ecrecover(digest, v, r, s)
+
+                # check if there is a known matching signature
+                matching_key = None
+                for (_key, _digest), (_v, _r, _s) in ex.known_sigs.items():
+                    if eq(digest, _digest) and eq(v, _v) and eq(r, _r) and eq(s, _s):
+                        matching_key = _key
+                        break
+
+                # check if there is a known addresses associated to the matching key
+                if matching_key is not None:
+                    for _key, _addr in ex.known_keys.items():
+                        if eq(matching_key, _key):
+                            ex.path.append(output == _addr)
+                            break
+
+                ret = uint256(output)
 
             # identity
-            if eq(to, con_addr(4)):
+            elif eq(to, con_addr(4)):
                 ex.path.append(exit_code_var != con(0))
                 ret = arg
 
             # halmos cheat code
-            if eq(to, halmos_cheat_code.address):
+            elif eq(to, halmos_cheat_code.address):
                 ex.path.append(exit_code_var != con(0))
                 ret = halmos_cheat_code.handle(ex, arg)
 
             # vm cheat code
-            if eq(to, hevm_cheat_code.address):
+            elif eq(to, hevm_cheat_code.address):
                 ex.path.append(exit_code_var != con(0))
                 ret = hevm_cheat_code.handle(self, ex, arg)
 
             # console
-            if eq(to, console.address):
+            elif eq(to, console.address):
                 ex.path.append(exit_code_var != con(0))
                 console.handle(ex, arg)
 

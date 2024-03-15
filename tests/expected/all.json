@@ -1568,6 +1568,24 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_vmsign_ecrecover_e2e_recoveredCanNotMatchOtherAddr(uint256,bytes32,address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmsign_ecrecover_e2e_recoveredMatches(uint256,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_vmsign_noDigestCollision(uint256,bytes32,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,

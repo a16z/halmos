@@ -177,4 +177,27 @@ contract SignatureTest is SymTest, Test {
 
         assertNotEq(r1, r2);
     }
+
+    function check_vmsign_ecrecover_e2e_recoveredMatches(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        address originalAddr = vm.addr(privateKey);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        address recoveredAddr = ecrecover(digest, v, r, s);
+        assertEq(originalAddr, recoveredAddr);
+    }
+
+    function check_vmsign_ecrecover_e2e_recoveredCanNotMatchOtherAddr(
+        uint256 privateKey,
+        bytes32 digest,
+        address otherAddr
+    ) public {
+        address originalAddr = vm.addr(privateKey);
+        vm.assume(originalAddr != otherAddr);
+
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        address recoveredAddr = ecrecover(digest, v, r, s);
+        assertNotEq(otherAddr, recoveredAddr);
+    }
 }
