@@ -9,6 +9,10 @@ from z3 import *
 
 from .exceptions import NotConcreteError, HalmosException
 
+# order of the secp256k1 curve
+secp256k1n = (
+    115792089237316195423570985008687907852837564279074904382605163141518161494337
+)
 
 Word = Any  # z3 expression (including constants)
 Byte = Any  # z3 expression (including constants)
@@ -53,6 +57,12 @@ BitVecSort160 = BitVecSorts[160]
 BitVecSort256 = BitVecSorts[256]
 BitVecSort264 = BitVecSorts[264]
 BitVecSort512 = BitVecSorts[512]
+
+
+# ecrecover(digest, v, r, s)
+f_ecrecover = Function(
+    "ecrecover", BitVecSort256, BitVecSort8, BitVecSort256, BitVecSort256, BitVecSort160
+)
 
 
 def concat(args):

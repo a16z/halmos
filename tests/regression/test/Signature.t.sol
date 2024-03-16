@@ -8,6 +8,8 @@ import {console2} from "forge-std/console2.sol";
 import {SignatureChecker} from "openzeppelin/utils/cryptography/SignatureChecker.sol";
 import {ECDSA} from "openzeppelin/utils/cryptography/ECDSA.sol";
 
+uint256 constant secp256k1n = 115792089237316195423570985008687907852837564279074904382605163141518161494337;
+
 contract SymAccount is SymTest {
     fallback(bytes calldata) external payable returns (bytes memory) {
         uint mode = svm.createUint256("mode");
@@ -200,4 +202,67 @@ contract SignatureTest is SymTest, Test {
         address recoveredAddr = ecrecover(digest, v, r, s);
         assertNotEq(otherAddr, recoveredAddr);
     }
+
+    /// we expect a counterexample for this test
+    function check_ecrecover_solveForMalleability(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+
+        // create another symbolic signature
+        uint8 otherV = uint8(svm.createUint256("otherV"));
+        bytes32 otherR = svm.createBytes32("otherR");
+        bytes32 otherS = svm.createBytes32("otherS");
+
+        vm.assume(v != otherV || r != otherR || s != otherS);
+
+        assertNotEq(ecrecover(digest, v, r, s), ecrecover(digest, otherV, otherR, otherS));
+    }
+
+    function check_ecrecover_explicitMalleability(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+
+        assertEq(
+            ecrecover(digest, v, r, s),
+            ecrecover(digest, v ^ 1, r, bytes32(secp256k1n - uint256(s)))
+        );
+    }
+
+    function check_ecrecover_samePrivateKeyCanSignMultipleDigests_with_vmaddr(
+        uint256 privateKey,
+        bytes32 digest1,
+        bytes32 digest2
+    ) public {
+        vm.assume(digest1 != digest2);
+
+        address originalAddr = vm.addr(privateKey);
+
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey, digest1);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey, digest2);
+
+        address addr1 = ecrecover(digest1, v1, r1, s1);
+        assertEq(addr1, originalAddr);
+
+        address addr2 = ecrecover(digest2, v2, r2, s2);
+        assertEq(addr2, originalAddr);
+    }
+
+    function check_ecrecover_samePrivateKeyCanSignMultipleDigests_without_vmaddr(
+        uint256 privateKey,
+        bytes32 digest1,
+        bytes32 digest2
+    ) public {
+        vm.assume(digest1 != digest2);
+
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey, digest1);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey, digest2);
+
+        assertEq(ecrecover(digest1, v1, r1, s1), ecrecover(digest2, v2, r2, s2));
+    }
 }
+
+

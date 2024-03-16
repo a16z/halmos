@@ -510,20 +510,32 @@ class hevm_cheat_code:
                 # if not, create a new signature
                 v, r, s = (f(key, digest) for f in (f_sign_v, f_sign_r, f_sign_s))
 
-                # mark the signatures as distinct
-                for (other_key, other_digest), (
-                    _,
-                    other_r,
-                    other_s,
-                ) in known_sigs.items():
+                # associate the new signature with the private key and digest
+                known_sigs[(key, digest)] = (v, r, s)
+
+                # explicitly model malleability
+                recover = f_ecrecover(digest, v, r, s)
+                recover_malleable = f_ecrecover(digest, v ^ 1, r, secp256k1n - s)
+                ex.path.append(recover == recover_malleable)
+
+                # mark signatures as distinct if key or digest are distinct
+                for (_key, _digest), (_v, _r, _s) in known_sigs.items():
                     distinct = Implies(
-                        Or(key != other_key, digest != other_digest),
-                        And(r != other_r, s != other_s),
+                        Or(key != _key, digest != _digest),
+                        And(r != _r, s != _s),
                     )
                     ex.path.append(distinct)
 
-                # associate the new signature with the private key and digest
-                known_sigs[(key, digest)] = (v, r, s)
+                    # signatures from the same signer decode to the same address
+
+                    _recover = f_ecrecover(_digest, _v, _r, _s)
+
+                    ex.path.append(
+                        Implies(
+                            key == _key,
+                            recover == _recover,
+                        )
+                    )
 
             return Concat(uint256(v), r, s)
 
