@@ -1469,6 +1469,24 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_ecrecover_distinctKeysSameDigestCorrectRecovery(uint256,uint256,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_ecrecover_distinctKeysSameDigestDistinctAddrs(uint256,uint256,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_ecrecover_explicitMalleability(uint256,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
@@ -1478,7 +1496,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_ecrecover_samePrivateKeyCanSignMultipleDigests_with_vmaddr(uint256,bytes32,bytes32)",
+                "name": "check_ecrecover_sameKeyDistinctDigestsCorrectRecovery(uint256,bytes32,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1487,7 +1505,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_ecrecover_samePrivateKeyCanSignMultipleDigests_without_vmaddr(uint256,bytes32,bytes32)",
+                "name": "check_ecrecover_sameKeyDistinctDigestsUniqueRecovery(uint256,bytes32,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1498,7 +1516,7 @@
             {
                 "name": "check_ecrecover_solveForMalleability(uint256,bytes32)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,

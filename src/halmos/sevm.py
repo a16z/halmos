@@ -1845,42 +1845,7 @@ class SEVM:
                 r = extract_bytes(arg, 64, 32)
                 s = extract_bytes(arg, 96, 32)
 
-                output = f_ecrecover(digest, v, r, s)
-
-                # check if there is a known matching signature
-                matching_key = None
-                for (_key, _digest), (_v, _r, _s) in ex.known_sigs.items():
-                    _ecrecover = f_ecrecover(_digest, _v, _r, _s)
-
-                    # check if digests and signatures don't match, then output != _addr
-                    digests_match = digest == _digest
-                    sigs_match = Or(
-                        And(v == _v, r == _r, s == _s),
-                        And(_v == v ^ 1, r == _r, s == _s - secp256k1n),
-                    )
-
-                    ex.path.append(
-                        Implies(
-                            Or(
-                                And(digests_match, Not(sigs_match)),
-                                And(Not(digests_match), sigs_match),
-                            ),
-                            output != _ecrecover,
-                        )
-                    )
-
-                    if not eq(digest, _digest):
-                        continue
-
-                    if eq(v, _v) and eq(r, _r) and eq(s, _s):
-                        matching_key = _key
-
-                # check if there is a known address associated to the matching key
-                if matching_key is not None:
-                    for _key, _addr in ex.known_keys.items():
-                        ex.path.append((matching_key == _key) == (output == _addr))
-
-                ret = uint256(output)
+                ret = uint256(f_ecrecover(digest, v, r, s))
 
             # identity
             elif eq(to, con_addr(4)):

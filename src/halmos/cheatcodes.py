@@ -205,6 +205,25 @@ def create_bool(ex, arg):
     return uint256(create_generic(ex, 1, name, "bool"))
 
 
+def apply_vmaddr(ex, private_key: Any):
+    # check if this private key has an existing address associated with it
+    known_keys = ex.known_keys
+    addr = known_keys.get(private_key, None)
+    if addr is None:
+        # if not, create a new address
+        addr = f_vmaddr(private_key)
+
+        # mark the addresses as distinct
+        for other_key, other_addr in known_keys.items():
+            distinct = Implies(private_key != other_key, addr != other_addr)
+            ex.path.append(distinct)
+
+        # associate the new address with the private key
+        known_keys[private_key] = addr
+
+    return addr
+
+
 class halmos_cheat_code:
     # address constant SVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('svm cheat code')))));
@@ -478,21 +497,7 @@ class hevm_cheat_code:
             #  - not zero
             #  - not the address of a known contract
 
-            # check if this private key has an existing address associated with it
-            known_keys = ex.known_keys
-            addr = known_keys.get(private_key, None)
-            if addr is None:
-                # if not, create a new address
-                addr = f_vmaddr(private_key)
-
-                # mark the addresses as distinct
-                for other_key, other_addr in known_keys.items():
-                    distinct = Implies(private_key != other_key, addr != other_addr)
-                    ex.path.append(distinct)
-
-                # associate the new address with the private key
-                known_keys[private_key] = addr
-
+            addr = apply_vmaddr(ex, private_key)
             return uint256(addr)
 
         elif funsig == hevm_cheat_code.sign_sig:
@@ -516,7 +521,10 @@ class hevm_cheat_code:
                 # explicitly model malleability
                 recover = f_ecrecover(digest, v, r, s)
                 recover_malleable = f_ecrecover(digest, v ^ 1, r, secp256k1n - s)
-                ex.path.append(recover == recover_malleable)
+
+                addr = apply_vmaddr(ex, key)
+                ex.path.append(recover == addr)
+                ex.path.append(recover_malleable == addr)
 
                 # mark signatures as distinct if key or digest are distinct
                 for (_key, _digest), (_v, _r, _s) in known_sigs.items():
@@ -525,17 +533,6 @@ class hevm_cheat_code:
                         And(r != _r, s != _s),
                     )
                     ex.path.append(distinct)
-
-                    # signatures from the same signer decode to the same address
-
-                    _recover = f_ecrecover(_digest, _v, _r, _s)
-
-                    ex.path.append(
-                        Implies(
-                            key == _key,
-                            recover == _recover,
-                        )
-                    )
 
             return Concat(uint256(v), r, s)
 

@@ -232,7 +232,20 @@ contract SignatureTest is SymTest, Test {
         );
     }
 
-    function check_ecrecover_samePrivateKeyCanSignMultipleDigests_with_vmaddr(
+    function check_ecrecover_sameKeyDistinctDigestsUniqueRecovery(
+        uint256 privateKey,
+        bytes32 digest1,
+        bytes32 digest2
+    ) public {
+        vm.assume(digest1 != digest2);
+
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey, digest1);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey, digest2);
+
+        assertEq(ecrecover(digest1, v1, r1, s1), ecrecover(digest2, v2, r2, s2));
+    }
+
+    function check_ecrecover_sameKeyDistinctDigestsCorrectRecovery(
         uint256 privateKey,
         bytes32 digest1,
         bytes32 digest2
@@ -251,18 +264,33 @@ contract SignatureTest is SymTest, Test {
         assertEq(addr2, originalAddr);
     }
 
-    function check_ecrecover_samePrivateKeyCanSignMultipleDigests_without_vmaddr(
-        uint256 privateKey,
-        bytes32 digest1,
-        bytes32 digest2
+    function check_ecrecover_distinctKeysSameDigestDistinctAddrs(
+        uint256 privateKey1,
+        uint256 privateKey2,
+        bytes32 digest
     ) public {
-        vm.assume(digest1 != digest2);
+        vm.assume(privateKey1 != privateKey2);
 
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey, digest1);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey, digest2);
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey1, digest);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey2, digest);
 
-        assertEq(ecrecover(digest1, v1, r1, s1), ecrecover(digest2, v2, r2, s2));
+        address addr1 = ecrecover(digest, v1, r1, s1);
+        address addr2 = ecrecover(digest, v2, r2, s2);
+
+        assertNotEq(addr1, addr2);
+    }
+
+    function check_ecrecover_distinctKeysSameDigestCorrectRecovery(
+        uint256 privateKey1,
+        uint256 privateKey2,
+        bytes32 digest
+    ) public {
+        vm.assume(privateKey1 != privateKey2);
+
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey1, digest);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey2, digest);
+
+        assertEq(ecrecover(digest, v1, r1, s1), vm.addr(privateKey1));
+        assertEq(ecrecover(digest, v2, r2, s2), vm.addr(privateKey2));
     }
 }
-
-
