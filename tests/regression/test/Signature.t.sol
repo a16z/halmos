@@ -86,7 +86,7 @@ contract SignatureTest is SymTest, Test {
     /// FIXME: this returns a counterexample, but it shouldn't
     // function check_vmaddr_concreteKey() public {
     //     address addr = vm.addr(0x42);
-    //     assertEq(0x6f4c950442e1Af093BcfF730381E63Ae9171b87a);
+    //     assertEq(addr, 0x6f4c950442e1Af093BcfF730381E63Ae9171b87a);
     // }
 
     /// FIXME: this returns a counterexample, but it shouldn't
@@ -292,5 +292,62 @@ contract SignatureTest is SymTest, Test {
 
         assertEq(ecrecover(digest, v1, r1, s1), vm.addr(privateKey1));
         assertEq(ecrecover(digest, v2, r2, s2), vm.addr(privateKey2));
+    }
+
+    function check_makeAddrAndKey_consistent_symbolic() public {
+        string memory keyName = svm.createString(32, "keyName");
+        (address addr, uint256 key) = makeAddrAndKey(keyName);
+
+        assertEq(addr, vm.addr(key));
+    }
+
+    function check_makeAddrAndKey_consistent_concrete() public {
+        (address addr, uint256 key) = makeAddrAndKey("someKey");
+
+        assertEq(addr, vm.addr(key));
+    }
+
+    function check_makeAddrAndKey_noCollision_symbolic() public {
+        string memory keyName1 = svm.createString(32, "keyName1");
+        (address addr1, uint256 key1) = makeAddrAndKey(keyName1);
+
+        string memory keyName2 = svm.createString(32, "keyName2");
+        (address addr2, uint256 key2) = makeAddrAndKey(keyName2);
+
+        // assume distinct keys
+        vm.assume(keccak256(abi.encodePacked(keyName1)) != keccak256(abi.encodePacked(keyName2)));
+
+        assertNotEq(key1, key2);
+        assertNotEq(addr1, addr2);
+        assertEq(vm.addr(key1), addr1);
+        assertEq(vm.addr(key2), addr2);
+    }
+
+    function check_makeAddrAndKey_noCollision_concrete() public {
+        (address addr1, uint256 key1) = makeAddrAndKey("someKey");
+        (address addr2, uint256 key2) = makeAddrAndKey("anotherKey");
+
+        assertNotEq(key1, key2);
+        assertNotEq(addr1, addr2);
+        assertEq(vm.addr(key1), addr1);
+        assertEq(vm.addr(key2), addr2);
+    }
+
+    function check_makeAddrAndKey_vmsign_ecrecover_e2e_symbolic(
+        string memory keyName,
+        bytes32 digest
+    ) public {
+        (address addr, uint256 key) = makeAddrAndKey(keyName);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);
+        address recoveredAddr = ecrecover(digest, v, r, s);
+        assertEq(addr, recoveredAddr);
+    }
+
+    function check_makeAddrAndKey_vmsign_ecrecover_e2e_concrete() public {
+        (address addr, uint256 key) = makeAddrAndKey("someKey");
+        bytes32 digest = keccak256(abi.encodePacked("someData"));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(key, digest);
+        address recoveredAddr = ecrecover(digest, v, r, s);
+        assertEq(addr, recoveredAddr);
     }
 }

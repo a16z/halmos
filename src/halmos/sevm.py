@@ -153,10 +153,6 @@ def iter_bytes(x: Any, _byte_length: int = -1):
     raise ValueError(x)
 
 
-def is_concrete(x: Any) -> bool:
-    return isinstance(x, int) or isinstance(x, bytes) or is_bv_value(x)
-
-
 def mnemonic(opcode) -> str:
     if is_concrete(opcode):
         opcode = int_of(opcode)

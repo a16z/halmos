@@ -1541,6 +1541,60 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_makeAddrAndKey_consistent_concrete()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_makeAddrAndKey_consistent_symbolic()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_makeAddrAndKey_noCollision_concrete()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_makeAddrAndKey_noCollision_symbolic()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_makeAddrAndKey_vmsign_ecrecover_e2e_concrete()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_makeAddrAndKey_vmsign_ecrecover_e2e_symbolic(string,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_tryRecover(address,bytes32,bytes)",
                 "exitcode": 0,
                 "num_models": 0,

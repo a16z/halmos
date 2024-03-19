@@ -141,6 +141,10 @@ def is_zero(x: Word) -> Word:
     return test(x, False)
 
 
+def is_concrete(x: Any) -> bool:
+    return isinstance(x, int) or isinstance(x, bytes) or is_bv_value(x)
+
+
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
@@ -175,7 +179,7 @@ def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
 def extract_string_argument(calldata: BitVecRef, arg_idx: int):
     """Extracts idx-th argument of string from calldata"""
     string_bytes = extract_bytes_argument(calldata, arg_idx)
-    return string_bytes.decode("utf-8") if string_bytes else ""
+    return string_bytes.decode("utf-8") if is_concrete(string_bytes) else string_bytes
 
 
 def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecRef:

@@ -325,6 +325,9 @@ class hevm_cheat_code:
     # sign(uint256,bytes32)
     sign_sig: int = 0xE341EAA4
 
+    # label(address,string)
+    label_sig: int = 0xC657C718
+
     @staticmethod
     def handle(sevm, ex, arg: BitVec) -> BitVec:
         funsig: int = int_of(extract_funsig(arg), "symbolic hevm cheatcode")
@@ -535,6 +538,13 @@ class hevm_cheat_code:
                     ex.path.append(distinct)
 
             return Concat(uint256(v), r, s)
+
+        elif funsig == hevm_cheat_code.label_sig:
+            addr = extract_bytes(arg, 4, 32)
+            label = extract_string_argument(arg, 1)
+
+            # TODO: no-op for now
+            pass
 
         else:
             # TODO: support other cheat codes
