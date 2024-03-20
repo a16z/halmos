@@ -58,8 +58,8 @@ contract MyToken is ERC20 {
 Then you can write a `setUp()` function that creates a new token contract with a _symbolic_ initial supply, as follows:
 ```solidity
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
-import "forge-std/Test.sol";
-import "./MyToken.sol";
+import {Test} from "forge-std/Test.sol";
+import {MyToken} from "../src/MyToken.sol";
 
 contract MyTokenTest is SymTest, Test {
     MyToken token;
