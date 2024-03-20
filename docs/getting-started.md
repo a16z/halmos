@@ -58,8 +58,10 @@ contract MyToken is ERC20 {
 Then you can write a `setUp()` function that creates a new token contract with a _symbolic_ initial supply, as follows:
 ```solidity
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
+import {Test} from "forge-std/Test.sol";
+import {MyToken} from "../src/MyToken.sol";
 
-contract MyTokenTest is SymTest {
+contract MyTokenTest is SymTest, Test {
     MyToken token;
 
     function setUp() public {
@@ -104,7 +106,7 @@ Below is an example symbolic test for the token transfer function:
 function check_transfer(address sender, address receiver, uint256 amount) public {
     // specify input conditions
     vm.assume(receiver != address(0));
-    vm.assume(token.balance(sender) >= amount);
+    vm.assume(token.balanceOf(sender) >= amount);
 
     // record the current balance of sender and receiver
     uint256 balanceOfSender = token.balanceOf(sender);
@@ -179,7 +181,7 @@ Recall that symbolic tests take into account all possible input combinations. Ho
 In our example, the conditions for the valid sender and receiver addresses are specified as follows:
 ```solidity
 vm.assume(receiver != address(0));
-vm.assume(token.balance(sender) >= amount);
+vm.assume(token.balanceOf(sender) >= amount);
 ```
 Like fuzz tests, any input combinations that don't satisfy the `assume()` conditions are disregarded. This means that, after executing the above `assume()` statements, only the input combinations in which the receiver is non-zero and the sender has sufficient balance are considered. Other input combinations that violate these conditions are ignored.
 
