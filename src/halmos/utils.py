@@ -9,6 +9,10 @@ from z3 import *
 
 from .exceptions import NotConcreteError, HalmosException
 
+# order of the secp256k1 curve
+secp256k1n = (
+    115792089237316195423570985008687907852837564279074904382605163141518161494337
+)
 
 Word = Any  # z3 expression (including constants)
 Byte = Any  # z3 expression (including constants)
@@ -55,6 +59,12 @@ BitVecSort264 = BitVecSorts[264]
 BitVecSort512 = BitVecSorts[512]
 
 
+# ecrecover(digest, v, r, s)
+f_ecrecover = Function(
+    "ecrecover", BitVecSort256, BitVecSort8, BitVecSort256, BitVecSort256, BitVecSort160
+)
+
+
 def concat(args):
     if len(args) > 1:
         return Concat(args)
@@ -92,6 +102,16 @@ def uint160(x: BitVecRef) -> BitVecRef:
         return simplify(ZeroExt(160 - bitsize, x))
 
 
+def uint8(x: BitVecRef) -> BitVecRef:
+    bitsize = x.size()
+    if bitsize == 8:
+        return x
+    if bitsize > 8:
+        return simplify(Extract(7, 0, x))
+    else:
+        return simplify(ZeroExt(8 - bitsize, x))
+
+
 def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, BitVecSorts[size_bits])
 
@@ -119,6 +139,10 @@ def is_non_zero(x: Word) -> Word:
 
 def is_zero(x: Word) -> Word:
     return test(x, False)
+
+
+def is_concrete(x: Any) -> bool:
+    return isinstance(x, int) or isinstance(x, bytes) or is_bv_value(x)
 
 
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
@@ -155,7 +179,7 @@ def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
 def extract_string_argument(calldata: BitVecRef, arg_idx: int):
     """Extracts idx-th argument of string from calldata"""
     string_bytes = extract_bytes_argument(calldata, arg_idx)
-    return string_bytes.decode("utf-8") if string_bytes else ""
+    return string_bytes.decode("utf-8") if is_concrete(string_bytes) else string_bytes
 
 
 def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecRef:

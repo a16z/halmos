@@ -32,7 +32,6 @@ from .warnings import (
     INTERNAL_ERROR,
 )
 
-
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = b""
@@ -40,6 +39,7 @@ MAX_CALL_DEPTH = 1024
 
 # TODO: make this configurable
 MAX_MEMORY_SIZE = 2**20
+
 
 # symbolic states
 # calldataload(index)
@@ -151,10 +151,6 @@ def iter_bytes(x: Any, _byte_length: int = -1):
         ]
 
     raise ValueError(x)
-
-
-def is_concrete(x: Any) -> bool:
-    return isinstance(x, int) or isinstance(x, bytes) or is_bv_value(x)
 
 
 def mnemonic(opcode) -> str:
@@ -768,6 +764,8 @@ class Exec:  # an execution path
     storages: Dict[Any, Any]  # storage updates
     balances: Dict[Any, Any]  # balance updates
     calls: List[Any]  # external calls
+    known_keys: Dict[Any, Any]  # maps address to private key
+    known_sigs: Dict[Any, Any]  # maps (private_key, digest) to (v, r, s)
 
     def __init__(self, **kwargs) -> None:
         self.code = kwargs["code"]
@@ -796,6 +794,8 @@ class Exec:  # an execution path
         self.storages = kwargs["storages"]
         self.balances = kwargs["balances"]
         self.calls = kwargs["calls"]
+        self.known_keys = kwargs["known_keys"] if "known_keys" in kwargs else {}
+        self.known_sigs = kwargs["known_sigs"] if "known_sigs" in kwargs else {}
 
         assert_address(self.context.message.target)
         assert_address(self.context.message.caller)
@@ -1769,6 +1769,8 @@ class SEVM:
                 storages=ex.storages,
                 balances=ex.balances,
                 calls=ex.calls,
+                known_keys=ex.known_keys,
+                known_sigs=ex.known_sigs,
             )
 
             stack.append((sub_ex, step_id))
@@ -1826,25 +1828,38 @@ class SEVM:
 
             # ecrecover
             if eq(to, con_addr(1)):
-                ex.path.append(exit_code_var != con(0))
+                # TODO: explicitly return empty data in case of an error
+                # TODO: validate input and fork on error?
+                # - v in [27, 28]
+                # - r, s in [1, secp256k1n)
+
+                # call never fails, errors result in empty returndata
+                ex.path.append(exit_code_var != 0)
+
+                digest = extract_bytes(arg, 0, 32)
+                v = uint8(extract_bytes(arg, 32, 32))
+                r = extract_bytes(arg, 64, 32)
+                s = extract_bytes(arg, 96, 32)
+
+                ret = uint256(f_ecrecover(digest, v, r, s))
 
             # identity
-            if eq(to, con_addr(4)):
+            elif eq(to, con_addr(4)):
                 ex.path.append(exit_code_var != con(0))
                 ret = arg
 
             # halmos cheat code
-            if eq(to, halmos_cheat_code.address):
+            elif eq(to, halmos_cheat_code.address):
                 ex.path.append(exit_code_var != con(0))
                 ret = halmos_cheat_code.handle(ex, arg)
 
             # vm cheat code
-            if eq(to, hevm_cheat_code.address):
+            elif eq(to, hevm_cheat_code.address):
                 ex.path.append(exit_code_var != con(0))
                 ret = hevm_cheat_code.handle(self, ex, arg)
 
             # console
-            if eq(to, console.address):
+            elif eq(to, console.address):
                 ex.path.append(exit_code_var != con(0))
                 console.handle(ex, arg)
 
@@ -2058,6 +2073,8 @@ class SEVM:
             storages=ex.storages,
             balances=ex.balances,
             calls=ex.calls,
+            known_keys=ex.known_keys,
+            known_sigs=ex.known_sigs,
         )
 
         stack.append((sub_ex, step_id))
@@ -2180,6 +2197,8 @@ class SEVM:
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
             calls=ex.calls.copy(),
+            known_keys=ex.known_keys,  # pass by reference, not need to copy
+            known_sigs=ex.known_sigs,  # pass by reference, not need to copy
         )
         return new_ex
 
