@@ -220,6 +220,27 @@ contract SignatureTest is SymTest, Test {
         assertNotEq(ecrecover(digest, v, r, s), ecrecover(digest, otherV, otherR, otherS));
     }
 
+    function check_vmsign_tryRecover(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        bytes memory sig = abi.encodePacked(r, s, v);
+        address originalAddr = vm.addr(privateKey);
+
+        // we don't want ecrecover to return address(0), it would indicate an error
+        vm.assume(originalAddr != address(0));
+
+        (address recovered, ECDSA.RecoverError error, ) = ECDSA.tryRecover(digest, sig);
+        if (error == ECDSA.RecoverError.InvalidSignatureS) {
+            // tryRecover rejects s values in the high half order
+            assertGt(uint256(s), secp256k1n / 2);
+        } else {
+            assertEq(uint256(error), uint256(ECDSA.RecoverError.NoError));
+            assertEq(recovered, originalAddr);
+        }
+    }
+
     function check_ecrecover_explicitMalleability(
         uint256 privateKey,
         bytes32 digest
