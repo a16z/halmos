@@ -149,8 +149,9 @@ contract SignatureTest is SymTest, Test {
         (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey, digest1);
         (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey, digest2);
 
-        assertNotEq(r1, r2);
-        assertNotEq(s1, s2);
+        bytes memory sig1 = abi.encodePacked(v1, r1, s1);
+        bytes memory sig2 = abi.encodePacked(v2, r2, s2);
+        assertNotEq(keccak256(sig1), keccak256(sig2));
     }
 
     function check_vmsign_noKeyCollision(
@@ -163,8 +164,7 @@ contract SignatureTest is SymTest, Test {
         (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(privateKey1, digest);
         (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(privateKey2, digest);
 
-        assertNotEq(r1, r2);
-        assertNotEq(s1, s2);
+        assert(v1 != v2 || r1 != r2 || s1 != s2);
     }
 
     /// we expect a counterexample for this test

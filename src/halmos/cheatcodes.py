@@ -535,7 +535,7 @@ class hevm_cheat_code:
                 for (_key, _digest), (_v, _r, _s) in known_sigs.items():
                     distinct = Implies(
                         Or(key != _key, digest != _digest),
-                        And(r != _r, s != _s),
+                        Or(v != _v, r != _r, s != _s),
                     )
                     ex.path.append(distinct)
 
