@@ -181,7 +181,7 @@ Recall that symbolic tests take into account all possible input combinations. Ho
 In our example, the conditions for the valid sender and receiver addresses are specified as follows:
 ```solidity
 vm.assume(receiver != address(0));
-vm.assume(token.balance(sender) >= amount);
+vm.assume(token.balanceOf(sender) >= amount);
 ```
 Like fuzz tests, any input combinations that don't satisfy the `assume()` conditions are disregarded. This means that, after executing the above `assume()` statements, only the input combinations in which the receiver is non-zero and the sender has sufficient balance are considered. Other input combinations that violate these conditions are ignored.
 
