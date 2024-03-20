@@ -530,6 +530,8 @@ class hevm_cheat_code:
                 ex.path.append(recover_malleable == addr)
 
                 # mark signatures as distinct if key or digest are distinct
+                # NOTE: the condition `And(r != _r, s != _s)` is stronger than `Or(v != _v, r != _r, s != _s)` which is sound
+                # TODO: we need to figure out whether this stronger condition is necessary and whether it could lead to unsound results in practical cases
                 for (_key, _digest), (_v, _r, _s) in known_sigs.items():
                     distinct = Implies(
                         Or(key != _key, digest != _digest),
