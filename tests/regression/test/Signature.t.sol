@@ -328,6 +328,25 @@ contract SignatureTest is SymTest, Test {
         assertEq(ecrecover(digest, v2, r2, s2), vm.addr(privateKey2));
     }
 
+    function check_ecrecover_eip2098CompactSignatures(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        address addr = vm.addr(privateKey);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+
+        // assume s is in the lower half order
+        vm.assume(uint256(s) < secp256k1n / 2);
+
+        // convert to compact format
+        uint8 yParity = v - 27;
+        bytes32 vs = bytes32(((uint256(yParity) << 255) | uint256(s)));
+
+        // check that the compact signature can be verified
+        address recovered = ECDSA.recover(digest, r, vs);
+        assertEq(recovered, addr);
+    }
+
     function check_makeAddrAndKey_consistent_symbolic() public {
         string memory keyName = svm.createString(32, "keyName");
         (address addr, uint256 key) = makeAddrAndKey(keyName);
