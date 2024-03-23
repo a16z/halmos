@@ -127,6 +127,19 @@ contract SignatureTest is SymTest, Test {
         assertNotEq(addr, address(0x42));
     }
 
+    function check_vmsign_valuesInExpectedRange(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+
+        assert(v == 27 || v == 28);
+        assertGt(uint256(r), 0);
+        assertLt(uint256(r), secp256k1n);
+        assertGt(uint256(s), 0);
+        assertLt(uint256(s), secp256k1n);
+    }
+
     function check_vmsign_consistent(
         uint256 privateKey,
         bytes32 digest
