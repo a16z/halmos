@@ -193,6 +193,17 @@ contract SignatureTest is SymTest, Test {
         assertNotEq(r1, r2);
     }
 
+    /// FIXME: this should pass, but it doesn't because we always return 32 bytes
+    // function check_ecrecover_invalidCallReturnsNothing() public {
+    //     uint256 returnDataSize;
+    //     assembly {
+    //         let succ := call(gas(), ECRECOVER_PRECOMPILE, 0, 0, 0, 0, 0)
+    //         returnDataSize := returndatasize()
+    //     }
+
+    //     assertEq(returnDataSize, 0);
+    // }
+
     function check_vmsign_ecrecover_e2e_recoveredMatches(
         uint256 privateKey,
         bytes32 digest
