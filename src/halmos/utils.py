@@ -182,8 +182,13 @@ def extract_string_argument(calldata: BitVecRef, arg_idx: int):
     return string_bytes.decode("utf-8") if is_concrete(string_bytes) else string_bytes
 
 
-def extract_bytes(data: BitVecRef, byte_offset: int, size_bytes: int) -> BitVecRef:
+def extract_bytes(
+    data: Optional[BitVecRef], byte_offset: int, size_bytes: int
+) -> BitVecRef:
     """Extract bytes from calldata. Zero-pad if out of bounds."""
+    if data is None:
+        return BitVecVal(0, size_bytes * 8)
+
     n = data.size()
     if n % 8 != 0:
         raise ValueError(n)

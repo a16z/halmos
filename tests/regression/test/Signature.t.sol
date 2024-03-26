@@ -127,6 +127,19 @@ contract SignatureTest is SymTest, Test {
         assertNotEq(addr, address(0x42));
     }
 
+    function check_vmsign_valuesInExpectedRange(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+
+        assert(v == 27 || v == 28);
+        assertGt(uint256(r), 0);
+        assertLt(uint256(r), secp256k1n);
+        assertGt(uint256(s), 0);
+        assertLt(uint256(s), secp256k1n);
+    }
+
     function check_vmsign_consistent(
         uint256 privateKey,
         bytes32 digest
@@ -180,6 +193,17 @@ contract SignatureTest is SymTest, Test {
         assertNotEq(r1, r2);
     }
 
+    /// FIXME: this should pass, but it doesn't because we always return 32 bytes
+    // function check_ecrecover_invalidCallReturnsNothing() public {
+    //     uint256 returnDataSize;
+    //     assembly {
+    //         let succ := call(gas(), ECRECOVER_PRECOMPILE, 0, 0, 0, 0, 0)
+    //         returnDataSize := returndatasize()
+    //     }
+
+    //     assertEq(returnDataSize, 0);
+    // }
+
     function check_vmsign_ecrecover_e2e_recoveredMatches(
         uint256 privateKey,
         bytes32 digest
@@ -218,6 +242,27 @@ contract SignatureTest is SymTest, Test {
         vm.assume(v != otherV || r != otherR || s != otherS);
 
         assertNotEq(ecrecover(digest, v, r, s), ecrecover(digest, otherV, otherR, otherS));
+    }
+
+    function check_vmsign_tryRecover(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        bytes memory sig = abi.encodePacked(r, s, v);
+        address originalAddr = vm.addr(privateKey);
+
+        // we don't want ecrecover to return address(0), it would indicate an error
+        vm.assume(originalAddr != address(0));
+
+        (address recovered, ECDSA.RecoverError error, ) = ECDSA.tryRecover(digest, sig);
+        if (error == ECDSA.RecoverError.InvalidSignatureS) {
+            // tryRecover rejects s values in the high half order
+            assertGt(uint256(s), secp256k1n / 2);
+        } else {
+            assertEq(uint256(error), uint256(ECDSA.RecoverError.NoError));
+            assertEq(recovered, originalAddr);
+        }
     }
 
     function check_ecrecover_explicitMalleability(
@@ -292,6 +337,25 @@ contract SignatureTest is SymTest, Test {
 
         assertEq(ecrecover(digest, v1, r1, s1), vm.addr(privateKey1));
         assertEq(ecrecover(digest, v2, r2, s2), vm.addr(privateKey2));
+    }
+
+    function check_ecrecover_eip2098CompactSignatures(
+        uint256 privateKey,
+        bytes32 digest
+    ) public {
+        address addr = vm.addr(privateKey);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+
+        // assume s is in the lower half order
+        vm.assume(uint256(s) < secp256k1n / 2);
+
+        // convert to compact format
+        uint8 yParity = v - 27;
+        bytes32 vs = bytes32(((uint256(yParity) << 255) | uint256(s)));
+
+        // check that the compact signature can be verified
+        address recovered = ECDSA.recover(digest, r, vs);
+        assertEq(recovered, addr);
     }
 
     function check_makeAddrAndKey_consistent_symbolic() public {

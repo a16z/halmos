@@ -521,6 +521,16 @@ class hevm_cheat_code:
                 # associate the new signature with the private key and digest
                 known_sigs[(key, digest)] = (v, r, s)
 
+                # constrain values to their expected ranges
+                in_range = And(
+                    Or(v == 27, v == 28),
+                    ULT(0, r),
+                    ULT(r, secp256k1n),
+                    ULT(0, s),
+                    ULT(s, secp256k1n),
+                )
+                ex.path.append(in_range)
+
                 # explicitly model malleability
                 recover = f_ecrecover(digest, v, r, s)
                 recover_malleable = f_ecrecover(digest, v ^ 1, r, secp256k1n - s)
