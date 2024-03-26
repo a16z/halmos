@@ -1,6 +1,17 @@
 {
     "exitcode": 1,
     "test_results": {
+        "test/BadElections.t.sol:BadElectionsTest": [
+            {
+                "name": "check_canNotVoteTwice(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Fork.t.sol:CounterForkTest": [
             {
                 "name": "check_invariant(address)",
