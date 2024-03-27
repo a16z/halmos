@@ -448,8 +448,11 @@ class hevm_cheat_code:
             try:
                 code_offset = int_of(extract_bytes(arg, 4 + 32, 32))
                 code_length = int_of(extract_bytes(arg, 4 + code_offset, 32))
-                code_int = int_of(extract_bytes(arg, 4 + code_offset + 32, code_length))
-                code_bytes = code_int.to_bytes(code_length, "big")
+
+                code_bytes = bytes()
+                if code_length != 0:
+                    code_bv = extract_bytes(arg, 4 + code_offset + 32, code_length)
+                    code_bytes = bv_value_to_bytes(code_bv)
                 ex.set_code(who, code_bytes)
             except Exception as e:
                 error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
@@ -508,8 +511,6 @@ class hevm_cheat_code:
             digest = extract_bytes(arg, 4 + 32, 32)
 
             # TODO: handle concrete private key + digest (generate concrete signature)
-            # TODO: do we want to constrain v to {27, 28}?
-            # TODO: do we want to constrain r and s to be less than curve order?
 
             # check for an existing signature
             known_sigs = ex.known_sigs

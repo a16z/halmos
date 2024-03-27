@@ -66,7 +66,12 @@ contract FoundryTest is Test {
         assertEq(uint256(uint8(retval[0])), 0xAA);
     }
 
+    function check_etch_emptyBytecode() public {
+        vm.etch(address(0x42), hex"");
+        (bool success, ) = address(0x42).call("");
 
+        assertTrue(success);
+    }
 
     /// @notice etching to a symbolic address is not supported
     // function check_etch_SymbolicAddr(address who) public {
