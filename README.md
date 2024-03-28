@@ -41,7 +41,9 @@ Refer to the [getting started guide](docs/getting-started.md) and the [examples]
 
 ## Contributing
 
-Refer to the [contributing guidelines](CONTRIBUTING.md).
+Refer to the [contributing guidelines](CONTRIBUTING.md), and explore the list of issues labeled ["good first issue" or "help wanted."][issues]
+
+[issues]: <https://github.com/a16z/halmos/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22%2C%22help+wanted%22>
 
 ## Disclaimer
 
