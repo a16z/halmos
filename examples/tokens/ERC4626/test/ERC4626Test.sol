@@ -19,13 +19,13 @@ abstract contract ERC4626Test is SymTest, Test {
         address caller = holders[0];
         vm.prank(caller); uint shares = IERC4626(vault).deposit(assets, caller);
         vm.prank(caller); uint assets2 = IERC4626(vault).redeem(shares, caller, caller);
-        assert(assets2 <= assets);
+        assert(assets2 <= assets); // timeout
     }
 
     function check_RT_mint_withdraw(uint shares) public virtual {
         address caller = holders[0];
         vm.prank(caller); uint assets = IERC4626(vault).mint(shares, caller);
         vm.prank(caller); uint shares2 = IERC4626(vault).withdraw(assets, caller, caller);
-        assert(shares2 >= shares);
+        assert(shares2 >= shares); // timeout
     }
 }
