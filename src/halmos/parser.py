@@ -214,20 +214,9 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         help="set memory limit (in megabytes) for the solver; 0 means no limit (default: %(default)s)",
     )
     group_solver.add_argument(
-        "--solver-fresh",
-        action="store_true",
-        help="run an extra solver with a fresh state for unknown",
-    )
-    group_solver.add_argument(
-        "--solver-subprocess",
-        action="store_true",
-        help="run an extra solver in subprocess for unknown",
-    )
-    group_solver.add_argument(
-        "--solver-subprocess-command",
+        "--solver-command",
         metavar="COMMAND",
-        default="z3 -model",
-        help="use the given command for the subprocess solver (requires --solver-subprocess) (default: '%(default)s')",
+        help="use the given command when invoking the solver, e.g. `z3 -model`",
     )
     group_solver.add_argument(
         "--solver-parallel",
