@@ -1017,25 +1017,52 @@ def copy_model(model: Model) -> Dict:
 def solve(
     query: str, args: Namespace, dump_filename: Optional[str] = None
 ) -> Tuple[CheckSatResult, Model]:
-    if dump_filename:
+    if args.dump_smt_queries or args.solver_command:
+        if not dump_filename:
+            dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
+
         with open(dump_filename, "w") as f:
+            print(f"Writing SMT query to {dump_filename}")
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)
             f.write("(get-model)\n")
 
-    solver = mk_solver(args, ctx=Context(), assertion=True)
-    solver.from_string(query)
-    result = solver.check()
-    model = copy_model(solver.model()) if result == sat else None
-    return result, model
+    if args.solver_command:
+        if args.verbose >= 1:
+            print(f"  Checking with external solver process")
+            print(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
+
+        cmd = args.solver_command.split() + [dump_filename]
+        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
+        res_str_head = res_str.split("\n", 1)[0]
+
+        with open(f"{dump_filename}.out", "w") as f:
+            f.write(res_str)
+
+        if args.verbose >= 1:
+            print(f"    {res_str_head}")
+
+        if res_str_head == "unsat":
+            return unsat, None
+        elif res_str_head == "sat":
+            return sat, f"{dump_filename}.out"
+        else:
+            return unknown, None
+
+    else:
+        solver = mk_solver(args, ctx=Context(), assertion=True)
+        solver.from_string(query)
+        result = solver.check()
+        model = copy_model(solver.model()) if result == sat else None
+        return result, model
 
 
 def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
     args, idx, sexpr = fn_args.args, fn_args.idx, fn_args.sexpr
 
-    dump_dirname = fn_args.dump_dirname if args.dump_smt_queries else None
-    dump_filename = f"{dump_dirname}/{idx+1}.smt2" if dump_dirname else None
-    if dump_dirname:
+    dump_dirname = fn_args.dump_dirname
+    dump_filename = f"{dump_dirname}/{idx+1}.smt2"
+    if args.dump_smt_queries or args.solver_command:
         if not os.path.isdir(dump_dirname):
             os.makedirs(dump_dirname)
             print(f"Generating SMT queries in {dump_dirname}")
@@ -1049,39 +1076,8 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
         if args.verbose >= 1:
             print(f"  Checking again with refinement")
 
-        res, model = solve(
-            refine(sexpr),
-            args,
-            dump_filename.replace(".smt2", ".refined.smt2") if dump_filename else None,
-        )
-
-    if args.solver_subprocess and is_unknown(res, model):
-        fname = f"/tmp/{uuid.uuid4().hex}.smt2"
-
-        if args.verbose >= 1:
-            print(f"  Checking again in an external process")
-            print(f"    {args.solver_subprocess_command} {fname} >{fname}.out")
-
-        query = refine(sexpr)
-        with open(fname, "w") as f:
-            f.write("(set-logic QF_AUFBV)\n")
-            f.write(query)
-
-        cmd = args.solver_subprocess_command.split() + [fname]
-        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
-        res_str_head = res_str.split("\n", 1)[0]
-
-        with open(f"{fname}.out", "w") as f:
-            f.write(res_str)
-
-        if args.verbose >= 1:
-            print(f"    {res_str_head}")
-
-        if res_str_head == "unsat":
-            res = unsat
-        elif res_str_head == "sat":
-            res = sat
-            model = f"{fname}.out"
+        refined_filename = dump_filename.replace(".smt2", ".refined.smt2")
+        res, model = solve(refine(sexpr), args, refined_filename)
 
     return package_result(model, idx, res, args)
 
@@ -1140,10 +1136,21 @@ def package_result(
 def is_model_valid(model: AnyModel) -> bool:
     # TODO: evaluate the path condition against the given model after excluding evm_* symbols,
     #       since the evm_* symbols may still appear in valid models.
-    for decl in model:
-        if str(decl).startswith("evm_"):
-            return False
-    return True
+
+    # model is a filename, containing solver output
+    if isinstance(model, str):
+        with open(model, "r") as f:
+            for line in f:
+                if "evm_" in line:
+                    return False
+        return True
+
+    # z3 model object
+    else:
+        for decl in model:
+            if str(decl).startswith("evm_"):
+                return False
+        return True
 
 
 def to_str_model(model: Model, print_full_model: bool) -> StrModel:
