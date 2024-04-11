@@ -145,6 +145,10 @@ def is_concrete(x: Any) -> bool:
     return isinstance(x, int) or isinstance(x, bytes) or is_bv_value(x)
 
 
+def is_concat(x: BitVecRef) -> bool:
+    return is_app_of(x, Z3_OP_CONCAT)
+
+
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
@@ -250,6 +254,10 @@ def byte_length(x: Any, strict=True) -> int:
         return math.ceil(x.size() / 8)
 
     if isinstance(x, bytes):
+        return len(x)
+
+    if isinstance(x, list):
+        # assume list of bytes, as used in calldata
         return len(x)
 
     raise HalmosException(f"byte_length({x}) of type {type(x)}")

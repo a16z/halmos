@@ -115,7 +115,7 @@ def id_str(x: Any) -> str:
     return hexify(x).replace(" ", "")
 
 
-def padded_slice(lst: List, start: int, size: int, default=0) -> List:
+def padded_slice(lst: Any, start: int, size: int, default=0) -> List:
     """
     Return a slice of lst, starting at start and with size elements. If the slice
     is out of bounds, pad with default.
@@ -509,27 +509,45 @@ class Block:
 class Contract:
     """Abstraction over contract bytecode. Can include concrete and symbolic elements."""
 
-    # for completely concrete code: _rawcode is a bytes object
-    # for completely or partially symbolic code: _rawcode is a single BitVec element
-    #    (typically a Concat() of concrete and symbolic values)
-    _rawcode: UnionType[bytes, BitVecRef]
+    _code: List[UnionType[bytes, BitVecRef]]
 
     def __init__(self, rawcode: UnionType[bytes, BitVecRef, str]) -> None:
         if rawcode is None:
             raise HalmosException("invalid contract code: None")
 
-        if is_bv_value(rawcode):
-            if rawcode.size() % 8 != 0:
-                raise ValueError(rawcode)
-            rawcode = rawcode.as_long().to_bytes(rawcode.size() // 8, "big")
+        if isinstance(rawcode, bytes):
+            rawcode = [rawcode]
 
-        if isinstance(rawcode, str):
-            rawcode = bytes.fromhex(rawcode)
+        elif is_bv_value(rawcode):
+            rawcode = [bv_value_to_bytes(rawcode)]
 
-        self._rawcode = rawcode
+        elif isinstance(rawcode, str):
+            raise HalmosException(
+                f"use Contract.from_hexcode() when passing a hex string"
+            )
+
+        elif is_bv(rawcode) and is_concat(rawcode):
+            # in the case of symbolic immutables in code, we expect a list
+            # of bytes and symbolic values
+            rawcode = [
+                bv_value_to_bytes(x) if is_bv_value(x) else x
+                for x in rawcode.children()
+            ]
+            debug(f"contract code is Concat of {rawcode}")
+
+        elif is_bv(rawcode):
+            rawcode = [rawcode]
+
+        else:
+            raise HalmosException(f"invalid contract code: {rawcode}")
+
+        # check that the code is well formed
+        assert all(isinstance(x, (bytes, BitVecRef)) for x in rawcode)
+
+        self._code = rawcode
 
         # cache length since it doesn't change after initialization
-        self._length = byte_length(rawcode)
+        self._length = sum(byte_length(x) for x in rawcode)
 
     def __init_jumpdests(self):
         self.jumpdests = set()
@@ -571,21 +589,16 @@ class Contract:
         return pc + instruction_length(opcode)
 
     def slice(self, start, stop) -> UnionType[bytes, BitVecRef]:
-        # symbolic
-        if is_bv(self._rawcode):
-            extracted = extract_bytes(self._rawcode, start, stop - start)
+        slice_data = [self[pc] for pc in range(start, stop)]
 
-            # check if that part of the code is concrete
-            if is_bv_value(extracted):
-                return bv_value_to_bytes(extracted)
+        # TODO: handle empty slices
 
-            else:
-                return extracted
+        # if we have any symbolic elements, return as a Concat expression
+        if any(is_bv(x) for x in slice_data):
+            return concat(slice_data)
 
-        # concrete
-        size = stop - start
-        data = padded_slice(self._rawcode, start, size, default=0)
-        return bytes(data)
+        # otherwise, return as a concrete bytes object
+        return bytes(slice_data)
 
     @lru_cache(maxsize=256)
     def __getitem__(self, key: int) -> UnionType[int, BitVecRef]:
@@ -600,15 +613,28 @@ class Contract:
         if offset >= len(self):
             return 0
 
-        # symbolic
-        if is_bv(self._rawcode):
-            extracted = extract_bytes(self._rawcode, offset, 1)
+        # locate the _code element that contains the byte at offset
+        # (we expect self._code to be a short list in the common case, 2-5 elements)
+        for code_element in self._code:
+            element_length = byte_length(code_element)
 
-            # return as concrete if possible
-            return unbox_int(extracted)
+            if offset < element_length:
+                # symbolic case
+                if is_bv(code_element):
+                    extracted = extract_bytes(code_element, offset, 1)
 
-        # concrete
-        return self._rawcode[offset]
+                    # return as concrete if possible
+                    return unbox_int(extracted)
+
+                # concrete case
+                return code_element[offset]
+
+            offset -= element_length
+
+        # should never reach here
+        raise HalmosException(
+            f"failed to locate offset={offset} in contract code {self._code}"
+        )
 
     def __len__(self) -> int:
         """Returns the length of the bytecode in bytes."""
@@ -626,7 +652,6 @@ class CodeIterator:
     def __init__(self, contract: Contract):
         self.contract = contract
         self.pc = 0
-        self.is_symbolic = is_bv(contract._rawcode)
 
     def __iter__(self):
         return self
@@ -636,13 +661,12 @@ class CodeIterator:
         if self.pc >= len(self.contract):
             raise StopIteration
 
-        if self.is_symbolic and is_bv(self.contract[self.pc]):
+        try:
+            insn = self.contract.decode_instruction(self.pc)
+            self.pc += len(insn)
+            return insn
+        except NotConcreteError:
             raise StopIteration
-
-        insn = self.contract.decode_instruction(self.pc)
-        self.pc += len(insn)
-
-        return insn
 
 
 class Path:
@@ -663,6 +687,7 @@ class Path:
         self.conditions = []
         self.branching = []
         self.pending = []
+        self.forked = False
 
     def __deepcopy__(self, memo):
         raise NotImplementedError(f"use the branch() method instead of deepcopy()")
@@ -681,6 +706,8 @@ class Path:
         # note: sharing the solver instance complicates the use of randomized path exploration approaches, which can be more efficient for quickly finding bugs.
         # currently, a dfs-based path exploration is employed, which is suitable for scenarios where exploring all paths is necessary, e.g., when proving the absence of bugs.
         path = Path(self.solver)
+
+        # print(f"path {id(path)} branched from {id(self)} with condition {cond}")
 
         # create a new scope within the solver, and save the current scope
         # the solver will roll back to this scope later when the new path is activated
@@ -712,6 +739,9 @@ class Path:
 
     def append(self, cond, branching=False):
         cond = simplify(cond)
+
+        if self.forked:
+            warn(f"attempting to append cond {cond} to forked path {id(self)}")
 
         if is_true(cond):
             return
