@@ -12,6 +12,19 @@ from .exceptions import FailCheatcode, HalmosException
 from .utils import *
 
 
+# f_vmaddr(key) -> address
+f_vmaddr = Function("f_vmaddr", BitVecSort256, BitVecSort160)
+
+# f_sign_v(key, digest) -> v
+f_sign_v = Function("f_sign_v", BitVecSort256, BitVecSort256, BitVecSort8)
+
+# f_sign_r(key, digest) -> r
+f_sign_r = Function("f_sign_r", BitVecSort256, BitVecSort256, BitVecSort256)
+
+# f_sign_s(key, digest) -> s
+f_sign_s = Function("f_sign_s", BitVecSort256, BitVecSort256, BitVecSort256)
+
+
 def name_of(x: str) -> str:
     return re.sub(r"\s+", "_", x)
 
@@ -192,6 +205,25 @@ def create_bool(ex, arg):
     return uint256(create_generic(ex, 1, name, "bool"))
 
 
+def apply_vmaddr(ex, private_key: Any):
+    # check if this private key has an existing address associated with it
+    known_keys = ex.known_keys
+    addr = known_keys.get(private_key, None)
+    if addr is None:
+        # if not, create a new address
+        addr = f_vmaddr(private_key)
+
+        # mark the addresses as distinct
+        for other_key, other_addr in known_keys.items():
+            distinct = Implies(private_key != other_key, addr != other_addr)
+            ex.path.append(distinct)
+
+        # associate the new address with the private key
+        known_keys[private_key] = addr
+
+    return addr
+
+
 class halmos_cheat_code:
     # address constant SVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('svm cheat code')))));
@@ -286,6 +318,15 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("ffi(string[])"))
     ffi_sig: int = 0x89160467
+
+    # addr(uint256)
+    addr_sig: int = 0xFFA18649
+
+    # sign(uint256,bytes32)
+    sign_sig: int = 0xE341EAA4
+
+    # label(address,string)
+    label_sig: int = 0xC657C718
 
     @staticmethod
     def handle(sevm, ex, arg: BitVec) -> BitVec:
@@ -407,8 +448,11 @@ class hevm_cheat_code:
             try:
                 code_offset = int_of(extract_bytes(arg, 4 + 32, 32))
                 code_length = int_of(extract_bytes(arg, 4 + code_offset, 32))
-                code_int = int_of(extract_bytes(arg, 4 + code_offset + 32, code_length))
-                code_bytes = code_int.to_bytes(code_length, "big")
+
+                code_bytes = bytes()
+                if code_length != 0:
+                    code_bv = extract_bytes(arg, 4 + code_offset + 32, code_length)
+                    code_bytes = bv_value_to_bytes(code_bv)
                 ex.set_code(who, code_bytes)
             except Exception as e:
                 error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
@@ -447,6 +491,73 @@ class hevm_cheat_code:
                 out_str = out_str.encode("utf-8").hex()
 
             return stringified_bytes_to_bytes(out_str)
+
+        elif funsig == hevm_cheat_code.addr_sig:
+            private_key = extract_bytes(arg, 4, 32)
+
+            # TODO: handle concrete private key (return directly the corresponding address)
+            # TODO: check (or assume?) private_key is valid
+            #  - less than curve order
+            #  - not zero
+            # TODO: add constraints that the generated addresses are reasonable
+            #  - not zero
+            #  - not the address of a known contract
+
+            addr = apply_vmaddr(ex, private_key)
+            return uint256(addr)
+
+        elif funsig == hevm_cheat_code.sign_sig:
+            key = extract_bytes(arg, 4, 32)
+            digest = extract_bytes(arg, 4 + 32, 32)
+
+            # TODO: handle concrete private key + digest (generate concrete signature)
+
+            # check for an existing signature
+            known_sigs = ex.known_sigs
+            (v, r, s) = known_sigs.get((key, digest), (None, None, None))
+            if (v, r, s) == (None, None, None):
+                # if not, create a new signature
+                v, r, s = (f(key, digest) for f in (f_sign_v, f_sign_r, f_sign_s))
+
+                # associate the new signature with the private key and digest
+                known_sigs[(key, digest)] = (v, r, s)
+
+                # constrain values to their expected ranges
+                in_range = And(
+                    Or(v == 27, v == 28),
+                    ULT(0, r),
+                    ULT(r, secp256k1n),
+                    ULT(0, s),
+                    ULT(s, secp256k1n),
+                )
+                ex.path.append(in_range)
+
+                # explicitly model malleability
+                recover = f_ecrecover(digest, v, r, s)
+                recover_malleable = f_ecrecover(digest, v ^ 1, r, secp256k1n - s)
+
+                addr = apply_vmaddr(ex, key)
+                ex.path.append(recover == addr)
+                ex.path.append(recover_malleable == addr)
+
+                # mark signatures as distinct if key or digest are distinct
+                # NOTE: the condition `And(r != _r, s != _s)` is stronger than `Or(v != _v, r != _r, s != _s)` which is sound
+                # TODO: we need to figure out whether this stronger condition is necessary and whether it could lead to unsound results in practical cases
+                for (_key, _digest), (_v, _r, _s) in known_sigs.items():
+                    distinct = Implies(
+                        Or(key != _key, digest != _digest),
+                        Or(v != _v, r != _r, s != _s),
+                    )
+                    ex.path.append(distinct)
+
+            return Concat(uint256(v), r, s)
+
+        elif funsig == hevm_cheat_code.label_sig:
+            addr = extract_bytes(arg, 4, 32)
+            label = extract_string_argument(arg, 1)
+
+            # TODO: no-op for now
+            pass
 
         else:
             # TODO: support other cheat codes
