@@ -1,5 +1,15 @@
 {
     "build": {
         "dockerfile": "Dockerfile"
-    }
+    },
+    "postCreateCommand": [
+        "python -m venv .venv",
+        "chmod +x .venv/bin/activate",
+        ".venv/bin/activate",
+        "python -m pip install -r requirements.txt",
+        "python -m pip install -r requirements-dev.txt",
+        "pre-commit install",
+        "pre-commit run --all-files",
+        "python -m pip install -e ."
+    ]
 }
