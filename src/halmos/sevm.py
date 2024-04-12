@@ -468,6 +468,7 @@ class State:
     def mstore(self, full: bool) -> None:
         loc: int = self.mloc()
         val: Word = self.pop()
+
         if is_bool(val):
             val = If(val, con(1), con(0))
         if full:
@@ -477,6 +478,7 @@ class State:
 
     def mload(self) -> None:
         loc: int = self.mloc()
+
         self.push(wload(self.memory, loc, 32))
 
     def ret(self) -> Bytes:
@@ -592,10 +594,11 @@ class Contract:
         slice_data = [self[pc] for pc in range(start, stop)]
 
         # TODO: handle empty slices
+        # TODO: return a bytevec object instead of a concat expression
 
         # if we have any symbolic elements, return as a Concat expression
         if any(is_bv(x) for x in slice_data):
-            return concat(slice_data)
+            return concat([x if is_bv(x) else con(x, 8) for x in slice_data])
 
         # otherwise, return as a concrete bytes object
         return bytes(slice_data)

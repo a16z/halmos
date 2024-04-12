@@ -65,9 +65,19 @@ f_ecrecover = Function(
 )
 
 
+def wrap(x: Any) -> Word:
+    if is_bv(x):
+        return x
+    if isinstance(x, int):
+        return con(x)
+    if isinstance(x, bytes):
+        return BitVecVal(int.from_bytes(x, "big"), 8 * len(x))
+    raise ValueError(x)
+
+
 def concat(args):
     if len(args) > 1:
-        return Concat(args)
+        return Concat([wrap(x) for x in args])
     else:
         return args[0]
 
