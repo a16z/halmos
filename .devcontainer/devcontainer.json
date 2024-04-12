@@ -2,6 +2,5 @@
     "build": {
         "dockerfile": "Dockerfile"
     },
-    //  run .devcontainer/postCreate.sh
     "postCreateCommand": "/bin/bash .devcontainer/postCreate.sh"
 }
