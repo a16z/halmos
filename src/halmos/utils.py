@@ -232,6 +232,10 @@ def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
     return x.as_long().to_bytes(byte_length(x, strict=True), "big")
 
 
+def try_bv_value_to_bytes(x: Any) -> Optional[bytes]:
+    return bv_value_to_bytes(x) if is_bv_value(x) else x
+
+
 def unbox_int(x: Any) -> Any:
     """
     Attempts to convert int-like objects to int

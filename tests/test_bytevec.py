@@ -1,8 +1,31 @@
 import pytest
 
-from z3 import BitVec, BitVecVal
+from z3 import BitVec, BitVecVal, Extract
 
-from halmos.bytevec import ByteVec, concat
+from halmos.bytevec import ByteVec, concat, defrag
+from halmos.exceptions import HalmosException
+
+
+### test helpers
+
+
+def test_defrag():
+    assert defrag([]) == []
+    assert defrag([b"hello"]) == [b"hello"]
+    assert defrag([b"hello", b"world"]) == [b"helloworld"]
+    assert defrag([b"hello", b"world", b"!"]) == [b"helloworld!"]
+
+    # defrag doesn't automatically convert bitvecvals to bytes
+    mixed = [b"hello", BitVecVal(int.from_bytes(b"world"), 30), b"!"]
+    assert defrag(mixed) == mixed
+
+    x, y, z = (BitVec(_, 8) for _ in "xyz")
+    assert defrag([x]) == [x]
+    assert defrag([x, y]) == [concat([x, y])]
+    assert defrag([x, y, z]) == [concat([x, y, z])]
+
+
+### test bytevec constructor
 
 
 def test_bytevec_constructor_nodata():
@@ -61,13 +84,29 @@ def test_bytevec_constructor_hexstr():
 def test_bytevec_constructor_list():
     vec = ByteVec([b"hello", BitVecVal(0x1234, 16)])
     assert len(vec) == 7
-    assert vec._data == [b"hello", b"\x12\x34"]
+
+    # we expect the output to be lowered to bytes and defragged
+    assert vec._data == [b"hello\x12\x34"]
     assert vec._well_formed()
+
+
+### test bytevec behavior
 
 
 def test_bytevec_empty_should_be_falsy():
     for vec in ByteVec(b""), ByteVec(), ByteVec(""):
         assert not vec
+
+
+def test_bytevec_eq():
+    vec = ByteVec(b"hello")
+    assert vec == b"hello"
+    assert vec == ByteVec(b"hello")
+    assert vec != b"world"
+    assert vec != ByteVec(b"world")
+
+
+### test getitem and slice
 
 
 def test_bytevec_getitem():
@@ -93,6 +132,8 @@ def test_bytevec_getitem_negative():
 def test_bytevec_slice_concrete():
     vec = ByteVec(b"hello")
 
+    assert len(vec[1:1]) == 0
+
     vec_slice = vec[:3]
     assert len(vec_slice) == 3
     assert vec_slice == b"hel"
@@ -108,8 +149,35 @@ def test_bytevec_slice_concrete():
 
 
 def test_bytevec_slice_symbolic():
-    vec = ByteVec(BitVec("x", 40))
+    x = BitVec("x", 40)
+    vec = ByteVec(x)
+
+    assert len(vec[1:1]) == 0
 
     vec_slice = vec[:3]
     assert len(vec_slice) == 3
-    assert vec_slice._data == [vec[0], vec[1], vec[2]]
+    assert vec_slice._data == [Extract(39, 16, x)]
+
+
+def test_bytevec_slice_mixed():
+    x = BitVec("x", 16)
+    vec = ByteVec([b"hello", x, b"world"])
+
+    tests = [
+        (vec[:3], b"hel"),
+        (vec[5:7], ByteVec(x)),
+        (vec[8:], b"orld"),
+        (vec[3:9], ByteVec([b"lo", x, b"wo"])),
+        (vec[100:120], ByteVec()),
+    ]
+
+    for actual, expected in tests:
+        print(f"actual={actual}, expected={expected}")
+        assert actual == expected
+        assert actual._well_formed()
+
+
+def test_bytevec_assign_slice():
+    with pytest.raises(HalmosException):
+        vec = ByteVec(b"hello")
+        vec[:3] = b"123"
