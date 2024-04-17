@@ -18,3 +18,5 @@ curl -L https://foundry.paradigm.xyz | bash
 
 # just a test
 # pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-v -st --storage-layout solidity --solver-timeout-assertion 0"
+# same, but with force use of local pytest
+# python -m pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-v -st --storage-layout solidity --solver-timeout-assertion 0"
