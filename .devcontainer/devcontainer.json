@@ -1,6 +1,4 @@
 {
-    "build": {
-        "dockerfile": "Dockerfile"
-    },
+    "image": "mcr.microsoft.com/devcontainers/python:3.12",
     "postCreateCommand": "/bin/bash .devcontainer/postCreate.sh"
 }

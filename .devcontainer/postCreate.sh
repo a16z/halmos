@@ -7,6 +7,9 @@ pre-commit install
 pre-commit run --all-files
 python -m pip install -e .
 
+# Installing during postCreateCommand instead of at docker creation
+# because foundryup installs the binaries in place not accessible by the
+# current (vscode) user.
 deactivate
 mkdir foundry
 cd foundry
