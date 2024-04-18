@@ -53,6 +53,10 @@ python -m black src/
 
 [black]: <https://black.readthedocs.io/en/stable/>
 
+## GitHub Codespace
+
+A pre-configured development environment is available as a GitHub Codespaces dev container.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under its [AGPL-3.0](LICENSE) License.
