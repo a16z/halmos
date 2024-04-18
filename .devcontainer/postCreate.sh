@@ -10,9 +10,6 @@ python -m pip install -e .
 # Installing during postCreateCommand instead of at docker creation
 # because foundryup installs the binaries in place not accessible by the
 # current (vscode) user.
-deactivate
-mkdir foundry
-cd foundry
 curl -L https://foundry.paradigm.xyz | bash
 /home/vscode/.foundry/bin/foundryup
 
@@ -20,3 +17,5 @@ curl -L https://foundry.paradigm.xyz | bash
 # pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-v -st --storage-layout solidity --solver-timeout-assertion 0"
 # same, but with force use of local pytest
 # python -m pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-v -st --storage-layout solidity --solver-timeout-assertion 0"
+
+echo 'source .venv/bin/activate' >> ~/.bashrc
