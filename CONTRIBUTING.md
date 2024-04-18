@@ -23,18 +23,20 @@ git clone git@github.com:a16z/halmos.git
 Create and activate a virtual environment:
 
 ```sh
-python3.11 -m venv .venv
-source .venv/bin/activate
+python3.12 -m venv .venv && source .venv/bin/activate
 ```
 
 Install the dependencies:
 
 ```sh
-python -m pip install -r requirements.txt
+# install halmos and its runtime dependencies
+python -m pip install -e .
+
+# install the dev dependencies
 python -m pip install -r requirements-dev.txt
 ```
 
-Install and run the git hook scripts:
+Install and run the git hook scripts (this is optional but will make sure that your PR will follow the style convention):
 
 ```sh
 pre-commit install
@@ -46,7 +48,7 @@ pre-commit run --all-files
 We recommend enabling the [black] formatter in your editor, but you can run it manually if needed:
 
 ```sh
-python -m black .
+python -m black src/
 ```
 
 [black]: <https://black.readthedocs.io/en/stable/>
