@@ -2,7 +2,7 @@ import pytest
 
 from z3 import BitVec, BitVecVal, Extract
 
-from halmos.bytevec import ByteVec, concat, defrag
+from halmos.bytevec import ByteVec, concat, defrag, OOBReads
 from halmos.exceptions import HalmosException
 
 
@@ -109,24 +109,36 @@ def test_bytevec_eq():
 ### test getitem and slice
 
 
-def test_bytevec_getitem():
-    vec = ByteVec(b"hello")
+@pytest.mark.parametrize("oob_read", [OOBReads.RETURN_ZERO, OOBReads.FAIL])
+def test_bytevec_getitem(oob_read):
+    vec = ByteVec(b"hello", oob_read=oob_read)
     assert vec[0] == ord("h")
     assert vec[1] == ord("e")
     assert vec[2] == ord("l")
     assert vec[3] == ord("l")
     assert vec[4] == ord("o")
-    assert vec[5] == None
+
+    if oob_read == OOBReads.FAIL:
+        with pytest.raises(IndexError):
+            vec[5]
+    else:
+        assert vec[5] == 0
 
 
-def test_bytevec_getitem_negative():
-    vec = ByteVec(b"hello")
+@pytest.mark.parametrize("oob_read", [OOBReads.RETURN_ZERO, OOBReads.FAIL])
+def test_bytevec_getitem_negative(oob_read):
+    vec = ByteVec(b"hello", oob_read=oob_read)
     assert vec[-1] == ord("o")
     assert vec[-2] == ord("l")
     assert vec[-3] == ord("l")
     assert vec[-4] == ord("e")
     assert vec[-5] == ord("h")
-    assert vec[-6] == None
+
+    if oob_read == OOBReads.FAIL:
+        with pytest.raises(IndexError):
+            vec[-6]
+    else:
+        assert vec[-6] == 0
 
 
 def test_bytevec_slice_concrete():

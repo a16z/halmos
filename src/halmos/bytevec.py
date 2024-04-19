@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
-
+from enum import Enum
 from typing import (
     Any,
     List,
@@ -11,6 +11,13 @@ from z3 import BitVecRef, Concat, is_bv, is_bv_value
 
 from .exceptions import HalmosException
 from .utils import *
+
+
+class OOBReads(Enum):
+    """Enum to control the behavior of out-of-bounds reads in ByteVec"""
+
+    RETURN_ZERO = 0
+    FAIL = 1
 
 
 def try_concat(lhs: Any, rhs: Any) -> Optional[Any]:
@@ -56,7 +63,13 @@ def defrag(data: List) -> List:
 
 
 class ByteVec:
-    def __init__(self, data: Optional[UnionType[bytes, str, BitVecRef, List]] = None):
+    """Immutable implementation of a byte vector made of mixed concrete/symbolic byte ranges"""
+
+    def __init__(
+        self,
+        data: Optional[UnionType[bytes, str, BitVecRef, List]] = None,
+        oob_read: OOBReads = OOBReads.RETURN_ZERO,
+    ):
         if data is None:
             data = []
 
@@ -97,6 +110,7 @@ class ByteVec:
 
         self._data = data
         self._length = sum(byte_length(x) for x in data)
+        self._oob_read = oob_read
 
     def _well_formed(self) -> bool:
         return (
@@ -174,11 +188,9 @@ class ByteVec:
         return ByteVec(acc)
 
     def __getitem__(
-        self, key: UnionType[int, slice], default=None
+        self, key: UnionType[int, slice]
     ) -> UnionType[int, BitVecRef, "ByteVec"]:
-        """Returns the byte at the given offset (symbolic or concrete)
-
-        default -- the value to return if the offset is out of bounds"""
+        """Returns the byte at the given offset (symbolic or concrete)"""
 
         if isinstance(key, slice):
             start, stop, step = key.indices(len(self))
@@ -191,9 +203,14 @@ class ByteVec:
 
         # out of bounds read
         if offset < -len(self) or offset >= len(self):
-            return default
+            if self._oob_read == OOBReads.RETURN_ZERO:
+                return 0
+            elif self._oob_read == OOBReads.FAIL:
+                raise IndexError(f"index {offset} out of bounds")
+            else:
+                raise HalmosException(f"unexpected oob_read value {self._oob_read}")
 
-        # support for negative indexing, e.g. contract[-1]
+        # support for negative indexing, e.g. bytevec[-1]
         if offset < 0:
             return self[len(self) + offset]
 
@@ -218,9 +235,6 @@ class ByteVec:
 
         # should never reach here
         raise HalmosException(f"failed to locate offset={offset} in {self._data}")
-
-    def get(self, key: int, default=None) -> UnionType[int, BitVecRef]:
-        return self.__getitem__(key, default=default)
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, bytes):
