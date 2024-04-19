@@ -184,9 +184,12 @@ def test_bytevec_slice_mixed():
     ]
 
     for actual, expected in tests:
-        print(f"actual={actual}, expected={expected}")
         assert actual == expected
         assert actual._well_formed()
+
+        # can not assign to the slice
+        with pytest.raises(TypeError):
+            actual[0] = 42
 
 
 def test_bytevec_assign_slice():

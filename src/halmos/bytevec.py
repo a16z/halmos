@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
+from abc import ABC, abstractmethod
 from enum import Enum
 from typing import (
     Any,
@@ -62,12 +63,15 @@ def defrag(data: List) -> List:
     return output
 
 
-class ByteVec:
-    """Immutable implementation of a byte vector made of mixed concrete/symbolic byte ranges"""
+ByteVecInput = UnionType[bytes, str, BitVecRef, List[int]]
+
+
+class ByteVecBase(ABC):
+    """Abstract base class for byte vectors made of mixed concrete/symbolic byte ranges"""
 
     def __init__(
         self,
-        data: Optional[UnionType[bytes, str, BitVecRef, List]] = None,
+        data: Optional[ByteVecInput] = None,
         oob_read: OOBReads = OOBReads.RETURN_ZERO,
     ):
         if data is None:
@@ -245,10 +249,35 @@ class ByteVec:
 
         return self._data == other._data
 
+    def __repr__(self) -> str:
+        return f"ByteVec({self._data})"
+
+    def __bool__(self) -> bool:
+        return bool(self._length)
+
+
+class ByteVec(ByteVecBase):
+    """Immutable ByteVec implementation"""
+
+    def __init__(
+        self,
+        data: Optional[ByteVecInput] = None,
+        oob_read: OOBReads = OOBReads.RETURN_ZERO,
+    ):
+        super().__init__(data, oob_read)
+
+
+class MutByteVec(ByteVecBase):
+    """Mutable ByteVec implementation"""
+
+    def __init__(
+        self,
+        data: Optional[ByteVecInput] = None,
+        oob_read: OOBReads = OOBReads.RETURN_ZERO,
+    ):
+        super().__init__(data, oob_read)
+
     def __setitem__(self, key, value) -> None:
         # arg1 can be an index or slice(start, stop, step=None)
         # arg2 is bytes or ByteVec
-        raise HalmosException("__setitem__ not supported, ByteVec is immutable")
-
-    def __repr__(self) -> str:
-        return f"ByteVec({self._data})"
+        raise NotImplementedError("TODO: __setitem__")
