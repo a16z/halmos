@@ -131,21 +131,26 @@ class ByteVecBase(ABC):
         return self._length
 
     def slice(self, start, stop) -> "ByteVec":
-        print(f"slice({start}, {stop})")
+        len_self = len(self)
+
+        if start is None:
+            start = 0
+
+        if stop is None:
+            stop = len_self
+
+        if start < 0:
+            raise IndexError(f"index start={start} out of bounds")
+
+        if stop > len_self and self._oob_read == OOBReads.FAIL:
+            raise IndexError(f"index stop={stop} out of bounds")
+
+        if start == 0 and stop == len_self:
+            # no need to copy since we're immutable
+            return self
+
         if start >= stop:
             return ByteVec()
-
-        # TODO: handle stop > len(self) actually
-        if start < 0 or stop > len(self):
-            raise HalmosException(f"unsupported slice(start={start}, stop={stop})")
-
-        if start == stop:
-            return ByteVec()
-
-        if start == 0 and stop == len(self):
-            # TODO: return self or copy? defragged or not?
-            # this returns a defragged copy, leaving the original unchanged
-            return ByteVec(self._data)
 
         expected_length = stop - start
 
@@ -178,16 +183,26 @@ class ByteVecBase(ABC):
             acc.append(sliced)
             acc_len += elem_stop - start
 
-            if acc_len >= expected_length:
-                if acc_len > expected_length:
-                    raise HalmosException(
-                        f"unexpected acc_len={acc_len} > expected_length={expected_length}"
-                    )
+            if acc_len > expected_length:
+                raise HalmosException(
+                    f"unexpected acc_len={acc_len} vs {expected_length}"
+                )
+
+            if acc_len == expected_length:
                 break
 
             # update the slice bounds
             start = max(0, start - elem_len)
             stop -= elem_len
+
+        if acc_len < expected_length:
+            if self._oob_read == OOBReads.RETURN_ZERO:
+                pad_len = expected_length - acc_len
+                acc.append(b"\x00" * pad_len)
+            else:
+                raise HalmosException(
+                    f"unexpected acc_len={acc_len} vs {expected_length}"
+                )
 
         return ByteVec(acc)
 
@@ -197,7 +212,7 @@ class ByteVecBase(ABC):
         """Returns the byte at the given offset (symbolic or concrete)"""
 
         if isinstance(key, slice):
-            start, stop, step = key.indices(len(self))
+            start, stop, step = key.start, key.stop, key.step
             if step != 1 and step != None:
                 raise NotImplementedError(f"slice with step={step} not supported")
 

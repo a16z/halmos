@@ -151,7 +151,7 @@ def test_bytevec_slice_concrete():
     assert vec_slice == b"hel"
 
     vec_slice = vec[:]
-    assert vec_slice is not vec
+    assert vec_slice is vec  # should return the same immutable object
     assert len(vec_slice) == 5
     assert vec_slice == b"hello"
     assert vec_slice == vec
@@ -180,7 +180,8 @@ def test_bytevec_slice_mixed():
         (vec[5:7], ByteVec(x)),
         (vec[8:], b"orld"),
         (vec[3:9], ByteVec([b"lo", x, b"wo"])),
-        (vec[100:120], ByteVec()),
+        (vec[7:16], b"world\x00\x00\x00\x00"),
+        (vec[100:120], bytes.fromhex("00" * 20)),
     ]
 
     for actual, expected in tests:
@@ -192,7 +193,10 @@ def test_bytevec_slice_mixed():
             actual[0] = 42
 
 
+# TODO: test_bytevec_iter
+
+
 def test_bytevec_assign_slice():
-    with pytest.raises(HalmosException):
+    with pytest.raises(TypeError):
         vec = ByteVec(b"hello")
         vec[:3] = b"123"
