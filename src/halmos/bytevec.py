@@ -123,9 +123,9 @@ class ByteVecBase(ABC):
             and self._length == sum(byte_length(x) for x in self._data)
         )
 
-    def __iter__(self):
-        # TODO
-        raise NotImplementedError()
+    # def __iter__(self):
+    #     # TODO (commented out because it messes with pytest)
+    #     raise NotImplementedError()
 
     def __len__(self):
         return self._length
@@ -146,8 +146,8 @@ class ByteVecBase(ABC):
             raise IndexError(f"index stop={stop} out of bounds")
 
         if start == 0 and stop == len_self:
-            # no need to copy since we're immutable
-            return self
+            is_immutable = not hasattr(self, "__setitem__")
+            return self if is_immutable else copy.copy(self)
 
         if start >= stop:
             return ByteVec()
@@ -257,11 +257,14 @@ class ByteVecBase(ABC):
 
     def __eq__(self, other: Any) -> bool:
         if isinstance(other, bytes):
+            if len(other) != len(self):
+                return False
             return self._data == [other]
 
         if not isinstance(other, ByteVec):
             return False
 
+        # XXX: direct comparison fails for fragmented but equivalent data
         return self._data == other._data
 
     def __repr__(self) -> str:

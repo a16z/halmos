@@ -100,10 +100,17 @@ def test_bytevec_empty_should_be_falsy():
 
 def test_bytevec_eq():
     vec = ByteVec(b"hello")
-    assert vec == b"hello"
     assert vec == ByteVec(b"hello")
+
+    # supports direct comparison with bytes
+    assert vec == b"hello"
+
+    # supports != operator
     assert vec != b"world"
     assert vec != ByteVec(b"world")
+
+    # weird way to check, but works because we defragment on construction
+    assert vec == ByteVec([b"hel", b"", b"lo"])
 
 
 ### test getitem and slice
@@ -141,10 +148,27 @@ def test_bytevec_getitem_negative(oob_read):
         assert vec[-6] == 0
 
 
+def assert_empty(bytevec):
+    """Checks the canonical ways to test for an empty bytevec."""
+
+    # 1000000 loops, best of 5: 0.094 usec per loop -- best
+    assert not bytevec
+
+    # 1000000 loops, best of 5: 0.105 usec per loop
+    assert len(bytevec) == 0
+
+    # 1000000 loops, best of 5: 1.063 usec per loop -- worst
+    assert bytevec == ByteVec()
+
+
 def test_bytevec_slice_concrete():
     vec = ByteVec(b"hello")
 
-    assert len(vec[1:1]) == 0
+    # empty slice
+    assert_empty(vec[1:1])
+    assert_empty(vec[4:1])
+    assert_empty(vec[5:])
+    assert_empty(vec[:0])
 
     vec_slice = vec[:3]
     assert len(vec_slice) == 3
@@ -156,16 +180,18 @@ def test_bytevec_slice_concrete():
     assert vec_slice == b"hello"
     assert vec_slice == vec
 
-    vec_slice = vec[4:1]
-    assert len(vec_slice) == 0
-
 
 def test_bytevec_slice_symbolic():
     x = BitVec("x", 40)
     vec = ByteVec(x)
 
-    assert len(vec[1:1]) == 0
+    # empty slice
+    assert_empty(vec[1:1])
+    assert_empty(vec[4:1])
+    assert_empty(vec[5:])
+    assert_empty(vec[:0])
 
+    # slice from beginning
     vec_slice = vec[:3]
     assert len(vec_slice) == 3
     assert vec_slice._data == [Extract(39, 16, x)]
@@ -177,6 +203,7 @@ def test_bytevec_slice_mixed():
 
     tests = [
         (vec[:3], b"hel"),
+        (vec[3:3], ByteVec()),
         (vec[5:7], ByteVec(x)),
         (vec[8:], b"orld"),
         (vec[3:9], ByteVec([b"lo", x, b"wo"])),
