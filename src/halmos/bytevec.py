@@ -11,7 +11,17 @@ from typing import (
 from z3 import BitVecRef, Concat, is_bv, is_bv_value
 
 from .exceptions import HalmosException
-from .utils import *
+from .utils import (
+    byte_length,
+    bv_value_to_bytes,
+    eq,
+    extract_bytes,
+    int_of,
+    is_concat,
+    is_bv_value,
+    try_bv_value_to_bytes,
+    unbox_int,
+)
 
 
 class OOBReads(Enum):
@@ -30,6 +40,167 @@ def try_concat(lhs: Any, rhs: Any) -> Optional[Any]:
         return Concat(lhs, rhs)
 
     return None
+
+
+class Chunk(ABC):
+    _empty = None
+
+    def __init__(self, data, start, length) -> None:
+        self.data = data
+
+        # a start offset into the data
+        self.start = start
+
+        # the length of the chunk (may be less than the length of the data itself)
+        self.length = length
+
+    @staticmethod
+    def wrap(data: UnionType[bytes, BitVecRef]) -> "Chunk":
+        # convert bv values to bytes if possible
+        if is_bv_value(data):
+            data = bv_value_to_bytes(data)
+
+        if isinstance(data, bytes):
+            return ConcreteChunk(data)
+        elif isinstance(data, BitVecRef):
+            return SymbolicChunk(data)
+        else:
+            raise TypeError(f"Unsupported data type: {type(data)}")
+
+    @staticmethod
+    def empty():
+        """A convenient way to get an empty chunk.
+
+        In order to test for emptiness, instead of comparing to Chunk.empty(), it may be better to use:
+        - `if not chunk` or
+        - `if len(chunk) == 0`
+        """
+        if Chunk._empty is None:
+            Chunk._empty = ConcreteChunk(b"")
+        return Chunk._empty
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            start, stop, step = key.start, key.stop, key.step
+            if step != 1 and step != None:
+                raise NotImplementedError(f"slice with step={step} not supported")
+
+            if start is None:
+                start = 0
+
+            if stop is None:
+                stop = self.length
+
+            if not (0 <= start < self.length) or not (0 <= stop <= self.length):
+                raise IndexError(key)
+
+            return self.slice(start, stop)
+
+        return self.byte_at(key)
+
+    def __len__(self):
+        return self.length
+
+    @abstractmethod
+    def byte_at(self, offset):
+        raise NotImplementedError
+
+    @abstractmethod
+    def slice(self, start, stop) -> "Chunk":
+        raise NotImplementedError
+
+    @abstractmethod
+    def unwrap(self) -> UnionType[bytes, BitVecRef]:
+        raise NotImplementedError
+
+
+class ConcreteChunk(Chunk):
+    """A chunk of concrete, native bytes"""
+
+    def __init__(self, data: bytes, start=0, length=None):
+        self.data_byte_length = len(data)
+
+        if length is None:
+            length = self.data_byte_length - start
+
+        assert start >= 0
+        assert length >= 0
+        assert start + length <= self.data_byte_length
+
+        super().__init__(data, start, length)
+
+    def byte_at(self, offset) -> int:
+        if not (0 <= offset < self.length):
+            raise IndexError(offset)
+
+        return self.data[self.start + offset]
+
+    def slice(self, start, stop):
+        return ConcreteChunk(self.data, self.start + start, stop - start)
+
+    def unwrap(self):
+        # if this chunk represents the entire data, return the data itself
+        if self.length == self.data_byte_length:
+            return self.data
+
+        return self.data[self.start : self.start + self.length]
+
+    def __eq__(self, other):
+        # allow comparison of empty symbolic and concrete chunks
+        if isinstance(other, Chunk) and not self and not other:
+            return True
+
+        if not isinstance(other, ConcreteChunk):
+            return False
+
+        return self.length == len(other) and self.unwrap() == other.unwrap()
+
+    def __repr__(self):
+        return f"ConcreteChunk({self.data!r}, start={self.start}, length={self.length})"
+
+
+class SymbolicChunk(Chunk):
+    """A chunk of symbolic bytes"""
+
+    def __init__(self, data: BitVecRef, start=0, length=None):
+        self.data_byte_length = byte_length(data)
+
+        if length is None:
+            length = self.data_byte_length - start
+
+        assert start >= 0
+        assert length >= 0
+        assert start + length <= self.data_byte_length
+
+        super().__init__(data, start, length)
+
+    def byte_at(self, offset):
+        if not (0 <= offset < self.length):
+            raise IndexError(offset)
+
+        return extract_bytes(self.data, self.start + offset, 1)
+
+    def slice(self, start, stop):
+        return SymbolicChunk(self.data, self.start + start, stop - start)
+
+    def unwrap(self):
+        # if this chunk represents the entire data, return the data itself
+        if self.length == self.data_byte_length:
+            return self.data
+
+        return extract_bytes(self.data, self.start, self.length)
+
+    def __eq__(self, other):
+        if isinstance(other, Chunk) and not self and not other:
+            return True
+
+        if not isinstance(other, SymbolicChunk):
+            return False
+
+        return self.length == len(other) and eq(self.unwrap(), other.unwrap())
+
+    def __repr__(self):
+        return f"SymbolicChunk({self.data!r})"
 
 
 def defrag(data: List) -> List:

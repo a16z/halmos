@@ -2,9 +2,9 @@ import pytest
 
 from z3 import BitVec, BitVecVal, Extract
 
-from halmos.bytevec import ByteVec, concat, defrag, OOBReads
+from halmos.bytevec import *
 from halmos.exceptions import HalmosException
-
+from halmos.utils import concat
 
 ### test helpers
 
@@ -23,6 +23,114 @@ def test_defrag():
     assert defrag([x]) == [x]
     assert defrag([x, y]) == [concat([x, y])]
     assert defrag([x, y, z]) == [concat([x, y, z])]
+
+
+### chunk tests
+
+
+def test_empty_chunk():
+    chunk = Chunk.empty()
+
+    # empty chunk is falsy
+    assert not chunk
+    assert len(chunk) == 0
+
+    # empty chunk is a singleton
+    assert chunk is Chunk.empty()
+
+    # equality comparison works as expected
+    assert chunk == Chunk.wrap(b"")
+
+    # a slice with start == stop is empty
+    assert chunk == Chunk.wrap(b"abc").slice(2, 2)
+
+    # can't access bytes of the empty chunk
+    with pytest.raises(IndexError):
+        chunk[0]
+
+
+def test_concrete_chunk():
+    chunk = Chunk.wrap(b"hello")
+    assert len(chunk) == 5
+    assert chunk  # non empty chunk is truthy
+    assert chunk.unwrap() == b"hello"
+    assert chunk[0] == b"h"[0]
+    assert chunk[1] == b"e"[0]
+    assert chunk[2] == b"l"[0]
+    assert chunk[3] == b"l"[0]
+    assert chunk[4] == b"o"[0]
+
+    with pytest.raises(IndexError):
+        chunk[-1]
+
+    with pytest.raises(IndexError):
+        chunk[5]
+
+    assert chunk[2:4].unwrap() == b"ll"
+    assert chunk[:].unwrap() == b"hello"
+    assert chunk[2:2] == Chunk.empty()
+    assert Chunk.empty() == chunk[2:2]
+    assert not chunk[1:1]
+
+    other_chunk = Chunk.wrap(b"hello world")
+    other_chunk_slice = other_chunk[:5]
+    assert chunk != other_chunk
+
+    # can be compared directly without unwrapping
+    assert chunk == other_chunk_slice
+
+    # equality is reflexive
+    assert chunk == chunk
+
+    # equality is symmetric
+    assert other_chunk_slice == chunk
+
+    # can't assign to a chunk
+    with pytest.raises(TypeError):
+        chunk[0] = 42
+
+    with pytest.raises(TypeError):
+        chunk[0:2] = b"bb"
+
+    # wrapping a bv value yields a concrete chunk
+    bv = BitVecVal(0x1234, 16)
+    bv_chunk = Chunk.wrap(bv)
+    assert len(bv_chunk) == 2
+    assert bv_chunk.unwrap() == b"\x12\x34"
+
+
+def test_symbolic_chunk():
+    x = BitVec("x", 16)
+    chunk = Chunk.wrap(x)
+    assert len(chunk) == 2
+    assert eq(chunk[0], extract_bytes(x, 0, 1))
+    assert eq(chunk[1], extract_bytes(x, 1, 1))
+    assert chunk[1:1] == Chunk.empty()
+    assert Chunk.empty() == chunk[1:1]
+    assert not chunk[1:1]
+    assert eq(chunk[:].unwrap(), x)
+
+    with pytest.raises(IndexError):
+        chunk[-1]
+
+    with pytest.raises(IndexError):
+        chunk[2]
+
+    # can't assign to a chunk
+    with pytest.raises(TypeError):
+        chunk[0] = BitVec("y", 8)
+
+    with pytest.raises(TypeError):
+        chunk[0:2] = BitVec("y", 16)
+
+    # equality is reflexive
+    assert chunk == chunk
+
+    # equality is symmetric
+    assert chunk == Chunk.wrap(x)
+    assert Chunk.wrap(x) == chunk
+
+    assert chunk != Chunk.wrap(BitVec("y", 16))
 
 
 ### test bytevec constructor
