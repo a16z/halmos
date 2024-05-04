@@ -138,87 +138,100 @@ def test_symbolic_chunk():
 
 def test_bytevec_constructor_nodata():
     vec = ByteVec()
-    assert len(vec) == 0
-    assert vec._data == []
     assert vec._well_formed()
+    assert len(vec) == 0
+    assert not vec
+    assert vec._num_chunks() == 0
 
 
 def test_bytevec_constructor_bytes():
     vec = ByteVec(b"hello")
-    assert len(vec) == 5
-    assert vec._data == [b"hello"]
     assert vec._well_formed()
+    assert len(vec) == 5
+    assert vec._num_chunks() == 1
 
 
 def test_bytevec_constructor_bitvecvalue():
     # when we use a concrete bitvecval
     vec = ByteVec(BitVecVal(0x1234, 16))
-    assert len(vec) == 2
-
-    # then the bitvecval has been internally converted to bytes
-    assert vec._data == [b"\x12\x34"]
     assert vec._well_formed()
+    assert len(vec) == 2
+    assert vec._num_chunks() == 1
+
+    # then the bitvecval has been converted to bytes
+    assert vec.unwrap() == b"\x12\x34"
 
 
 def test_bytevec_constructor_bitvec():
     # when we use a symbolic bitvec
     x = BitVec("x", 16)
     vec = ByteVec(x)
+    assert vec._well_formed()
     assert len(vec) == 2
 
     # then the bitvec is stored as-is
-    assert vec._data == [x]
-    assert vec._well_formed()
+    assert eq(vec.unwrap(), x)
 
 
 def test_bytevec_constructor_concat():
     # when we use a mixed concat expression
     x = BitVec("x", 16)
-    vec = ByteVec(concat([BitVecVal(0, 16), x]))
+    expr = concat([BitVecVal(0, 16), x])
+    vec = ByteVec(expr)
+    assert vec._well_formed()
     assert len(vec) == 4
 
     # then the concat expression has been unwrapped
-    assert vec._data == [b"\x00\x00", x]
-    assert vec._well_formed()
+    assert vec.unwrap() == expr
 
 
 def test_bytevec_constructor_hexstr():
-    vec = ByteVec("deadbeef")
+    data = bytes.fromhex("deadbeef")
+    vec = ByteVec(data)
+    assert vec._well_formed()
     assert len(vec) == 4
-    assert vec._data == [b"\xde\xad\xbe\xef"]
-    assert vec._well_formed()
-
-
-def test_bytevec_constructor_list():
-    vec = ByteVec([b"hello", BitVecVal(0x1234, 16)])
-    assert len(vec) == 7
-
-    # we expect the output to be lowered to bytes and defragged
-    assert vec._data == [b"hello\x12\x34"]
-    assert vec._well_formed()
+    assert vec.unwrap() == data
 
 
 ### test bytevec behavior
 
 
+def test_bytevec_append_multiple():
+    vec = ByteVec()
+    vec.append(b"hello")
+    vec.append(BitVecVal(0x1234, 16))
+    assert vec._well_formed()
+    assert len(vec) == 7
+
+    # we expect the output to be lowered to bytes and defragged
+    assert vec.unwrap() == b"hello\x12\x34"
+
+
 def test_bytevec_empty_should_be_falsy():
-    for vec in ByteVec(b""), ByteVec(), ByteVec(""):
+    for vec in ByteVec(b""), ByteVec(), ByteVec(Chunk.empty()):
         assert not vec
 
 
 def test_bytevec_eq():
     vec = ByteVec(b"hello")
-    assert vec == ByteVec(b"hello")
 
-    # supports direct comparison with bytes
-    assert vec == b"hello"
+    # eq is reflexive
+    assert vec == vec
+
+    # eq is symmetric
+    assert vec == ByteVec(b"hello")
+    assert ByteVec(b"hello") == vec
 
     # supports != operator
     assert vec != b"world"
     assert vec != ByteVec(b"world")
 
-    # weird way to check, but works because we defragment on construction
-    assert vec == ByteVec([b"hel", b"", b"lo"])
+    # fragmentation doesn't affect equality
+    fragmented = ByteVec()
+    fragmented.append(b"hel")
+    fragmented.append(b"")
+    fragmented.append(Chunk.wrap(b"lol")[:2])
+    assert vec == fragmented
 
 
 ### test getitem and slice
@@ -243,17 +256,8 @@ def test_bytevec_getitem(oob_read):
 @pytest.mark.parametrize("oob_read", [OOBReads.RETURN_ZERO, OOBReads.FAIL])
 def test_bytevec_getitem_negative(oob_read):
     vec = ByteVec(b"hello", oob_read=oob_read)
-    assert vec[-1] == ord("o")
-    assert vec[-2] == ord("l")
-    assert vec[-3] == ord("l")
-    assert vec[-4] == ord("e")
-    assert vec[-5] == ord("h")
-
-    if oob_read == OOBReads.FAIL:
-        with pytest.raises(IndexError):
-            vec[-6]
-    else:
-        assert vec[-6] == 0
+    with pytest.raises(IndexError):
+        vec[-1]
 
 
 def assert_empty(bytevec):
@@ -280,12 +284,15 @@ def test_bytevec_slice_concrete():
 
     vec_slice = vec[:3]
     assert len(vec_slice) == 3
-    assert vec_slice == b"hel"
+    assert vec_slice.unwrap() == b"hel"
 
     vec_slice = vec[:]
-    assert vec_slice is vec  # should return the same immutable object
+
+    # TODO: if immutable, should return the same object
+    # assert vec_slice is vec
+
     assert len(vec_slice) == 5
-    assert vec_slice == b"hello"
+    assert vec_slice.unwrap() == b"hello"
     assert vec_slice == vec
 
 

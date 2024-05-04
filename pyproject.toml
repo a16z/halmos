@@ -23,6 +23,7 @@ classifiers = [
 requires-python = ">=3.9"
 dependencies = [
     "z3-solver==4.12.2.0",
+    "sortedcontainers>=2.4.0",
 ]
 dynamic = ["version"]
 

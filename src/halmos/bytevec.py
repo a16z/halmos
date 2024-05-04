@@ -5,23 +5,25 @@ from typing import (
     Any,
     List,
     Optional,
+    Tuple,
     Union as UnionType,
 )
 
+from sortedcontainers import SortedDict
 from z3 import BitVecRef, Concat, is_bv, is_bv_value
 
 from .exceptions import HalmosException
 from .utils import (
     byte_length,
     bv_value_to_bytes,
+    concat,
     eq,
     extract_bytes,
-    int_of,
-    is_concat,
     is_bv_value,
-    try_bv_value_to_bytes,
-    unbox_int,
 )
+
+Byte = UnionType[int, BitVecRef]
+Bytes = UnionType["Chunk", "ByteVec"]
 
 
 class OOBReads(Enum):
@@ -40,6 +42,37 @@ def try_concat(lhs: Any, rhs: Any) -> Optional[Any]:
         return Concat(lhs, rhs)
 
     return None
+
+
+def defrag(data: List) -> List:
+    """Merge adjacent bytes into a single element"""
+
+    if len(data) <= 1:
+        return data
+
+    output = []
+
+    # accumulator, used to merge adjacent elements of the same type
+    acc = None
+
+    for elem in data:
+        if acc is None:
+            acc = elem
+            continue
+
+        concatenated = try_concat(acc, elem)
+        if concatenated is not None:
+            acc = concatenated
+            continue
+
+        output.append(acc)
+        acc = elem
+
+    # make sure the last element has been flushed
+    if acc is not None:
+        output.append(acc)
+
+    return output
 
 
 class Chunk(ABC):
@@ -81,28 +114,25 @@ class Chunk(ABC):
 
     def __getitem__(self, key):
         if isinstance(key, slice):
-            start, stop, step = key.start, key.stop, key.step
-            if step != 1 and step != None:
+            start = key.start or 0
+            stop = key.stop if key.stop is not None else self.length
+            step = key.step or 1
+
+            if step != 1:
                 raise NotImplementedError(f"slice with step={step} not supported")
-
-            if start is None:
-                start = 0
-
-            if stop is None:
-                stop = self.length
 
             if not (0 <= start < self.length) or not (0 <= stop <= self.length):
                 raise IndexError(key)
 
             return self.slice(start, stop)
 
-        return self.byte_at(key)
+        return self.get_byte(key)
 
     def __len__(self):
         return self.length
 
     @abstractmethod
-    def byte_at(self, offset):
+    def get_byte(self, offset):
         raise NotImplementedError
 
     @abstractmethod
@@ -129,16 +159,34 @@ class ConcreteChunk(Chunk):
 
         super().__init__(data, start, length)
 
-    def byte_at(self, offset) -> int:
+    def get_byte(self, offset) -> int:
+        """
+        Return a single byte at the given offset (fast given that this is a native operation)
+
+        Complexity: O(1)
+        """
+
         if not (0 <= offset < self.length):
             raise IndexError(offset)
 
         return self.data[self.start + offset]
 
-    def slice(self, start, stop):
+    def slice(self, start, stop) -> "ConcreteChunk":
+        """
+        Return a slice of the chunk, as a new chunk (this is fast and does not copy the backing data)
+
+        Complexity: O(1)
+        """
+
         return ConcreteChunk(self.data, self.start + start, stop - start)
 
-    def unwrap(self):
+    def unwrap(self) -> bytes:
+        """
+        Return the data as a single value, this is where the actual slicing/copying is done
+
+        Complexity: O(n)
+        """
+
         # if this chunk represents the entire data, return the data itself
         if self.length == self.data_byte_length:
             return self.data
@@ -174,16 +222,38 @@ class SymbolicChunk(Chunk):
 
         super().__init__(data, start, length)
 
-    def byte_at(self, offset):
+    def get_byte(self, offset) -> BitVecRef:
+        """
+        Return a single byte at the given offset.
+
+        This can be slow because it involves an Extract expression on a potentially large BitVec.
+
+        Complexity: O(n)?
+        """
+
         if not (0 <= offset < self.length):
             raise IndexError(offset)
 
         return extract_bytes(self.data, self.start + offset, 1)
 
-    def slice(self, start, stop):
+    def slice(self, start, stop) -> "SymbolicChunk":
+        """
+        Return a slice of the chunk, as a new chunk (this is fast and does not copy the backing data)
+
+        Complexity: O(1)
+        """
+
         return SymbolicChunk(self.data, self.start + start, stop - start)
 
-    def unwrap(self):
+    def unwrap(self) -> BitVecRef:
+        """
+        Return the data as a single value, this is where the actual slicing/copying is done
+
+        This can be slow because it involves an Extract expression on a potentially large BitVec.
+
+        Complexity: O(n)?
+        """
+
         # if this chunk represents the entire data, return the data itself
         if self.length == self.data_byte_length:
             return self.data
@@ -203,270 +273,242 @@ class SymbolicChunk(Chunk):
         return f"SymbolicChunk({self.data!r})"
 
 
-def defrag(data: List) -> List:
-    """Merge adjacent bytes into a single element"""
+class ByteVec:
+    """
+    ByteVec represents a sequence of mixed concrete/symbolic chunks of bytes.
 
-    if len(data) <= 1:
-        return data
+    Supported operations:
+    - append: add a new chunk to the end of the ByteVec
+    - get a single byte at a given offset
+    - get a slice (returns a ByteVec)
+    - get the length of the ByteVec
 
-    output = []
+    - assign a byte
+    - assign a slice
 
-    # accumulator, used to merge adjacent elements of the same type
-    acc = None
-
-    for elem in data:
-        if acc is None:
-            acc = elem
-            continue
-
-        concatenated = try_concat(acc, elem)
-        if concatenated is not None:
-            acc = concatenated
-            continue
-
-        output.append(acc)
-        acc = elem
-
-    # make sure the last element has been flushed
-    if acc is not None:
-        output.append(acc)
-
-    return output
-
-
-ByteVecInput = UnionType[bytes, str, BitVecRef, List[int]]
-
-
-class ByteVecBase(ABC):
-    """Abstract base class for byte vectors made of mixed concrete/symbolic byte ranges"""
+    - compare equality with another ByteVec
+    - unwrap (returns the entire ByteVec as a single value, either bytes or a BitVecRef)
+    """
 
     def __init__(
         self,
-        data: Optional[ByteVecInput] = None,
+        data: Optional[Chunk] = None,
         oob_read: OOBReads = OOBReads.RETURN_ZERO,
     ):
-        if data is None:
-            data = []
+        self.chunks = SortedDict()
+        self.oob_read = oob_read
+        self.length = 0
 
-        elif isinstance(data, bytes):
-            data = [data]
-
-        elif is_bv_value(data):
-            data = [bv_value_to_bytes(data)]
-
-        elif is_bv(data) and is_concat(data):
-            # in the case of symbolic immutables in code, we expect a list
-            # of bytes and symbolic values
-            data = [try_bv_value_to_bytes(x) for x in data.children()]
-
-        elif is_bv(data):
-            data = [data]
-
-        elif isinstance(data, list):
-            # first, try to convert bv values to bytes
-            data = [try_bv_value_to_bytes(x) for x in data]
-
-            # then store as defragged list
-            data = defrag(data)
-
-        elif isinstance(data, str):
-            hexcode = data
-            if len(hexcode) % 2 != 0:
-                raise ValueError(hexcode)
-
-            data = [bytes.fromhex(hexcode)]
-
-        else:
-            raise HalmosException(f"invalid argument: {data}")
-
-        # check that the data is well formed
-        assert all(isinstance(x, (bytes, BitVecRef)) for x in data)
-        assert all(isinstance(x, (bytes, BitVecRef)) for x in data)
-
-        self._data = data
-        self._length = sum(byte_length(x) for x in data)
-        self._oob_read = oob_read
-
-    def _well_formed(self) -> bool:
-        return (
-            all(isinstance(x, (bytes, BitVecRef)) for x in self._data)
-            and all(byte_length(x) > 0 for x in self._data)
-            and self._length == sum(byte_length(x) for x in self._data)
-        )
-
-    # def __iter__(self):
-    #     # TODO (commented out because it messes with pytest)
-    #     raise NotImplementedError()
+        # for convenience, allow passing a single chunk directly
+        if data is not None:
+            # if the data is not wrapped in a Chunk, try to wrap it
+            if not isinstance(data, Chunk):
+                data = Chunk.wrap(data)
+            self.append(data)
 
     def __len__(self):
-        return self._length
+        return self.length
+
+    def __repr__(self) -> str:
+        return f"ByteVec({self.chunks!r})"
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, ByteVec):
+            return False
+
+        if len(self) != len(other):
+            return False
+
+        # can be expensive, but we can't compare chunks one by one
+        return self.unwrap() == other.unwrap()
+
+    ### internal methods
+
+    def _dump(self, msg=None):
+        print(f"-- MEMDUMP (length: {self.length}) -- {msg if msg else ''}")
+        for start, chunk in self.chunks.items():
+            print(f"chunk@{start}: {chunk}")
+
+    def _well_formed(self, msg=None):
+        self._dump(msg=msg)
+        cumulative_length = 0
+        for start, chunk in self.chunks.items():
+            if len(chunk) == 0:
+                raise ValueError("Empty chunk")
+            if start != cumulative_length:
+                raise ValueError("Non-contiguous chunks")
+            cumulative_length += len(chunk)
+
+        if cumulative_length != self.length:
+            raise ValueError("Length mismatch")
+
+        return True
+
+    def _num_chunks(self) -> int:
+        return len(self.chunks)
+
+    def _locate_chunk(self, offset) -> int:
+        """
+        Locate the chunk that contains the given offset.
+
+        Returns the index of the chunk in the SortedDict, or -1 if not found.
+
+        Complexity: O(log n) where n is the number of chunks (thanks to the backing SortedDict)
+        """
+
+        if offset < 0:
+            raise IndexError(offset)
+
+        NOT_FOUND = -1
+        if offset >= self.length:
+            return NOT_FOUND
+
+        chunk_index = self.chunks.bisect_right(offset) - 1
+        return chunk_index
+
+    ### write operations
+
+    def append(self, chunk: Chunk) -> None:
+        """
+        Append a new chunk at the end of the ByteVec.
+
+        This does not copy the data, it just adds a reference to it.
+
+        Complexity: O(1)
+        """
+
+        # if the data is not wrapped in a Chunk, try to wrap it
+        if not isinstance(chunk, Chunk):
+            chunk = Chunk.wrap(chunk)
+
+        # do not append empty chunks
+        if not chunk:
+            return
+
+        start = self.length
+        self.chunks[start] = chunk
+        self.length += len(chunk)
+
+    def set_slice(self, start: int, stop: int, value: Bytes) -> None:
+        # TODO
+        raise NotImplementedError
+
+    def set_byte(self, offset: int, value: Byte) -> None:
+        # TODO
+        raise NotImplementedError
+
+    def __setitem__(self, key, value) -> None:
+        # TODO
+        raise NotImplementedError
+
+    ### read operations
 
     def slice(self, start, stop) -> "ByteVec":
-        len_self = len(self)
+        """
+        Return a single byte at the given offset.
 
-        if start is None:
-            start = 0
+        If the offset is out of bounds, the behavior is controlled by the `oob_read` attribute.
 
-        if stop is None:
-            stop = len_self
+        Complexity:
+        - O(log(num_chunks)) to locate the first chunk
+        - plus complexity to iterate over the subsequent chunks (O(stop - start))
+        - plus complexity to slice the first and last chunks (O(1) on concrete bytes, O(n) on symbolic bytes)
+        - plus complexity to append the resulting chunks to a new ByteVec (O(stop - start))
+        """
 
-        if start < 0:
-            raise IndexError(f"index start={start} out of bounds")
-
-        if stop > len_self and self._oob_read == OOBReads.FAIL:
-            raise IndexError(f"index stop={stop} out of bounds")
-
-        if start == 0 and stop == len_self:
-            is_immutable = not hasattr(self, "__setitem__")
-            return self if is_immutable else copy.copy(self)
-
-        if start >= stop:
-            return ByteVec()
+        result = ByteVec()
 
         expected_length = stop - start
+        if expected_length <= 0:
+            return result
 
-        # we will store (fragments of) subelements in this list
-        acc = []
-        acc_len = 0
+        first_chunk_index = self._locate_chunk(start)
+        if first_chunk_index < 0:
+            return self.__read_oob(expected_length)
 
-        for elem in self._data:
-            # skip elements that are entirely after the slice
-            if stop <= 0:
+        for chunk_start, chunk in self.chunks.items()[first_chunk_index:]:
+            if chunk_start >= stop:
+                # we are past the end of the requested slice
                 break
 
-            elem_len = byte_length(elem)
+            if start <= chunk_start and chunk_start + len(chunk) <= stop:
+                # the entire chunk is in the slice
+                result.append(chunk)
 
-            # skip elements that are entirely before the slice
-            if start >= elem_len:
-                start -= elem_len
-                stop -= elem_len
-                continue
-
-            # slice the element
-            # TODO: handle case where the whole element is included (no need to slice)
-            elem_stop = min(stop, elem_len)
-            sliced = (
-                extract_bytes(elem, start, elem_stop - start)
-                if is_bv(elem)
-                else elem[start:elem_stop]
-            )
-
-            acc.append(sliced)
-            acc_len += elem_stop - start
-
-            if acc_len > expected_length:
-                raise HalmosException(
-                    f"unexpected acc_len={acc_len} vs {expected_length}"
-                )
-
-            if acc_len == expected_length:
-                break
-
-            # update the slice bounds
-            start = max(0, start - elem_len)
-            stop -= elem_len
-
-        if acc_len < expected_length:
-            if self._oob_read == OOBReads.RETURN_ZERO:
-                pad_len = expected_length - acc_len
-                acc.append(b"\x00" * pad_len)
             else:
-                raise HalmosException(
-                    f"unexpected acc_len={acc_len} vs {expected_length}"
-                )
+                # a portion of the chunk is in the slice
+                start_offset = max(0, start - chunk_start)
+                end_offset = min(len(chunk), stop - chunk_start)
 
-        return ByteVec(acc)
+                assert end_offset - start_offset > 0
 
-    def __getitem__(
-        self, key: UnionType[int, slice]
-    ) -> UnionType[int, BitVecRef, "ByteVec"]:
-        """Returns the byte at the given offset (symbolic or concrete)"""
+                chunk_slice = chunk[start_offset:end_offset]
+                result.append(chunk_slice)
 
+        num_missing_bytes = expected_length - len(result)
+        if num_missing_bytes:
+            result.append(self.__read_oob(num_missing_bytes))
+
+        assert len(result) == expected_length
+        return result
+
+    def get_byte(self, offset) -> Byte:
+        """
+        Return a single byte at the given offset.
+
+        If the offset is out of bounds, the behavior is controlled by the `oob_read` attribute.
+
+        Complexity:
+        - O(log(num_chunks)) to locate the chunk
+        - plus the complexity to extract a byte (O(1) on concrete chunks, O(num_bytes) on symbolic chunks)
+        """
+
+        chunk_index = self._locate_chunk(offset)
+        if chunk_index < 0:
+            return self.__read_oob_byte()
+
+        chunk_start, chunk = self.chunks.peekitem(chunk_index)
+        return chunk.get_byte(offset - chunk_start)
+
+    def __getitem__(self, key) -> UnionType[Byte, "ByteVec"]:
         if isinstance(key, slice):
-            start, stop, step = key.start, key.stop, key.step
-            if step != 1 and step != None:
+            start = key.start or 0
+            stop = key.stop if key.stop is not None else self.length
+            step = key.step or 1
+
+            if step != 1:
                 raise NotImplementedError(f"slice with step={step} not supported")
 
             return self.slice(start, stop)
 
-        offset = int_of(key, "can not handle symbolic offset {offset!r}")
+        return self.get_byte(key)
 
-        # out of bounds read
-        if offset < -len(self) or offset >= len(self):
-            if self._oob_read == OOBReads.RETURN_ZERO:
-                return 0
-            elif self._oob_read == OOBReads.FAIL:
-                raise IndexError(f"index {offset} out of bounds")
-            else:
-                raise HalmosException(f"unexpected oob_read value {self._oob_read}")
+    def __read_oob(self, num_bytes) -> Chunk:
+        if self.oob_read == OOBReads.FAIL:
+            raise IndexError
+        else:
+            return Chunk.wrap(b"\x00" * num_bytes)
 
-        # support for negative indexing, e.g. bytevec[-1]
-        if offset < 0:
-            return self[len(self) + offset]
+    def __read_oob_byte(self) -> int:
+        return self.__read_oob(1)[0]
 
-        # locate the sub-element that contains the byte at offset
-        # TODO: consider using prefix sum to speed up this operation
-        # TODO: consider using a binary search if the number of sub-elements is large
-        for element in self._data:
-            element_len = byte_length(element)
+    def unwrap(self) -> UnionType[bytes, BitVecRef]:
+        """
+        Return the entire ByteVec as a single value.
 
-            if offset < element_len:
-                # symbolic case
-                if is_bv(element):
-                    extracted = extract_bytes(element, offset, 1)
+        This is where the actual slicing/copying is done.
 
-                    # return as concrete if possible
-                    return unbox_int(extracted)
+        Complexity: O(n)
+        """
 
-                # concrete case
-                return element[offset]
+        if not self:
+            return b""
 
-            offset -= element_len
+        # unwrap and defrag, ideally this becomes either a single bytes or a single BitVecRef
+        data = [chunk.unwrap() for chunk in self.chunks.values()]
+        data = defrag(data)
+        if len(data) == 1:
+            return data[0]
 
-        # should never reach here
-        raise HalmosException(f"failed to locate offset={offset} in {self._data}")
-
-    def __eq__(self, other: Any) -> bool:
-        if isinstance(other, bytes):
-            if len(other) != len(self):
-                return False
-            return self._data == [other]
-
-        if not isinstance(other, ByteVec):
-            return False
-
-        # XXX: direct comparison fails for fragmented but equivalent data
-        return self._data == other._data
-
-    def __repr__(self) -> str:
-        return f"ByteVec({self._data})"
-
-    def __bool__(self) -> bool:
-        return bool(self._length)
-
-
-class ByteVec(ByteVecBase):
-    """Immutable ByteVec implementation"""
-
-    def __init__(
-        self,
-        data: Optional[ByteVecInput] = None,
-        oob_read: OOBReads = OOBReads.RETURN_ZERO,
-    ):
-        super().__init__(data, oob_read)
-
-
-class MutByteVec(ByteVecBase):
-    """Mutable ByteVec implementation"""
-
-    def __init__(
-        self,
-        data: Optional[ByteVecInput] = None,
-        oob_read: OOBReads = OOBReads.RETURN_ZERO,
-    ):
-        super().__init__(data, oob_read)
-
-    def __setitem__(self, key, value) -> None:
-        # arg1 can be an index or slice(start, stop, step=None)
-        # arg2 is bytes or ByteVec
-        raise NotImplementedError("TODO: __setitem__")
+        # if we have multiple chunks, concatenate them
+        return concat(*data)
