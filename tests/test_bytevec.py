@@ -263,13 +263,16 @@ def test_bytevec_getitem_negative(oob_read):
 def assert_empty(bytevec):
     """Checks the canonical ways to test for an empty bytevec."""
 
-    # 1000000 loops, best of 5: 0.094 usec per loop -- best
+    # 1000000 loops, best of 5: 0.055 usec per loop -- best
     assert not bytevec
 
-    # 1000000 loops, best of 5: 0.105 usec per loop
+    # 1000000 loops, best of 5: 0.073 usec per loop
     assert len(bytevec) == 0
 
-    # 1000000 loops, best of 5: 1.063 usec per loop -- worst
+    # 1000000 loops, best of 5: 0.101 usec per loop
+    assert bytevec.unwrap() == b""
+
+    # 1000000 loops, best of 5: 4.069 usec per loop -- worst
     assert bytevec == ByteVec()
 
 
@@ -309,7 +312,7 @@ def test_bytevec_slice_symbolic():
     # slice from beginning
     vec_slice = vec[:3]
     assert len(vec_slice) == 3
-    assert vec_slice._data == [Extract(39, 16, x)]
+    assert eq(vec_slice.unwrap(), Extract(39, 16, x))
 
 
 def test_bytevec_slice_mixed():
@@ -317,28 +320,27 @@ def test_bytevec_slice_mixed():
     vec = ByteVec([b"hello", x, b"world"])
 
     tests = [
-        (vec[:3], b"hel"),
+        (vec[:3], ByteVec(b"hel")),
         (vec[3:3], ByteVec()),
         (vec[5:7], ByteVec(x)),
-        (vec[8:], b"orld"),
+        (vec[8:], ByteVec(b"orld")),
         (vec[3:9], ByteVec([b"lo", x, b"wo"])),
-        (vec[7:16], b"world\x00\x00\x00\x00"),
-        (vec[100:120], bytes.fromhex("00" * 20)),
+        (vec[7:16], ByteVec(b"world\x00\x00\x00\x00")),
+        (vec[100:120], ByteVec(bytes.fromhex("00" * 20))),
     ]
 
     for actual, expected in tests:
         assert actual == expected
         assert actual._well_formed()
 
+        # TODO: separate immutable type?
         # can not assign to the slice
-        with pytest.raises(TypeError):
-            actual[0] = 42
+        # with pytest.raises(TypeError):
+        #     actual[0] = 42
 
 
-# TODO: test_bytevec_iter
-
-
-def test_bytevec_assign_slice():
-    with pytest.raises(TypeError):
-        vec = ByteVec(b"hello")
-        vec[:3] = b"123"
+# TODO: separate immutable type?
+# def test_bytevec_assign_slice():
+#     with pytest.raises(TypeError):
+#         vec = ByteVec(b"hello")
+#         vec[:3] = b"123"

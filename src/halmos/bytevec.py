@@ -301,10 +301,11 @@ class ByteVec:
 
         # for convenience, allow passing a single chunk directly
         if data is not None:
-            # if the data is not wrapped in a Chunk, try to wrap it
-            if not isinstance(data, Chunk):
-                data = Chunk.wrap(data)
-            self.append(data)
+            if isinstance(data, list) or isinstance(data, tuple):
+                for chunk in data:
+                    self.append(chunk)
+            else:
+                self.append(data)
 
     def __len__(self):
         return self.length
@@ -424,7 +425,8 @@ class ByteVec:
 
         first_chunk_index = self._locate_chunk(start)
         if first_chunk_index < 0:
-            return self.__read_oob(expected_length)
+            result.append(self.__read_oob(expected_length))
+            return result
 
         for chunk_start, chunk in self.chunks.items()[first_chunk_index:]:
             if chunk_start >= stop:
@@ -511,4 +513,4 @@ class ByteVec:
             return data[0]
 
         # if we have multiple chunks, concatenate them
-        return concat(*data)
+        return concat(data)
