@@ -6,6 +6,12 @@ from halmos.bytevec import *
 from halmos.exceptions import HalmosException
 from halmos.utils import concat
 
+
+@pytest.fixture
+def mem():
+    return ByteVec()
+
+
 ### test helpers
 
 
@@ -344,3 +350,215 @@ def test_bytevec_slice_mixed():
 #     with pytest.raises(TypeError):
 #         vec = ByteVec(b"hello")
 #         vec[:3] = b"123"
+
+
+def test_memory_write_byte_basic(mem):
+    # write a single byte into empty memory
+    mem[0] = 0x42
+    assert mem[0] == 0x42
+    assert len(mem) == 1
+
+    # write another byte to extend non-empty memory
+    mem[12] = 0x42
+    assert mem[12] == 0x42
+    assert len(mem) == 13
+
+    # write a single byte into an existing chunk
+    mem[6] = 0x42
+    assert len(mem) == 13  # unchanged
+    assert mem[6] == 0x42
+
+
+def test_memory_write_byte_splitting_1_concrete_byte(mem):
+    # when we have a 1 byte chunk
+    mem[0] = 0x42
+
+    # and overwrite it with another 1 byte chunk
+    mem[0] = 0x43
+
+    # then the existing chunk should be overwritten
+    assert mem._well_formed()
+    assert len(mem) == 1
+    assert mem[0] == 0x43
+
+
+def test_memory_write_byte_splitting_2_concrete_bytes_no_prechunk():
+    # when we have a 2 byte chunk
+    mem = ByteVec(b"\x01\x02")
+
+    # and overwrite it with a 1 byte chunk
+    mem[0] = 0x42
+
+    # then the existing chunk should be split
+    assert mem._well_formed()
+    assert len(mem) == 2
+
+    # does a lookup in the single byte chunk at the beginning
+    assert mem[0] == 0x42
+
+    # does a lookup in ConcreteChunk(b'\\x01\\x02', start=1, length=1)
+    assert mem[1] == 0x02
+
+
+def test_memory_write_byte_splitting_2_concrete_bytes_no_postchunk():
+    # when we have a 2 byte chunk
+    mem = ByteVec(b"\x01\x02")
+
+    # and overwrite it with a 1 byte chunk
+    mem[1] = 0x42
+
+    # then the existing chunk should be split
+    assert mem._well_formed()
+    assert len(mem) == 2
+
+    # does a lookup in ConcreteChunk(b'\\x01\\x02', start=0, length=1)
+    assert mem[0] == 0x01
+
+    # does a lookup in the single byte chunk at the end
+    assert mem[1] == 0x42
+
+
+def test_memory_write_byte_splitting_3_concrete_bytes():
+    # when we have a 3 byte chunk
+    mem = ByteVec(b"\x01\x02\x03")
+
+    # and overwrite it with a 1 byte chunk
+    mem[1] = 0x42
+
+    # then the existing chunk should be split
+    assert mem._well_formed()
+    assert len(mem) == 3
+
+    # does a lookup in ConcreteChunk(b'\\x01\\x02\\x03', start=0, length=1)
+    assert mem[0] == 0x01
+
+    # does a lookup in the single byte chunk in the middle
+    assert mem[1] == 0x42
+
+    # does a lookup in ConcreteChunk(b'\\x01\\x02\\x03', start=2, length=1)
+    assert mem[2] == 0x03
+
+
+def test_memory_write_slice_empty(mem):
+    mem[0:0] = b""
+    assert_empty(mem)
+
+    mem[42:42] = b""
+    assert_empty(mem)
+
+
+def test_memory_write_slice_length_mismatch(mem):
+    with pytest.raises(ValueError):
+        mem[0:1] = b"hello"
+
+    mem[0] = 42
+    with pytest.raises(ValueError):
+        mem[:] = b"hello"
+
+    with pytest.raises(ValueError):
+        mem[0:32] = b"hello"
+
+
+def test_memory_write_slice_into_empty_memory(mem):
+    mem[2:7] = b"hello"
+    assert mem._well_formed()
+    assert len(mem) == 7
+    assert mem[:].unwrap() == b"\x00\x00hello"
+
+
+def test_memory_write_slice_past_existing_chunk(mem):
+    mem.append(b"hello")
+    mem[40:45] = b"world"
+    assert mem._well_formed()
+    assert len(mem) == 45
+    assert mem[0:5].unwrap() == b"hello"
+    assert mem[40:45].unwrap() == b"world"
+
+
+# ┌──────────────────┐
+# │////new chunk/////│
+# └──────────────────┘
+# ┌──────────────────┐           ┌──────────────────┐
+# │....old chunk.....│  ──────▶  │////new chunk/////│
+# └──────────────────┘           └──────────────────┘
+def test_memory_write_slice_over_existing_chunk(mem):
+    mem.append(b"hello")
+    mem[:] = b"world"
+    assert mem._well_formed()
+    assert len(mem) == 5
+    assert mem[:].unwrap() == b"world"
+
+
+# ┌───────────────────────┐
+# │///////new chunk///////│
+# └───────────────────────┘
+# ┌───┬───┬───┬───┬───┬───┐         ┌───────────────────────┐
+# │old│old│old│old│old│old│ ──────▶ │///////new chunk///////│
+# └───┴───┴───┴───┴───┴───┘         └───────────────────────┘
+def test_memory_write_slice_stomp_over_existing_chunks(mem):
+    # setup some chunks
+    mem[10:15] = b"world"
+    assert mem._well_formed()
+    assert len(mem) == 15
+    assert mem[:].unwrap() == b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00world"
+
+    mem[20:32] = b"foofeefoofum"
+    assert mem._well_formed()
+    assert len(mem) == 32
+    assert (
+        mem[:].unwrap()
+        == b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00world\x00\x00\x00\x00\x00foofeefoofum"
+    )
+
+    # stomp the existing chunks, results in every chunk being overwritten
+    #
+    #    -- MEMDUMP (length: 32) -- after stomping
+    #    chunk@0: ConcreteChunk(b'hellohellohellohellohellohellohe', start=0, length=32)
+
+    mem[:32] = b"hellohellohellohellohellohellohe"
+    assert mem._well_formed("after stomping")
+    assert len(mem) == 32
+    assert mem[:].unwrap() == b"hellohellohellohellohellohellohe"
+    assert mem[:5].unwrap() == b"hello"
+
+
+#     ┌───────────────┐
+#     │///new chunk///│
+#     └───────────────┘
+# ┌───────────────────────┐         ┌───┬───────────────┬───┐
+# │.......old chunk.......│ ──────▶ │...│///new chunk///│...│
+# └───────────────────────┘         └───┴───────────────┴───┘
+def test_memory_write_slice_into_existing_chunk(mem):
+    # setup a chunk
+    mem[2:7] = b"hello"
+    assert len(mem) == 7
+
+    # write into an existing chunk
+    # results in the following layout:
+    #
+    #     -- MEMDUMP (length: 7) --
+    #     chunk@0: ConcreteChunk(b'\x00\x00', start=0, length=2)
+    #     chunk@2: ConcreteChunk(b'hello', start=0, length=2)
+    #     chunk@4: ConcreteChunk(b'!!', start=0, length=2)
+    #     chunk@6: ConcreteChunk(b'hello', start=4, length=1)
+
+    mem[4:6] = b"!!"
+    assert mem._well_formed()
+    assert len(mem) == 7  # unchanged
+    assert mem[:].unwrap() == b"\x00\x00he!!o"
+
+
+#         ┌───────────────┐
+#         │///new chunk///│
+#         └───────────────┘
+# ┌───────────────┐                 ┌──────┬───────────────┐
+# │...old chunk...│         ──────▶ │...old│///new chunk///│
+# └───────────────┘                 └──────┴───────────────┘
+def test_memory_write_slice_across_existing_chunk(mem):
+    mem[:32] = b"hellohellohellohellohellohellohe"
+
+    # stomp in the middle of the existing chunk and extend the memory
+    mem[16:48] = b"worldworldworldworldworldworldwo"
+    assert mem._well_formed()
+    assert len(mem) == 48
+    assert mem[:32].unwrap() == b"hellohellohellohworldworldworldw"
