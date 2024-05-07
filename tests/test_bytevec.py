@@ -578,7 +578,7 @@ def test_memory_write_slice_into_existing_chunk(mem):
 # ┌───────────────┐                 ┌──────┬───────────────┐
 # │...old chunk...│         ──────▶ │...old│///new chunk///│
 # └───────────────┘                 └──────┴───────────────┘
-def test_memory_write_slice_across_existing_chunk_concrete(mem):
+def test_memory_write_slice_across_prechunk_extend_concrete(mem):
     mem[:32] = b"hellohellohellohellohellohellohe"
 
     # stomp in the middle of the existing chunk and extend the memory
@@ -588,7 +588,26 @@ def test_memory_write_slice_across_existing_chunk_concrete(mem):
     assert mem[:32].unwrap() == b"hellohellohellohworldworldworldw"
 
 
-def test_memory_write_slice_across_existing_chunk_mixed(mem):
+#       ┌───────────────┐
+#       │///new chunk///│
+#       └───────────────┘
+# ┌─────────────┬─────────────┐         ┌─────┬───────────────┬──────┐
+# │..old chunk..│..old chunk..│ ──────▶ │..old│///new chunk///│hunk..│
+# └─────────────┴─────────────┘         └─────┴───────────────┴──────┘
+def test_memory_write_slice_across_prechunk_postchunk(mem):
+    # setup
+    mem[:5] = b"hello"
+    mem[5:10] = b"world"
+
+    # write the new chunk across the existing chunks
+    mem[3:7] = b"!!!!"
+
+    assert mem._well_formed()
+    assert len(mem) == 10
+    assert mem[:].unwrap() == b"hel!!!!rld"
+
+
+def test_memory_write_slice_across_prechunk_extend_mixed(mem):
     x = BitVec("x", 256)
     mem[:32] = x
 

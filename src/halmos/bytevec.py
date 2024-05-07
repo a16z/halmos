@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import Enum
 from typing import (
     Any,
@@ -292,6 +293,17 @@ class SymbolicChunk(Chunk):
         return f"SymbolicChunk({self.data!r})"
 
 
+@dataclass
+class ChunkInfo:
+    index: int  # -1 if not found
+    chunk: Optional[Chunk] = None
+    start: Optional[int] = None
+    end: Optional[int] = None  # end offset, i.e. start + len(chunk)
+
+    def found(self) -> bool:
+        return self.index >= 0
+
+
 class ByteVec:
     """
     ByteVec represents a sequence of mixed concrete/symbolic chunks of bytes.
@@ -367,11 +379,9 @@ class ByteVec:
     def _num_chunks(self) -> int:
         return len(self.chunks)
 
-    def _locate_chunk(self, offset) -> int:
+    def _load_chunk(self, offset) -> ChunkInfo:
         """
         Locate the chunk that contains the given offset.
-
-        Returns the index of the chunk in the SortedDict, or -1 if not found.
 
         Complexity: O(log n) where n is the number of chunks (thanks to the backing SortedDict)
         """
@@ -379,12 +389,12 @@ class ByteVec:
         if offset < 0:
             raise IndexError(offset)
 
-        NOT_FOUND = -1
         if offset >= self.length:
-            return NOT_FOUND
+            return ChunkInfo(index=-1)
 
-        chunk_index = self.chunks.bisect_right(offset) - 1
-        return chunk_index
+        index = self.chunks.bisect_right(offset) - 1
+        start, chunk = self.chunks.peekitem(index)
+        return ChunkInfo(index=index, chunk=chunk, start=start, end=start + len(chunk))
 
     ### write operations
 
@@ -433,11 +443,11 @@ class ByteVec:
             self.append(byte_chunk)
             return
 
-        chunk_index = self.chunks.bisect_right(offset) - 1
-        assert chunk_index >= 0
+        chunk_info = self._load_chunk(offset)
+        assert chunk_info.index >= 0
 
-        start, chunk = self.chunks.peekitem(chunk_index)
-        offset_in_chunk = offset - start
+        chunk = chunk_info.chunk
+        offset_in_chunk = offset - chunk_info.start
         assert 0 <= offset_in_chunk < len(chunk)
 
         # we are overwriting a byte in an existing chunk
@@ -461,12 +471,12 @@ class ByteVec:
         # └────────────────────────────────────────────────────┘
 
         pre_chunk = chunk[:offset]
-        self.__set_chunk(start, pre_chunk)
+        self.__set_chunk(chunk_info.start, pre_chunk)
 
         self.chunks[offset] = Chunk.wrap(value)
 
         post_chunk = chunk[offset + 1 :]
-        self.__set_chunk(offset + 1, chunk[offset + 1 :])
+        self.__set_chunk(offset + 1, post_chunk)
 
     def __setslice__(self, start: int, stop: int, value: Any) -> None:
         """
@@ -495,57 +505,47 @@ class ByteVec:
         if stop - start != len(value):
             raise ValueError("Length of value must match the length of the slice")
 
-        first_chunk_index = self.chunks.bisect_right(start) - 1
-        if first_chunk_index < 0:
-            # there are no chunks, so we backfill
-            self.append(b"\x00" * start)
+        if start >= self.length:
+            # we are past the end of the ByteVec, so we must backfill
+            self.append(b"\x00" * (start - self.length))
             self.append(value)
             return
 
-        # there are one or more existing chunks
-        first_chunk_start, first_chunk = self.chunks.peekitem(first_chunk_index)
-        first_chunk_end = first_chunk_start + len(first_chunk)
+        # there has to be a first chunk because of the start >= self.length check
+        first_chunk = self._load_chunk(start)
+        assert first_chunk.found()
 
         # aligned write, just overwrite the existing chunk
-        if start == first_chunk_start and stop == first_chunk_end:
-            self.__set_chunk(first_chunk_start, value)
-
-            # length is unchanged, we can exit early
+        # length is unchanged, so we can return early
+        if start == first_chunk.start and stop == first_chunk.end:
+            self.__set_chunk(first_chunk.start, value)
             return
 
-        last_chunk_index = self.chunks.bisect_right(stop) - 1
-        last_chunk_start, last_chunk = self.chunks.peekitem(last_chunk_index)
-        last_chunk_end = last_chunk_start + len(last_chunk)
-
-        # if we start past the end of the last chunk, just pad and append
-        if start >= last_chunk_end:
-            self.append(b"\x00" * (start - last_chunk_end))
-            self.append(value)
-            return
+        # chunk that has the last byte of the slice,
+        # or not found if stop >= self.length
+        last_chunk = self._load_chunk(stop - 1)
 
         # remove the chunks that will be overwritten
-        for key in self.chunks.keys()[first_chunk_index + 1 : last_chunk_index]:
+        remove_from = first_chunk.index + 1
+
+        #
+        remove_to = None if stop >= self.length else last_chunk.index + 1
+        for key in self.chunks.keys()[remove_from:remove_to]:
             del self.chunks[key]
 
-        # unaligned write
         # truncate the first_chunk
-        pre_chunk = first_chunk[: start - first_chunk_start]
-        self.__set_chunk(first_chunk_start, pre_chunk)
+        pre_chunk = first_chunk.chunk[: start - first_chunk.start]
+        self.__set_chunk(first_chunk.start, pre_chunk)
 
         # TODO: handle the case where value is a ByteVec (multiple chunks)
         assert not isinstance(value, ByteVec)
 
         self.__set_chunk(start, value)
 
-        if start <= last_chunk_start and last_chunk_end <= stop:
-            # we are overwriting the entire last chunk
-            del self.chunks[last_chunk_start]
-
-        else:
-            # we are overwriting a portion of the last chunk
-            if stop < last_chunk_end:
-                post_chunk = last_chunk[stop - last_chunk_start :]
-                self.__set_chunk(stop, post_chunk)
+        # truncate the last chunk
+        if last_chunk.end and stop < last_chunk.end:
+            post_chunk = last_chunk.chunk[stop - last_chunk.start :]
+            self.__set_chunk(stop, post_chunk)
 
         self.length = max(self.length, stop)
 
@@ -583,12 +583,12 @@ class ByteVec:
         if expected_length <= 0:
             return result
 
-        first_chunk_index = self._locate_chunk(start)
-        if first_chunk_index < 0:
+        first_chunk = self._load_chunk(start)
+        if not first_chunk.found():
             result.append(self.__read_oob(expected_length))
             return result
 
-        for chunk_start, chunk in self.chunks.items()[first_chunk_index:]:
+        for chunk_start, chunk in self.chunks.items()[first_chunk.index :]:
             if chunk_start >= stop:
                 # we are past the end of the requested slice
                 break
@@ -625,12 +625,11 @@ class ByteVec:
         - plus the complexity to extract a byte (O(1) on concrete chunks, O(num_bytes) on symbolic chunks)
         """
 
-        chunk_index = self._locate_chunk(offset)
-        if chunk_index < 0:
+        chunk = self._load_chunk(offset)
+        if not chunk.found():
             return self.__read_oob_byte()
 
-        chunk_start, chunk = self.chunks.peekitem(chunk_index)
-        return chunk.get_byte(offset - chunk_start)
+        return chunk.chunk.get_byte(offset - chunk.start)
 
     def __getitem__(self, key) -> UnionType[Byte, "ByteVec"]:
         if isinstance(key, slice):
