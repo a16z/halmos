@@ -505,7 +505,7 @@ def test_memory_write_slice_past_existing_chunk(mem):
 # ┌──────────────────┐           ┌──────────────────┐
 # │....old chunk.....│  ──────▶  │////new chunk/////│
 # └──────────────────┘           └──────────────────┘
-def test_memory_write_slice_over_existing_chunk(mem):
+def test_memory_write_slice_over_single_chunk(mem):
     mem.append(BitVec("x", 40))
     mem[:] = b"world"
     assert mem._well_formed()
@@ -519,7 +519,7 @@ def test_memory_write_slice_over_existing_chunk(mem):
 # ┌───┬───┬───┬───┬───┬───┐         ┌───────────────────────┐
 # │old│old│old│old│old│old│ ──────▶ │///////new chunk///////│
 # └───┴───┴───┴───┴───┴───┘         └───────────────────────┘
-def test_memory_write_slice_stomp_over_existing_chunks(mem):
+def test_memory_write_slice_over_multiple_chunks(mem):
     # setup some chunks
     mem[10:15] = b"world"
     assert mem._well_formed()
