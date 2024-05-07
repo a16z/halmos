@@ -508,9 +508,9 @@ class ByteVec:
 
         # aligned write, just overwrite the existing chunk
         if start == first_chunk_start and stop == first_chunk_end:
-            self.chunks[first_chunk_start] = value
+            self.__set_chunk(first_chunk_start, value)
 
-            # length is unchanged, so we can exit early
+            # length is unchanged, we can exit early
             return
 
         last_chunk_index = self.chunks.bisect_right(stop) - 1
@@ -525,21 +525,17 @@ class ByteVec:
 
         # remove the chunks that will be overwritten
         for key in self.chunks.keys()[first_chunk_index + 1 : last_chunk_index]:
-            print(f"deleting chunk@{key}")
             del self.chunks[key]
 
-        # unaligned write, split the first and last chunks
-        first_chunk_end_offset = start - first_chunk_start
-        # print(f"first_chunk_end_offset: {first_chunk_end_offset}")
-        pre_chunk = first_chunk[:first_chunk_end_offset]
-        print(f"pre_chunk: {pre_chunk}")
-        if pre_chunk:
-            self.chunks[first_chunk_start] = pre_chunk
+        # unaligned write
+        # truncate the first_chunk
+        pre_chunk = first_chunk[: start - first_chunk_start]
+        self.__set_chunk(first_chunk_start, pre_chunk)
 
         # TODO: handle the case where value is a ByteVec (multiple chunks)
         assert not isinstance(value, ByteVec)
 
-        self.chunks[start] = value
+        self.__set_chunk(start, value)
 
         if start <= last_chunk_start and last_chunk_end <= stop:
             # we are overwriting the entire last chunk
@@ -547,11 +543,9 @@ class ByteVec:
 
         else:
             # we are overwriting a portion of the last chunk
-            last_chunk_start_offset = stop - last_chunk_start
-            if last_chunk_start_offset < len(last_chunk):
-                post_chunk = last_chunk[last_chunk_start_offset:]
-                if post_chunk:
-                    self.chunks[stop] = post_chunk
+            if stop < last_chunk_end:
+                post_chunk = last_chunk[stop - last_chunk_start :]
+                self.__set_chunk(stop, post_chunk)
 
         self.length = max(self.length, stop)
 

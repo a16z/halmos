@@ -482,7 +482,7 @@ def test_memory_write_slice_past_existing_chunk(mem):
 # │....old chunk.....│  ──────▶  │////new chunk/////│
 # └──────────────────┘           └──────────────────┘
 def test_memory_write_slice_over_existing_chunk(mem):
-    mem.append(b"hello")
+    mem.append(BitVec("x", 40))
     mem[:] = b"world"
     assert mem._well_formed()
     assert len(mem) == 5
@@ -554,7 +554,7 @@ def test_memory_write_slice_into_existing_chunk(mem):
 # ┌───────────────┐                 ┌──────┬───────────────┐
 # │...old chunk...│         ──────▶ │...old│///new chunk///│
 # └───────────────┘                 └──────┴───────────────┘
-def test_memory_write_slice_across_existing_chunk(mem):
+def test_memory_write_slice_across_existing_chunk_concrete(mem):
     mem[:32] = b"hellohellohellohellohellohellohe"
 
     # stomp in the middle of the existing chunk and extend the memory
@@ -562,3 +562,18 @@ def test_memory_write_slice_across_existing_chunk(mem):
     assert mem._well_formed()
     assert len(mem) == 48
     assert mem[:32].unwrap() == b"hellohellohellohworldworldworldw"
+
+
+def test_memory_write_slice_across_existing_chunk_mixed(mem):
+    x = BitVec("x", 256)
+    mem[:32] = x
+
+    # stomp in the middle of the existing chunk and extend the memory
+    woworld = b"worldworldworldworldworldworldwo"
+    woworld_bv = BitVecVal(int.from_bytes(woworld[:16], "big"), 128)
+    mem[16:48] = woworld
+    assert mem._well_formed()
+    assert len(mem) == 48
+    assert eq(
+        mem[:32].unwrap(), Concat(Extract(255, 128, x), BitVecVal(woworld_bv, 128))
+    )
