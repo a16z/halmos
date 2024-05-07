@@ -369,7 +369,13 @@ def test_memory_write_byte_basic(mem):
     assert mem[6] == 0x42
 
 
-def test_memory_write_byte_splitting_1_concrete_byte(mem):
+# ┌───┐
+# │new│
+# └───┘
+# ┌───┐         ┌───┐
+# │ . │ ──────▶ │new│
+# └───┘         └───┘
+def test_memory_write_byte_stomping_1_concrete_byte(mem):
     # when we have a 1 byte chunk
     mem[0] = 0x42
 
@@ -382,6 +388,12 @@ def test_memory_write_byte_splitting_1_concrete_byte(mem):
     assert mem[0] == 0x43
 
 
+# ┌───┐
+# │new│
+# └───┘
+# ┌───┬───┐         ┌───┬───┐
+# │ . │ . │ ──────▶ │new│ . │
+# └───┴───┘         └───┴───┘
 def test_memory_write_byte_splitting_2_concrete_bytes_no_prechunk():
     # when we have a 2 byte chunk
     mem = ByteVec(b"\x01\x02")
@@ -400,6 +412,12 @@ def test_memory_write_byte_splitting_2_concrete_bytes_no_prechunk():
     assert mem[1] == 0x02
 
 
+#     ┌───┐
+#     │new│
+#     └───┘
+# ┌───┬───┐         ┌───┬───┐
+# │ . │ . │ ──────▶ │ . │new│
+# └───┴───┘         └───┴───┘
 def test_memory_write_byte_splitting_2_concrete_bytes_no_postchunk():
     # when we have a 2 byte chunk
     mem = ByteVec(b"\x01\x02")
@@ -418,6 +436,12 @@ def test_memory_write_byte_splitting_2_concrete_bytes_no_postchunk():
     assert mem[1] == 0x42
 
 
+#     ┌───┐
+#     │new│
+#     └───┘
+# ┌───┬───┬───┐          ┌───┬───┬───┐
+# │ . │ . │ . │  ──────▶ │ . │new│ . │
+# └───┴───┴───┘          └───┴───┴───┘
 def test_memory_write_byte_splitting_3_concrete_bytes():
     # when we have a 3 byte chunk
     mem = ByteVec(b"\x01\x02\x03")
