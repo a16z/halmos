@@ -620,3 +620,23 @@ def test_memory_write_slice_across_prechunk_extend_mixed(mem):
     assert eq(
         mem[:32].unwrap(), Concat(Extract(255, 128, x), BitVecVal(woworld_bv, 128))
     )
+
+
+def test_memory_write_slice_bytevec(mem):
+    mem[:5] = b"hello"
+    mem[5:10] = b"world"
+    mem[10:20] = mem[0:10]
+
+    assert mem._well_formed()
+    assert len(mem) == 20
+    assert mem[:].unwrap() == b"helloworldhelloworld"
+
+    mem[40:50] = mem[5:15]
+    assert mem._well_formed()
+    assert len(mem) == 50
+    assert mem[40:50].unwrap() == b"worldhello"
+
+    mem[5:15] = mem[30:40]
+    assert mem._well_formed()
+    assert len(mem) == 50
+    assert mem[5:15].unwrap() == b"\x00" * 10

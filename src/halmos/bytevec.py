@@ -414,7 +414,7 @@ class ByteVec:
         self.chunks[start_offset] = chunk
         return True
 
-    def append(self, chunk: Chunk) -> None:
+    def append(self, chunk: UnionType[Chunk, "ByteVec"]) -> None:
         """
         Append a new chunk at the end of the ByteVec.
 
@@ -423,8 +423,9 @@ class ByteVec:
         Complexity: O(1)
         """
 
-        # if the data is not wrapped in a Chunk, try to wrap it
-        if not isinstance(chunk, Chunk):
+        # if the data is not wrapped, try to wrap it
+        #
+        if not isinstance(chunk, Chunk) and not isinstance(chunk, ByteVec):
             chunk = Chunk.wrap(chunk)
 
         start = self.length
@@ -537,9 +538,7 @@ class ByteVec:
         pre_chunk = first_chunk.chunk[: start - first_chunk.start]
         self.__set_chunk(first_chunk.start, pre_chunk)
 
-        # TODO: handle the case where value is a ByteVec (multiple chunks)
-        assert not isinstance(value, ByteVec)
-
+        # store the value as a single chunk (even if it is a bytevec with multiple chunks)
         self.__set_chunk(start, value)
 
         # truncate the last chunk
