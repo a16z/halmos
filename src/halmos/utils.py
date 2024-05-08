@@ -389,10 +389,13 @@ def stringify(symbol_name: str, val: Any):
         return hexify(val)
 
 
-def assert_address(x: BitVecRef) -> None:
-    if x.size() != 160:
+def assert_address(x: Word) -> None:
+    if is_concrete(x):
+        if not 0 <= int_of(x) < 2**160:
+            raise ValueError(x)
+
+    elif x.size() != 160:
         raise ValueError(x)
-    pass
 
 
 def assert_uint256(x: BitVecRef) -> None:
