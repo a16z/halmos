@@ -65,6 +65,8 @@ VERBOSITY_TRACE_SETUP = 3
 VERBOSITY_TRACE_PATHS = 4
 VERBOSITY_TRACE_CONSTRUCTOR = 5
 
+solver_contexts = []
+
 
 @dataclass(frozen=True)
 class FunctionInfo:
@@ -657,7 +659,14 @@ def run(
     counterexamples = []
     traces = {}
 
+    early_exit = False
+
     def future_callback(future_model):
+        nonlocal early_exit
+
+        if early_exit:
+            return
+
         m = future_model.result()
         models.append(m)
 
@@ -665,17 +674,21 @@ def run(
         if result == unsat:
             return
 
+        counterexample_found = False
+
         # model could be an empty dict here
         if model is not None:
             if is_valid:
                 print(red(f"Counterexample: {render_model(model)}"))
                 counterexamples.append(model)
+                counterexample_found = True
             else:
                 warn(
                     COUNTEREXAMPLE_INVALID,
                     f"Counterexample (potentially invalid): {render_model(model)}",
                 )
                 counterexamples.append(model)
+                counterexample_found = True
         else:
             warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
 
@@ -690,6 +703,26 @@ def run(
                 else "Trace:"
             )
             print(traces[index], end="")
+
+        if args.early_exit and counterexample_found:
+            early_exit = True
+
+            # Interrupt all the solver contexts
+            for ctx in solver_contexts:
+                try:
+                    ctx.interrupt()
+                except Exception as e:
+                    if args.debug:
+                        traceback.print_exc()
+
+            # Cancel the remaining futures
+            for future in future_models:
+                if not future.done():
+                    future.cancel()
+
+            # Clear the global lists to prevent memory leaks
+            solver_contexts.clear()
+            future_models.clear()
 
     for idx, ex in enumerate(exs):
         result_exs.append(ex)
@@ -739,16 +772,7 @@ def run(
             f"# of potential paths involving assertion violations: {len(future_models)} / {len(result_exs)}  (--solver-threads {args.solver_threads})"
         )
 
-    if args.early_exit:
-        while not (
-            len(counterexamples) > 0 or all([fm.done() for fm in future_models])
-        ):
-            time.sleep(1)
-
-        thread_pool.shutdown(wait=False, cancel_futures=True)
-
-    else:
-        thread_pool.shutdown(wait=True)
+    thread_pool.shutdown(wait=True)
 
     counter = Counter(str(m.result) for m in models)
     if counter["sat"] > 0:
@@ -1054,6 +1078,7 @@ def solve(
         solver.from_string(query)
         result = solver.check()
         model = copy_model(solver.model()) if result == sat else None
+        solver_contexts.append(solver.ctx)
         return result, model
 
 
