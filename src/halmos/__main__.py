@@ -18,6 +18,7 @@ from collections import Counter
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
+from .bytevec import Chunk, ByteVec
 from .sevm import *
 from .utils import (
     create_solver,
@@ -154,11 +155,11 @@ def mk_caller(args: Namespace) -> Address:
     if args.symbolic_msg_sender:
         return mk_addr("msg_sender")
     else:
-        return con_addr(magic_address)
+        return magic_address
 
 
 def mk_this() -> Address:
-    return con_addr(magic_address + 1)
+    return magic_address + 1
 
 
 def mk_solver(args: Namespace, logic="QF_AUFBV", ctx=None, assertion=False):
@@ -359,8 +360,8 @@ def deploy_test(
     message = Message(
         target=this,
         caller=mk_caller(args),
-        value=con(0),
-        data=[],
+        value=0,
+        data=ByteVec(),
     )
 
     ex = sevm.mk_exec(
@@ -1491,6 +1492,8 @@ def _main(_args=None) -> MainResult:
 
         contract_path = f"{contract_json['ast']['absolutePath']}:{contract_name}"
         print(f"\nRunning {num_found} tests for {contract_path}")
+
+        # support for `/// @custom:halmos` annotations
         contract_args = extend_args(args, parse_natspec(natspec)) if natspec else args
 
         run_args = RunArgs(

@@ -17,6 +17,7 @@ from halmos.sevm import (
     Exec,
     Message,
     NotConcreteError,
+    Path,
     SEVM,
     byte_length,
     con,
@@ -170,16 +171,10 @@ def empty(iterable) -> bool:
         return True
 
 
-def render_path(ex: Exec) -> None:
-    path = list(dict.fromkeys(ex.path))
-    path.remove("True")
-    print(f"Path: {', '.join(path)}")
-
-
 def mk_create_ex(
     hexcode, sevm, solver, caller=caller, value=con(0), this=this, storage={}
 ) -> Exec:
-    bytecode = Contract(hexcode)
+    bytecode = Contract.from_hexcode(hexcode)
     storage[this] = {}
 
     message = Message(
@@ -199,7 +194,7 @@ def mk_create_ex(
         this=this,
         pgm=bytecode,
         symbolic=True,
-        solver=solver,
+        path=Path(solver),
     )
 
 
@@ -213,7 +208,7 @@ def mk_ex(
     storage={},
     data=default_calldata,
 ) -> Exec:
-    bytecode = Contract(hexcode)
+    bytecode = Contract.from_hexcode(hexcode)
     storage[this] = {}
 
     message = Message(
@@ -233,7 +228,7 @@ def mk_ex(
         this=this,
         pgm=bytecode,
         symbolic=True,
-        solver=solver,
+        path=Path(solver),
     )
 
 
@@ -274,7 +269,7 @@ def test_deploy_basic(sevm, solver):
     # before execution
     assert exec.context.output.data is None
 
-    sevm.run(exec)
+    output_ex = next(sevm.run(exec))
     render_trace(exec.context)
 
     # after execution
@@ -287,7 +282,7 @@ def test_deploy_nonpayable_reverts(sevm, solver):
     deploy_hexcode, _ = get_bytecode(DEFAULT_EMPTY_CONSTRUCTOR)
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver, value=con(1))
 
-    sevm.run(exec)
+    output_ex = next(sevm.run(exec))
     render_trace(exec.context)
 
     assert isinstance(exec.context.output.error, Revert)
@@ -305,7 +300,7 @@ def test_deploy_payable(sevm, solver):
     )
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver, value=con(1))
 
-    sevm.run(exec)
+    output_ex = next(sevm.run(exec))
     render_trace(exec.context)
 
     assert exec.context.output.error is None
@@ -327,7 +322,7 @@ def test_deploy_event_in_constructor(sevm, solver):
     )
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver)
 
-    sevm.run(exec)
+    output_ex = next(sevm.run(exec))
     render_trace(exec.context)
 
     assert exec.context.output.error is None
@@ -354,9 +349,7 @@ def test_simple_call(sevm: SEVM, solver):
         """
     )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
-
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     render_trace(output_exec.context)
@@ -390,8 +383,7 @@ def test_failed_call(sevm: SEVM, solver):
     )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
 
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     render_trace(output_exec.context)
@@ -426,9 +418,7 @@ def test_failed_static_call(sevm: SEVM, solver):
         """
     )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
-
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     render_trace(output_exec.context)
@@ -460,7 +450,7 @@ def test_symbolic_subcall(sevm: SEVM, solver):
     )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
 
-    execs = sevm.run(input_exec)[0]
+    execs = list(sevm.run(input_exec))
 
     # we get 2 executions, one for x == 42 and one for x != 42
     assert len(execs) == 2
@@ -504,7 +494,7 @@ def test_symbolic_create(sevm: SEVM, solver):
     )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
 
-    execs = sevm.run(input_exec)[0]
+    execs = list(sevm.run(input_exec))
 
     # we get 2 executions, one for x == 42 and one for x != 42
     assert len(execs) == 2
@@ -526,9 +516,7 @@ def test_symbolic_create(sevm: SEVM, solver):
 def test_failed_create(sevm: SEVM, solver):
     _, runtime_hexcode = get_bytecode(FAILED_CREATE)
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver)
-
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     render_trace(output_exec.context)
@@ -566,11 +554,9 @@ def test_event_conditional_on_symbol(sevm: SEVM, solver):
     """
     )
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
-
-    execs = sevm.run(input_exec)[0]
+    execs = list(sevm.run(input_exec))
 
     for e in execs:
-        render_path(e)
         render_trace(e.context)
 
     assert len(execs) == 2
@@ -608,8 +594,7 @@ def test_symbolic_event_data(sevm: SEVM, solver):
     )
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     (is_single_event, event) = single(output_exec.context.logs())
@@ -633,8 +618,7 @@ def test_symbolic_event_topic(sevm: SEVM, solver):
     )
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     (is_single_event, event) = single(output_exec.context.logs())
@@ -670,8 +654,7 @@ def test_trace_ordering(sevm: SEVM, solver):
     )
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     top_level_call = output_exec.context
@@ -715,9 +698,7 @@ def test_static_context_propagates(sevm: SEVM, solver):
     )
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
-
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     top_level_call = output_exec.context
@@ -757,9 +738,7 @@ def test_halmos_exception_halts_path(sevm: SEVM, solver):
     )
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
-
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     outer_call = output_exec.context
@@ -793,9 +772,7 @@ def test_deploy_symbolic_bytecode(sevm: SEVM, solver):
     )
 
     input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=go_uint256_calldata)
-
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     outer_call = output_exec.context
@@ -829,9 +806,7 @@ def test_deploy_empty_runtime_bytecode(sevm: SEVM, solver):
         )
 
         input_exec: Exec = mk_ex(runtime_hexcode, sevm, solver, data=default_calldata)
-
-        execs = sevm.run(input_exec)[0]
-        (is_single_exec, output_exec) = single(execs)
+        (is_single_exec, output_exec) = single(sevm.run(input_exec))
         assert is_single_exec
 
         outer_call = output_exec.context
@@ -870,8 +845,7 @@ def test_call_limit_with_create(monkeypatch, sevm: SEVM, solver):
     MAX_CALL_DEPTH_OVERRIDE = 3
     monkeypatch.setattr(halmos.sevm, "MAX_CALL_DEPTH", MAX_CALL_DEPTH_OVERRIDE)
 
-    execs = sevm.run(input_exec)[0]
-    (is_single_exec, output_exec) = single(execs)
+    (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec
 
     outer_call = output_exec.context

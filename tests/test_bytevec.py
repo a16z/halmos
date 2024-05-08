@@ -625,18 +625,26 @@ def test_memory_write_slice_across_prechunk_extend_mixed(mem):
 def test_memory_write_slice_bytevec(mem):
     mem[:5] = b"hello"
     mem[5:10] = b"world"
+
+    # mem[0:10] is a bytevec with 2 chunks
     mem[10:20] = mem[0:10]
 
     assert mem._well_formed()
     assert len(mem) == 20
+
+    # unwrap() recursively calls unwrap() on all chunks and bytevecs
     assert mem[:].unwrap() == b"helloworldhelloworld"
 
+    # mem[5:15] is a bytevec with 1 concrete chunk and a slice of a bytevec
     mem[40:50] = mem[5:15]
     assert mem._well_formed()
     assert len(mem) == 50
     assert mem[40:50].unwrap() == b"worldhello"
 
+    # writing to mem[5:15] will delete the concrete chunk at 5 and split the bytevec at 10
     mem[5:15] = mem[30:40]
     assert mem._well_formed()
     assert len(mem) == 50
     assert mem[5:15].unwrap() == b"\x00" * 10
+
+    assert not repr(mem)

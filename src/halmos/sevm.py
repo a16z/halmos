@@ -22,6 +22,7 @@ from typing import (
 )
 from z3 import *
 
+from .bytevec import Chunk, ByteVec
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 from .console import console
 from .exceptions import *
@@ -80,7 +81,7 @@ new_address_offset: int = 1
 class Instruction:
     pc: int
     opcode: int
-    operand: Optional[UnionType[bytes, BitVecRef]]
+    operand: Optional[ByteVec]
 
     def __init__(self, opcode, **kwargs) -> None:
         self.opcode = opcode
@@ -511,52 +512,16 @@ class Block:
 class Contract:
     """Abstraction over contract bytecode. Can include concrete and symbolic elements."""
 
-    _code: List[UnionType[bytes, BitVecRef]]
+    def __init__(self, code: Optional[ByteVec] = None) -> None:
+        # if
+        if not isinstance(code, ByteVec):
+            code = ByteVec(code)
 
-    def __init__(self, rawcode: UnionType[bytes, BitVecRef, str]) -> None:
-        if rawcode is None:
-            raise HalmosException("invalid contract code: None")
-
-        if isinstance(rawcode, bytes):
-            rawcode = [rawcode]
-
-        elif is_bv_value(rawcode):
-            rawcode = [bv_value_to_bytes(rawcode)]
-
-        elif isinstance(rawcode, str):
-            raise HalmosException(
-                f"use Contract.from_hexcode() when passing a hex string"
-            )
-
-        elif is_bv(rawcode) and is_concat(rawcode):
-            # in the case of symbolic immutables in code, we expect a list
-            # of bytes and symbolic values
-            rawcode = [
-                bv_value_to_bytes(x) if is_bv_value(x) else x
-                for x in rawcode.children()
-            ]
-            debug(f"contract code is Concat of {rawcode}")
-
-        elif is_bv(rawcode):
-            rawcode = [rawcode]
-
-        else:
-            raise HalmosException(f"invalid contract code: {rawcode}")
-
-        # check that the code is well formed
-        assert all(isinstance(x, (bytes, BitVecRef)) for x in rawcode)
-
-        self._code = rawcode
-
-        # cache length since it doesn't change after initialization
-        self._length = sum(byte_length(x) for x in rawcode)
+        self._code = code
 
     def __init_jumpdests(self):
-        self.jumpdests = set()
-
-        for insn in iter(self):
-            if insn.opcode == EVM.JUMPDEST:
-                self.jumpdests.add(insn.pc)
+        # x[0] is the pc, x[1] is the opcode
+        self._jumpdests = set((x[0] for x in iter(self) if x[1] == EVM.JUMPDEST))
 
     def __iter__(self):
         return CodeIterator(self)
@@ -573,15 +538,16 @@ class Contract:
             warn(LIBRARY_PLACEHOLDER, f"contract hexcode contains library placeholder")
 
         try:
-            return Contract(bytes.fromhex(stripped(hexcode)))
+            bytecode = bytes.fromhex(stripped(hexcode))
+            return Contract(ByteVec(bytecode))
         except ValueError as e:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
     def decode_instruction(self, pc: int) -> Instruction:
-        opcode = int_of(self[pc], f"symbolic opcode at pc={pc}")
+        opcode = int_of(self._code[pc], f"symbolic opcode at pc={pc}")
 
         if EVM.PUSH1 <= opcode <= EVM.PUSH32:
-            operand = self.slice(pc + 1, pc + opcode - EVM.PUSH0 + 1)
+            operand = self.slice(pc + 1, pc + opcode - EVM.PUSH0 + 1).unwrap()
             return Instruction(opcode, pc=pc, operand=operand)
 
         return Instruction(opcode, pc=pc)
@@ -590,65 +556,24 @@ class Contract:
         opcode = self[pc]
         return pc + instruction_length(opcode)
 
-    def slice(self, start, stop) -> UnionType[bytes, BitVecRef]:
-        slice_data = [self[pc] for pc in range(start, stop)]
+    def slice(self, start, stop) -> ByteVec:
+        return self._code[start:stop]
 
-        # TODO: handle empty slices
-        # TODO: return a bytevec object instead of a concat expression
-
-        # if we have any symbolic elements, return as a Concat expression
-        if any(is_bv(x) for x in slice_data):
-            return concat([x if is_bv(x) else con(x, 8) for x in slice_data])
-
-        # otherwise, return as a concrete bytes object
-        return bytes(slice_data)
-
-    @lru_cache(maxsize=256)
-    def __getitem__(self, key: int) -> UnionType[int, BitVecRef]:
+    def __getitem__(self, key: int) -> Byte:
         """Returns the byte at the given offset."""
         offset = int_of(key, "symbolic index into contract bytecode {offset!r}")
-
-        # support for negative indexing, e.g. contract[-1]
-        if offset < 0:
-            return self[len(self) + offset]
-
-        # in the EVM, this is defined as returning 0
-        if offset >= len(self):
-            return 0
-
-        # locate the _code element that contains the byte at offset
-        # (we expect self._code to be a short list in the common case, 2-5 elements)
-        for code_element in self._code:
-            element_length = byte_length(code_element)
-
-            if offset < element_length:
-                # symbolic case
-                if is_bv(code_element):
-                    extracted = extract_bytes(code_element, offset, 1)
-
-                    # return as concrete if possible
-                    return unbox_int(extracted)
-
-                # concrete case
-                return code_element[offset]
-
-            offset -= element_length
-
-        # should never reach here
-        raise HalmosException(
-            f"failed to locate offset={offset} in contract code {self._code}"
-        )
+        return self._code[offset]
 
     def __len__(self) -> int:
         """Returns the length of the bytecode in bytes."""
-        return self._length
+        return len(self._code)
 
     def valid_jump_destinations(self) -> set:
         """Returns the set of valid jump destinations."""
         if not hasattr(self, "jumpdests"):
             self.__init_jumpdests()
 
-        return self.jumpdests
+        return self._jumpdests
 
 
 class CodeIterator:
@@ -659,15 +584,18 @@ class CodeIterator:
     def __iter__(self):
         return self
 
-    def __next__(self) -> Instruction:
+    def __next__(self) -> Tuple[int, int]:
         """Returns a tuple of (pc, opcode)"""
         if self.pc >= len(self.contract):
             raise StopIteration
 
         try:
-            insn = self.contract.decode_instruction(self.pc)
-            self.pc += len(insn)
-            return insn
+            pc = self.pc
+            opcode = self.contract[pc]
+
+            # this avoids decoding instruction operands (don't slice if we don't need to)
+            self.pc += instruction_length(opcode)
+            return (pc, opcode)
         except NotConcreteError:
             raise StopIteration
 
@@ -2253,7 +2181,6 @@ class SEVM:
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
         step_id: int = 0
-
         stack: List[Tuple[Exec, int]] = [(ex0, 0)]
 
         def finalize(ex: Exec):
@@ -2278,6 +2205,8 @@ class SEVM:
                     raise MessageDepthLimitError(ex.context)
 
                 insn = ex.current_instruction()
+                print(f"insn={insn}")
+
                 opcode = insn.opcode
                 ex.cnts["opcode"][opcode] += 1
 
@@ -2555,15 +2484,16 @@ class SEVM:
                     size: int = int_of(ex.st.pop(), "symbolic CODECOPY size")
                     wextend(ex.st.memory, loc, size)
 
-                    codeslice = ex.pgm.slice(offset, offset + size)
+                    codeslice: ByteVec = ex.pgm.slice(offset, offset + size)
 
-                    actual_size = byte_length(codeslice)
+                    actual_size = len(codeslice)
                     if actual_size != size:
                         raise HalmosException(
                             f"CODECOPY: expected {size} bytes but got {actual_size}"
                         )
 
-                    ex.st.memory[loc : loc + size] = iter_bytes(codeslice)
+                    # XXX: use native ByteVec slice assignment here
+                    ex.st.memory[loc : loc + size] = iter_bytes(codeslice.unwrap())
 
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()

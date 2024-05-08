@@ -224,7 +224,7 @@ class ConcreteChunk(Chunk):
         return self.length == len(other) and self.unwrap() == other.unwrap()
 
     def __repr__(self):
-        return f"ConcreteChunk({self.data!r}, start={self.start}, length={self.length})"
+        return f"ConcreteChunk({self.data.hex()}, start={self.start}, length={self.length})"
 
 
 class SymbolicChunk(Chunk):
