@@ -856,7 +856,6 @@ class Exec:  # an execution path
 
     def returndatasize(self) -> int:
         returndata = self.returndata()
-        print(f"returndata: {returndata}")
         return len(returndata) if returndata is not None else 0
 
     def is_jumpdest(self, x: Word) -> bool:

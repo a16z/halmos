@@ -335,7 +335,6 @@ class hevm_cheat_code:
         # vm.assume(bool)
         if funsig == hevm_cheat_code.assume_sig:
             assume_cond = simplify(is_non_zero(arg.get_word(4)))
-            print(f"[vm.assume] {assume_cond}")
             ex.path.append(assume_cond)
             return ret
 

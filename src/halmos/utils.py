@@ -136,7 +136,8 @@ def con(n: int, size_bits=256) -> Word:
 # int_to_bool(x) == b   if sort(x) = int
 def test(x: Word, b: bool) -> Word:
     if isinstance(x, int):
-        return x != 0 if b else x == 0
+        return BoolVal(x != 0) if b else BoolVal(x == 0)
+
     elif is_bool(x):
         if b:
             return x
