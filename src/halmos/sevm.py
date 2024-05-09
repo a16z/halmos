@@ -22,7 +22,7 @@ from typing import (
 )
 from z3 import *
 
-from .bytevec import Chunk, ByteVec, OOBReads
+from .bytevec import Chunk, ByteVec
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 from .console import console
 from .exceptions import *
@@ -635,9 +635,6 @@ class Exec:  # an execution path
         if output.data is not None:
             raise HalmosException("output already set")
 
-        if data is not None:
-            data.oob_read = OOBReads.FAIL
-
         output.data = data
         output.error = error
         output.return_scheme = self.current_opcode()
@@ -859,6 +856,7 @@ class Exec:  # an execution path
 
     def returndatasize(self) -> int:
         returndata = self.returndata()
+        print(f"returndata: {returndata}")
         return len(returndata) if returndata is not None else 0
 
     def is_jumpdest(self, x: Word) -> bool:
@@ -1651,15 +1649,14 @@ class SEVM:
             else:
                 actual_ret_size = self.options["unknown_calls_return_size"]
 
+            ret = ByteVec()
             if actual_ret_size > 0:
                 f_ret = Function(
                     "ret_" + str(actual_ret_size * 8),
                     BitVecSort256,
                     BitVecSorts[actual_ret_size * 8],
                 )
-                ret = f_ret(exit_code_var)
-            else:
-                ret = ByteVec()
+                ret.append(f_ret(exit_code_var))
 
             # TODO: cover other precompiled
 
@@ -1703,8 +1700,6 @@ class SEVM:
             # store return value
             if ret_size > 0:
                 ex.st.memory.set_slice(ret_loc, ret_loc + ret_size, ret)
-
-            ret.oob_read = OOBReads.FAIL
 
             ex.context.trace.append(
                 CallContext(
@@ -1819,7 +1814,7 @@ class SEVM:
 
             # add a virtual subcontext to the trace for debugging purposes
             subcall = CallContext(message=message, depth=ex.context.depth + 1)
-            subcall.output.data = ByteVec(oob_read=OOBReads.FAIL)
+            subcall.output.data = ByteVec()
             subcall.output.error = AddressCollision()
             ex.context.trace.append(subcall)
 
@@ -2113,10 +2108,10 @@ class SEVM:
 
                 if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
-                        ex.halt(data=ByteVec(oob_read=OOBReads.FAIL))
+                        ex.halt(data=ByteVec())
                     elif opcode == EVM.INVALID:
                         ex.halt(
-                            data=ByteVec(oob_read=OOBReads.FAIL),
+                            data=ByteVec(),
                             error=InvalidOpcode(opcode),
                         )
                     elif opcode == EVM.REVERT:
@@ -2363,6 +2358,9 @@ class SEVM:
                         raise HalmosException("RETURNDATACOPY > MAX_MEMORY_SIZE")
 
                     if size > 0:
+                        if offset + size > ex.returndatasize():
+                            raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
+
                         data = ex.returndata().slice(offset, offset + size)
                         ex.st.memory.set_slice(loc, loc + size, data)
 
@@ -2450,7 +2448,7 @@ class SEVM:
                 stack.push(ex, step_id)
 
             except EvmException as err:
-                ex.halt(data=ByteVec(oob_read=OOBReads.FAIL), error=err)
+                ex.halt(data=ByteVec(), error=err)
                 yield from finalize(ex)
                 continue
 

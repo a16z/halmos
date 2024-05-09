@@ -36,13 +36,6 @@ Bytes = UnionType["Chunk", "ByteVec"]
 Word = UnionType[int, BitVecRef]
 
 
-class OOBReads(Enum):
-    """Enum to control the behavior of out-of-bounds reads in ByteVec"""
-
-    RETURN_ZERO = 0
-    FAIL = 1
-
-
 def try_concat(lhs: Any, rhs: Any) -> Optional[Any]:
     """Attempt to concatenate two values together if they have the same type"""
     if isinstance(lhs, bytes) and isinstance(rhs, bytes):
@@ -337,11 +330,9 @@ class ByteVec:
     def __init__(
         self,
         data: Optional[Chunk] = None,
-        oob_read: OOBReads = OOBReads.RETURN_ZERO,
         _chunks: Optional[SortedDict] = None,
         _length: Optional[int] = None,
     ):
-        self.oob_read = oob_read
         self.chunks = _chunks if _chunks is not None else SortedDict()
         self.length = _length or 0
 
@@ -613,7 +604,7 @@ class ByteVec:
         """
         Return a single byte at the given offset.
 
-        If the offset is out of bounds, the behavior is controlled by the `oob_read` attribute.
+        If some portion of [start:stop] is out of bounds, it will be filled with zeroes.
 
         Complexity:
         - O(log(num_chunks)) to locate the first chunk
@@ -663,7 +654,7 @@ class ByteVec:
         """
         Return a single byte at the given offset.
 
-        If the offset is out of bounds, the behavior is controlled by the `oob_read` attribute.
+        If the offset is out of bounds, returns 0.
 
         Complexity:
         - O(log(num_chunks)) to locate the chunk
@@ -682,7 +673,7 @@ class ByteVec:
 
         This is a thin wrapper that just loads a slice and converts it to a single value (int or bv) rather than bytes.
 
-        If [offset:offset+32] is out of bounds, the behavior is controlled by the `oob_read` attribute.
+        If some portion of [offset:offset+32] is out of bounds, returns zeroes.
         """
 
         data = self.slice(offset, offset + 32).unwrap()
@@ -702,13 +693,10 @@ class ByteVec:
         return self.get_byte(key)
 
     def __read_oob(self, num_bytes) -> Chunk:
-        if self.oob_read == OOBReads.FAIL:
-            raise IndexError
-        else:
-            return Chunk.wrap(b"\x00" * num_bytes)
+        return Chunk.wrap(b"\x00" * num_bytes)
 
     def __read_oob_byte(self) -> int:
-        return self.__read_oob(1)[0]
+        return 0
 
     def unwrap(self) -> UnionType[bytes, BitVecRef]:
         """
@@ -739,7 +727,6 @@ class ByteVec:
         """
 
         return ByteVec(
-            oob_read=self.oob_read,
             _chunks=self.chunks.copy(),
             _length=self.length,
         )

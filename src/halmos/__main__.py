@@ -405,7 +405,6 @@ def deploy_test(
     if error:
         raise ValueError(f"constructor failed, error={error} returndata={returndata}")
 
-    # deployed bytecode
     deployed_bytecode = Contract(returndata)
     ex.code[this] = deployed_bytecode
     ex.pgm = deployed_bytecode

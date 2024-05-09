@@ -243,25 +243,18 @@ def test_bytevec_eq():
 ### test getitem and slice
 
 
-@pytest.mark.parametrize("oob_read", [OOBReads.RETURN_ZERO, OOBReads.FAIL])
-def test_bytevec_getitem(oob_read):
-    vec = ByteVec(b"hello", oob_read=oob_read)
+def test_bytevec_getitem():
+    vec = ByteVec(b"hello")
     assert vec[0] == ord("h")
     assert vec[1] == ord("e")
     assert vec[2] == ord("l")
     assert vec[3] == ord("l")
     assert vec[4] == ord("o")
-
-    if oob_read == OOBReads.FAIL:
-        with pytest.raises(IndexError):
-            vec[5]
-    else:
-        assert vec[5] == 0
+    assert vec[5] == 0
 
 
-@pytest.mark.parametrize("oob_read", [OOBReads.RETURN_ZERO, OOBReads.FAIL])
-def test_bytevec_getitem_negative(oob_read):
-    vec = ByteVec(b"hello", oob_read=oob_read)
+def test_bytevec_getitem_negative():
+    vec = ByteVec(b"hello")
     with pytest.raises(IndexError):
         vec[-1]
 
