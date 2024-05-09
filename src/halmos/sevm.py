@@ -35,7 +35,7 @@ from .warnings import (
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
-EMPTY_BYTES = b""
+EMPTY_BYTES = ByteVec()
 MAX_CALL_DEPTH = 1024
 
 # TODO: make this configurable
@@ -267,7 +267,8 @@ class CallContext:
 
         This is meaningless during execution, because the call may not yet have an output
         """
-        return self.output.data is None
+        data, error = self.output.data, self.output.error
+        return data is None or isinstance(error, HalmosException)
 
     def get_stuck_reason(self) -> Optional[HalmosException]:
         """
@@ -340,7 +341,9 @@ class State:
     def ret(self) -> ByteVec:
         loc: int = self.mloc()
         size: int = int_of(self.pop(), "symbolic return data size")  # size in bytes
-        return self.memory.slice(loc, loc + size)
+
+        returndata_slice = self.memory.slice(loc, loc + size)
+        return returndata_slice
 
 
 class Block:
@@ -622,16 +625,16 @@ class Exec:  # an execution path
 
     def halt(
         self,
-        data: ByteVec = None,
+        data: Optional[ByteVec],
         error: Optional[EvmException] = None,
     ) -> None:
         output = self.context.output
         if output.data is not None:
             raise HalmosException("output already set")
 
-        if data is None:
-            data = ByteVec()
-        data.oob_read = OOBReads.FAIL
+        if data is not None:
+            data.oob_read = OOBReads.FAIL
+
         output.data = data
         output.error = error
         output.return_scheme = self.current_opcode()
@@ -2079,6 +2082,7 @@ class SEVM:
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
 
+                # print(f"{hexify(ex.this)}@{ex.pc}", end=" ")
                 insn = ex.current_instruction()
                 # print(f"insn={insn}")
 
@@ -2106,9 +2110,12 @@ class SEVM:
 
                 if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
-                        ex.halt()
+                        ex.halt(data=ByteVec(oob_read=OOBReads.FAIL))
                     elif opcode == EVM.INVALID:
-                        ex.halt(error=InvalidOpcode(opcode))
+                        ex.halt(
+                            data=ByteVec(oob_read=OOBReads.FAIL),
+                            error=InvalidOpcode(opcode),
+                        )
                     elif opcode == EVM.REVERT:
                         ex.halt(data=ex.st.ret(), error=Revert())
                     elif opcode == EVM.RETURN:
@@ -2440,7 +2447,7 @@ class SEVM:
                 stack.push(ex, step_id)
 
             except EvmException as err:
-                ex.halt(error=err)
+                ex.halt(data=ByteVec(oob_read=OOBReads.FAIL), error=err)
                 yield from finalize(ex)
                 continue
 

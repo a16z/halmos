@@ -330,8 +330,9 @@ class hevm_cheat_code:
     label_sig: int = 0xC657C718
 
     @staticmethod
-    def handle(sevm, ex, arg: ByteVec) -> ByteVec:
+    def handle(sevm, ex, arg: ByteVec) -> Optional[ByteVec]:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
+        ret = ByteVec()
 
         # vm.fail()
         if funsig == 0x70CA10BB and arg == hevm_cheat_code.fail_payload:
@@ -342,6 +343,7 @@ class hevm_cheat_code:
             assume_cond = simplify(is_non_zero(arg.get_word(4)))
             print(f"[vm.assume] {assume_cond}")
             ex.path.append(assume_cond)
+            return ret
 
         # vm.getCode(string)
         elif funsig == hevm_cheat_code.get_code_sig:
@@ -371,6 +373,7 @@ class hevm_cheat_code:
             result = ex.prank.prank(address)
             if not result:
                 raise HalmosException("You have an active prank already.")
+            return ret
 
         # vm.startPrank(address)
         elif funsig == hevm_cheat_code.start_prank_sig:
@@ -378,16 +381,19 @@ class hevm_cheat_code:
             result = ex.prank.startPrank(address)
             if not result:
                 raise HalmosException("You have an active prank already.")
+            return ret
 
         # vm.stopPrank()
         elif funsig == hevm_cheat_code.stop_prank_sig:
             ex.prank.stopPrank()
+            return ret
 
         # vm.deal(address,uint256)
         elif funsig == hevm_cheat_code.deal_sig:
             who = uint160(arg.get_word(4))
             amount = uint256(arg.get_word(36))
             ex.balance_update(who, amount)
+            return ret
 
         # vm.store(address,bytes32,bytes32)
         elif funsig == hevm_cheat_code.store_sig:
@@ -399,6 +405,7 @@ class hevm_cheat_code:
                 raise HalmosException(f"uninitialized account: {store_account}")
 
             sevm.sstore(ex, store_account_addr, store_slot, store_value)
+            return ret
 
         # vm.load(address,bytes32)
         elif funsig == hevm_cheat_code.load_sig:
@@ -409,30 +416,37 @@ class hevm_cheat_code:
                 raise HalmosException(f"uninitialized account: {store_account}")
 
             return sevm.sload(ex, load_account_addr, load_slot)
+            return ret
 
         # vm.fee(uint256)
         elif funsig == hevm_cheat_code.fee_sig:
             ex.block.basefee = arg.get_word(4)
+            return ret
 
         # vm.chainId(uint256)
         elif funsig == hevm_cheat_code.chainid_sig:
             ex.block.chainid = arg.get_word(4)
+            return ret
 
         # vm.coinbase(address)
         elif funsig == hevm_cheat_code.coinbase_sig:
             ex.block.coinbase = uint160(arg.get_word(4))
+            return ret
 
         # vm.difficulty(uint256)
         elif funsig == hevm_cheat_code.difficulty_sig:
             ex.block.difficulty = arg.get_word(4)
+            return ret
 
         # vm.roll(uint256)
         elif funsig == hevm_cheat_code.roll_sig:
             ex.block.number = arg.get_word(4)
+            return ret
 
         # vm.warp(uint256)
         elif funsig == hevm_cheat_code.warp_sig:
             ex.block.timestamp = arg.get_word(4)
+            return ret
 
         # vm.etch(address,bytes)
         elif funsig == hevm_cheat_code.etch_sig:
@@ -456,6 +470,8 @@ class hevm_cheat_code:
             except Exception as e:
                 error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
                 raise HalmosException(error_msg) from e
+
+            return ret
 
         # ffi(string[]) returns (bytes)
         elif funsig == hevm_cheat_code.ffi_sig:
@@ -503,7 +519,8 @@ class hevm_cheat_code:
             #  - not the address of a known contract
 
             addr = apply_vmaddr(ex, private_key)
-            return uint256(addr)
+            ret.append(uint256(addr))
+            return ret
 
         elif funsig == hevm_cheat_code.sign_sig:
             key = extract_bytes(arg, 4, 32)
@@ -549,14 +566,17 @@ class hevm_cheat_code:
                     )
                     ex.path.append(distinct)
 
-            return Concat(uint256(v), r, s)
+            ret.append(uint256(v))
+            ret.append(r)
+            ret.append(s)
+            return ret
 
         elif funsig == hevm_cheat_code.label_sig:
             addr = extract_bytes(arg, 4, 32)
             label = extract_string_argument(arg, 1)
 
             # TODO: no-op for now
-            pass
+            return ret
 
         else:
             # TODO: support other cheat codes

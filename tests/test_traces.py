@@ -8,6 +8,7 @@ from typing import Dict, List, Any, Optional
 from z3 import *
 
 from halmos.__main__ import mk_block, render_trace
+from halmos.bytevec import ByteVec
 from halmos.exceptions import *
 from halmos.sevm import (
     CallContext,
@@ -22,7 +23,6 @@ from halmos.sevm import (
     byte_length,
     con,
     int_of,
-    wstore,
 )
 from halmos.utils import EVM
 from test_fixtures import args, options, sevm
@@ -92,14 +92,16 @@ caller = BitVec("msg_sender", 160)
 this = BitVec("this_address", 160)
 balance = Array("balance_0", BitVecSort(160), BitVecSort(256))
 
-# 0x0f59f83a is keccak256("go()")
-default_calldata = list(con(x, size_bits=8) for x in bytes.fromhex("0f59f83a"))
+# go()
+go_selector = bytes.fromhex("0f59f83a")
 
-go_uint256_selector = BitVecVal(0xB20E7344, 32)  # keccak256("go(uint256)")
+# go(uint256)
+go_uint256_selector = BitVecVal(0xB20E7344, 32)
+
 p_x_uint256 = BitVec("p_x_uint256", 256)
-go_uint256_calldata: List[BitVecRef] = []
-wstore(go_uint256_calldata, 0, 4, go_uint256_selector)
-wstore(go_uint256_calldata, 4, 32, p_x_uint256)
+
+default_calldata = ByteVec(go_selector)
+go_uint256_calldata = ByteVec([go_uint256_selector, p_x_uint256])
 
 
 @pytest.fixture
@@ -172,7 +174,7 @@ def empty(iterable) -> bool:
 
 
 def mk_create_ex(
-    hexcode, sevm, solver, caller=caller, value=con(0), this=this, storage={}
+    hexcode, sevm, solver, caller=caller, value=0, this=this, storage={}
 ) -> Exec:
     bytecode = Contract.from_hexcode(hexcode)
     storage[this] = {}
@@ -181,7 +183,7 @@ def mk_create_ex(
         target=this,
         caller=caller,
         value=value,
-        data=[],
+        data=ByteVec(),
         is_static=False,
     )
 
@@ -274,7 +276,7 @@ def test_deploy_basic(sevm, solver):
 
     # after execution
     assert exec.context.output.error is None
-    assert exec.context.output.data == bytes.fromhex(runtime_hexcode)
+    assert exec.context.output.data.unwrap() == bytes.fromhex(runtime_hexcode)
     assert len(exec.context.trace) == 0
 
 
@@ -304,7 +306,7 @@ def test_deploy_payable(sevm, solver):
     render_trace(exec.context)
 
     assert exec.context.output.error is None
-    assert exec.context.output.data == bytes.fromhex(runtime_hexcode)
+    assert exec.context.output.data.unwrap() == bytes.fromhex(runtime_hexcode)
     assert len(exec.context.trace) == 0
 
 
@@ -601,7 +603,7 @@ def test_symbolic_event_data(sevm: SEVM, solver):
     assert is_single_event
     assert len(event.topics) == 1
     assert int_of(event.topics[0]) == LOG_U256_SIG
-    assert is_bv(event.data) and event.data.decl().name() == "p_x_uint256"
+    assert event.data.unwrap() == p_x_uint256
 
 
 def test_symbolic_event_topic(sevm: SEVM, solver):
@@ -851,8 +853,8 @@ def test_call_limit_with_create(monkeypatch, sevm: SEVM, solver):
     outer_call = output_exec.context
     render_trace(outer_call)
 
-    assert outer_call.output.error is None
-    assert byte_length(outer_call.output.data) == 0
+    assert not outer_call.output.error
+    assert not outer_call.output.data
     assert not outer_call.is_stuck()
 
     # peel the layer of the call stack onion until we get to the innermost call

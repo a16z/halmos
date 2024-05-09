@@ -89,6 +89,9 @@ def uint256(x: Any) -> Word:
     if isinstance(x, int):
         return con(x, size_bits=256)
 
+    if is_bool(x):
+        return If(x, con(1, size_bits=256), con(0, size_bits=256))
+
     bitsize = x.size()
     if bitsize == 256:
         return x
@@ -259,8 +262,14 @@ def unbox_int(x: Any) -> Any:
     """
     Attempts to convert int-like objects to int
     """
+    if hasattr(x, "unwrap"):
+        return unbox_int(x.unwrap())
+
     if isinstance(x, bytes):
         return int.from_bytes(x, "big")
+
+    if is_bv(x):
+        x = simplify(x)
 
     if is_bv_value(x):
         return x.as_long()

@@ -21,10 +21,6 @@ from halmos.sevm import (
     int_of,
     uint256,
     uint160,
-    iter_bytes,
-    wload,
-    wstore,
-    wstore_bytes,
     Path,
 )
 
