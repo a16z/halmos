@@ -263,14 +263,12 @@ class hevm_cheat_code:
     #     bytes4(keccak256("store(address,bytes32,bytes32)")),
     #     abi.encode(HEVM_ADDRESS, bytes32("failed"), bytes32(uint256(0x01)))
     # )
-    fail_payload_bytes = bytes.fromhex(
+    fail_payload = bytes.fromhex(
         "70ca10bb"
         + "0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d"
         + "6661696c65640000000000000000000000000000000000000000000000000000"
         + "0000000000000000000000000000000000000000000000000000000000000001"
     )
-
-    fail_payload: int = int.from_bytes(fail_payload_bytes, "big")
 
     # bytes4(keccak256("assume(bool)"))
     assume_sig: int = 0x4C63E562
@@ -334,12 +332,8 @@ class hevm_cheat_code:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 
-        # vm.fail()
-        if funsig == 0x70CA10BB and arg == hevm_cheat_code.fail_payload:
-            raise FailCheatcode()
-
         # vm.assume(bool)
-        elif funsig == hevm_cheat_code.assume_sig:
+        if funsig == hevm_cheat_code.assume_sig:
             assume_cond = simplify(is_non_zero(arg.get_word(4)))
             print(f"[vm.assume] {assume_cond}")
             ex.path.append(assume_cond)
@@ -397,12 +391,19 @@ class hevm_cheat_code:
 
         # vm.store(address,bytes32,bytes32)
         elif funsig == hevm_cheat_code.store_sig:
+            if arg.unwrap() == hevm_cheat_code.fail_payload:
+                # there isn't really a vm.fail() cheatcode, calling DSTest.fail()
+                # really triggers vm.store(HEVM_ADDRESS, "failed", 1)
+                # let's intercept it and raise an exception instead of actually storing
+                # since HEVM_ADDRESS is an uninitialized account
+                raise FailCheatcode()
+
             store_account = uint160(arg.get_word(4))
             store_slot = uint256(arg.get_word(36))
             store_value = uint256(arg.get_word(68))
             store_account_addr = sevm.resolve_address_alias(ex, store_account)
             if store_account_addr is None:
-                raise HalmosException(f"uninitialized account: {store_account}")
+                raise HalmosException(f"uninitialized account: {hexify(store_account)}")
 
             sevm.sstore(ex, store_account_addr, store_slot, store_value)
             return ret
@@ -413,7 +414,7 @@ class hevm_cheat_code:
             load_slot = uint256(arg.get_word(36))
             load_account_addr = sevm.resolve_address_alias(ex, load_account)
             if load_account_addr is None:
-                raise HalmosException(f"uninitialized account: {store_account}")
+                raise HalmosException(f"uninitialized account: {load_account}")
 
             return sevm.sload(ex, load_account_addr, load_slot)
             return ret

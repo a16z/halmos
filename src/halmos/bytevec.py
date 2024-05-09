@@ -23,6 +23,7 @@ from .utils import (
     extract_bytes,
     is_bv_value,
     unbox_int,
+    warn,
 )
 
 # concrete or symbolic byte
@@ -360,6 +361,9 @@ class ByteVec:
         return f"ByteVec({self.chunks!r})"
 
     def __eq__(self, other) -> bool:
+        if isinstance(other, bytes):
+            warn("can't directly compare ByteVec with bytes, use ByteVec.unwrap()")
+
         if not isinstance(other, ByteVec):
             return False
 

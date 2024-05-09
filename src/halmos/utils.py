@@ -82,10 +82,38 @@ def concat(args):
         return args[0]
 
 
+def uint(x: Any, n: int) -> Word:
+    """
+    Truncates or zero-extends x to n bits
+    """
+
+    if isinstance(x, int):
+        return con(x, size_bits=n)
+
+    if is_bool(x):
+        return If(x, con(1, size_bits=n), con(0, size_bits=n))
+
+    bitsize = x.size()
+    if bitsize == n:
+        return x
+    if bitsize > n:
+        return simplify(Extract(n - 1, 0, x))
+    return simplify(ZeroExt(n - bitsize, x))
+
+
+def uint8(x: UnionType[Word, Byte]) -> Byte:
+    return uint(x, 8)
+
+
+def uint160(x: BitVecRef) -> BitVecRef:
+    return uint(x, 160)
+
+
 def uint256(x: Any) -> Word:
-    """
-    Truncates or zero-extends x to 256 bits
-    """
+    return uint(x, 256)
+
+
+def int256(x: BitVecRef) -> BitVecRef:
     if isinstance(x, int):
         return con(x, size_bits=256)
 
@@ -93,48 +121,11 @@ def uint256(x: Any) -> Word:
         return If(x, con(1, size_bits=256), con(0, size_bits=256))
 
     bitsize = x.size()
-    if bitsize == 256:
-        return x
-    if bitsize > 256:
-        return simplify(Extract(255, 0, x))
-    return simplify(ZeroExt(256 - bitsize, x))
-
-
-def int256(x: BitVecRef) -> BitVecRef:
-    bitsize = x.size()
     if bitsize > 256:
         raise ValueError(x)
     if bitsize == 256:
         return x
     return simplify(SignExt(256 - bitsize, x))
-
-
-def uint160(x: BitVecRef) -> BitVecRef:
-    bitsize = x.size()
-    if bitsize > 256:
-        raise ValueError(x)
-    if bitsize == 160:
-        return x
-    if bitsize > 160:
-        return simplify(Extract(159, 0, x))
-    else:
-        return simplify(ZeroExt(160 - bitsize, x))
-
-
-def uint8(x: UnionType[Word, Byte]) -> Byte:
-    if isinstance(x, int):
-        return x & 0xFF
-
-    if is_bool(x):
-        return If(x, con(1, size_bits=8), con(0, size_bits=8))
-
-    bitsize = x.size()
-    if bitsize == 8:
-        return x
-    if bitsize > 8:
-        return simplify(Extract(7, 0, x))
-    else:
-        return simplify(ZeroExt(8 - bitsize, x))
 
 
 def con(n: int, size_bits=256) -> Word:

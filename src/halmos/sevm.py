@@ -755,7 +755,7 @@ class Exec:  # an execution path
 
     def balance_of(self, addr: Word) -> Word:
         assert_address(addr)
-        value = self.select(self.balance, addr, self.balances)
+        value = self.select(self.balance, uint160(addr), self.balances)
         # practical assumption on the max balance per account
         self.path.append(ULT(value, con(2**96)))
         return value
