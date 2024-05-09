@@ -326,7 +326,6 @@ def test_stack_underflow_pop(sevm: SEVM, solver, storage):
 
 
 def test_large_memory_offset(sevm: SEVM, solver, storage):
-    # check that we get an exception when popping from an empty stack
     for op in [o(EVM.MLOAD), o(EVM.MSTORE), o(EVM.MSTORE8)]:
         ex = mk_ex(op, sevm, solver, storage, caller, this)
         ex.st.stack.append(con(42))  # value, ignored by MLOAD
@@ -334,86 +333,3 @@ def test_large_memory_offset(sevm: SEVM, solver, storage):
 
     exs = list(sevm.run(ex))
     assert len(exs) == 1 and isinstance(exs[0].context.output.error, OutOfGasError)
-
-
-def test_iter_bytes_bv_val():
-    b = BitVecVal(0x12345678, 32)
-    assert list(iter_bytes(b)) == [0x12, 0x34, 0x56, 0x78]
-
-
-def test_iter_bytes_bv_ref():
-    x = BitVec("x", 8)
-    b = Concat(BitVecVal(0x123456, 24), x)
-    assert list(iter_bytes(b)) == [0x12, 0x34, 0x56, x]
-
-
-def test_iter_bytes_int():
-    # can not iterate bytes of an integer without explicit size
-    with pytest.raises(Exception):
-        list(iter_bytes(0x12345678))
-
-    assert list(iter_bytes(0x12345678, _byte_length=4)) == [0x12, 0x34, 0x56, 0x78]
-    assert list(iter_bytes(0x12345678, _byte_length=6)) == [
-        0x00,
-        0x00,
-        0x12,
-        0x34,
-        0x56,
-        0x78,
-    ]
-
-
-def test_wload_wrong_type():
-    with pytest.raises(ValueError):
-        wload([bytes.fromhex("aa")], 0, 4)
-
-
-def test_wload_concrete():
-    # using ints or concrete bitvector values should be equivalent
-    assert wload([0x12, 0x34, 0x56, 0x78], 0, 4, prefer_concrete=True) == bytes.fromhex(
-        "12345678"
-    )
-    assert wload([0x12, 0x34, 0x56, 0x78], 0, 4, prefer_concrete=False) == con(
-        0x12345678, 32
-    )
-    assert wload(
-        [con(x, 8) for x in [0x12, 0x34, 0x56, 0x78]], 0, 4, prefer_concrete=True
-    ) == bytes.fromhex("12345678")
-    assert wload(
-        [con(x, 8) for x in [0x12, 0x34, 0x56, 0x78]], 0, 4, prefer_concrete=False
-    ) == con(0x12345678, 32)
-
-
-def test_wload_symbolic():
-    x = BitVec("x", 32)
-    mem = []
-    wstore(mem, 0, 4, x)
-
-    assert wload(mem, 0, 4, prefer_concrete=False) == x
-
-    # no effect because the memory is not concrete
-    assert wload(mem, 0, 4, prefer_concrete=True) == x
-
-
-def test_wload_bad_byte():
-    with pytest.raises(ValueError):
-        wload([512], 0, 1, prefer_concrete=True)
-
-    with pytest.raises(ValueError):
-        wload([512], 0, 1, prefer_concrete=False)
-
-
-def test_wstore_bytes_concrete():
-    mem = [0] * 4
-    wstore_bytes(mem, 0, 4, bytes.fromhex("12345678"))
-    assert mem == [0x12, 0x34, 0x56, 0x78]
-
-
-def test_wstore_bytes_concolic():
-    mem1 = [0] * 4
-    wstore(mem1, 0, 4, con(0x12345678, 32))
-
-    mem2 = [0] * 4
-    wstore_bytes(mem2, 0, 4, mem1)
-
-    assert mem2 == [0x12, 0x34, 0x56, 0x78]

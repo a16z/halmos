@@ -336,7 +336,10 @@ class State:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
     def mloc(self) -> int:
-        return int_of(self.pop(), "symbolic memory offset")
+        loc: int = int_of(self.pop(), "symbolic memory offset")
+        if loc > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
+        return loc
 
     def ret(self) -> ByteVec:
         loc: int = self.mloc()

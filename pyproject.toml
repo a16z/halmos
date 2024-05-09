@@ -39,3 +39,4 @@ target-versions = ["py39", "py310", "py311"]
 [tool.pytest.ini_options]
 # TODO: re-add test_traces.py when we have a better way to support it in CI
 addopts = "--ignore=tests/lib --ignore=tests/test_traces.py"
+# addopts = "--ignore=tests/lib"
