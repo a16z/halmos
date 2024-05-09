@@ -11,20 +11,28 @@ from typing import (
 )
 
 from sortedcontainers import SortedDict
-from z3 import BitVecRef, Concat, is_bv, is_bv_value
+from z3 import BitVecRef, Concat, is_bv, is_bv_value, If, is_bool
 
 from .exceptions import HalmosException
 from .utils import (
     byte_length,
     bv_value_to_bytes,
+    con,
     concat,
     eq,
     extract_bytes,
     is_bv_value,
+    unbox_int,
 )
 
+# concrete or symbolic byte
 Byte = UnionType[int, BitVecRef]
+
+# wrapped concrete or symbolic sequence of bytes
 Bytes = UnionType["Chunk", "ByteVec"]
+
+# concrete or symbolic 32-byte word
+Word = UnionType[int, BitVecRef]
 
 
 class OOBReads(Enum):
@@ -105,6 +113,7 @@ class Chunk(ABC):
         # convert bv values to bytes if possible
         if is_bv_value(data):
             data = bv_value_to_bytes(data)
+
         if isinstance(data, int):
             # assume a single byte, raises if value does not fit in a byte
             data = int.to_bytes(data, 1)
@@ -127,6 +136,9 @@ class Chunk(ABC):
         if Chunk._empty is None:
             Chunk._empty = ConcreteChunk(b"")
         return Chunk._empty
+
+    def __iter__(self):
+        raise TypeError("Chunk object is not iterable")
 
     def __getitem__(self, key):
         if isinstance(key, slice):
@@ -325,13 +337,16 @@ class ByteVec:
         self,
         data: Optional[Chunk] = None,
         oob_read: OOBReads = OOBReads.RETURN_ZERO,
+        _chunks: Optional[SortedDict] = None,
+        _length: Optional[int] = None,
     ):
-        self.chunks = SortedDict()
         self.oob_read = oob_read
-        self.length = 0
+        self.chunks = _chunks if _chunks is not None else SortedDict()
+        self.length = _length or 0
 
         # for convenience, allow passing a single chunk directly
         if data is not None:
+            assert not self.chunks
             if isinstance(data, list) or isinstance(data, tuple):
                 for chunk in data:
                     self.append(chunk)
@@ -353,6 +368,9 @@ class ByteVec:
 
         # can be expensive, but we can't compare chunks one by one
         return self.unwrap() == other.unwrap()
+
+    def __iter__(self):
+        raise TypeError("ByteVec object is not iterable")
 
     ### internal methods
 
@@ -479,7 +497,7 @@ class ByteVec:
         post_chunk = chunk[offset + 1 :]
         self.__set_chunk(offset + 1, post_chunk)
 
-    def __setslice__(self, start: int, stop: int, value: Any) -> None:
+    def set_slice(self, start: int, stop: int, value: Bytes) -> None:
         """
         Assign a byte range value to the ByteVec between offsets start (inclusive) and stop (exclusive).
 
@@ -557,9 +575,33 @@ class ByteVec:
             if step != 1:
                 raise NotImplementedError
 
-            return self.__setslice__(start, stop, value)
+            return self.set_slice(start, stop, value)
 
         return self.set_byte(key, value)
+
+    def set_word(self, offset: int, value: Word) -> None:
+        """
+        Write a 32-byte word at the given offset.
+
+        This is a thin wrapper that wraps the value as a Chunk and stores it.
+
+        Supported types:
+        - int: will be converted to 32 byte Chunk
+        - BitVecRef: must be 32 bytes
+        - bytes: must be 32 bytes
+        - bool: will be converted to 32 byte SymbolicChunk
+        """
+
+        # convert to concrete value when possible
+        if is_bv_value(value):
+            value = value.as_long()
+
+        if isinstance(value, int):
+            value = int.to_bytes(value, 32, "big")
+        elif is_bool(value):
+            value = If(value, con(1), con(0))
+
+        self.set_slice(offset, offset + 32, value)
 
     ### read operations
 
@@ -630,6 +672,18 @@ class ByteVec:
 
         return chunk.chunk.get_byte(offset - chunk.start)
 
+    def get_word(self, offset) -> Word:
+        """
+        Return a single word (32 bytes) at the given offset.
+
+        This is a thin wrapper that just loads a slice and converts it to a single value (int or bv) rather than bytes.
+
+        If [offset:offset+32] is out of bounds, the behavior is controlled by the `oob_read` attribute.
+        """
+
+        data = self.slice(offset, offset + 32).unwrap()
+        return unbox_int(data)
+
     def __getitem__(self, key) -> UnionType[Byte, "ByteVec"]:
         if isinstance(key, slice):
             start = key.start or 0
@@ -672,3 +726,16 @@ class ByteVec:
 
         # if we have multiple chunks, concatenate them
         return concat(data)
+
+    def copy(self):
+        """
+        Return a deep copy of the ByteVec.
+
+        This is a deep copy, so the chunks are copied as well.
+        """
+
+        return ByteVec(
+            oob_read=self.oob_read,
+            _chunks=self.chunks.copy(),
+            _length=self.length,
+        )

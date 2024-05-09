@@ -646,5 +646,3 @@ def test_memory_write_slice_bytevec(mem):
     assert mem._well_formed()
     assert len(mem) == 50
     assert mem[5:15].unwrap() == b"\x00" * 10
-
-    assert not repr(mem)

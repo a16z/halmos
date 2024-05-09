@@ -82,12 +82,18 @@ def concat(args):
         return args[0]
 
 
-def uint256(x: BitVecRef) -> BitVecRef:
+def uint256(x: Any) -> Word:
+    """
+    Truncates or zero-extends x to 256 bits
+    """
+    if isinstance(x, int):
+        return con(x, size_bits=256)
+
     bitsize = x.size()
-    if bitsize > 256:
-        raise ValueError(x)
     if bitsize == 256:
         return x
+    if bitsize > 256:
+        return simplify(Extract(255, 0, x))
     return simplify(ZeroExt(256 - bitsize, x))
 
 
@@ -112,7 +118,13 @@ def uint160(x: BitVecRef) -> BitVecRef:
         return simplify(ZeroExt(160 - bitsize, x))
 
 
-def uint8(x: BitVecRef) -> BitVecRef:
+def uint8(x: UnionType[Word, Byte]) -> Byte:
+    if isinstance(x, int):
+        return x & 0xFF
+
+    if is_bool(x):
+        return If(x, con(1, size_bits=8), con(0, size_bits=8))
+
     bitsize = x.size()
     if bitsize == 8:
         return x
@@ -129,16 +141,15 @@ def con(n: int, size_bits=256) -> Word:
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
 def test(x: Word, b: bool) -> Word:
-    if is_bool(x):
+    if isinstance(x, int):
+        return x != 0 if b else x == 0
+    elif is_bool(x):
         if b:
             return x
         else:
             return Not(x)
     elif is_bv(x):
-        if b:
-            return x != con(0)
-        else:
-            return x == con(0)
+        return x != con(0) if b else x == con(0)
     else:
         raise ValueError(x)
 
@@ -196,10 +207,12 @@ def extract_string_argument(calldata: BitVecRef, arg_idx: int):
     return string_bytes.decode("utf-8") if is_concrete(string_bytes) else string_bytes
 
 
-def extract_bytes(
-    data: Optional[BitVecRef], byte_offset: int, size_bytes: int
-) -> BitVecRef:
-    """Extract bytes from calldata. Zero-pad if out of bounds."""
+def extract_bytes(data: Bytes, offset: int, size_bytes: int) -> Bytes:
+    """Extract bytes from data. Zero-pad if out of bounds."""
+    if hasattr(data, "__getitem__"):
+        data_slice = data[offset : offset + size_bytes]
+        return data_slice.unwrap() if hasattr(data_slice, "unwrap") else data_slice
+
     if data is None:
         return BitVecVal(0, size_bytes * 8)
 
@@ -208,8 +221,8 @@ def extract_bytes(
         raise ValueError(n)
 
     # will extract hi - lo + 1 bits
-    hi = n - 1 - byte_offset * 8
-    lo = n - byte_offset * 8 - size_bytes * 8
+    hi = n - 1 - offset * 8
+    lo = n - offset * 8 - size_bytes * 8
     lo = 0 if lo < 0 else lo
 
     val = simplify(Extract(hi, lo, data))
@@ -223,8 +236,10 @@ def extract_bytes(
     return val
 
 
-def extract_funsig(calldata: BitVecRef):
+def extract_funsig(calldata: Bytes) -> Any:
     """Extracts the function signature (first 4 bytes) from calldata"""
+    if hasattr(calldata, "__getitem__"):
+        return calldata[:4].unwrap()
     return extract_bytes(calldata, 0, 4)
 
 
@@ -234,6 +249,10 @@ def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
 
 def try_bv_value_to_bytes(x: Any) -> Optional[bytes]:
     return bv_value_to_bytes(x) if is_bv_value(x) else x
+
+
+def bytes_to_bv_value(x: bytes) -> BitVecNumRef:
+    return con(int.from_bytes(x, "big"), size_bits=len(x) * 8)
 
 
 def unbox_int(x: Any) -> Any:
@@ -262,19 +281,16 @@ def int_of(x: Any, err: str = "expected concrete value but got") -> int:
 
 
 def byte_length(x: Any, strict=True) -> int:
+    if hasattr(x, "__len__"):
+        # bytes, lists, tuples, bytevecs, chunks...
+        return len(x)
+
     if is_bv(x):
         if x.size() % 8 != 0 and strict:
             raise HalmosException(f"byte_length({x}) with bit size {x.size()}")
         return math.ceil(x.size() / 8)
 
-    if isinstance(x, bytes):
-        return len(x)
-
-    if isinstance(x, list):
-        # assume list of bytes, as used in calldata
-        return len(x)
-
-    raise HalmosException(f"byte_length({x}) of type {type(x)}")
+    raise TypeError(f"byte_length({x}) of type {type(x)}")
 
 
 def stripped(hexstring: str) -> str:
@@ -297,6 +313,8 @@ def hexify(x):
         return hex(x)
     elif isinstance(x, bytes):
         return "0x" + x.hex()
+    elif hasattr(x, "unwrap"):
+        return hexify(x.unwrap())
     elif is_bv_value(x):
         # maintain the byte size of x
         num_bytes = byte_length(x, strict=False)

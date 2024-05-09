@@ -8,6 +8,7 @@ from typing import List, Dict, Set, Tuple, Any
 
 from z3 import *
 
+from .bytevec import ByteVec
 from .exceptions import FailCheatcode, HalmosException
 from .utils import *
 
@@ -55,7 +56,7 @@ def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
     return string_array
 
 
-def stringified_bytes_to_bytes(hexstring: str):
+def stringified_bytes_to_bytes(hexstring: str) -> ByteVec:
     """Converts a string of bytes to a bytes memory type"""
 
     hexstring = stripped(hexstring)
@@ -69,9 +70,8 @@ def stringified_bytes_to_bytes(hexstring: str):
         + hexstring_len_enc
         + hexstring.ljust(hexstring_len_ceil * 2, "0")
     )
-    ret_len = len(ret_bytes)
 
-    return BitVecVal(int.from_bytes(ret_bytes, "big"), ret_len * 8)
+    return ByteVec(ret_bytes)
 
 
 class Prank:
@@ -263,13 +263,14 @@ class hevm_cheat_code:
     #     bytes4(keccak256("store(address,bytes32,bytes32)")),
     #     abi.encode(HEVM_ADDRESS, bytes32("failed"), bytes32(uint256(0x01)))
     # )
-    fail_payload: int = int(
+    fail_payload_bytes = bytes.fromhex(
         "70ca10bb"
         + "0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d"
         + "6661696c65640000000000000000000000000000000000000000000000000000"
-        + "0000000000000000000000000000000000000000000000000000000000000001",
-        16,
+        + "0000000000000000000000000000000000000000000000000000000000000001"
     )
+
+    fail_payload: int = int.from_bytes(fail_payload_bytes, "big")
 
     # bytes4(keccak256("assume(bool)"))
     assume_sig: int = 0x4C63E562
@@ -329,27 +330,23 @@ class hevm_cheat_code:
     label_sig: int = 0xC657C718
 
     @staticmethod
-    def handle(sevm, ex, arg: BitVec) -> BitVec:
-        funsig: int = int_of(extract_funsig(arg), "symbolic hevm cheatcode")
+    def handle(sevm, ex, arg: ByteVec) -> ByteVec:
+        funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
 
         # vm.fail()
-        # BitVecVal(hevm_cheat_code.fail_payload, 800)
-        if arg == hevm_cheat_code.fail_payload:
+        if funsig == 0x70CA10BB and arg == hevm_cheat_code.fail_payload:
             raise FailCheatcode()
 
         # vm.assume(bool)
-        elif (
-            eq(arg.sort(), BitVecSorts[(4 + 32) * 8])
-            and funsig == hevm_cheat_code.assume_sig
-        ):
-            assume_cond = simplify(is_non_zero(Extract(255, 0, arg)))
+        elif funsig == hevm_cheat_code.assume_sig:
+            assume_cond = simplify(is_non_zero(arg.get_word(4)))
+            print(f"[vm.assume] {assume_cond}")
             ex.path.append(assume_cond)
 
         # vm.getCode(string)
         elif funsig == hevm_cheat_code.get_code_sig:
-            calldata = bv_value_to_bytes(arg)
-            path_len = int.from_bytes(calldata[36:68], "big")
-            path = calldata[68 : 68 + path_len].decode("utf-8")
+            path_len = arg.get_word(36)
+            path = arg[68 : 68 + path_len].unwrap().decode("utf-8")
 
             if ":" in path:
                 [filename, contract_name] = path.split(":")
@@ -370,13 +367,15 @@ class hevm_cheat_code:
 
         # vm.prank(address)
         elif funsig == hevm_cheat_code.prank_sig:
-            result = ex.prank.prank(uint160(Extract(255, 0, arg)))
+            address = uint160(arg.get_word(4))
+            result = ex.prank.prank(address)
             if not result:
                 raise HalmosException("You have an active prank already.")
 
         # vm.startPrank(address)
         elif funsig == hevm_cheat_code.start_prank_sig:
-            result = ex.prank.startPrank(uint160(Extract(255, 0, arg)))
+            address = uint160(arg.get_word(4))
+            result = ex.prank.startPrank(address)
             if not result:
                 raise HalmosException("You have an active prank already.")
 
@@ -386,58 +385,58 @@ class hevm_cheat_code:
 
         # vm.deal(address,uint256)
         elif funsig == hevm_cheat_code.deal_sig:
-            who = uint160(Extract(511, 256, arg))
-            amount = simplify(Extract(255, 0, arg))
+            who = uint160(arg.get_word(4))
+            amount = uint256(arg.get_word(36))
             ex.balance_update(who, amount)
 
         # vm.store(address,bytes32,bytes32)
         elif funsig == hevm_cheat_code.store_sig:
-            store_account = uint160(Extract(767, 512, arg))
-            store_slot = simplify(Extract(511, 256, arg))
-            store_value = simplify(Extract(255, 0, arg))
+            store_account = uint160(arg.get_word(4))
+            store_slot = uint256(arg.get_word(36))
+            store_value = uint256(arg.get_word(68))
             store_account_addr = sevm.resolve_address_alias(ex, store_account)
-            if store_account_addr is not None:
-                sevm.sstore(ex, store_account_addr, store_slot, store_value)
-            else:
+            if store_account_addr is None:
                 raise HalmosException(f"uninitialized account: {store_account}")
+
+            sevm.sstore(ex, store_account_addr, store_slot, store_value)
 
         # vm.load(address,bytes32)
         elif funsig == hevm_cheat_code.load_sig:
-            load_account = uint160(Extract(511, 256, arg))
-            load_slot = simplify(Extract(255, 0, arg))
+            load_account = uint160(arg.get_word(4))
+            load_slot = uint256(arg.get_word(36))
             load_account_addr = sevm.resolve_address_alias(ex, load_account)
-            if load_account_addr is not None:
-                return sevm.sload(ex, load_account_addr, load_slot)
-            else:
+            if load_account_addr is None:
                 raise HalmosException(f"uninitialized account: {store_account}")
+
+            return sevm.sload(ex, load_account_addr, load_slot)
 
         # vm.fee(uint256)
         elif funsig == hevm_cheat_code.fee_sig:
-            ex.block.basefee = simplify(Extract(255, 0, arg))
+            ex.block.basefee = arg.get_word(4)
 
         # vm.chainId(uint256)
         elif funsig == hevm_cheat_code.chainid_sig:
-            ex.block.chainid = simplify(Extract(255, 0, arg))
+            ex.block.chainid = arg.get_word(4)
 
         # vm.coinbase(address)
         elif funsig == hevm_cheat_code.coinbase_sig:
-            ex.block.coinbase = uint160(Extract(255, 0, arg))
+            ex.block.coinbase = uint160(arg.get_word(4))
 
         # vm.difficulty(uint256)
         elif funsig == hevm_cheat_code.difficulty_sig:
-            ex.block.difficulty = simplify(Extract(255, 0, arg))
+            ex.block.difficulty = arg.get_word(4)
 
         # vm.roll(uint256)
         elif funsig == hevm_cheat_code.roll_sig:
-            ex.block.number = simplify(Extract(255, 0, arg))
+            ex.block.number = arg.get_word(4)
 
         # vm.warp(uint256)
         elif funsig == hevm_cheat_code.warp_sig:
-            ex.block.timestamp = simplify(Extract(255, 0, arg))
+            ex.block.timestamp = arg.get_word(4)
 
         # vm.etch(address,bytes)
         elif funsig == hevm_cheat_code.etch_sig:
-            who = extract_bytes(arg, 4 + 12, 20)
+            who = uint160(arg.get_word(4))
 
             # who must be concrete
             if not is_bv_value(who):
@@ -446,13 +445,13 @@ class hevm_cheat_code:
 
             # code must be concrete
             try:
-                code_offset = int_of(extract_bytes(arg, 4 + 32, 32))
-                code_length = int_of(extract_bytes(arg, 4 + code_offset, 32))
+                code_offset = int_of(arg.read_word(36), "symbolic code offset")
+                code_length = int_of(
+                    arg.read_word(4 + code_offset, "symbolic code length")
+                )
 
-                code_bytes = bytes()
-                if code_length != 0:
-                    code_bv = extract_bytes(arg, 4 + code_offset + 32, code_length)
-                    code_bytes = bv_value_to_bytes(code_bv)
+                code_loc = 4 + code_offset + 32
+                code_bytes = arg[code_loc : code_loc + code_length]
                 ex.set_code(who, code_bytes)
             except Exception as e:
                 error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"

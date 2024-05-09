@@ -106,7 +106,7 @@ def find_abi(abi: List, fun_info: FunctionInfo) -> Dict:
 def mk_calldata(
     abi: List,
     fun_info: FunctionInfo,
-    cd: List,
+    cd: ByteVec,
     dyn_param_size: List[str],
     args: Namespace,
 ) -> None:
@@ -119,10 +119,7 @@ def mk_calldata(
 
     # generate symbolic ABI calldata
     calldata = Calldata(args, mk_arrlen(args), dyn_param_size)
-    result = calldata.create(fun_abi)
-
-    # TODO: use Contract abstraction for calldata
-    wstore(cd, 4, result.size() // 8, result)
+    calldata.create(fun_abi, cd)
 
 
 def mk_callvalue() -> Word:
@@ -199,13 +196,16 @@ def render_output(context: CallContext, file=sys.stdout) -> None:
     if not failed and context.is_stuck():
         return
 
-    if output.data is not None:
+    data = output.data
+    if data is not None:
         is_create = context.message.is_create()
+        if hasattr(data, "unwrap"):
+            data = data.unwrap()
 
         returndata_str = (
-            f"<{byte_length(output.data)} bytes of code>"
+            f"<{byte_length(data)} bytes of code>"
             if (is_create and not failed)
-            else hexify(output.data)
+            else hexify(data)
         )
 
     ret_scheme = context.output.return_scheme
@@ -238,13 +238,8 @@ def rendered_trace(context: CallContext) -> str:
         return output.getvalue()
 
 
-def rendered_calldata(calldata: List[Byte]) -> str:
-    if any(is_bv(x) for x in calldata):
-        # make sure every byte is wrapped
-        calldata_bv = [x if is_bv(x) else con(x, 8) for x in calldata]
-        return hexify(simplify(concat(calldata_bv)))
-
-    return "0x" + bytes(calldata).hex() if calldata else "0x"
+def rendered_calldata(calldata: ByteVec) -> str:
+    return hexify(calldata.unwrap()) if calldata else "0x"
 
 
 def render_trace(context: CallContext, file=sys.stdout) -> None:
@@ -303,7 +298,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         target=this,
         caller=mk_caller(args),
         value=mk_callvalue(),
-        data=[],
+        data=ByteVec(),
     )
 
     sevm = SEVM(options)
@@ -443,8 +438,9 @@ def setup(
 
     setup_sig, setup_selector = (setup_info.sig, setup_info.selector)
     if setup_sig:
-        calldata = []
-        wstore(calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
+        calldata = ByteVec()
+        calldata.append(int(setup_selector, 16).to_bytes(4, "big"))
+
         dyn_param_size = []  # TODO: propagate to run
         mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
 
@@ -452,7 +448,7 @@ def setup(
             message=Message(
                 target=setup_ex.message().target,
                 caller=setup_ex.message().caller,
-                value=con(0),
+                value=0,
                 data=calldata,
             ),
         )
@@ -587,8 +583,8 @@ def run(
     # calldata
     #
 
-    cd = []
-    wstore(cd, 0, 4, BitVecVal(int(funselector, 16), 32))
+    cd = ByteVec()
+    cd.append(int(funselector, 16).to_bytes(4, "big"))
 
     dyn_param_size = []
     mk_calldata(abi, fun_info, cd, dyn_param_size, args)
@@ -596,7 +592,7 @@ def run(
     message = Message(
         target=setup_ex.this,
         caller=setup_ex.caller(),
-        value=con(0),
+        value=0,
         data=cd,
     )
 
@@ -1407,7 +1403,7 @@ def _main(_args=None) -> MainResult:
     build_cmd = [
         "forge",  # shutil.which('forge')
         "build",
-        "--build-info",
+        "--ast",
         "--root",
         args.root,
         "--extra-output",
