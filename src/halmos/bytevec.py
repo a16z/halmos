@@ -21,6 +21,7 @@ from .utils import (
     concat,
     eq,
     extract_bytes,
+    hexify,
     is_bv_value,
     try_bv_value_to_bytes,
     unbox_int,
@@ -41,9 +42,6 @@ def try_concat(lhs: Any, rhs: Any) -> Optional[Any]:
     """Attempt to concatenate two values together if they have the same type"""
     if isinstance(lhs, bytes) and isinstance(rhs, bytes):
         return lhs + rhs
-
-    if is_bv(lhs) and is_bv(rhs):
-        return Concat(lhs, rhs)
 
     return None
 
@@ -728,12 +726,15 @@ class ByteVec:
 
         # unwrap and defrag, ideally this becomes either a single bytes or a single BitVecRef
         data = [chunk.unwrap() for chunk in self.chunks.values()]
+        data = [try_bv_value_to_bytes(chunk) for chunk in data]
         data = defrag(data)
+
         if len(data) == 1:
             return data[0]
 
         # if we have multiple chunks, concatenate them
-        return concat(data)
+        result = simplify(concat(data))
+        return result
 
     def copy(self):
         """

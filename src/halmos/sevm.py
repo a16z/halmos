@@ -1796,7 +1796,9 @@ class SEVM:
             # create_hexcode must be z3 expression to be passed into sha3_data
             create_hexcode = create_hexcode.unwrap()
 
-            if not is_bv(create_hexcode):
+            if is_bv(create_hexcode):
+                create_hexcode = simplify(create_hexcode)
+            else:
                 create_hexcode = bytes_to_bv_value(create_hexcode)
 
             code_hash = ex.sha3_data(create_hexcode)
