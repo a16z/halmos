@@ -1793,12 +1793,14 @@ class SEVM:
         if op == EVM.CREATE:
             new_addr = ex.new_address()
         elif op == EVM.CREATE2:  # EVM.CREATE2
-            if isinstance(create_hexcode, bytes):
-                create_hexcode = con(
-                    int.from_bytes(create_hexcode, "big"), len(create_hexcode) * 8
-                )
+            # create_hexcode must be z3 expression to be passed into sha3_data
+            create_hexcode = create_hexcode.unwrap()
+
+            if not is_bv(create_hexcode):
+                create_hexcode = bytes_to_bv_value(create_hexcode)
+
             code_hash = ex.sha3_data(create_hexcode)
-            hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
+            hash_data = simplify(Concat(con(0xFF, 8), uint160(caller), salt, code_hash))
             new_addr = uint160(ex.sha3_data(hash_data))
         else:
             raise HalmosException(f"Unknown CREATE opcode: {op}")
