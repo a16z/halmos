@@ -237,7 +237,7 @@ def extract_bytes(data: Bytes, offset: int, size_bytes: int) -> Bytes:
 def extract_funsig(calldata: Bytes) -> Any:
     """Extracts the function signature (first 4 bytes) from calldata"""
     if hasattr(calldata, "__getitem__"):
-        return calldata[:4].unwrap()
+        return unbox_int(calldata[:4])
     return extract_bytes(calldata, 0, 4)
 
 
