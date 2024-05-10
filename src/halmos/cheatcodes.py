@@ -459,18 +459,12 @@ class hevm_cheat_code:
                 raise HalmosException(error_msg)
 
             # code must be concrete
-            try:
-                code_offset = int_of(arg.read_word(36), "symbolic code offset")
-                code_length = int_of(
-                    arg.read_word(4 + code_offset, "symbolic code length")
-                )
+            code_offset = int_of(arg.get_word(36), "symbolic code offset")
+            code_length = int_of(arg.get_word(4 + code_offset), "symbolic code length")
 
-                code_loc = 4 + code_offset + 32
-                code_bytes = arg[code_loc : code_loc + code_length]
-                ex.set_code(who, code_bytes)
-            except Exception as e:
-                error_msg = f"vm.etch(address who, bytes code) must have concrete argument `code` but received calldata {arg}"
-                raise HalmosException(error_msg) from e
+            code_loc = 4 + code_offset + 32
+            code_bytes = arg[code_loc : code_loc + code_length]
+            ex.set_code(who, code_bytes)
 
             return ret
 
