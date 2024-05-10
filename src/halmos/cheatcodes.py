@@ -263,11 +263,13 @@ class hevm_cheat_code:
     #     bytes4(keccak256("store(address,bytes32,bytes32)")),
     #     abi.encode(HEVM_ADDRESS, bytes32("failed"), bytes32(uint256(0x01)))
     # )
-    fail_payload = bytes.fromhex(
-        "70ca10bb"
-        + "0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d"
-        + "6661696c65640000000000000000000000000000000000000000000000000000"
-        + "0000000000000000000000000000000000000000000000000000000000000001"
+    fail_payload = ByteVec(
+        bytes.fromhex(
+            "70ca10bb"
+            + "0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d"
+            + "6661696c65640000000000000000000000000000000000000000000000000000"
+            + "0000000000000000000000000000000000000000000000000000000000000001"
+        )
     )
 
     # bytes4(keccak256("assume(bool)"))
@@ -390,7 +392,7 @@ class hevm_cheat_code:
 
         # vm.store(address,bytes32,bytes32)
         elif funsig == hevm_cheat_code.store_sig:
-            if arg.unwrap() == hevm_cheat_code.fail_payload:
+            if arg == hevm_cheat_code.fail_payload:
                 # there isn't really a vm.fail() cheatcode, calling DSTest.fail()
                 # really triggers vm.store(HEVM_ADDRESS, "failed", 1)
                 # let's intercept it and raise an exception instead of actually storing
@@ -415,8 +417,7 @@ class hevm_cheat_code:
             if load_account_addr is None:
                 raise HalmosException(f"uninitialized account: {load_account}")
 
-            return sevm.sload(ex, load_account_addr, load_slot)
-            return ret
+            return ByteVec(sevm.sload(ex, load_account_addr, load_slot))
 
         # vm.fee(uint256)
         elif funsig == hevm_cheat_code.fee_sig:

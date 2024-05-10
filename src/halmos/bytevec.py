@@ -11,7 +11,7 @@ from typing import (
 )
 
 from sortedcontainers import SortedDict
-from z3 import BitVecRef, Concat, is_bv, is_bv_value, If, is_bool
+from z3 import BitVecRef, Concat, is_bv, is_bv_value, If, is_bool, simplify
 
 from .exceptions import HalmosException
 from .utils import (
@@ -22,6 +22,7 @@ from .utils import (
     eq,
     extract_bytes,
     is_bv_value,
+    try_bv_value_to_bytes,
     unbox_int,
     warn,
 )
@@ -352,17 +353,32 @@ class ByteVec:
         return f"ByteVec({self.chunks!r})"
 
     def __eq__(self, other) -> bool:
-        if isinstance(other, bytes):
-            warn("can't directly compare ByteVec with bytes, use ByteVec.unwrap()")
-
         if not isinstance(other, ByteVec):
+            warn(
+                f"can't directly compare ByteVec with {type(other)}, did you mean to wrap it in a ByteVec?"
+            )
             return False
 
         if len(self) != len(other):
             return False
 
         # can be expensive, but we can't compare chunks one by one
-        return self.unwrap() == other.unwrap()
+        self_unwrapped = self.unwrap()
+        other_unwrapped = other.unwrap()
+
+        if is_bv(self_unwrapped):
+            self_unwrapped = try_bv_value_to_bytes(simplify(self_unwrapped))
+
+        if is_bv(other_unwrapped):
+            other_unwrapped = try_bv_value_to_bytes(simplify(other_unwrapped))
+
+        if is_bv(self_unwrapped) and is_bv(other_unwrapped):
+            return eq(self_unwrapped, other_unwrapped)
+
+        if isinstance(self_unwrapped, bytes) and isinstance(other_unwrapped, bytes):
+            return self_unwrapped == other_unwrapped
+
+        return False
 
     def __iter__(self):
         raise TypeError("ByteVec object is not iterable")

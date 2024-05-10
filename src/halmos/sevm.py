@@ -635,6 +635,9 @@ class Exec:  # an execution path
         if output.data is not None:
             raise HalmosException("output already set")
 
+        if data is not None and not isinstance(data, ByteVec):
+            raise HalmosException(f"invalid output data {data}")
+
         output.data = data
         output.error = error
         output.return_scheme = self.current_opcode()
@@ -844,7 +847,6 @@ class Exec:  # an execution path
         """
 
         last_subcall = self.context.last_subcall()
-
         if not last_subcall:
             return EMPTY_BYTES
 
@@ -1695,10 +1697,14 @@ class SEVM:
             elif eq(to, console.address):
                 ex.path.append(exit_code_var != 0)
                 console.handle(ex, arg)
+                ret = ByteVec()
 
             # store return value
             if ret_size > 0:
                 ex.st.memory.set_slice(ret_loc, ret_loc + ret_size, ret)
+
+            if not isinstance(ret, ByteVec):
+                raise HalmosException(f"Invalid return value: {ret}")
 
             ex.context.trace.append(
                 CallContext(
