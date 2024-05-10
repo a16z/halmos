@@ -1676,7 +1676,7 @@ class SEVM:
                 r = extract_bytes(arg, 64, 32)
                 s = extract_bytes(arg, 96, 32)
 
-                ret = uint256(f_ecrecover(digest, v, r, s))
+                ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
 
             # identity
             elif eq(to, con_addr(4)):
@@ -1797,9 +1797,9 @@ class SEVM:
                 create_hexcode = con(
                     int.from_bytes(create_hexcode, "big"), len(create_hexcode) * 8
                 )
-            code_hash = ex.sha3_data(create_hexcode, create_hexcode.size() // 8)
+            code_hash = ex.sha3_data(create_hexcode)
             hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
-            new_addr = uint160(ex.sha3_data(hash_data, 85))
+            new_addr = uint160(ex.sha3_data(hash_data))
         else:
             raise HalmosException(f"Unknown CREATE opcode: {op}")
 
@@ -2431,7 +2431,7 @@ class SEVM:
                         val = int_of(insn.operand)
                         if opcode == EVM.PUSH32 and val in sha3_inv:
                             # restore precomputed hashes
-                            ex.st.push(ex.sha3_data(con(sha3_inv[val]), 32))
+                            ex.st.push(ex.sha3_data(con(sha3_inv[val])))
                         else:
                             ex.st.push(con(val))
                     else:

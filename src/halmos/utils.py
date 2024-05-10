@@ -87,6 +87,9 @@ def uint(x: Any, n: int) -> Word:
     Truncates or zero-extends x to n bits
     """
 
+    if isinstance(x, bytes):
+        x = int.from_bytes(x, "big")
+
     if isinstance(x, int):
         return con(x, size_bits=n)
 

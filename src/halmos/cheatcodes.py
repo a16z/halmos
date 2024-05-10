@@ -205,7 +205,7 @@ def create_bool(ex, arg):
     return uint256(create_generic(ex, 1, name, "bool"))
 
 
-def apply_vmaddr(ex, private_key: Any):
+def apply_vmaddr(ex, private_key: Word):
     # check if this private key has an existing address associated with it
     known_keys = ex.known_keys
     addr = known_keys.get(private_key, None)
@@ -246,7 +246,7 @@ class halmos_cheat_code:
     def handle(ex, arg: BitVecRef) -> BitVecRef:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
-            return handler(ex, arg)
+            return ByteVec(handler(ex, arg))
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
         raise HalmosException(error_msg)
@@ -509,7 +509,7 @@ class hevm_cheat_code:
             return stringified_bytes_to_bytes(out_str)
 
         elif funsig == hevm_cheat_code.addr_sig:
-            private_key = extract_bytes(arg, 4, 32)
+            private_key = uint256(extract_bytes(arg, 4, 32))
 
             # TODO: handle concrete private key (return directly the corresponding address)
             # TODO: check (or assume?) private_key is valid
