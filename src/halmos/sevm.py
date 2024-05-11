@@ -1778,7 +1778,6 @@ class SEVM:
         def call_unknown() -> None:
             call_id = len(ex.calls)
 
-            # push exit code
             if arg_size > 0:
                 f_call = Function(
                     "call_" + str(arg_size * 8),
@@ -1801,11 +1800,6 @@ class SEVM:
                 )
                 exit_code = f_call(con(call_id), gas, to, fund)
             exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
-            ex.path.append(exit_code_var == exit_code)
-            ex.st.push(exit_code_var)
-
-            # transfer msg.value
-            send_callvalue(exit_code_var != con(0))
 
             if ret_size > 0:
                 # actual return data will be capped or zero-padded by ret_size
@@ -1834,7 +1828,7 @@ class SEVM:
                 # - r, s in [1, secp256k1n)
 
                 # call never fails, errors result in empty returndata
-                ex.path.append(exit_code_var != 0)
+                exit_code = con(1)
 
                 digest = extract_bytes(arg, 0, 32)
                 v = uint8(extract_bytes(arg, 32, 32))
@@ -1845,23 +1839,30 @@ class SEVM:
 
             # identity
             elif eq(to, con_addr(4)):
-                ex.path.append(exit_code_var != con(0))
+                exit_code = con(1)
                 ret = arg
 
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
-                ex.path.append(exit_code_var != con(0))
+                exit_code = con(1)
                 ret = halmos_cheat_code.handle(ex, arg)
 
             # vm cheat code
             elif eq(to, hevm_cheat_code.address):
-                ex.path.append(exit_code_var != con(0))
+                exit_code = con(1)
                 ret = hevm_cheat_code.handle(self, ex, arg)
 
             # console
             elif eq(to, console.address):
-                ex.path.append(exit_code_var != con(0))
+                exit_code = con(1)
                 console.handle(ex, arg)
+
+            # push exit code
+            ex.path.append(exit_code_var == exit_code)
+            ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
+
+            # transfer msg.value
+            send_callvalue(exit_code_var != con(0))
 
             # store return value
             if ret_size > 0:
