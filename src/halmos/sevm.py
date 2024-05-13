@@ -2382,7 +2382,6 @@ class SEVM:
                         raise HalmosException("CALLDATACOPY size > MAX_MEMORY_SIZE")
 
                     if size > 0:
-                        print("calldata:", ex.calldata())
                         data: ByteVec = ex.calldata()[offset : offset + size]
                         ex.st.memory[loc : loc + size] = data
 
