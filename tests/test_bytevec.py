@@ -456,6 +456,23 @@ def test_memory_write_byte_splitting_3_concrete_bytes():
     assert mem[2] == 0x03
 
 
+def test_memory_write_byte_non_zero_start():
+    # setup memory with multiple chunks
+    mem = ByteVec()
+    mem.append(b"\x01\x02\x03")
+    mem.append(b"\x04\x05\x06")
+
+    # when we write in the second chunk (i.e. non zero start offset)
+    mem[4] = 0x42
+
+    # then the existing chunk should be split
+    assert mem._well_formed()
+    assert len(mem) == 6
+    assert mem[3] == 0x04
+    assert mem[4] == 0x42
+    assert mem[5] == 0x06
+
+
 def test_memory_write_slice_empty(mem):
     mem[0:0] = b""
     assert_empty(mem)

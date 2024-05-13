@@ -498,12 +498,12 @@ class ByteVec:
         # │                  old_chunk_data                    │
         # └────────────────────────────────────────────────────┘
 
-        pre_chunk = chunk[:offset]
+        pre_chunk = chunk[:offset_in_chunk]
         self.__set_chunk(chunk_info.start, pre_chunk)
 
         self.chunks[offset] = Chunk.wrap(value)
 
-        post_chunk = chunk[offset + 1 :]
+        post_chunk = chunk[offset_in_chunk + 1 :]
         self.__set_chunk(offset + 1, post_chunk)
 
     def set_slice(self, start: int, stop: int, value: Bytes) -> None:
