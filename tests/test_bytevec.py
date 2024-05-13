@@ -27,8 +27,8 @@ def test_defrag():
 
     x, y, z = (BitVec(_, 8) for _ in "xyz")
     assert defrag([x]) == [x]
-    assert defrag([x, y]) == [concat([x, y])]
-    assert defrag([x, y, z]) == [concat([x, y, z])]
+    assert defrag([x, y]) == [x, y]
+    assert defrag([x, y, z]) == [x, y, z]
 
 
 ### chunk tests
