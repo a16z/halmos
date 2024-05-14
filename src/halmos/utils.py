@@ -257,17 +257,20 @@ def unbox_int(x: Any) -> Any:
     """
     Attempts to convert int-like objects to int
     """
+    if isinstance(x, int):
+        return x
+
     if hasattr(x, "unwrap"):
         return unbox_int(x.unwrap())
 
     if isinstance(x, bytes):
         return int.from_bytes(x, "big")
 
-    if is_bv(x):
-        x = simplify(x)
-
     if is_bv_value(x):
         return x.as_long()
+
+    if is_bv(x):
+        x = simplify(x)
 
     return x
 
