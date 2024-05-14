@@ -585,7 +585,7 @@ class Exec:  # an execution path
     alias: Dict[Address, Address]  # address aliases
 
     # internal bookkeeping
-    cnts: Dict[str, Dict[int, int]]  # opcode -> frequency; counters
+    cnts: Dict[str, int]  # counters
     sha3s: Dict[Word, int]  # sha3 hashes generated
     storages: Dict[Any, Any]  # storage updates
     balances: Dict[Any, Any]  # balance updates
@@ -675,14 +675,6 @@ class Exec:  # an execution path
         """
         assert_address(who)
         self.code[who] = code if isinstance(code, Contract) else Contract(code)
-
-    def str_cnts(self) -> str:
-        return "".join(
-            [
-                f"{x[0]}: {x[1]}\n"
-                for x in sorted(self.cnts["opcode"].items(), key=lambda x: x[0])
-            ]
-        )
 
     def __str__(self) -> str:
         return self.dump()
@@ -836,18 +828,16 @@ class Exec:  # an execution path
         self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
-        self.cnts["fresh"]["gas"] += 1
-        return self.cnts["fresh"]["gas"]
+        self.cnts["gas"] += 1
+        return self.cnts["gas"]
 
     def new_address(self) -> Address:
-        self.cnts["fresh"]["address"] += 1
-        return con_addr(
-            magic_address + new_address_offset + self.cnts["fresh"]["address"]
-        )
+        self.cnts["address"] += 1
+        return con_addr(magic_address + new_address_offset + self.cnts["address"])
 
     def new_symbol_id(self) -> int:
-        self.cnts["fresh"]["symbol"] += 1
-        return self.cnts["fresh"]["symbol"]
+        self.cnts["symbol"] += 1
+        return self.cnts["symbol"]
 
     def returndata(self) -> Optional[ByteVec]:
         """
@@ -873,9 +863,11 @@ class Exec:  # an execution path
         return pc in self.pgm.valid_jump_destinations()
 
     def jumpi_id(self) -> str:
-        return f"{self.pc}:" + ",".join(
-            map(lambda x: str(x) if self.is_jumpdest(x) else "", self.st.stack[:16])
-        )
+        # no need to scan the entire stack, limit ourselves to the top N elements
+        # limiting ourselves to the top 16 leads to false positives
+        top_stack = self.st.stack[:32]
+        jumpdests_str = map(lambda x: str(x) if self.is_jumpdest(x) else "", top_stack)
+        return f"{self.pc}:{','.join(jumpdests_str)}"
 
     # deploy libraries and resolve library placeholders in hexcode
     def resolve_libs(self, creation_hexcode, deployed_hexcode, lib_references) -> str:
@@ -2101,12 +2093,9 @@ class SEVM:
 
                 insn = ex.current_instruction()
                 opcode = insn.opcode
-                ex.cnts["opcode"][opcode] += 1
 
-                if (
-                    "max_depth" in self.options
-                    and sum(ex.cnts["opcode"].values()) > self.options["max_depth"]
-                ):
+                max_depth = self.options.get("max_depth", 0)
+                if max_depth and step_id > max_depth:
                     continue
 
                 # TODO: clean up
@@ -2520,7 +2509,7 @@ class SEVM:
             alias={},
             #
             log=[],
-            cnts=defaultdict(lambda: defaultdict(int)),
+            cnts=defaultdict(int),
             sha3s={},
             storages={},
             balances={},
