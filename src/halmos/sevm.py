@@ -78,12 +78,11 @@ create2_magic_address: int = 0xBBBB0000
 new_address_offset: int = 1
 
 
-# TODO: make @dataclass with slots
 class Instruction:
     opcode: int
-    pc: int
-    next_pc: int
-    operand: Optional[ByteVec]
+    pc: int = -1
+    next_pc: int = -1
+    operand: Optional[ByteVec] = None
 
     def __init__(self, opcode, pc=-1, next_pc=-1, operand=None) -> None:
         self.opcode = opcode
@@ -93,26 +92,14 @@ class Instruction:
         self.operand = operand
 
     def __str__(self) -> str:
-        operand_str = ""
-        if self.operand is not None:
-            operand = self.operand
-            if isinstance(operand, bytes):
-                operand = con(int.from_bytes(operand, "big"), len(operand) * 8)
-
-            expected_operand_length = instruction_length(self.opcode) - 1
-            actual_operand_length = operand.size() // 8
-            if expected_operand_length != actual_operand_length:
-                operand_str = f" ERROR {operand} ({expected_operand_length - actual_operand_length} bytes missed)"
-            else:
-                operand_str = " " + str(operand)
-
+        operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
         return f"{mnemonic(self.opcode)}{operand_str}"
 
     def __repr__(self) -> str:
         return f"Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})"
 
     def __len__(self) -> int:
-        return instruction_length(self.opcode)
+        return self.next_pc - self.pc
 
 
 def id_str(x: Any) -> str:
@@ -125,11 +112,6 @@ def mnemonic(opcode) -> str:
         return str_opcode.get(opcode, hex(opcode))
     else:
         return str(opcode)
-
-
-def instruction_length(opcode: Any) -> int:
-    opcode = int_of(opcode)
-    return (opcode - EVM.PUSH0 + 1) if EVM.PUSH1 <= opcode <= EVM.PUSH32 else 1
 
 
 def is_byte(x: Any) -> bool:
@@ -439,8 +421,7 @@ class Contract:
         return insn
 
     def next_pc(self, pc):
-        opcode = self[pc]
-        return pc + instruction_length(opcode)
+        return self.decode_instruction(pc).next_pc
 
     def slice(self, start, stop) -> ByteVec:
         return self._code.slice(start, stop)
@@ -2124,10 +2105,7 @@ class SEVM:
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
 
-                # print(f"{hexify(ex.this)}@{ex.pc}", end=" ")
                 insn = ex.current_instruction()
-                # print(f"insn={insn}")
-
                 opcode = insn.opcode
                 ex.cnts["opcode"][opcode] += 1
 
