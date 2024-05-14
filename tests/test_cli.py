@@ -3,7 +3,7 @@ import json
 
 from z3 import *
 
-from halmos.utils import EVM
+from halmos.utils import EVM, hexify
 
 from halmos.sevm import con, Contract, Instruction
 
@@ -96,7 +96,7 @@ def test_decode_mixed_bytecode():
     )
 
     disassembly = " ".join([str(contract.decode_instruction(pc)) for pc in pcs])
-    assert disassembly == "PUSH20 x PUSH0 MSTORE PUSH1 20 PUSH1 12 RETURN"
+    assert disassembly == "PUSH20 x() PUSH0 MSTORE PUSH1 0x14 PUSH1 0x0c RETURN"
 
     # jump destination scanning
     assert contract.valid_jump_destinations() == set()
@@ -115,7 +115,9 @@ def test_run_bytecode(args):
 def test_instruction():
     assert str(Instruction(con(0))) == "STOP"
     assert str(Instruction(con(1))) == "ADD"
-    assert str(Instruction(con(EVM.PUSH32), operand=con(1))) == "PUSH32 1"
+
+    push32_1_str = "PUSH32 " + hexify(con(1))
+    assert str(Instruction(con(EVM.PUSH32), operand=con(1))) == push32_1_str
     assert str(Instruction(con(EVM.BASEFEE))) == "BASEFEE"
 
     # symbolic opcode is not supported
@@ -126,13 +128,13 @@ def test_instruction():
     assert str(Instruction(EVM.ADD)) == "ADD"
     assert (
         str(Instruction(EVM.PUSH32, operand=bytes.fromhex("00" * 31 + "01")))
-        == "PUSH32 1"
+        == push32_1_str
     )
 
 
 def test_decode_hex():
     code = Contract.from_hexcode("600100")
-    assert str(code.decode_instruction(0)) == "PUSH1 1"
+    assert str(code.decode_instruction(0)) == f"PUSH1 {hexify(1)}"
     assert [opcode for (pc, opcode) in code] == [0x60, 0x00]
 
     code = Contract.from_hexcode("01")
@@ -146,7 +148,7 @@ def test_decode_hex():
 def test_decode():
     code = Contract(Concat(BitVecVal(EVM.PUSH32, 8), BitVec("x", 256)))
     assert len(code) == 33
-    assert str(code.decode_instruction(0)) == "PUSH32 x"
+    assert str(code.decode_instruction(0)) == "PUSH32 x()"
     assert str(code.decode_instruction(33)) == "STOP"
 
     code = Contract(BitVec("x", 256))
@@ -157,7 +159,7 @@ def test_decode():
     ops = list(code)
     assert len(ops) == 1
     assert (
-        str(code.decode_instruction(0)) == "PUSH3 Concat(x, 0)"
+        str(code.decode_instruction(0)) == "PUSH3 Concat(x(), 0x00)"
     )  # 'PUSH3 ERROR x (1 bytes missed)'
 
 

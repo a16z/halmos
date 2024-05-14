@@ -314,7 +314,7 @@ def hexify(x):
     if isinstance(x, str):
         return re.sub(r"\b(\d+)\b", lambda match: hex(int(match.group(1))), x)
     elif isinstance(x, int):
-        return hex(x)
+        return f"0x{x:02x}"
     elif isinstance(x, bytes):
         return "0x" + x.hex()
     elif hasattr(x, "unwrap"):
