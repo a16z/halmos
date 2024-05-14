@@ -78,16 +78,19 @@ create2_magic_address: int = 0xBBBB0000
 new_address_offset: int = 1
 
 
+# TODO: make @dataclass with slots
 class Instruction:
-    pc: int
     opcode: int
+    pc: int
+    next_pc: int
     operand: Optional[ByteVec]
 
-    def __init__(self, opcode, **kwargs) -> None:
+    def __init__(self, opcode, pc=-1, next_pc=-1, operand=None) -> None:
         self.opcode = opcode
 
-        self.pc = kwargs.get("pc", -1)
-        self.operand = kwargs.get("operand", None)
+        self.pc = pc
+        self.next_pc = next_pc
+        self.operand = operand
 
     def __str__(self) -> str:
         operand_str = ""
@@ -299,6 +302,12 @@ class State:
         st.memory = self.memory.copy()
         return st
 
+    def dump(self, print_mem=False) -> str:
+        if print_mem:
+            return f"Stack: {str(list(reversed(self.stack)))}\n{self.str_memory()}"
+        else:
+            return f"Stack: {str(list(reversed(self.stack)))}"
+
     def __str__(self) -> str:
         return f"Stack: {str(list(reversed(self.stack)))}\n{self.str_memory()}"
 
@@ -380,7 +389,11 @@ class Contract:
 
         self._code = code
 
+        # maps pc to decoded instruction (including operand and next_pc)
+        self._insn = dict()
+
     def __init_jumpdests(self):
+        assert not hasattr(self, "_jumpdests")
         self._jumpdests = set((pc for (pc, op) in iter(self) if op == EVM.JUMPDEST))
 
     def __iter__(self):
@@ -403,14 +416,27 @@ class Contract:
         except ValueError as e:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
-    def decode_instruction(self, pc: int) -> Instruction:
+    def _decode_instruction(self, pc: int) -> Instruction:
         opcode = int_of(self._code[pc], f"symbolic opcode at pc={pc}")
 
         if EVM.PUSH1 <= opcode <= EVM.PUSH32:
-            operand = self.slice(pc + 1, pc + opcode - EVM.PUSH0 + 1).unwrap()
-            return Instruction(opcode, pc=pc, operand=operand)
+            operand_offset = pc + 1
+            operand_size = opcode - EVM.PUSH0
+            next_pc = operand_offset + operand_size
 
-        return Instruction(opcode, pc=pc)
+            # TODO: consider slicing lazily
+            operand = self.slice(operand_offset, next_pc).unwrap()
+            return Instruction(opcode, pc=pc, operand=operand, next_pc=next_pc)
+
+        return Instruction(opcode, pc=pc, next_pc=pc + 1)
+
+    def decode_instruction(self, pc: int) -> Instruction:
+        insn = self._insn.get(pc, None)
+        if insn is None:
+            insn = self._decode_instruction(pc)
+            self._insn[pc] = insn
+
+        return insn
 
     def next_pc(self, pc):
         opcode = self[pc]
@@ -451,11 +477,9 @@ class CodeIterator:
 
         try:
             pc = self.pc
-            opcode = self.contract[pc]
-
-            # this avoids decoding instruction operands (don't slice if we don't need to)
-            self.pc += instruction_length(opcode)
-            return (pc, opcode)
+            insn = self.contract.decode_instruction(pc)
+            self.pc = insn.next_pc
+            return (pc, insn.opcode)
         except NotConcreteError:
             raise StopIteration
 
@@ -680,12 +704,15 @@ class Exec:  # an execution path
         )
 
     def __str__(self) -> str:
+        return self.dump()
+
+    def dump(self, print_mem=False) -> str:
         output = self.context.output.data
         return hexify(
             "".join(
                 [
                     f"PC: {self.this} {self.pc} {mnemonic(self.current_opcode())}\n",
-                    str(self.st),
+                    self.st.dump(print_mem=print_mem),
                     f"Balance: {self.balance}\n",
                     f"Storage:\n",
                     "".join(
@@ -2121,7 +2148,7 @@ class SEVM:
                         self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
                 if self.options.get("print_steps"):
-                    print(ex)
+                    print(ex.dump(print_mem=self.options.get("print_mem", False)))
 
                 if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
