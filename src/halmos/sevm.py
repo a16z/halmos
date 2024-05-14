@@ -869,18 +869,12 @@ class Exec:  # an execution path
         return len(returndata) if returndata is not None else 0
 
     def is_jumpdest(self, x: Word) -> bool:
-        if not is_concrete(x):
-            return False
-
-        pc: int = int_of(x)
-        if pc < 0:
-            raise ValueError(pc)
-
+        pc = unbox_int(x)
         return pc in self.pgm.valid_jump_destinations()
 
     def jumpi_id(self) -> str:
         return f"{self.pc}:" + ",".join(
-            map(lambda x: str(x) if self.is_jumpdest(x) else "", self.st.stack)
+            map(lambda x: str(x) if self.is_jumpdest(x) else "", self.st.stack[:16])
         )
 
     # deploy libraries and resolve library placeholders in hexcode
