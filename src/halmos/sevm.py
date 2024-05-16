@@ -465,34 +465,39 @@ class Path:
     # initially, it's an empty path at the beginning of execution
 
     solver: Solver
-    num_scopes: int
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
-    # TODO: separate these two types of constraints, so that we can display only branching conditions to users
-    conditions: List
-    branching: List  # indexes of conditions
-    pending: List
+    conditions: Dict  # cond -> bool (true if explicit branching conditions)
 
     def __init__(self, solver: Solver):
         self.solver = solver
-        self.num_scopes = 0
-        self.conditions = []
-        self.branching = []
-        self.pending = []
         self.forked = False
+        self.conditions = {}
 
     def __deepcopy__(self, memo):
         raise NotImplementedError(f"use the branch() method instead of deepcopy()")
 
     def __str__(self) -> str:
-        branching_conds = [self.conditions[idx] for idx in self.branching]
         return "".join(
-            [f"- {cond}\n" for cond in branching_conds if str(cond) != "True"]
+            [f"- {cond}\n" for cond in conditions if conditions[cond] and str(cond) != "True"]
         )
 
-    def branch(self, cond):
-        if len(self.pending) > 0:
-            raise ValueError("branching from an inactive path", self)
+    def to_smt2(self) -> str:
+        for cond in self.conditions:
+            self.solver.add(cond)
+        query = self.solver.to_smt2()
+        self.solver.reset()
+        return query
 
+    def check(self, cond):
+        if cond in self.conditions:
+            return sat
+
+        if simplify(Not(cond)) in self.conditions:
+            return unsat
+
+        return unknown
+
+    def branch(self, cond):
         # create a new path that shares the same solver instance to minimize memory usage
         # note: sharing the solver instance complicates the use of randomized path exploration approaches, which can be more efficient for quickly finding bugs.
         # currently, a dfs-based path exploration is employed, which is suitable for scenarios where exploring all paths is necessary, e.g., when proving the absence of bugs.
@@ -500,33 +505,13 @@ class Path:
 
         # print(f"path {id(path)} branched from {id(self)} with condition {cond}")
 
-        # create a new scope within the solver, and save the current scope
-        # the solver will roll back to this scope later when the new path is activated
-        path.num_scopes = self.solver.num_scopes()
-        self.solver.push()
-
         # shallow copy because existing conditions won't change
         # note: deep copy would be needed later for advanced query optimizations (eg, constant propagation)
         path.conditions = self.conditions.copy()
 
-        # store the branching condition aside until the new path is activated.
-        path.pending.append(cond)
+        path.conditions[cond] = True
 
         return path
-
-    def is_activated(self) -> bool:
-        return len(self.pending) == 0
-
-    def activate(self):
-        if self.solver.num_scopes() < self.num_scopes:
-            raise ValueError(
-                "invalid num_scopes", self.solver.num_scopes(), self.num_scopes
-            )
-
-        self.solver.pop(self.solver.num_scopes() - self.num_scopes)
-
-        self.extend(self.pending, branching=True)
-        self.pending = []
 
     def append(self, cond, branching=False):
         cond = simplify(cond)
@@ -537,19 +522,13 @@ class Path:
         if is_true(cond):
             return
 
-        self.solver.add(cond)
-        self.conditions.append(cond)
+        if is_false(cond):
+            print(f"XXXXXXXXXXXXXXXXXXXXXX false condition added", flush=True)
 
-        if branching:
-            self.branching.append(len(self.conditions) - 1)
-
-    def extend(self, conds, branching=False):
-        for cond in conds:
-            self.append(cond, branching=branching)
+        self.conditions[cond] = branching
 
     def extend_path(self, path):
-        # branching conditions are not preserved
-        self.extend(path.conditions)
+        self.conditions = self.conditions | path.conditions
 
 
 class Exec:  # an execution path
@@ -732,7 +711,7 @@ class Exec:  # an execution path
         if is_false(cond):
             return unsat
 
-        return self.path.solver.check(cond)
+        return self.path.check(cond)
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
@@ -2090,9 +2069,6 @@ class SEVM:
                 ex: Exec = item.ex
                 prev_step_id: int = item.step
                 step_id += 1
-
-                if not ex.path.is_activated():
-                    ex.path.activate()
 
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)

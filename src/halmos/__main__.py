@@ -465,7 +465,7 @@ def setup(
             error = setup_ex.context.output.error
 
             if error is None:
-                setup_exs_no_error.append((setup_ex, setup_ex.path.solver.to_smt2()))
+                setup_exs_no_error.append((setup_ex, setup_ex.path.to_smt2()))
 
             else:
                 if opcode not in [EVM.REVERT, EVM.INVALID]:
@@ -709,7 +709,7 @@ def run(
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 traces[idx] = rendered_trace(ex.context)
 
-            query = ex.path.solver.to_smt2()
+            query = ex.path.to_smt2()
 
             future_model = thread_pool.submit(
                 gen_model_from_sexpr, GenModelArgs(args, idx, query, dump_dirname)
@@ -717,7 +717,7 @@ def run(
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
 
-        elif ex.context.is_stuck():
+        elif ex.context.is_stuck(): # and ex.path.solver.check() != unsat:
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
             if args.print_blocked_states:
                 traces[idx] = rendered_trace(ex.context)

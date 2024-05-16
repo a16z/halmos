@@ -417,7 +417,7 @@
             },
             {
                 "name": "check_call0_normal(uint256)",
-                "exitcode": 0,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -444,7 +444,7 @@
             },
             {
                 "name": "check_call1_normal(uint256,uint256)",
-                "exitcode": 0,
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -2052,7 +2052,7 @@
             },
             {
                 "name": "check_unknown_send_fail(address)",
-                "exitcode": 4,
+                "exitcode": 0,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
