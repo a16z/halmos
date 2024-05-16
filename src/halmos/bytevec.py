@@ -1,19 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
 from typing import (
     Any,
     List,
     Optional,
-    Tuple,
     Union as UnionType,
 )
 
 from sortedcontainers import SortedDict
-from z3 import BitVecRef, Concat, is_bv, is_bv_value, If, is_bool, simplify
+from z3 import BitVecRef, is_bv, is_bv_value, If, is_bool, simplify
 
-from .exceptions import HalmosException
 from .utils import (
     byte_length,
     bv_value_to_bytes,
@@ -21,7 +18,6 @@ from .utils import (
     concat,
     eq,
     extract_bytes,
-    hexify,
     is_bv_value,
     try_bv_value_to_bytes,
     unbox_int,
@@ -450,9 +446,14 @@ class ByteVec:
         Complexity: O(1)
         """
 
+        if isinstance(chunk, ByteVec):
+            # unwrap the ByteVec into chunks and store them
+            for inner_chunk in chunk.chunks.values():
+                self.append(inner_chunk)
+            return
+
         # if the data is not wrapped, try to wrap it
-        #
-        if not isinstance(chunk, Chunk) and not isinstance(chunk, ByteVec):
+        if not isinstance(chunk, Chunk):
             chunk = Chunk.wrap(chunk)
 
         start = self.length
@@ -555,8 +556,6 @@ class ByteVec:
 
         # remove the chunks that will be overwritten
         remove_from = first_chunk.index + 1
-
-        #
         remove_to = None if stop >= self.length else last_chunk.index + 1
         for key in self.chunks.keys()[remove_from:remove_to]:
             del self.chunks[key]
@@ -565,8 +564,13 @@ class ByteVec:
         pre_chunk = first_chunk.chunk[: start - first_chunk.start]
         self.__set_chunk(first_chunk.start, pre_chunk)
 
-        # store the value as a single chunk (even if it is a bytevec with multiple chunks)
-        self.__set_chunk(start, value)
+        if isinstance(value, ByteVec):
+            # unpack the ByteVec into chunks and store them
+            for inner_chunk_start, inner_chunk in value.chunks.items():
+                self.__set_chunk(start + inner_chunk_start, inner_chunk)
+        else:
+            # store the value as a single chunk
+            self.__set_chunk(start, value)
 
         # truncate the last chunk
         if last_chunk.end and stop < last_chunk.end:
@@ -730,7 +734,8 @@ class ByteVec:
         data = defrag(data)
 
         if len(data) == 1:
-            return data[0]
+            item = data[0]
+            return simplify(item) if is_bv(item) else item
 
         # if we have multiple chunks, concatenate them
         result = simplify(concat(data))

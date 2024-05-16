@@ -3,7 +3,6 @@ import pytest
 from z3 import BitVec, BitVecVal, Extract
 
 from halmos.bytevec import *
-from halmos.exceptions import HalmosException
 from halmos.utils import concat
 
 
@@ -656,3 +655,48 @@ def test_memory_write_slice_bytevec(mem):
     assert mem._well_formed()
     assert len(mem) == 50
     assert mem[5:15].unwrap() == b"\x00" * 10
+
+
+def test_appending_bytevec_to_bytevec_makes_copy(mem):
+    # setup
+    mem[:5] = b"hello"
+    mem[5:10] = b"world"
+
+    # grab a slice of memory (as a bytevec), write it back to memory
+    hello_world_bytevec = mem[:10]
+
+    # when append via a set_slice that happens to be at the end
+    mem[10:20] = hello_world_bytevec
+
+    # and we modify the bytevec
+    hello_world_bytevec[:5] = b"bloop"
+
+    # then the memory should not be affected
+    assert mem[10:20].unwrap() == b"helloworld"
+
+    # when we explicitly append
+    hello_world_bytevec = mem[:10]
+    mem.append(hello_world_bytevec)
+
+    # and we modify the bytevec
+    hello_world_bytevec[5:10] = b"bleep"
+
+    # then memory should not be affected
+    assert mem[20:30].unwrap() == b"helloworld"
+
+
+def test_writing_bytevec_to_bytevec_makes_copy(mem):
+    # setup
+    mem[:5] = b"hello"
+    mem[5:10] = b"world"
+
+    other_bytevec = ByteVec(b"!!!!")
+
+    # when we write the bytevec to memory
+    mem[3:7] = other_bytevec
+
+    # and we modify the bytevec
+    other_bytevec[1:3] = b"$$"
+
+    # then the memory should not be affected
+    assert mem.unwrap() == b"hel!!!!rld"
