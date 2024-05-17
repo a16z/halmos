@@ -664,7 +664,7 @@ class Exec:  # an execution path
     def current_instruction(self) -> Instruction:
         return self.pgm.decode_instruction(self.pc)
 
-    def set_code(self, who: Address, code: UnionType[ByteVec | Contract]) -> None:
+    def set_code(self, who: Address, code: UnionType[ByteVec, Contract]) -> None:
         """
         Sets the code at a given address.
         """
