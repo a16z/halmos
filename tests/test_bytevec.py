@@ -1,6 +1,6 @@
 import pytest
 
-from z3 import BitVec, BitVecVal, Extract
+from z3 import BitVec, BitVecVal, Concat, Extract
 
 from halmos.bytevec import *
 from halmos.utils import concat
@@ -21,7 +21,7 @@ def test_defrag():
     assert defrag([b"hello", b"world", b"!"]) == [b"helloworld!"]
 
     # defrag doesn't automatically convert bitvecvals to bytes
-    mixed = [b"hello", BitVecVal(int.from_bytes(b"world"), 30), b"!"]
+    mixed = [b"hello", BitVecVal(int.from_bytes(b"world", "big"), 30), b"!"]
     assert defrag(mixed) == mixed
 
     x, y, z = (BitVec(_, 8) for _ in "xyz")
