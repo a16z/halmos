@@ -9,7 +9,7 @@ on:
 
 jobs:
   test:
-    runs-on: macos-latest
+    runs-on: macos-latest-large
 
     strategy:
       fail-fast: false
