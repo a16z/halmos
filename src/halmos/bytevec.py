@@ -105,7 +105,7 @@ class Chunk(ABC):
 
         if isinstance(data, int):
             # assume a single byte, raises if value does not fit in a byte
-            data = int.to_bytes(data, 1)
+            data = int.to_bytes(data, 1, "big")
 
         if isinstance(data, bytes):
             return ConcreteChunk(data)
