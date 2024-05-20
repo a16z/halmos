@@ -35,7 +35,7 @@ jobs:
 
       - name: Install yices
         run: |
-          brew install yices2
+          brew install SRI-CSL/sri-csl/yices2
 
       - name: Install dependencies
         run: |
