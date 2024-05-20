@@ -33,6 +33,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install yices
+        run: |
+          brew install yices2
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -45,4 +49,4 @@ jobs:
           python -m pip install -e .
 
       - name: Run pytest
-        run: pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="-v -st --solver-timeout-assertion 0 --solver-threads 6" -s --log-cli-level=
+        run: pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command='yices-smt2'" -s --log-cli-level=
