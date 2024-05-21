@@ -26,9 +26,11 @@ from .utils import (
 
 # concrete or symbolic byte
 Byte = UnionType[int, BitVecRef]
+UnwrappedBytes = UnionType[bytes, Byte]
+WrappedBytes = UnionType["Chunk", "ByteVec"]
 
-# wrapped concrete or symbolic sequence of bytes
-Bytes = UnionType["Chunk", "ByteVec"]
+# any concrete or symbolic sequence of bytes
+Bytes = UnionType[UnwrappedBytes, WrappedBytes]
 
 # concrete or symbolic 32-byte word
 Word = UnionType[int, BitVecRef]
@@ -86,7 +88,7 @@ class Chunk(ABC):
         self.length = length
 
     @staticmethod
-    def wrap(data: UnionType[int, bytes, BitVecRef]) -> "Chunk":
+    def wrap(data: UnwrappedBytes) -> "Chunk":
         """
         Wrap a value in a Chunk object to represent a span of bytes.
 
@@ -115,7 +117,7 @@ class Chunk(ABC):
             raise TypeError(f"Unsupported data type: {type(data)}")
 
     @staticmethod
-    def empty():
+    def empty() -> "Chunk":
         """A convenient way to get an empty chunk.
 
         In order to test for emptiness, instead of comparing to Chunk.empty(), it may be better to use:
@@ -129,7 +131,7 @@ class Chunk(ABC):
     def __iter__(self):
         raise TypeError("Chunk object is not iterable")
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> UnionType[Byte, "Chunk"]:
         if isinstance(key, slice):
             start = key.start or 0
             stop = key.stop if key.stop is not None else self.length
@@ -149,11 +151,11 @@ class Chunk(ABC):
 
         return self.get_byte(key)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.length
 
     @abstractmethod
-    def get_byte(self, offset):
+    def get_byte(self, offset) -> Byte:
         raise NotImplementedError
 
     @abstractmethod
@@ -161,7 +163,7 @@ class Chunk(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def unwrap(self) -> UnionType[bytes, BitVecRef]:
+    def unwrap(self) -> UnwrappedBytes:
         raise NotImplementedError
 
 
@@ -214,7 +216,7 @@ class ConcreteChunk(Chunk):
 
         return self.data[self.start : self.start + self.length]
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         # allow comparison of empty symbolic and concrete chunks
         if isinstance(other, Chunk) and not self and not other:
             return True
@@ -222,9 +224,11 @@ class ConcreteChunk(Chunk):
         if not isinstance(other, ConcreteChunk):
             return False
 
+        # unwrap() may create copies of the underlying data
+        # could be improved to scan only once, with O(1) space, if this becomes a bottleneck
         return self.length == len(other) and self.unwrap() == other.unwrap()
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ConcreteChunk({self.data.hex()}, start={self.start}, length={self.length})"
 
 
@@ -281,7 +285,7 @@ class SymbolicChunk(Chunk):
 
         return extract_bytes(self.data, self.start, self.length)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if isinstance(other, Chunk) and not self and not other:
             return True
 
@@ -290,12 +294,14 @@ class SymbolicChunk(Chunk):
 
         return self.length == len(other) and eq(self.unwrap(), other.unwrap())
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"SymbolicChunk({self.data!r})"
 
 
 @dataclass
 class ChunkInfo:
+    """Metadata about a chunk at a given offset in a ByteVec."""
+
     index: int  # -1 if not found
     chunk: Optional[Chunk] = None
     start: Optional[int] = None
@@ -340,7 +346,7 @@ class ByteVec:
             else:
                 self.append(data)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.length
 
     def __repr__(self) -> str:
@@ -384,7 +390,7 @@ class ByteVec:
         for start, chunk in self.chunks.items():
             print(f"chunk@{start}: {chunk}")
 
-    def _well_formed(self, msg=None):
+    def _well_formed(self, msg=None) -> bool:
         self._dump(msg=msg)
         cumulative_length = 0
         for start, chunk in self.chunks.items():
@@ -437,7 +443,7 @@ class ByteVec:
         self.chunks[start_offset] = chunk
         return True
 
-    def append(self, chunk: UnionType[Chunk, "ByteVec"]) -> None:
+    def append(self, chunk: Bytes) -> None:
         """
         Append a new chunk at the end of the ByteVec.
 
@@ -618,7 +624,7 @@ class ByteVec:
 
     ### read operations
 
-    def slice(self, start, stop) -> "ByteVec":
+    def slice(self, start: int, stop: int) -> "ByteVec":
         """
         Return a single byte at the given offset.
 
@@ -668,7 +674,7 @@ class ByteVec:
         assert len(result) == expected_length
         return result
 
-    def get_byte(self, offset) -> Byte:
+    def get_byte(self, offset: int) -> Byte:
         """
         Return a single byte at the given offset.
 
@@ -716,7 +722,7 @@ class ByteVec:
     def __read_oob_byte(self) -> int:
         return 0
 
-    def unwrap(self) -> UnionType[bytes, BitVecRef]:
+    def unwrap(self) -> UnwrappedBytes:
         """
         Return the entire ByteVec as a single value.
 
