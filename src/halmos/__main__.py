@@ -18,6 +18,7 @@ from collections import Counter
 
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
+from .bytevec import Chunk, ByteVec
 from .sevm import *
 from .utils import (
     create_solver,
@@ -105,7 +106,7 @@ def find_abi(abi: List, fun_info: FunctionInfo) -> Dict:
 def mk_calldata(
     abi: List,
     fun_info: FunctionInfo,
-    cd: List,
+    cd: ByteVec,
     dyn_param_size: List[str],
     args: Namespace,
 ) -> None:
@@ -118,10 +119,7 @@ def mk_calldata(
 
     # generate symbolic ABI calldata
     calldata = Calldata(args, mk_arrlen(args), dyn_param_size)
-    result = calldata.create(fun_abi)
-
-    # TODO: use Contract abstraction for calldata
-    wstore(cd, 4, result.size() // 8, result)
+    calldata.create(fun_abi, cd)
 
 
 def mk_callvalue() -> Word:
@@ -154,11 +152,11 @@ def mk_caller(args: Namespace) -> Address:
     if args.symbolic_msg_sender:
         return mk_addr("msg_sender")
     else:
-        return con_addr(magic_address)
+        return magic_address
 
 
 def mk_this() -> Address:
-    return con_addr(magic_address + 1)
+    return magic_address + 1
 
 
 def mk_solver(args: Namespace, logic="QF_AUFBV", ctx=None, assertion=False):
@@ -198,13 +196,16 @@ def render_output(context: CallContext, file=sys.stdout) -> None:
     if not failed and context.is_stuck():
         return
 
-    if output.data is not None:
+    data = output.data
+    if data is not None:
         is_create = context.message.is_create()
+        if hasattr(data, "unwrap"):
+            data = data.unwrap()
 
         returndata_str = (
-            f"<{byte_length(output.data)} bytes of code>"
+            f"<{byte_length(data)} bytes of code>"
             if (is_create and not failed)
-            else hexify(output.data)
+            else hexify(data)
         )
 
     ret_scheme = context.output.return_scheme
@@ -237,13 +238,8 @@ def rendered_trace(context: CallContext) -> str:
         return output.getvalue()
 
 
-def rendered_calldata(calldata: List[Byte]) -> str:
-    if any(is_bv(x) for x in calldata):
-        # make sure every byte is wrapped
-        calldata_bv = [x if is_bv(x) else con(x, 8) for x in calldata]
-        return hexify(simplify(concat(calldata_bv)))
-
-    return "0x" + bytes(calldata).hex() if calldata else "0x"
+def rendered_calldata(calldata: ByteVec) -> str:
+    return hexify(calldata.unwrap()) if calldata else "0x"
 
 
 def render_trace(context: CallContext, file=sys.stdout) -> None:
@@ -302,7 +298,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         target=this,
         caller=mk_caller(args),
         value=mk_callvalue(),
-        data=[],
+        data=ByteVec(),
     )
 
     sevm = SEVM(options)
@@ -359,8 +355,8 @@ def deploy_test(
     message = Message(
         target=this,
         caller=mk_caller(args),
-        value=con(0),
-        data=[],
+        value=0,
+        data=ByteVec(),
     )
 
     ex = sevm.mk_exec(
@@ -409,7 +405,6 @@ def deploy_test(
     if error:
         raise ValueError(f"constructor failed, error={error} returndata={returndata}")
 
-    # deployed bytecode
     deployed_bytecode = Contract(returndata)
     ex.code[this] = deployed_bytecode
     ex.pgm = deployed_bytecode
@@ -442,8 +437,9 @@ def setup(
 
     setup_sig, setup_selector = (setup_info.sig, setup_info.selector)
     if setup_sig:
-        calldata = []
-        wstore(calldata, 0, 4, BitVecVal(int(setup_selector, 16), 32))
+        calldata = ByteVec()
+        calldata.append(int(setup_selector, 16).to_bytes(4, "big"))
+
         dyn_param_size = []  # TODO: propagate to run
         mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
 
@@ -451,7 +447,7 @@ def setup(
             message=Message(
                 target=setup_ex.message().target,
                 caller=setup_ex.message().caller,
-                value=con(0),
+                value=0,
                 data=calldata,
             ),
         )
@@ -586,8 +582,8 @@ def run(
     # calldata
     #
 
-    cd = []
-    wstore(cd, 0, 4, BitVecVal(int(funselector, 16), 32))
+    cd = ByteVec()
+    cd.append(int(funselector, 16).to_bytes(4, "big"))
 
     dyn_param_size = []
     mk_calldata(abi, fun_info, cd, dyn_param_size, args)
@@ -595,7 +591,7 @@ def run(
     message = Message(
         target=setup_ex.this,
         caller=setup_ex.caller(),
-        value=con(0),
+        value=0,
         data=cd,
     )
 
@@ -1032,21 +1028,32 @@ def solve(
             print(f"  Checking with external solver process")
             print(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
 
+        # solver_timeout_assertion == 0 means no timeout,
+        # which translates to timeout_seconds=None for subprocess.run
+        timeout_seconds = None
+        if timeout_millis := args.solver_timeout_assertion:
+            timeout_seconds = timeout_millis / 1000
+
         cmd = args.solver_command.split() + [dump_filename]
-        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
-        res_str_head = res_str.split("\n", 1)[0]
+        try:
+            res_str = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout_seconds
+            ).stdout.strip()
+            res_str_head = res_str.split("\n", 1)[0]
 
-        with open(f"{dump_filename}.out", "w") as f:
-            f.write(res_str)
+            with open(f"{dump_filename}.out", "w") as f:
+                f.write(res_str)
 
-        if args.verbose >= 1:
-            print(f"    {res_str_head}")
+            if args.verbose >= 1:
+                print(f"    {res_str_head}")
 
-        if res_str_head == "unsat":
-            return unsat, None
-        elif res_str_head == "sat":
-            return sat, f"{dump_filename}.out"
-        else:
+            if res_str_head == "unsat":
+                return unsat, None
+            elif res_str_head == "sat":
+                return sat, f"{dump_filename}.out"
+            else:
+                return unknown, None
+        except subprocess.TimeoutExpired:
             return unknown, None
 
     else:
@@ -1491,6 +1498,8 @@ def _main(_args=None) -> MainResult:
 
         contract_path = f"{contract_json['ast']['absolutePath']}:{contract_name}"
         print(f"\nRunning {num_found} tests for {contract_path}")
+
+        # support for `/// @custom:halmos` annotations
         contract_args = extend_args(args, parse_natspec(natspec)) if natspec else args
 
         run_args = RunArgs(

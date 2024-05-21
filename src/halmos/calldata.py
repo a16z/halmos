@@ -10,6 +10,7 @@ from functools import reduce
 from z3 import *
 
 from .sevm import con, concat
+from .bytevec import ByteVec
 
 
 @dataclass(frozen=True)
@@ -107,25 +108,27 @@ class Calldata:
 
         return array_len
 
-    def create(self, abi: Dict) -> BitVecRef:
-        """Create calldata of ABI type"""
+    def create(self, abi: Dict, output: ByteVec) -> None:
+        """Create calldata of ABI type, and append to output"""
 
         # list of parameter types
         tuple_type = parse_tuple_type("", abi["inputs"])
 
         # no parameters
         if len(tuple_type.items) == 0:
-            return None
+            return
+
+        starting_size = len(output)
 
         # ABI encoded symbolic calldata for parameters
         encoded = self.encode("", tuple_type)
-        result = concat(encoded.data)
+        for data in encoded.data:
+            output.append(data)
 
         # sanity check
-        if result.size() != 8 * encoded.size:
+        calldata_size = len(output) - starting_size
+        if calldata_size != encoded.size:
             raise ValueError(encoded)
-
-        return result
 
     def encode(self, name: str, typ: Type) -> EncodingResult:
         """Create symbolic ABI encoded calldata

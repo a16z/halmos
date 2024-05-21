@@ -54,11 +54,11 @@ def test_decode_concrete_bytecode():
     # random data access
     assert contract[0] == EVM.CALLVALUE
     assert contract[1] == EVM.CODESIZE
-    assert contract[-2] == EVM.JUMPDEST
-    assert contract[-1] == EVM.STOP
+    assert contract[10] == EVM.JUMPDEST
+    assert contract[11] == EVM.STOP
 
     # iteration
-    opcodes = [insn.opcode for insn in contract]
+    opcodes = [opcode for (pc, opcode) in contract]
     assert bytes(opcodes).hex() == hexcode.lower()
 
     # jump destination scanning
@@ -80,29 +80,23 @@ def test_decode_mixed_bytecode():
 
     # random data access
     assert contract[0] == EVM.PUSH20
-    assert contract[-1] == EVM.RETURN
+    assert contract[27] == EVM.RETURN
     assert contract[28] == EVM.STOP  # past the end
 
     # iteration
-    opcodes = [insn.opcode for insn in contract]
-    assert opcodes == [
+    pcs, opcodes = zip(*iter(contract))
+
+    assert opcodes == (
         EVM.PUSH20,
         EVM.PUSH0,
         EVM.MSTORE,
         EVM.PUSH1,
         EVM.PUSH1,
         EVM.RETURN,
-    ]
-
-    disassembly = "\n".join([str(insn) for insn in contract])
-    assert disassembly == (
-        """PUSH20 x
-PUSH0
-MSTORE
-PUSH1 20
-PUSH1 12
-RETURN"""
     )
+
+    disassembly = " ".join([str(contract.decode_instruction(pc)) for pc in pcs])
+    assert disassembly == "PUSH20 x PUSH0 MSTORE PUSH1 20 PUSH1 12 RETURN"
 
     # jump destination scanning
     assert contract.valid_jump_destinations() == set()
@@ -139,11 +133,11 @@ def test_instruction():
 def test_decode_hex():
     code = Contract.from_hexcode("600100")
     assert str(code.decode_instruction(0)) == "PUSH1 1"
-    assert [insn.opcode for insn in code] == [0x60, 0x00]
+    assert [opcode for (pc, opcode) in code] == [0x60, 0x00]
 
     code = Contract.from_hexcode("01")
     assert str(code.decode_instruction(0)) == "ADD"
-    assert [insn.opcode for insn in code] == [1]
+    assert [opcode for (pc, opcode) in code] == [1]
 
     with pytest.raises(ValueError, match="1"):
         Contract.from_hexcode("1")
@@ -157,12 +151,14 @@ def test_decode():
 
     code = Contract(BitVec("x", 256))
     assert len(code) == 32
-    assert str(code[-1]) == "Extract(7, 0, x)"
+    assert str(code[31]) == "Extract(7, 0, x)"
 
     code = Contract(Concat(BitVecVal(EVM.PUSH3, 8), BitVec("x", 16)))
-    ops = [insn for insn in code]
+    ops = list(code)
     assert len(ops) == 1
-    assert str(ops[0]) == "PUSH3 Concat(x, 0)"  # 'PUSH3 ERROR x (1 bytes missed)'
+    assert (
+        str(code.decode_instruction(0)) == "PUSH3 Concat(x, 0)"
+    )  # 'PUSH3 ERROR x (1 bytes missed)'
 
 
 @pytest.mark.parametrize(

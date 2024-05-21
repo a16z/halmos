@@ -22,6 +22,7 @@ from typing import (
 )
 from z3 import *
 
+from .bytevec import Chunk, ByteVec
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 from .console import console
 from .exceptions import *
@@ -34,7 +35,7 @@ from .warnings import (
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
-EMPTY_BYTES = b""
+EMPTY_BYTES = ByteVec()
 MAX_CALL_DEPTH = 1024
 
 # TODO: make this configurable
@@ -80,7 +81,7 @@ new_address_offset: int = 1
 class Instruction:
     pc: int
     opcode: int
-    operand: Optional[UnionType[bytes, BitVecRef]]
+    operand: Optional[ByteVec]
 
     def __init__(self, opcode, **kwargs) -> None:
         self.opcode = opcode
@@ -115,44 +116,6 @@ def id_str(x: Any) -> str:
     return hexify(x).replace(" ", "")
 
 
-def padded_slice(lst: List, start: int, size: int, default=0) -> List:
-    """
-    Return a slice of lst, starting at start and with size elements. If the slice
-    is out of bounds, pad with default.
-    """
-
-    end = start + size
-    n = len(lst)
-    return [lst[i] if i < n else default for i in range(start, end)]
-
-
-def iter_bytes(x: Any, _byte_length: int = -1):
-    """Return an iterable over the bytes of x (concrete or symbolic)"""
-
-    if isinstance(x, bytes):
-        return x
-
-    if isinstance(x, int):
-        # the byte length must be passed explicitly for ints, or this will fail
-        return x.to_bytes(_byte_length, "big")
-
-    if is_bv_value(x):
-        return bv_value_to_bytes(x)
-
-    if is_bv(x):
-        if x.size() % 8 != 0:
-            raise ValueError(x)
-
-        # size in bytes
-        size = x.size() // 8
-        return [
-            simplify(Extract((size - 1 - i) * 8 + 7, (size - 1 - i) * 8, x))
-            for i in range(size)
-        ]
-
-    raise ValueError(x)
-
-
 def mnemonic(opcode) -> str:
     if is_concrete(opcode):
         opcode = int_of(opcode)
@@ -164,101 +127,6 @@ def mnemonic(opcode) -> str:
 def instruction_length(opcode: Any) -> int:
     opcode = int_of(opcode)
     return (opcode - EVM.PUSH0 + 1) if EVM.PUSH1 <= opcode <= EVM.PUSH32 else 1
-
-
-def wextend(mem: List[UnionType[int, BitVecRef]], loc: int, size: int) -> None:
-    new_msize = loc + size
-    if new_msize > MAX_MEMORY_SIZE:
-        raise OutOfGasError(f"memory offset {new_msize} exceeds max memory")
-
-    mem.extend([0] * (loc + size - len(mem)))
-
-
-def wload(
-    mem: List[UnionType[int, BitVecRef]], loc: int, size: int, prefer_concrete=False
-) -> UnionType[bytes, Bytes]:
-    wextend(mem, loc, size)
-
-    memslice = mem[loc : loc + size]
-
-    # runtime sanity check: mem should only contain ints or BitVecs (not bytes)
-    all_concrete = True
-    for i in memslice:
-        if isinstance(i, int):
-            if not i in range(0, 256):
-                raise ValueError(i)
-            continue
-
-        if is_bv(i):
-            if not is_bv_value(i):
-                all_concrete = False
-            continue
-
-        raise ValueError(i)
-
-    if prefer_concrete and all_concrete:
-        # will raise an error if any i is not in range(0, 256)
-        return bytes([int_of(i) for i in memslice])
-
-    # wrap concrete bytes in BitVecs
-    # this would truncate the upper bits if the value didn't fit in 8 bits
-    # therefore we rely on the value range check above to raise an error
-    wrapped = [BitVecVal(i, BitVecSort8) if not is_bv(i) else i for i in memslice]
-
-    # BitVecSorts[size * 8]
-    return simplify(concat(wrapped))
-
-
-def wstore(
-    mem: List[UnionType[int, BitVecRef]], loc: int, size: int, val: Bytes
-) -> None:
-    if not eq(val.sort(), BitVecSorts[size * 8]):
-        raise ValueError(val)
-    wextend(mem, loc, size)
-    for i in range(size):
-        mem[loc + i] = simplify(
-            Extract((size - 1 - i) * 8 + 7, (size - 1 - i) * 8, val)
-        )
-
-
-def wstore_partial(
-    mem: List[UnionType[int, BitVecRef]],
-    loc: int,
-    offset: int,
-    size: int,
-    data: UnionType[bytes, Bytes],
-    datasize: int,
-) -> None:
-    if size <= 0:
-        return
-
-    if not datasize >= offset + size:
-        raise OutOfBoundsRead(datasize, offset, size)
-
-    if is_bv(data):
-        sub_data = Extract(
-            (datasize - 1 - offset) * 8 + 7, (datasize - offset - size) * 8, data
-        )
-        wstore(mem, loc, size, sub_data)
-    elif isinstance(data, bytes):
-        sub_data = data[offset : offset + size]
-        mem[loc : loc + size] = sub_data
-    else:
-        raise ValueError(data)
-
-
-def wstore_bytes(
-    mem: List[UnionType[int, BitVecRef]], loc: int, size: int, arr: List[Byte]
-) -> None:
-    if not size == len(arr):
-        raise ValueError(size, arr)
-    wextend(mem, loc, size)
-    for i in range(size):
-        val = arr[i]
-        if not is_byte(val):
-            raise ValueError(val)
-
-        mem[loc + i] = val
 
 
 def is_byte(x: Any) -> bool:
@@ -338,7 +206,7 @@ class Message:
     target: Address
     caller: Address
     value: Word
-    data: List[Byte]
+    data: ByteVec
     is_static: bool = False
     call_scheme: int = EVM.CALL
     gas: Optional[Word] = None
@@ -353,7 +221,7 @@ class CallOutput:
     Data record produced during the execution of a call.
     """
 
-    data: Optional[Bytes] = None
+    data: Optional[ByteVec] = None
     accounts_to_delete: Set[Address] = field(default_factory=set)
     error: Optional[UnionType[EvmException, HalmosException]] = None
     return_scheme: Optional[int] = None
@@ -399,7 +267,8 @@ class CallContext:
 
         This is meaningless during execution, because the call may not yet have an output
         """
-        return self.output.data is None
+        data, error = self.output.data, self.output.error
+        return data is None or isinstance(error, HalmosException)
 
     def get_stuck_reason(self) -> Optional[HalmosException]:
         """
@@ -418,11 +287,11 @@ class CallContext:
 
 class State:
     stack: List[Word]
-    memory: List[Byte]
+    memory: ByteVec
 
     def __init__(self) -> None:
-        self.stack: List[Word] = []
-        self.memory: List[Byte] = []
+        self.stack = []
+        self.memory = ByteVec()
 
     def __deepcopy__(self, memo):  # -> State:
         st = State()
@@ -431,23 +300,28 @@ class State:
         return st
 
     def __str__(self) -> str:
-        return "".join(
-            [
-                f"Stack: {str(list(reversed(self.stack)))}\n",
-                # self.str_memory(),
-            ]
-        )
+        return f"Stack: {str(list(reversed(self.stack)))}\n{self.str_memory()}"
 
     def str_memory(self) -> str:
-        idx: int = 0
-        ret: str = "Memory:"
-        size: int = len(self.memory)
-        while idx < size:
-            ret += f"\n- {hex(idx)}: {self.memory[idx : min(idx + 32, size)]}"
-            idx += 32
-        return ret + "\n"
+        return (
+            "Memory:"
+            + "".join(
+                f"\n- {idx:04x}: {hexify(self.memory.get_word(idx))}"
+                for idx in range(0, len(self.memory), 32)
+            )
+            + "\n"
+        )
 
     def push(self, v: Word) -> None:
+        if isinstance(v, int):
+            # TODO: support native types on the stack
+            # if not (0 <= v < 2**256):
+            #     raise ValueError(v)
+            # self.stack.append(v)
+
+            # for now, wrap ints in a BitVec
+            v = con(v)
+
         if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
             raise ValueError(v)
         self.stack.append(simplify(v))
@@ -463,26 +337,16 @@ class State:
 
     def mloc(self) -> int:
         loc: int = int_of(self.pop(), "symbolic memory offset")
+        if loc > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
         return loc
 
-    def mstore(self, full: bool) -> None:
-        loc: int = self.mloc()
-        val: Word = self.pop()
-        if is_bool(val):
-            val = If(val, con(1), con(0))
-        if full:
-            wstore(self.memory, loc, 32, val)
-        else:  # mstore8
-            wstore_bytes(self.memory, loc, 1, [simplify(Extract(7, 0, val))])
-
-    def mload(self) -> None:
-        loc: int = self.mloc()
-        self.push(wload(self.memory, loc, 32))
-
-    def ret(self) -> Bytes:
+    def ret(self) -> ByteVec:
         loc: int = self.mloc()
         size: int = int_of(self.pop(), "symbolic return data size")  # size in bytes
-        return wload(self.memory, loc, size, prefer_concrete=True) if size else b""
+
+        returndata_slice = self.memory.slice(loc, loc + size)
+        return returndata_slice
 
 
 class Block:
@@ -509,34 +373,15 @@ class Block:
 class Contract:
     """Abstraction over contract bytecode. Can include concrete and symbolic elements."""
 
-    # for completely concrete code: _rawcode is a bytes object
-    # for completely or partially symbolic code: _rawcode is a single BitVec element
-    #    (typically a Concat() of concrete and symbolic values)
-    _rawcode: UnionType[bytes, BitVecRef]
+    def __init__(self, code: Optional[ByteVec] = None) -> None:
+        # if
+        if not isinstance(code, ByteVec):
+            code = ByteVec(code)
 
-    def __init__(self, rawcode: UnionType[bytes, BitVecRef, str]) -> None:
-        if rawcode is None:
-            raise HalmosException("invalid contract code: None")
-
-        if is_bv_value(rawcode):
-            if rawcode.size() % 8 != 0:
-                raise ValueError(rawcode)
-            rawcode = rawcode.as_long().to_bytes(rawcode.size() // 8, "big")
-
-        if isinstance(rawcode, str):
-            rawcode = bytes.fromhex(rawcode)
-
-        self._rawcode = rawcode
-
-        # cache length since it doesn't change after initialization
-        self._length = byte_length(rawcode)
+        self._code = code
 
     def __init_jumpdests(self):
-        self.jumpdests = set()
-
-        for insn in iter(self):
-            if insn.opcode == EVM.JUMPDEST:
-                self.jumpdests.add(insn.pc)
+        self._jumpdests = set((pc for (pc, op) in iter(self) if op == EVM.JUMPDEST))
 
     def __iter__(self):
         return CodeIterator(self)
@@ -553,15 +398,16 @@ class Contract:
             warn(LIBRARY_PLACEHOLDER, f"contract hexcode contains library placeholder")
 
         try:
-            return Contract(bytes.fromhex(stripped(hexcode)))
+            bytecode = bytes.fromhex(stripped(hexcode))
+            return Contract(ByteVec(bytecode))
         except ValueError as e:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
     def decode_instruction(self, pc: int) -> Instruction:
-        opcode = int_of(self[pc], f"symbolic opcode at pc={pc}")
+        opcode = int_of(self._code[pc], f"symbolic opcode at pc={pc}")
 
         if EVM.PUSH1 <= opcode <= EVM.PUSH32:
-            operand = self.slice(pc + 1, pc + opcode - EVM.PUSH0 + 1)
+            operand = self.slice(pc + 1, pc + opcode - EVM.PUSH0 + 1).unwrap()
             return Instruction(opcode, pc=pc, operand=operand)
 
         return Instruction(opcode, pc=pc)
@@ -570,79 +416,48 @@ class Contract:
         opcode = self[pc]
         return pc + instruction_length(opcode)
 
-    def slice(self, start, stop) -> UnionType[bytes, BitVecRef]:
-        # symbolic
-        if is_bv(self._rawcode):
-            extracted = extract_bytes(self._rawcode, start, stop - start)
+    def slice(self, start, stop) -> ByteVec:
+        return self._code.slice(start, stop)
 
-            # check if that part of the code is concrete
-            if is_bv_value(extracted):
-                return bv_value_to_bytes(extracted)
-
-            else:
-                return extracted
-
-        # concrete
-        size = stop - start
-        data = padded_slice(self._rawcode, start, size, default=0)
-        return bytes(data)
-
-    @lru_cache(maxsize=256)
-    def __getitem__(self, key: int) -> UnionType[int, BitVecRef]:
+    def __getitem__(self, key: int) -> Byte:
         """Returns the byte at the given offset."""
         offset = int_of(key, "symbolic index into contract bytecode {offset!r}")
-
-        # support for negative indexing, e.g. contract[-1]
-        if offset < 0:
-            return self[len(self) + offset]
-
-        # in the EVM, this is defined as returning 0
-        if offset >= len(self):
-            return 0
-
-        # symbolic
-        if is_bv(self._rawcode):
-            extracted = extract_bytes(self._rawcode, offset, 1)
-
-            # return as concrete if possible
-            return unbox_int(extracted)
-
-        # concrete
-        return self._rawcode[offset]
+        return self._code.get_byte(offset)
 
     def __len__(self) -> int:
         """Returns the length of the bytecode in bytes."""
-        return self._length
+        return len(self._code)
 
     def valid_jump_destinations(self) -> set:
         """Returns the set of valid jump destinations."""
-        if not hasattr(self, "jumpdests"):
+        if not hasattr(self, "_jumpdests"):
             self.__init_jumpdests()
 
-        return self.jumpdests
+        return self._jumpdests
 
 
 class CodeIterator:
     def __init__(self, contract: Contract):
         self.contract = contract
         self.pc = 0
-        self.is_symbolic = is_bv(contract._rawcode)
 
     def __iter__(self):
         return self
 
-    def __next__(self) -> Instruction:
+    def __next__(self) -> Tuple[int, int]:
         """Returns a tuple of (pc, opcode)"""
         if self.pc >= len(self.contract):
             raise StopIteration
 
-        if self.is_symbolic and is_bv(self.contract[self.pc]):
+        try:
+            pc = self.pc
+            opcode = self.contract[pc]
+
+            # this avoids decoding instruction operands (don't slice if we don't need to)
+            self.pc += instruction_length(opcode)
+            return (pc, opcode)
+        except NotConcreteError:
             raise StopIteration
-
-        insn = self.contract.decode_instruction(self.pc)
-        self.pc += len(insn)
-
-        return insn
 
 
 class Path:
@@ -663,6 +478,7 @@ class Path:
         self.conditions = []
         self.branching = []
         self.pending = []
+        self.forked = False
 
     def __deepcopy__(self, memo):
         raise NotImplementedError(f"use the branch() method instead of deepcopy()")
@@ -681,6 +497,8 @@ class Path:
         # note: sharing the solver instance complicates the use of randomized path exploration approaches, which can be more efficient for quickly finding bugs.
         # currently, a dfs-based path exploration is employed, which is suitable for scenarios where exploring all paths is necessary, e.g., when proving the absence of bugs.
         path = Path(self.solver)
+
+        # print(f"path {id(path)} branched from {id(self)} with condition {cond}")
 
         # create a new scope within the solver, and save the current scope
         # the solver will roll back to this scope later when the new path is activated
@@ -712,6 +530,9 @@ class Path:
 
     def append(self, cond, branching=False):
         cond = simplify(cond)
+
+        if self.forked:
+            warn(f"attempting to append cond {cond} to forked path {id(self)}")
 
         if is_true(cond):
             return
@@ -807,12 +628,15 @@ class Exec:  # an execution path
 
     def halt(
         self,
-        data: Bytes = EMPTY_BYTES,
+        data: Optional[ByteVec],
         error: Optional[EvmException] = None,
     ) -> None:
         output = self.context.output
         if output.data is not None:
             raise HalmosException("output already set")
+
+        if data is not None and not isinstance(data, ByteVec):
+            raise HalmosException(f"invalid output data {data}")
 
         output.data = data
         output.error = error
@@ -821,9 +645,9 @@ class Exec:  # an execution path
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
 
-    def calldata(self) -> List[Byte]:
+    def calldata(self) -> ByteVec:
         message = self.message()
-        return [] if message.is_create() else message.data
+        return Chunk.empty() if message.is_create() else message.data
 
     def caller(self):
         return self.message().caller
@@ -840,9 +664,7 @@ class Exec:  # an execution path
     def current_instruction(self) -> Instruction:
         return self.pgm.decode_instruction(self.pc)
 
-    def set_code(
-        self, who: Address, code: UnionType[bytes, BitVecRef, Contract]
-    ) -> None:
+    def set_code(self, who: Address, code: UnionType[ByteVec, Contract]) -> None:
         """
         Sets the code at a given address.
         """
@@ -933,7 +755,7 @@ class Exec:  # an execution path
 
     def balance_of(self, addr: Word) -> Word:
         assert_address(addr)
-        value = self.select(self.balance, addr, self.balances)
+        value = self.select(self.balance, uint160(addr), self.balances)
         # practical assumption on the max balance per account
         self.path.append(ULT(value, con(2**96)))
         return value
@@ -952,27 +774,30 @@ class Exec:  # an execution path
     def sha3(self) -> None:
         loc: int = self.st.mloc()
         size: int = int_of(self.st.pop(), "symbolic SHA3 data size")
-        if size > 0:
-            sha3_image = self.sha3_data(wload(self.st.memory, loc, size), size)
-        else:
-            sha3_image = self.sha3_data(None, size)
+        data = self.st.memory.slice(loc, loc + size).unwrap() if size else b""
+        sha3_image = self.sha3_data(data)
         self.st.push(sha3_image)
 
-    def sha3_data(self, data: Bytes, size: int) -> Word:
+    def sha3_data(self, data: Bytes) -> Word:
+        size = byte_length(data)
+
         if size > 0:
+            if isinstance(data, bytes):
+                data = bytes_to_bv_value(data)
+
             f_sha3 = Function(f"sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256)
             sha3_expr = f_sha3(data)
         else:
             sha3_expr = BitVec("sha3_0", BitVecSort256)
 
         # assume hash values are sufficiently smaller than the uint max
-        self.path.append(ULE(sha3_expr, con(2**256 - 2**64)))
+        self.path.append(ULE(sha3_expr, 2**256 - 2**64))
 
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
 
         # handle create2 hash
-        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xFF, 8)):
+        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xFF, size_bits=8)):
             return con(create2_magic_address + self.sha3s[sha3_expr])
         else:
             return sha3_expr
@@ -1016,13 +841,12 @@ class Exec:  # an execution path
         self.cnts["fresh"]["symbol"] += 1
         return self.cnts["fresh"]["symbol"]
 
-    def returndata(self) -> Optional[Bytes]:
+    def returndata(self) -> Optional[ByteVec]:
         """
         Return data from the last executed sub-context or the empty bytes sequence
         """
 
         last_subcall = self.context.last_subcall()
-
         if not last_subcall:
             return EMPTY_BYTES
 
@@ -1034,7 +858,7 @@ class Exec:  # an execution path
 
     def returndatasize(self) -> int:
         returndata = self.returndata()
-        return byte_length(returndata) if returndata is not None else 0
+        return len(returndata) if returndata is not None else 0
 
     def is_jumpdest(self, x: Word) -> bool:
         if not is_concrete(x):
@@ -1385,6 +1209,26 @@ class HalmosLogs:
                 )
 
 
+@dataclass
+class WorklistItem:
+    ex: Exec
+    step: int
+
+
+class Worklist:
+    def __init__(self):
+        self.stack = []
+
+    def push(self, ex: Exec, step: int):
+        self.stack.append(WorklistItem(ex, step))
+
+    def pop(self) -> WorklistItem:
+        return self.stack.pop()
+
+    def __len__(self) -> int:
+        return len(self.stack)
+
+
 class SEVM:
     options: Dict
     storage_model: Type[SomeStorage]
@@ -1653,11 +1497,12 @@ class SEVM:
 
         if not arg_size >= 0:
             raise ValueError(arg_size)
+
         if not ret_size >= 0:
             raise ValueError(ret_size)
 
-        arg = wload(ex.st.memory, arg_loc, arg_size) if arg_size > 0 else None
         caller = ex.prank.lookup(ex.this, to)
+        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
@@ -1674,25 +1519,16 @@ class SEVM:
             # transfer msg.value
             send_callvalue()
 
-            # prepare calldata
-            calldata = [None] * arg_size
-            wextend(ex.st.memory, arg_loc, arg_size)
-            wstore_bytes(
-                calldata, 0, arg_size, ex.st.memory[arg_loc : arg_loc + arg_size]
-            )
-
             message = Message(
                 target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
                 caller=caller if op != EVM.DELEGATECALL else ex.caller(),
                 value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
-                data=calldata,
+                data=arg,
                 is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
                 call_scheme=op,
             )
 
-            # TODO: check max call depth
-
-            def callback(new_ex, stack, step_id):
+            def callback(new_ex: Exec, stack, step_id):
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
                 subcall = new_ex.context
@@ -1719,15 +1555,14 @@ class SEVM:
                 new_ex.prank = deepcopy(ex.prank)
 
                 # set return data (in memory)
-                actual_ret_size = new_ex.returndatasize()
-                wstore_partial(
-                    new_ex.st.memory,
-                    ret_loc,
-                    0,
-                    min(ret_size, actual_ret_size),
-                    subcall.output.data,
-                    actual_ret_size,
-                )
+                effective_ret_size = min(ret_size, new_ex.returndatasize())
+                if effective_ret_size > 0:
+                    returndata_slice = subcall.output.data.slice(0, effective_ret_size)
+                    end_loc = ret_loc + effective_ret_size
+                    if end_loc > MAX_MEMORY_SIZE:
+                        raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
+
+                    new_ex.st.memory.set_slice(ret_loc, end_loc, returndata_slice)
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
@@ -1741,7 +1576,7 @@ class SEVM:
 
                 # add to worklist even if it reverted during the external call
                 new_ex.next_pc()
-                stack.append((new_ex, step_id))
+                stack.push(new_ex, step_id)
 
             sub_ex = Exec(
                 code=ex.code,
@@ -1773,7 +1608,7 @@ class SEVM:
                 known_sigs=ex.known_sigs,
             )
 
-            stack.append((sub_ex, step_id))
+            stack.push(sub_ex, step_id)
 
         def call_unknown() -> None:
             call_id = len(ex.calls)
@@ -1788,7 +1623,11 @@ class SEVM:
                     BitVecSorts[arg_size * 8],  # args
                     BitVecSort256,
                 )
-                exit_code = f_call(con(call_id), gas, to, fund, arg)
+
+                unwrapped = arg.unwrap()
+                arg_bv = unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+
+                exit_code = f_call(con(call_id), gas, to, fund, arg_bv)
             else:
                 f_call = Function(
                     "call_" + str(arg_size * 8),
@@ -1808,15 +1647,14 @@ class SEVM:
             else:
                 actual_ret_size = self.options["unknown_calls_return_size"]
 
+            ret = ByteVec()
             if actual_ret_size > 0:
                 f_ret = Function(
                     "ret_" + str(actual_ret_size * 8),
                     BitVecSort256,
                     BitVecSorts[actual_ret_size * 8],
                 )
-                ret = f_ret(exit_code_var)
-            else:
-                ret = None
+                ret.append(f_ret(exit_code_var))
 
             # TODO: cover other precompiled
 
@@ -1835,7 +1673,7 @@ class SEVM:
                 r = extract_bytes(arg, 64, 32)
                 s = extract_bytes(arg, 96, 32)
 
-                ret = uint256(f_ecrecover(digest, v, r, s))
+                ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
 
             # identity
             elif eq(to, con_addr(4)):
@@ -1856,6 +1694,7 @@ class SEVM:
             elif eq(to, console.address):
                 exit_code = con(1)
                 console.handle(ex, arg)
+                ret = ByteVec()
 
             # push exit code
             ex.path.append(exit_code_var == exit_code)
@@ -1866,7 +1705,14 @@ class SEVM:
 
             # store return value
             if ret_size > 0:
-                wstore(ex.st.memory, ret_loc, ret_size, ret)
+                end_loc = ret_loc + ret_size
+                if end_loc > MAX_MEMORY_SIZE:
+                    raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
+
+                ex.st.memory.set_slice(ret_loc, end_loc, ret)
+
+            if not isinstance(ret, ByteVec):
+                raise HalmosException(f"Invalid return value: {ret}")
 
             ex.context.trace.append(
                 CallContext(
@@ -1874,7 +1720,7 @@ class SEVM:
                         target=to,
                         caller=caller,
                         value=fund,
-                        data=ex.st.memory[arg_loc : arg_loc + arg_size],
+                        data=ex.st.memory.slice(arg_loc, arg_loc + arg_size),
                         call_scheme=op,
                     ),
                     output=CallOutput(
@@ -1889,7 +1735,7 @@ class SEVM:
             ex.calls.append((exit_code_var, exit_code, ex.context.output.data))
 
             ex.next_pc()
-            stack.append((ex, step_id))
+            stack.push(ex, step_id)
 
         # precompiles or cheatcodes
         if (
@@ -1948,20 +1794,24 @@ class SEVM:
         caller = ex.prank.lookup(ex.this, con_addr(0))
 
         # contract creation code
-        create_hexcode = wload(ex.st.memory, loc, size, prefer_concrete=True)
+        create_hexcode = ex.st.memory.slice(loc, loc + size)
         create_code = Contract(create_hexcode)
 
         # new account address
         if op == EVM.CREATE:
             new_addr = ex.new_address()
         elif op == EVM.CREATE2:  # EVM.CREATE2
-            if isinstance(create_hexcode, bytes):
-                create_hexcode = con(
-                    int.from_bytes(create_hexcode, "big"), len(create_hexcode) * 8
-                )
-            code_hash = ex.sha3_data(create_hexcode, create_hexcode.size() // 8)
-            hash_data = simplify(Concat(con(0xFF, 8), caller, salt, code_hash))
-            new_addr = uint160(ex.sha3_data(hash_data, 85))
+            # create_hexcode must be z3 expression to be passed into sha3_data
+            create_hexcode = create_hexcode.unwrap()
+
+            if is_bv(create_hexcode):
+                create_hexcode = simplify(create_hexcode)
+            else:
+                create_hexcode = bytes_to_bv_value(create_hexcode)
+
+            code_hash = ex.sha3_data(create_hexcode)
+            hash_data = simplify(Concat(con(0xFF, 8), uint160(caller), salt, code_hash))
+            new_addr = uint160(ex.sha3_data(hash_data))
         else:
             raise HalmosException(f"Unknown CREATE opcode: {op}")
 
@@ -1976,16 +1826,16 @@ class SEVM:
 
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
-            ex.st.push(con(0))
+            ex.st.push(0)
             ex.next_pc()
 
             # add a virtual subcontext to the trace for debugging purposes
             subcall = CallContext(message=message, depth=ex.context.depth + 1)
-            subcall.output.data = b""
+            subcall.output.data = ByteVec()
             subcall.output.error = AddressCollision()
             ex.context.trace.append(subcall)
 
-            stack.append((ex, step_id))
+            stack.push(ex, step_id)
             return
 
         for addr in ex.code:
@@ -2037,7 +1887,7 @@ class SEVM:
 
             else:
                 # creation failed
-                new_ex.st.push(con(0))
+                new_ex.st.push(0)
 
                 # revert network states
                 new_ex.code = orig_code.copy()
@@ -2046,7 +1896,7 @@ class SEVM:
 
             # add to worklist
             new_ex.next_pc()
-            stack.append((new_ex, step_id))
+            stack.push(new_ex, step_id)
 
         sub_ex = Exec(
             code=ex.code,
@@ -2078,7 +1928,7 @@ class SEVM:
             known_sigs=ex.known_sigs,
         )
 
-        stack.append((sub_ex, step_id))
+        stack.push(sub_ex, step_id)
 
     def jumpi(
         self,
@@ -2138,7 +1988,7 @@ class SEVM:
                     True: visited[True] + 1,
                     False: visited[False],
                 }
-            stack.append((new_ex_true, step_id))
+            stack.push(new_ex_true, step_id)
 
         if new_ex_false:
             if potential_true and potential_false:
@@ -2146,7 +1996,7 @@ class SEVM:
                     True: visited[True],
                     False: visited[False] + 1,
                 }
-            stack.append((new_ex_false, step_id))
+            stack.push(new_ex_false, step_id)
 
     def jump(self, ex: Exec, stack: List[Tuple[Exec, int]], step_id: int) -> None:
         dst = ex.st.pop()
@@ -2154,7 +2004,7 @@ class SEVM:
         # if dst is concrete, just jump
         if is_concrete(dst):
             ex.pc = int_of(dst)
-            stack.append((ex, step_id))
+            stack.push(ex, step_id)
 
         # otherwise, create a new execution for feasible targets
         elif self.options["sym_jump"]:
@@ -2166,7 +2016,7 @@ class SEVM:
                             f"We can jump to {target} with model {ex.path.solver.model()}"
                         )
                     new_ex = self.create_branch(ex, target_reachable, target)
-                    stack.append((new_ex, step_id))
+                    stack.push(new_ex, step_id)
         else:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
@@ -2221,8 +2071,8 @@ class SEVM:
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
         step_id: int = 0
-
-        stack: List[Tuple[Exec, int]] = [(ex0, 0)]
+        stack: Worklist = Worklist()
+        stack.push(ex0, 0)
 
         def finalize(ex: Exec):
             # if it's at the top-level, there is no callback; yield the current execution state
@@ -2236,7 +2086,9 @@ class SEVM:
 
         while stack:
             try:
-                (ex, prev_step_id) = stack.pop()
+                item = stack.pop()
+                ex: Exec = item.ex
+                prev_step_id: int = item.step
                 step_id += 1
 
                 if not ex.path.is_activated():
@@ -2245,7 +2097,10 @@ class SEVM:
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
 
+                # print(f"{hexify(ex.this)}@{ex.pc}", end=" ")
                 insn = ex.current_instruction()
+                # print(f"insn={insn}")
+
                 opcode = insn.opcode
                 ex.cnts["opcode"][opcode] += 1
 
@@ -2270,9 +2125,12 @@ class SEVM:
 
                 if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
-                        ex.halt()
+                        ex.halt(data=ByteVec())
                     elif opcode == EVM.INVALID:
-                        ex.halt(error=InvalidOpcode(opcode))
+                        ex.halt(
+                            data=ByteVec(),
+                            error=InvalidOpcode(opcode),
+                        )
                     elif opcode == EVM.REVERT:
                         ex.halt(data=ex.st.ret(), error=Revert())
                     elif opcode == EVM.RETURN:
@@ -2309,14 +2167,17 @@ class SEVM:
                     w1 = b2i(ex.st.pop())
                     w2 = b2i(ex.st.pop())
                     ex.st.push(ULT(w1, w2))  # bvult
+
                 elif opcode == EVM.GT:
                     w1 = b2i(ex.st.pop())
                     w2 = b2i(ex.st.pop())
                     ex.st.push(UGT(w1, w2))  # bvugt
+
                 elif opcode == EVM.SLT:
                     w1 = b2i(ex.st.pop())
                     w2 = b2i(ex.st.pop())
                     ex.st.push(w1 < w2)  # bvslt
+
                 elif opcode == EVM.SGT:
                     w1 = b2i(ex.st.pop())
                     w2 = b2i(ex.st.pop())
@@ -2343,14 +2204,18 @@ class SEVM:
 
                 elif opcode in [EVM.AND, EVM.OR, EVM.XOR]:
                     ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
+
                 elif opcode == EVM.NOT:
                     ex.st.push(~b2i(ex.st.pop()))  # bvnot
+
                 elif opcode == EVM.SHL:
                     w = ex.st.pop()
                     ex.st.push(b2i(ex.st.pop()) << b2i(w))  # bvshl
+
                 elif opcode == EVM.SAR:
                     w = ex.st.pop()
                     ex.st.push(ex.st.pop() >> w)  # bvashr
+
                 elif opcode == EVM.SHR:
                     w = ex.st.pop()
                     ex.st.push(LShR(ex.st.pop(), w))  # bvlshr
@@ -2362,35 +2227,30 @@ class SEVM:
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
 
                 elif opcode == EVM.CALLDATALOAD:
-                    calldata = ex.calldata()
-                    if calldata is None:
-                        ex.st.push(f_calldataload(ex.st.pop()))
-                    else:
-                        err_msg = "symbolic CALLDATALOAD offset"
-                        offset: int = int_of(ex.st.pop(), err_msg)
-                        data = padded_slice(calldata, offset, 32, default=con(0, 8))
-                        ex.st.push(Concat(data))
+                    offset: int = int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
+                    ex.st.push(ex.calldata().get_word(offset))
 
                 elif opcode == EVM.CALLDATASIZE:
-                    cd = ex.calldata()
-
-                    # TODO: is optional calldata necessary?
-                    ex.st.push(f_calldatasize() if cd is None else con(len(cd)))
+                    ex.st.push(len(ex.calldata()))
 
                 elif opcode == EVM.CALLVALUE:
                     ex.st.push(ex.callvalue())
+
                 elif opcode == EVM.CALLER:
                     ex.st.push(uint256(ex.caller()))
+
                 elif opcode == EVM.ORIGIN:
                     ex.st.push(uint256(f_origin()))
+
                 elif opcode == EVM.ADDRESS:
                     ex.st.push(uint256(ex.this))
+
                 # TODO: define f_extcodesize for known addresses in advance
                 elif opcode == EVM.EXTCODESIZE:
                     account = uint160(ex.st.pop())
                     account_addr = self.resolve_address_alias(ex, account)
                     if account_addr is not None:
-                        codesize = con(len(ex.code[account_addr]))
+                        codesize = len(ex.code[account_addr])
                     else:
                         codesize = f_extcodesize(account)
                         if (
@@ -2400,6 +2260,7 @@ class SEVM:
                         ):
                             ex.path.append(codesize > 0)
                     ex.st.push(codesize)
+
                 # TODO: define f_extcodehash for known addresses in advance
                 elif opcode == EVM.EXTCODEHASH:
                     account = uint160(ex.st.pop())
@@ -2410,36 +2271,46 @@ class SEVM:
                         else f_extcodehash(account)
                     )
                     ex.st.push(codehash)
+
                 elif opcode == EVM.CODESIZE:
-                    ex.st.push(con(len(ex.pgm)))
+                    ex.st.push(len(ex.pgm))
+
                 elif opcode == EVM.GAS:
                     ex.st.push(f_gas(con(ex.new_gas_id())))
+
                 elif opcode == EVM.GASPRICE:
                     ex.st.push(f_gasprice())
 
                 elif opcode == EVM.BASEFEE:
                     ex.st.push(ex.block.basefee)
+
                 elif opcode == EVM.CHAINID:
                     ex.st.push(ex.block.chainid)
+
                 elif opcode == EVM.COINBASE:
                     ex.st.push(uint256(ex.block.coinbase))
+
                 elif opcode == EVM.DIFFICULTY:
                     ex.st.push(ex.block.difficulty)
+
                 elif opcode == EVM.GASLIMIT:
                     ex.st.push(ex.block.gaslimit)
+
                 elif opcode == EVM.NUMBER:
                     ex.st.push(ex.block.number)
+
                 elif opcode == EVM.TIMESTAMP:
                     ex.st.push(ex.block.timestamp)
 
                 elif opcode == EVM.PC:
-                    ex.st.push(con(ex.pc))
+                    ex.st.push(ex.pc)
 
                 elif opcode == EVM.BLOCKHASH:
                     ex.st.push(f_blockhash(ex.st.pop()))
 
                 elif opcode == EVM.BALANCE:
                     ex.st.push(ex.balance_of(uint160(ex.st.pop())))
+
                 elif opcode == EVM.SELFBALANCE:
                     ex.st.push(ex.balance_of(ex.this))
 
@@ -2461,77 +2332,80 @@ class SEVM:
 
                 elif opcode == EVM.POP:
                     ex.st.pop()
+
                 elif opcode == EVM.MLOAD:
-                    ex.st.mload()
+                    loc: int = ex.st.mloc()
+                    ex.st.push(ex.st.memory.get_word(loc))
+
                 elif opcode == EVM.MSTORE:
-                    ex.st.mstore(True)
+                    loc: int = ex.st.mloc()
+                    val: Word = ex.st.pop()
+                    ex.st.memory.set_word(loc, uint256(val))
+
                 elif opcode == EVM.MSTORE8:
-                    ex.st.mstore(False)
+                    loc: int = ex.st.mloc()
+                    val: Word = ex.st.pop()
+                    ex.st.memory.set_byte(loc, uint8(val))
 
                 elif opcode == EVM.MSIZE:
                     size: int = len(ex.st.memory)
                     # round up to the next multiple of 32
                     size = ((size + 31) // 32) * 32
-                    ex.st.push(con(size))
+                    ex.st.push(size)
 
                 elif opcode == EVM.SLOAD:
-                    ex.st.push(self.sload(ex, ex.this, ex.st.pop()))
+                    slot: Word = ex.st.pop()
+                    ex.st.push(self.sload(ex, ex.this, slot))
+
                 elif opcode == EVM.SSTORE:
-                    self.sstore(ex, ex.this, ex.st.pop(), ex.st.pop())
+                    slot: Word = ex.st.pop()
+                    value: Word = ex.st.pop()
+                    self.sstore(ex, ex.this, slot, value)
 
                 elif opcode == EVM.RETURNDATASIZE:
-                    ex.st.push(con(ex.returndatasize()))
+                    ex.st.push(ex.returndatasize())
+
                 elif opcode == EVM.RETURNDATACOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
-                    # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
+                    end_loc = loc + size
 
-                    # TODO: do we need to pass returndatasize here?
-                    wstore_partial(
-                        ex.st.memory,
-                        loc,
-                        offset,
-                        size,
-                        ex.returndata(),
-                        ex.returndatasize(),
-                    )
+                    if end_loc > MAX_MEMORY_SIZE:
+                        raise HalmosException("RETURNDATACOPY > MAX_MEMORY_SIZE")
+
+                    if size > 0:
+                        if offset + size > ex.returndatasize():
+                            raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
+
+                        data: ByteVec = ex.returndata().slice(offset, offset + size)
+                        ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CALLDATACOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
-                    # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
+                    end_loc = loc + size
+
+                    if end_loc > MAX_MEMORY_SIZE:
+                        raise HalmosException("CALLDATACOPY > MAX_MEMORY_SIZE")
+
                     if size > 0:
-                        calldata = ex.message().data
-                        if calldata is None:
-                            f_calldatacopy = Function(
-                                "calldatacopy_" + str(size * 8),
-                                BitVecSort256,
-                                BitVecSorts[size * 8],
-                            )
-                            data = f_calldatacopy(offset)
-                            wstore(ex.st.memory, loc, size, data)
-                        else:
-                            data = padded_slice(calldata, offset, size, con(0, 8))
-                            wstore_bytes(ex.st.memory, loc, size, data)
+                        data: ByteVec = ex.calldata().slice(offset, offset + size)
+                        ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.st.mloc()
                     offset: int = int_of(ex.st.pop(), "symbolic CODECOPY offset")
-                    # size (in bytes)
                     size: int = int_of(ex.st.pop(), "symbolic CODECOPY size")
-                    wextend(ex.st.memory, loc, size)
+                    end_loc = loc + size
 
-                    codeslice = ex.pgm.slice(offset, offset + size)
+                    if end_loc > MAX_MEMORY_SIZE:
+                        raise HalmosException("CODECOPY > MAX_MEMORY_SIZE")
 
-                    actual_size = byte_length(codeslice)
-                    if actual_size != size:
-                        raise HalmosException(
-                            f"CODECOPY: expected {size} bytes but got {actual_size}"
-                        )
-
-                    ex.st.memory[loc : loc + size] = iter_bytes(codeslice)
+                    if size > 0:
+                        codeslice: ByteVec = ex.pgm.slice(offset, offset + size)
+                        ex.st.memory.set_slice(loc, loc + size, codeslice)
 
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()
@@ -2541,7 +2415,7 @@ class SEVM:
                         if idx < 0:
                             raise ValueError(idx)
                         if idx >= 32:
-                            ex.st.push(con(0))
+                            ex.st.push(0)
                         else:
                             ex.st.push(
                                 ZeroExt(
@@ -2563,8 +2437,7 @@ class SEVM:
                     loc: int = ex.st.mloc()
                     size: int = int_of(ex.st.pop(), "symbolic LOG data size")
                     topics = list(ex.st.pop() for _ in range(num_topics))
-                    data = wload(ex.st.memory, loc, size) if size > 0 else None
-
+                    data = ex.st.memory.slice(loc, loc + size)
                     ex.emit_log(EventLog(ex.this, topics, data))
 
                 elif opcode == EVM.PUSH0:
@@ -2575,7 +2448,7 @@ class SEVM:
                         val = int_of(insn.operand)
                         if opcode == EVM.PUSH32 and val in sha3_inv:
                             # restore precomputed hashes
-                            ex.st.push(ex.sha3_data(con(sha3_inv[val]), 32))
+                            ex.st.push(ex.sha3_data(con(sha3_inv[val])))
                         else:
                             ex.st.push(con(val))
                     else:
@@ -2594,10 +2467,10 @@ class SEVM:
                     raise HalmosException(f"Unsupported opcode {hex(opcode)}")
 
                 ex.next_pc()
-                stack.append((ex, step_id))
+                stack.push(ex, step_id)
 
             except EvmException as err:
-                ex.halt(error=err)
+                ex.halt(data=ByteVec(), error=err)
                 yield from finalize(ex)
                 continue
 
