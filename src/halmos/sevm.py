@@ -2379,8 +2379,8 @@ class SEVM:
                     offset: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
                     size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
 
-                    if size > MAX_MEMORY_SIZE:
-                        raise HalmosException("CALLDATACOPY size > MAX_MEMORY_SIZE")
+                    if loc + size > MAX_MEMORY_SIZE:
+                        raise HalmosException("CALLDATACOPY > MAX_MEMORY_SIZE")
 
                     if size > 0:
                         data: ByteVec = ex.calldata()[offset : offset + size]
