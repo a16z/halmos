@@ -479,7 +479,7 @@ class ByteVec:
             return
 
         chunk_info = self._load_chunk(offset)
-        assert chunk_info.index >= 0
+        assert chunk_info.found()
 
         chunk = chunk_info.chunk
         offset_in_chunk = offset - chunk_info.start
@@ -749,9 +749,9 @@ class ByteVec:
 
     def copy(self):
         """
-        Return a deep copy of the ByteVec.
-
-        This is a deep copy, so the chunks are copied as well.
+        Return a shallow copy of the ByteVec:
+        - copies the container for the chunks
+        - does not copy the chunks themselves, which are immutable
         """
 
         return ByteVec(
