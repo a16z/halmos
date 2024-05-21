@@ -626,7 +626,7 @@ class ByteVec:
 
     def slice(self, start: int, stop: int) -> "ByteVec":
         """
-        Return a single byte at the given offset.
+        Return a slice of data between offsets start (inclusive) and stop (exclusive).
 
         If some portion of [start:stop] is out of bounds, it will be filled with zeroes.
 
