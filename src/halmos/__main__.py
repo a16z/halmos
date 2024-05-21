@@ -1028,21 +1028,32 @@ def solve(
             print(f"  Checking with external solver process")
             print(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
 
+        # solver_timeout_assertion == 0 means no timeout,
+        # which translates to timeout_seconds=None for subprocess.run
+        timeout_seconds = None
+        if timeout_millis := args.solver_timeout_assertion:
+            timeout_seconds = timeout_millis / 1000
+
         cmd = args.solver_command.split() + [dump_filename]
-        res_str = subprocess.run(cmd, capture_output=True, text=True).stdout.strip()
-        res_str_head = res_str.split("\n", 1)[0]
+        try:
+            res_str = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout_seconds
+            ).stdout.strip()
+            res_str_head = res_str.split("\n", 1)[0]
 
-        with open(f"{dump_filename}.out", "w") as f:
-            f.write(res_str)
+            with open(f"{dump_filename}.out", "w") as f:
+                f.write(res_str)
 
-        if args.verbose >= 1:
-            print(f"    {res_str_head}")
+            if args.verbose >= 1:
+                print(f"    {res_str_head}")
 
-        if res_str_head == "unsat":
-            return unsat, None
-        elif res_str_head == "sat":
-            return sat, f"{dump_filename}.out"
-        else:
+            if res_str_head == "unsat":
+                return unsat, None
+            elif res_str_head == "sat":
+                return sat, f"{dump_filename}.out"
+            else:
+                return unknown, None
+        except subprocess.TimeoutExpired:
             return unknown, None
 
     else:
