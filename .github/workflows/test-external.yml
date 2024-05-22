@@ -10,6 +10,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    container: ghcr.io/emperororokusaki/solvers:0.1.0
 
     strategy:
       fail-fast: false
@@ -52,26 +53,6 @@ jobs:
           ref: ${{ matrix.branch }}
           submodules: recursive
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Install yices
-        run: |
-          sudo add-apt-repository ppa:sri-csl/formal-methods
-          sudo apt-get update
-          sudo apt-get install yices2
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: python -m pip install --upgrade pip
-
-      - name: Install Halmos
-        run: python -m pip install -e ./halmos
-
       - name: Test external repo
-        run: ${{ matrix.cmd }} -v -st --solver-timeout-assertion 0 --solver-threads 4 --solver-command=yices-smt2
+        run: ${{ matrix.cmd }} --statistics --debug --solver-timeout-assertion 0 --solver-threads 4 --solver-command=yices-smt2
         working-directory: ${{ matrix.dir }}
