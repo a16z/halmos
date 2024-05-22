@@ -27,13 +27,7 @@ jobs:
       - name: Pull Docker image
         run: docker pull ghcr.io/emperororokusaki/halmos:0.1
 
-      - name: Set up Docker container
-        uses: addnab/docker-run-action@v3
-        with:
-          image: ghcr.io/emperororokusaki/halmos:0.1
-          options: -v ${{ github.workspace }}:/workspace
-
       - name: Run pytest
         run: |
-          docker run -v ${{ github.workspace }}:/workspace ghcr.io/emperororokusaki/halmos:0.1 \
+          docker run -v ${{ github.workspace }}:/workspace -w /workspace ghcr.io/emperororokusaki/halmos:0.1 \
             pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
