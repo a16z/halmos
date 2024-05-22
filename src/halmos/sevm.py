@@ -478,7 +478,7 @@ class Path:
 
     def __str__(self) -> str:
         return "".join(
-            [f"- {cond}\n" for cond in conditions if conditions[cond] and str(cond) != "True"]
+            [f"- {cond}\n" for cond in self.conditions if self.conditions[cond] and str(cond) != "True"]
         )
 
     def to_smt2(self) -> str:
