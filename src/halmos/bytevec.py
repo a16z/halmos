@@ -295,7 +295,7 @@ class SymbolicChunk(Chunk):
         return self.length == len(other) and eq(self.unwrap(), other.unwrap())
 
     def __repr__(self) -> str:
-        return f"SymbolicChunk({self.data!r})"
+        return f"SymbolicChunk({self.data!r}, start={self.start}, length={self.length})"
 
 
 @dataclass
