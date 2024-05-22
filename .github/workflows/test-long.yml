@@ -8,22 +8,32 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest  # Change to a suitable runner that can run Docker containers
-    container:
-      image: ghcr.io/emperororokusaki/halmos:0.1
 
     strategy:
       fail-fast: false
       matrix:
         include:
-        - testname: "tests/solver"
-        - testname: "examples/simple"
-        - testname: "examples/tokens/ERC20"
-        - testname: "examples/tokens/ERC721"
+          - testname: "tests/solver"
+          - testname: "examples/simple"
+          - testname: "examples/tokens/ERC20"
+          - testname: "examples/tokens/ERC721"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      - name: Pull Docker image
+        run: docker pull ghcr.io/emperororokusaki/halmos:0.1
+
+      - name: Set up Docker container
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ghcr.io/emperororokusaki/halmos:0.1
+          options: -v ${{ github.workspace }}:/workspace
+
       - name: Run pytest
-        run: pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
+        run: |
+          docker run -v ${{ github.workspace }}:/workspace ghcr.io/emperororokusaki/halmos:0.1 \
+            pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
