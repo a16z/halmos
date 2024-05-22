@@ -25,9 +25,9 @@ jobs:
           submodules: recursive
 
       - name: Pull Docker image
-        run: docker pull ghcr.io/emperororokusaki/halmos:0.1
+        run: docker pull ghcr.io/emperororokusaki/solvers:0.1.0
 
       - name: Run pytest
         run: |
-          docker run -v ${{ github.workspace }}:/workspace -w /workspace ghcr.io/emperororokusaki/halmos:0.1 \
+          docker run -v ${{ github.workspace }}:/workspace -w /workspace ghcr.io/emperororokusaki/solvers:0.1.0 \
             pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
