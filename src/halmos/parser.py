@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import os
 import argparse
+import os
+
+import toml
+
+from .utils import color_warn
 
 
 def mk_arg_parser() -> argparse.ArgumentParser:
@@ -108,6 +112,14 @@ def mk_arg_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--version", action="store_true", help="print the version number"
+    )
+
+    parser.add_argument(
+        "-f",
+        "--configure",
+        metavar="CONFIGURE_FILE_PATH",
+        type=str,
+        help="load the configuration from the given TOML file",
     )
 
     # debugging options
@@ -256,3 +268,57 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
+
+def load_configure_file(path: str):
+    if not os.path.exists(path):
+        print(f"Configuration file not found: {path}")
+        return None
+
+    with open(path, "r") as f:
+        return toml.load(f)
+
+
+def parse_configure_file(
+    parser: argparse.ArgumentParser, args: argparse.Namespace, commands: list[str]
+) -> argparse.Namespace:
+    configure_path = os.path.join(args.root, args.configure)
+    configure = load_configure_file(configure_path)
+
+    if not configure:
+        return args
+
+    actions = {
+        action.dest: (action.type, action.option_strings) for action in parser._actions
+    }
+
+    for _, configure_group in configure.items():
+        for key, value in configure_group.items():
+            key = key.replace(
+                "-", "_"
+            )  # convert to snake_case because argparse converts hyphens to underscores
+            if key in actions:
+                value_type, options_strings = actions[key]
+
+                if any(option in commands for option in options_strings):
+                    print(
+                        color_warn(
+                            f"Skipping configure key: {key} (command line argument)"
+                        )
+                    )
+                    continue
+
+                if value_type is None or isinstance(value, value_type):
+                    # Set the value if the type is None or the type is correct
+                    setattr(args, key, value)
+                else:
+                    expected_type_name = value_type.__name__ if value_type else "Any"
+                    print(
+                        color_warn(
+                            f"Invalid type for {key}: {type(value).__name__} (expected {expected_type_name})"
+                        )
+                    )
+            else:
+                print(color_warn(f"Unknown configure key: {key}"))
+
+    return args

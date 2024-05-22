@@ -1,0 +1,9 @@
+# This is an example file for configuring the Halmos settings.
+# For configuration values, refer to the options listed under the 'halmos --help' command.
+# You may freely use sections to categorize the settings as needed.
+
+[settings]
+depth = 4
+
+[compile-settings]
+array-lengths = 2
