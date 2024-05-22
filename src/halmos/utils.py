@@ -560,6 +560,7 @@ class EVM:
     MSIZE = 0x59
     GAS = 0x5A
     JUMPDEST = 0x5B
+    MCOPY = 0x5E
     PUSH0 = 0x5F
     PUSH1 = 0x60
     PUSH2 = 0x61

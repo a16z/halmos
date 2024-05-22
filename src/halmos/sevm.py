@@ -2398,6 +2398,21 @@ class SEVM:
                         codeslice: ByteVec = ex.pgm.slice(offset, offset + size)
                         ex.st.memory.set_slice(loc, loc + size, codeslice)
 
+                elif opcode == EVM.MCOPY:
+                    dest_offset = int_of(ex.st.pop(), "symbolic MCOPY destOffset")
+                    src_offset = int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
+                    size = int_of(ex.st.pop(), "symbolic MCOPY size")
+
+                    if size > 0:
+                        src_end_loc = src_offset + size
+                        dst_end_loc = dest_offset + size
+
+                        if max(src_end_loc, dst_end_loc) > MAX_MEMORY_SIZE:
+                            raise HalmosException("MCOPY > MAX_MEMORY_SIZE")
+
+                        data = ex.st.memory.slice(src_offset, src_end_loc)
+                        ex.st.memory.set_slice(dest_offset, dst_end_loc, data)
+
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()
                     w = ex.st.pop()
