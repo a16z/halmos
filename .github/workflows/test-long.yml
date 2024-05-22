@@ -3,13 +3,13 @@ name: Test long
 on:
   push:
     branches: [main]
-# pull_request:
-#   branches: [main]
   workflow_dispatch:
 
 jobs:
   test:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest  # Change to a suitable runner that can run Docker containers
+    container:
+      image: ghcr.io/emperororokusaki/halmos:0.1
 
     strategy:
       fail-fast: false
@@ -24,29 +24,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install yices
-        run: |
-          brew install SRI-CSL/sri-csl/yices2
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pytest
-          python -m pip install setuptools
-
-      - name: Install Halmos
-        run: |
-          python -m pip install z3-solver==4.12.2.0
-          python -m pip install -e .
 
       - name: Run pytest
         run: pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
