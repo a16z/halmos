@@ -1022,7 +1022,8 @@ def solve(
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
 
         with open(dump_filename, "w") as f:
-            print(f"Writing SMT query to {dump_filename}")
+            if args.verbose >= 1:
+                print(f"Writing SMT query to {dump_filename}")
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query)
             f.write("(get-model)\n")
