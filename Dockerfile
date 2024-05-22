@@ -23,6 +23,8 @@ RUN curl -L https://foundry.paradigm.xyz | bash
 # Set up Python and Install Halmos
 RUN pip3 install pytest setuptools
 RUN pip3 install z3-solver==4.12.2.0
+# Install the package in editable mode
+RUN pip3 install -e .
 
 # Add your application files
 WORKDIR /app
