@@ -7,7 +7,8 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest  # Change to a suitable runner that can run Docker containers
+    runs-on: ubuntu-latest 
+    container: ghcr.io/emperororokusaki/solvers:0.1.0
 
     strategy:
       fail-fast: false
@@ -24,10 +25,6 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Pull Docker image
-        run: docker pull ghcr.io/emperororokusaki/solvers:0.1.0
-
-      - name: Run pytest
+      - name: Run Pytest
         run: |
-          docker run -v ${{ github.workspace }}:/workspace -w /workspace ghcr.io/emperororokusaki/solvers:0.1.0 \
-            pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
+          pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
