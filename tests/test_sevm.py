@@ -2,6 +2,7 @@ import pytest
 
 from z3 import *
 
+from halmos.bytevec import ByteVec
 from halmos.exceptions import OutOfGasError
 from halmos.utils import EVM
 
@@ -44,7 +45,15 @@ def storage():
 
 def mk_ex(hexcode, sevm, solver, storage, caller, this):
     bytecode = Contract(hexcode)
-    message = Message(target=this, caller=caller, value=callvalue, data=[])
+
+    message = Message(
+        target=this,
+        caller=caller,
+        value=callvalue,
+        data=ByteVec(),
+        call_scheme=EVM.CALL,
+    )
+
     return sevm.mk_exec(
         code={this: bytecode},
         storage={this: storage},

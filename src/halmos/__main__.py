@@ -299,6 +299,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         caller=mk_caller(args),
         value=mk_callvalue(),
         data=ByteVec(),
+        call_scheme=EVM.CALL,
     )
 
     sevm = SEVM(options)
@@ -357,6 +358,7 @@ def deploy_test(
         caller=mk_caller(args),
         value=0,
         data=ByteVec(),
+        call_scheme=EVM.CREATE,
     )
 
     ex = sevm.mk_exec(
@@ -449,6 +451,7 @@ def setup(
                 caller=setup_ex.message().caller,
                 value=0,
                 data=calldata,
+                call_scheme=EVM.CALL,
             ),
         )
 
@@ -593,6 +596,7 @@ def run(
         caller=setup_ex.caller(),
         value=0,
         data=cd,
+        call_scheme=EVM.CALL,
     )
 
     #

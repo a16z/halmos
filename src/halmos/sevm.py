@@ -192,12 +192,15 @@ class Message:
     caller: Address
     value: Word
     data: ByteVec
+
+    # we outer calls, we expect a virtual call scheme to be provided, either CREATE or CALL
+    call_scheme: int
+
     is_static: bool = False
-    call_scheme: int = EVM.CALL
     gas: Optional[Word] = None
 
     def is_create(self) -> bool:
-        return self.call_scheme == EVM.CREATE or self.call_scheme == EVM.CREATE2
+        return self.call_scheme in (EVM.CREATE, EVM.CREATE2)
 
 
 @dataclass
