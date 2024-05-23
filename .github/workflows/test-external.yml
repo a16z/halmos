@@ -9,7 +9,8 @@ on:
 
 jobs:
   test:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
+    container: ghcr.io/emperororokusaki/solvers:0.1.0
 
     strategy:
       fail-fast: false
@@ -22,11 +23,11 @@ jobs:
           - repo: "a16z/cicada"
             dir: "cicada"
             cmd: "halmos --contract LibUint1024Test --function testProve --loop 256"
-            branch: ""
+            branch: "pin-solc"
           - repo: "a16z/cicada"
             dir: "cicada"
             cmd: "halmos --contract LibPrimeTest --function testProve --loop 256"
-            branch: ""
+            branch: "pin-solc"
           - repo: "farcasterxyz/contracts"
             dir: "farcaster-contracts"
             cmd: "halmos"
@@ -52,20 +53,6 @@ jobs:
           ref: ${{ matrix.branch }}
           submodules: recursive
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: python -m pip install --upgrade pip
-
-      - name: Install Halmos
-        run: python -m pip install -e ./halmos
-
       - name: Test external repo
-        run: ${{ matrix.cmd }} -v -st --solver-timeout-assertion 0 --solver-threads 2
+        run: ${{ matrix.cmd }} --statistics --debug --solver-timeout-assertion 0 --solver-threads 4 --solver-command=yices-smt2
         working-directory: ${{ matrix.dir }}

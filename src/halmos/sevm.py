@@ -79,37 +79,27 @@ new_address_offset: int = 1
 
 
 class Instruction:
-    pc: int
     opcode: int
-    operand: Optional[ByteVec]
+    pc: int = -1
+    next_pc: int = -1
+    operand: Optional[ByteVec] = None
 
-    def __init__(self, opcode, **kwargs) -> None:
+    def __init__(self, opcode, pc=-1, next_pc=-1, operand=None) -> None:
         self.opcode = opcode
 
-        self.pc = kwargs.get("pc", -1)
-        self.operand = kwargs.get("operand", None)
+        self.pc = pc
+        self.next_pc = next_pc
+        self.operand = operand
 
     def __str__(self) -> str:
-        operand_str = ""
-        if self.operand is not None:
-            operand = self.operand
-            if isinstance(operand, bytes):
-                operand = con(int.from_bytes(operand, "big"), len(operand) * 8)
-
-            expected_operand_length = instruction_length(self.opcode) - 1
-            actual_operand_length = operand.size() // 8
-            if expected_operand_length != actual_operand_length:
-                operand_str = f" ERROR {operand} ({expected_operand_length - actual_operand_length} bytes missed)"
-            else:
-                operand_str = " " + str(operand)
-
+        operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
         return f"{mnemonic(self.opcode)}{operand_str}"
 
     def __repr__(self) -> str:
         return f"Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})"
 
     def __len__(self) -> int:
-        return instruction_length(self.opcode)
+        return self.next_pc - self.pc
 
 
 def id_str(x: Any) -> str:
@@ -122,11 +112,6 @@ def mnemonic(opcode) -> str:
         return str_opcode.get(opcode, hex(opcode))
     else:
         return str(opcode)
-
-
-def instruction_length(opcode: Any) -> int:
-    opcode = int_of(opcode)
-    return (opcode - EVM.PUSH0 + 1) if EVM.PUSH1 <= opcode <= EVM.PUSH32 else 1
 
 
 def is_byte(x: Any) -> bool:
@@ -207,12 +192,15 @@ class Message:
     caller: Address
     value: Word
     data: ByteVec
+
+    # we outer calls, we expect a virtual call scheme to be provided, either CREATE or CALL
+    call_scheme: int
+
     is_static: bool = False
-    call_scheme: int = EVM.CALL
     gas: Optional[Word] = None
 
     def is_create(self) -> bool:
-        return self.call_scheme == EVM.CREATE or self.call_scheme == EVM.CREATE2
+        return self.call_scheme in (EVM.CREATE, EVM.CREATE2)
 
 
 @dataclass
@@ -299,6 +287,12 @@ class State:
         st.memory = self.memory.copy()
         return st
 
+    def dump(self, print_mem=False) -> str:
+        if print_mem:
+            return f"Stack: {str(list(reversed(self.stack)))}\n{self.str_memory()}"
+        else:
+            return f"Stack: {str(list(reversed(self.stack)))}"
+
     def __str__(self) -> str:
         return f"Stack: {str(list(reversed(self.stack)))}\n{self.str_memory()}"
 
@@ -380,7 +374,11 @@ class Contract:
 
         self._code = code
 
+        # maps pc to decoded instruction (including operand and next_pc)
+        self._insn = dict()
+
     def __init_jumpdests(self):
+        assert not hasattr(self, "_jumpdests")
         self._jumpdests = set((pc for (pc, op) in iter(self) if op == EVM.JUMPDEST))
 
     def __iter__(self):
@@ -403,18 +401,30 @@ class Contract:
         except ValueError as e:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
-    def decode_instruction(self, pc: int) -> Instruction:
+    def _decode_instruction(self, pc: int) -> Instruction:
         opcode = int_of(self._code[pc], f"symbolic opcode at pc={pc}")
 
         if EVM.PUSH1 <= opcode <= EVM.PUSH32:
-            operand = self.slice(pc + 1, pc + opcode - EVM.PUSH0 + 1).unwrap()
-            return Instruction(opcode, pc=pc, operand=operand)
+            operand_offset = pc + 1
+            operand_size = opcode - EVM.PUSH0
+            next_pc = operand_offset + operand_size
 
-        return Instruction(opcode, pc=pc)
+            # TODO: consider slicing lazily
+            operand = self.slice(operand_offset, next_pc).unwrap()
+            return Instruction(opcode, pc=pc, operand=operand, next_pc=next_pc)
+
+        return Instruction(opcode, pc=pc, next_pc=pc + 1)
+
+    def decode_instruction(self, pc: int) -> Instruction:
+        insn = self._insn.get(pc, None)
+        if insn is None:
+            insn = self._decode_instruction(pc)
+            self._insn[pc] = insn
+
+        return insn
 
     def next_pc(self, pc):
-        opcode = self[pc]
-        return pc + instruction_length(opcode)
+        return self.decode_instruction(pc).next_pc
 
     def slice(self, start, stop) -> ByteVec:
         return self._code.slice(start, stop)
@@ -451,11 +461,9 @@ class CodeIterator:
 
         try:
             pc = self.pc
-            opcode = self.contract[pc]
-
-            # this avoids decoding instruction operands (don't slice if we don't need to)
-            self.pc += instruction_length(opcode)
-            return (pc, opcode)
+            insn = self.contract.decode_instruction(pc)
+            self.pc = insn.next_pc
+            return (pc, insn.opcode)
         except NotConcreteError:
             raise StopIteration
 
@@ -580,7 +588,7 @@ class Exec:  # an execution path
     alias: Dict[Address, Address]  # address aliases
 
     # internal bookkeeping
-    cnts: Dict[str, Dict[int, int]]  # opcode -> frequency; counters
+    cnts: Dict[str, int]  # counters
     sha3s: Dict[Word, int]  # sha3 hashes generated
     storages: Dict[Any, Any]  # storage updates
     balances: Dict[Any, Any]  # balance updates
@@ -671,21 +679,16 @@ class Exec:  # an execution path
         assert_address(who)
         self.code[who] = code if isinstance(code, Contract) else Contract(code)
 
-    def str_cnts(self) -> str:
-        return "".join(
-            [
-                f"{x[0]}: {x[1]}\n"
-                for x in sorted(self.cnts["opcode"].items(), key=lambda x: x[0])
-            ]
-        )
-
     def __str__(self) -> str:
+        return self.dump()
+
+    def dump(self, print_mem=False) -> str:
         output = self.context.output.data
         return hexify(
             "".join(
                 [
                     f"PC: {self.this} {self.pc} {mnemonic(self.current_opcode())}\n",
-                    str(self.st),
+                    self.st.dump(print_mem=print_mem),
                     f"Balance: {self.balance}\n",
                     f"Storage:\n",
                     "".join(
@@ -828,18 +831,16 @@ class Exec:  # an execution path
         self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
-        self.cnts["fresh"]["gas"] += 1
-        return self.cnts["fresh"]["gas"]
+        self.cnts["gas"] += 1
+        return self.cnts["gas"]
 
     def new_address(self) -> Address:
-        self.cnts["fresh"]["address"] += 1
-        return con_addr(
-            magic_address + new_address_offset + self.cnts["fresh"]["address"]
-        )
+        self.cnts["address"] += 1
+        return con_addr(magic_address + new_address_offset + self.cnts["address"])
 
     def new_symbol_id(self) -> int:
-        self.cnts["fresh"]["symbol"] += 1
-        return self.cnts["fresh"]["symbol"]
+        self.cnts["symbol"] += 1
+        return self.cnts["symbol"]
 
     def returndata(self) -> Optional[ByteVec]:
         """
@@ -860,20 +861,17 @@ class Exec:  # an execution path
         returndata = self.returndata()
         return len(returndata) if returndata is not None else 0
 
-    def is_jumpdest(self, x: Word) -> bool:
-        if not is_concrete(x):
-            return False
-
-        pc: int = int_of(x)
-        if pc < 0:
-            raise ValueError(pc)
-
-        return pc in self.pgm.valid_jump_destinations()
-
     def jumpi_id(self) -> str:
-        return f"{self.pc}:" + ",".join(
-            map(lambda x: str(x) if self.is_jumpdest(x) else "", self.st.stack)
+        # TODO: avoid scanning the entire stack for jumpdests every time
+        valid_jumpdests = self.pgm.valid_jump_destinations()
+
+        jumpdests_str = (
+            str(unboxed)
+            for x in self.st.stack
+            if (unboxed := unbox_int(x)) in valid_jumpdests
         )
+
+        return f"{self.pc}:{','.join(jumpdests_str)}"
 
     # deploy libraries and resolve library placeholders in hexcode
     def resolve_libs(self, creation_hexcode, deployed_hexcode, lib_references) -> str:
@@ -2097,17 +2095,11 @@ class SEVM:
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
 
-                # print(f"{hexify(ex.this)}@{ex.pc}", end=" ")
                 insn = ex.current_instruction()
-                # print(f"insn={insn}")
-
                 opcode = insn.opcode
-                ex.cnts["opcode"][opcode] += 1
 
-                if (
-                    "max_depth" in self.options
-                    and sum(ex.cnts["opcode"].values()) > self.options["max_depth"]
-                ):
+                max_depth = self.options.get("max_depth", 0)
+                if max_depth and step_id > max_depth:
                     continue
 
                 # TODO: clean up
@@ -2121,7 +2113,7 @@ class SEVM:
                         self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
                 if self.options.get("print_steps"):
-                    print(ex)
+                    print(ex.dump(print_mem=self.options.get("print_mem", False)))
 
                 if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
@@ -2407,6 +2399,21 @@ class SEVM:
                         codeslice: ByteVec = ex.pgm.slice(offset, offset + size)
                         ex.st.memory.set_slice(loc, loc + size, codeslice)
 
+                elif opcode == EVM.MCOPY:
+                    dest_offset = int_of(ex.st.pop(), "symbolic MCOPY destOffset")
+                    src_offset = int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
+                    size = int_of(ex.st.pop(), "symbolic MCOPY size")
+
+                    if size > 0:
+                        src_end_loc = src_offset + size
+                        dst_end_loc = dest_offset + size
+
+                        if max(src_end_loc, dst_end_loc) > MAX_MEMORY_SIZE:
+                            raise HalmosException("MCOPY > MAX_MEMORY_SIZE")
+
+                        data = ex.st.memory.slice(src_offset, src_end_loc)
+                        ex.st.memory.set_slice(dest_offset, dst_end_loc, data)
+
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()
                     w = ex.st.pop()
@@ -2521,7 +2528,7 @@ class SEVM:
             alias={},
             #
             log=[],
-            cnts=defaultdict(lambda: defaultdict(int)),
+            cnts=defaultdict(int),
             sha3s={},
             storages={},
             balances={},

@@ -184,6 +184,7 @@ def mk_create_ex(
         caller=caller,
         value=value,
         data=ByteVec(),
+        call_scheme=EVM.CREATE,
         is_static=False,
     )
 
@@ -218,6 +219,7 @@ def mk_ex(
         caller=caller,
         value=value,
         data=data,
+        call_scheme=EVM.CALL,
         is_static=False,
     )
 
