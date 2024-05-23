@@ -2,10 +2,11 @@
 
 import argparse
 import os
-
 import toml
 
-from .utils import color_warn
+from typing import Dict, Optional
+
+from .utils import warn
 
 
 def mk_arg_parser() -> argparse.ArgumentParser:
@@ -116,7 +117,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "-f",
-        "--configure",
+        "--config",
         metavar="CONFIGURE_FILE_PATH",
         type=str,
         help="load the configuration from the given TOML file",
@@ -270,7 +271,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_configure_file(path: str):
+def load_config_file(path: str) -> Optional[Dict]:
     if not os.path.exists(path):
         print(f"Configuration file not found: {path}")
         return None
@@ -279,46 +280,42 @@ def load_configure_file(path: str):
         return toml.load(f)
 
 
-def parse_configure_file(
-    parser: argparse.ArgumentParser, args: argparse.Namespace, commands: list[str]
+def parse_config(
+    config_from_file: Dict,
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    commands: list[str],
 ) -> argparse.Namespace:
-    configure_path = os.path.join(args.root, args.configure)
-    configure = load_configure_file(configure_path)
-
-    if not configure:
+    if not config_from_file:
         return args
 
     actions = {
         action.dest: (action.type, action.option_strings) for action in parser._actions
     }
 
-    for _, configure_group in configure.items():
-        for key, value in configure_group.items():
-            key = key.replace(
-                "-", "_"
-            )  # convert to snake_case because argparse converts hyphens to underscores
-            if key in actions:
-                value_type, options_strings = actions[key]
+    for _, config_group in config_from_file.items():
+        for key, value in config_group.items():
+            # convert to snake_case because argparse converts hyphens to underscores
+            key = key.replace("-", "_")
 
-                if any(option in commands for option in options_strings):
-                    print(
-                        color_warn(
-                            f"Skipping configure key: {key} (command line argument)"
-                        )
-                    )
-                    continue
+            if key not in actions:
+                warn(f"Unknown config key: {key}")
+                continue
 
-                if value_type is None or isinstance(value, value_type):
-                    # Set the value if the type is None or the type is correct
-                    setattr(args, key, value)
-                else:
-                    expected_type_name = value_type.__name__ if value_type else "Any"
-                    print(
-                        color_warn(
-                            f"Invalid type for {key}: {type(value).__name__} (expected {expected_type_name})"
-                        )
-                    )
+            value_type, options_strings = actions[key]
+
+            if any(option in commands for option in options_strings):
+                warn(f"Skipping config key: {key} (command line argument)")
+                continue
+
+            if value_type is None or isinstance(value, value_type):
+                # Set the value if the type is None or the type is correct
+                setattr(args, key, value)
             else:
-                print(color_warn(f"Unknown configure key: {key}"))
+                expected_type_name = value_type.__name__ if value_type else "Any"
+                warn(
+                    f"Invalid type for {key}: {type(value).__name__}"
+                    f" (expected {expected_type_name})"
+                )
 
     return args

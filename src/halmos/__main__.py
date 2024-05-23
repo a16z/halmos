@@ -18,7 +18,7 @@ from importlib import metadata
 
 from .bytevec import Chunk, ByteVec
 from .calldata import Calldata
-from .parser import mk_arg_parser, parse_configure_file
+from .parser import mk_arg_parser, load_config_file, parse_config
 from .sevm import *
 from .utils import (
     NamedTimer,
@@ -1400,8 +1400,9 @@ def _main(_args=None) -> MainResult:
 
     args = arg_parser.parse_args(_args)
 
-    if args.configure:
-        args = parse_configure_file(arg_parser, args, sys.argv[1:])
+    if args.config:
+        config = load_config_file(args.config)
+        args = parse_config(config, arg_parser, args, sys.argv[1:])
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")
