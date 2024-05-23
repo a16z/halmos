@@ -1,45 +1,43 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import os
-import sys
-import subprocess
-import uuid
 import json
+import os
 import re
 import signal
-import traceback
+import subprocess
+import sys
 import time
-
+import traceback
+import uuid
 from argparse import Namespace
-from dataclasses import dataclass, asdict
-from importlib import metadata
-from enum import Enum
 from collections import Counter
-
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from dataclasses import asdict, dataclass
+from enum import Enum
+from importlib import metadata
 
 from .bytevec import Chunk, ByteVec
+from .calldata import Calldata
+from .parser import mk_arg_parser, load_config_file, parse_config
 from .sevm import *
 from .utils import (
-    create_solver,
-    hexify,
-    stringify,
-    indent_text,
     NamedTimer,
-    yellow,
-    cyan,
-    green,
-    red,
-    error,
-    info,
-    color_good,
-    color_warn,
-    color_info,
     color_error,
+    color_good,
+    color_info,
+    color_warn,
+    create_solver,
+    cyan,
+    error,
+    green,
+    hexify,
+    indent_text,
+    info,
+    red,
+    stringify,
+    yellow,
 )
 from .warnings import *
-from .parser import mk_arg_parser
-from .calldata import Calldata
 
 StrModel = Dict[str, str]
 AnyModel = UnionType[Model, StrModel]
@@ -1401,6 +1399,10 @@ def _main(_args=None) -> MainResult:
     #
 
     args = arg_parser.parse_args(_args)
+
+    if args.config:
+        config = load_config_file(args.config)
+        args = parse_config(config, arg_parser, args, sys.argv[1:])
 
     if args.version:
         print(f"Halmos {metadata.version('halmos')}")

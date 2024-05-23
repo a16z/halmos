@@ -1,7 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import os
 import argparse
+import os
+import toml
+
+from typing import Dict, Optional
+
+from .utils import warn
 
 
 def mk_arg_parser() -> argparse.ArgumentParser:
@@ -108,6 +113,14 @@ def mk_arg_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--version", action="store_true", help="print the version number"
+    )
+
+    parser.add_argument(
+        "-f",
+        "--config",
+        metavar="CONFIGURE_FILE_PATH",
+        type=str,
+        help="load the configuration from the given TOML file",
     )
 
     # debugging options
@@ -256,3 +269,53 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     )
 
     return parser
+
+
+def load_config_file(path: str) -> Optional[Dict]:
+    if not os.path.exists(path):
+        print(f"Configuration file not found: {path}")
+        return None
+
+    with open(path, "r") as f:
+        return toml.load(f)
+
+
+def parse_config(
+    config_from_file: Dict,
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    commands: list[str],
+) -> argparse.Namespace:
+    if not config_from_file:
+        return args
+
+    actions = {
+        action.dest: (action.type, action.option_strings) for action in parser._actions
+    }
+
+    for _, config_group in config_from_file.items():
+        for key, value in config_group.items():
+            # convert to snake_case because argparse converts hyphens to underscores
+            key = key.replace("-", "_")
+
+            if key not in actions:
+                warn(f"Unknown config key: {key}")
+                continue
+
+            value_type, options_strings = actions[key]
+
+            if any(option in commands for option in options_strings):
+                warn(f"Skipping config key: {key} (command line argument)")
+                continue
+
+            if value_type is None or isinstance(value, value_type):
+                # Set the value if the type is None or the type is correct
+                setattr(args, key, value)
+            else:
+                expected_type_name = value_type.__name__ if value_type else "Any"
+                warn(
+                    f"Invalid type for {key}: {type(value).__name__}"
+                    f" (expected {expected_type_name})"
+                )
+
+    return args
