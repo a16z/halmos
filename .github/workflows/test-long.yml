@@ -3,50 +3,28 @@ name: Test long
 on:
   push:
     branches: [main]
-# pull_request:
-#   branches: [main]
   workflow_dispatch:
 
 jobs:
   test:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest 
+    container: ghcr.io/emperororokusaki/solvers:0.1.0
 
     strategy:
       fail-fast: false
       matrix:
         include:
-        - testname: "tests/solver"
-        - testname: "examples/simple"
-        - testname: "examples/tokens/ERC20"
-        - testname: "examples/tokens/ERC721"
+          - testname: "tests/solver"
+          - testname: "examples/simple"
+          - testname: "examples/tokens/ERC20"
+          - testname: "examples/tokens/ERC721"
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install yices
+      - name: Run Pytest
         run: |
-          brew install SRI-CSL/sri-csl/yices2
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install pytest
-          python -m pip install setuptools
-
-      - name: Install Halmos
-        run: |
-          python -m pip install z3-solver==4.12.2.0
-          python -m pip install -e .
-
-      - name: Run pytest
-        run: pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
+          pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
