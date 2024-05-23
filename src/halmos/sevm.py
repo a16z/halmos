@@ -861,15 +861,16 @@ class Exec:  # an execution path
         returndata = self.returndata()
         return len(returndata) if returndata is not None else 0
 
-    def is_jumpdest(self, x: Word) -> bool:
-        pc = unbox_int(x)
-        return pc in self.pgm.valid_jump_destinations()
-
     def jumpi_id(self) -> str:
-        # no need to scan the entire stack, limit ourselves to the top N elements
-        # limiting ourselves to the top 16 leads to false positives
-        top_stack = self.st.stack[:32]
-        jumpdests_str = map(lambda x: str(x) if self.is_jumpdest(x) else "", top_stack)
+        # TODO: avoid scanning the entire stack for jumpdests every time
+        valid_jumpdests = self.pgm.valid_jump_destinations()
+
+        jumpdests_str = (
+            str(unboxed)
+            for x in self.st.stack
+            if (unboxed := unbox_int(x)) in valid_jumpdests
+        )
+
         return f"{self.pc}:{','.join(jumpdests_str)}"
 
     # deploy libraries and resolve library placeholders in hexcode
