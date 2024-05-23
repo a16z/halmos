@@ -257,17 +257,20 @@ def unbox_int(x: Any) -> Any:
     """
     Attempts to convert int-like objects to int
     """
+    if isinstance(x, int):
+        return x
+
     if hasattr(x, "unwrap"):
         return unbox_int(x.unwrap())
 
     if isinstance(x, bytes):
         return int.from_bytes(x, "big")
 
-    if is_bv(x):
-        x = simplify(x)
-
     if is_bv_value(x):
         return x.as_long()
+
+    if is_bv(x):
+        x = simplify(x)
 
     return x
 
@@ -314,7 +317,7 @@ def hexify(x):
     if isinstance(x, str):
         return re.sub(r"\b(\d+)\b", lambda match: hex(int(match.group(1))), x)
     elif isinstance(x, int):
-        return hex(x)
+        return f"0x{x:02x}"
     elif isinstance(x, bytes):
         return "0x" + x.hex()
     elif hasattr(x, "unwrap"):
@@ -557,6 +560,7 @@ class EVM:
     MSIZE = 0x59
     GAS = 0x5A
     JUMPDEST = 0x5B
+    MCOPY = 0x5E
     PUSH0 = 0x5F
     PUSH1 = 0x60
     PUSH2 = 0x61

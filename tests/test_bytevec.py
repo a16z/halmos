@@ -700,3 +700,36 @@ def test_writing_bytevec_to_bytevec_makes_copy(mem):
 
     # then the memory should not be affected
     assert mem.unwrap() == b"hel!!!!rld"
+
+
+def test_memory_write_slice_overlapping_forward(mem):
+    mem[:5] = b"hello"
+
+    # when we write a slice that overlaps with itself
+    mem[2:7] = mem[:5]
+
+    # then the existing memory should be correctly overwritten
+    assert mem._well_formed()
+    assert len(mem) == 7
+    assert mem[:].unwrap() == b"hehello"
+
+
+def test_memory_write_slice_overlapping_backward(mem):
+    x = BitVec("x", 256)
+    mem.set_word(32, x)
+
+    # when we write a slice that overlaps with itself
+    mem[16:48] = mem[32:64]
+
+    # then the existing memory should be correctly overwritten
+    assert mem._well_formed()
+    assert len(mem) == 64
+
+    # 16 bytes of zeroes, top half of x
+    assert eq(mem[:32].unwrap(), Concat(BitVecVal(0, 128), Extract(255, 128, x)))
+
+    # just x itself
+    assert eq(mem[16:48].unwrap(), x)
+
+    # bottom half of x, bottom half of x
+    assert eq(mem[32:64].unwrap(), Concat(Extract(127, 0, x), Extract(127, 0, x)))
