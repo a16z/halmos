@@ -71,8 +71,8 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--uninterpreted-unknown-calls",
         metavar="SELECTOR1,SELECTOR2,...",
-        # onERC721Received, IERC1271.isValidSignature
-        default="0x150b7a02,0x1626ba7e",
+        # IERC721.onERC721Received, IERC1271.isValidSignature, IERC1155.onERC1155Received, IERC1155.onERC1155BatchReceived
+        default="0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81",
         help="use uninterpreted abstractions for unknown external calls with the given function signatures (default: '%(default)s')",
     )
     parser.add_argument(

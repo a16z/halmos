@@ -25,7 +25,7 @@ contract Create2Test is Test {
         bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, codeHash));
         address c2 = address(uint160(uint(hash)));
 
-        assert(address(c1) == c2);
+        assertEq(address(c1), c2);
 
         assert(C(c2).num1() == x);
         assert(C(c2).num2() == y);
