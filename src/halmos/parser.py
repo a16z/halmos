@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-from copy import deepcopy
-
 import configargparse
 import os
 
@@ -338,22 +336,37 @@ class ConfigParser:
         """
         Parse command line arguments, potentially extending an existing configuration.
         """
-        base_namespace = deepcopy(base_config.args) if base_config else None
+        base_namespace = configargparse.Namespace()
         new_namespace = self.arg_parser.parse_args(args, namespace=base_namespace)
 
         if base_config.debug:
             self.format_values()
 
-        return Config(parser=self, args=new_namespace)
+        return Config(parser=self, args=new_namespace, parent=base_config)
 
     def format_values(self):
         return self.arg_parser.format_values()
 
 
 class Config:
-    def __init__(self, parser: ConfigParser = None, args: Args = None):
-        self.parser: ConfigParser = parser if parser else ConfigParser()
-        self.args: Args = args if args else self.parser.parse_config
+    """
+    A wrapper around the parsed configuration with some extras:
+
+    - keeps a reference to its parser
+    - can extend itself with more options
+    - can format the values for debugging (shows provenance of each value)
+    - can access the values of the underlying namespace as attributes
+    - keeps track of its parent configuration, avoiding copies
+
+    Not to be instantiated directly, use ConfigParser.parse_config instead.
+    """
+
+    def __init__(
+        self, parser: ConfigParser = None, args: Args = None, parent: "Config" = None
+    ):
+        self.parser = parser
+        self.args = args
+        self.parent = parent
 
     def extend(self, more_opts: str) -> "Config":
         if more_opts:
@@ -366,6 +379,10 @@ class Config:
         return self.parser.format_values()
 
     def __getattr__(self, name):
+        if not hasattr(self.args, name):
+            if self.parent:
+                return getattr(self.parent, name)
+
         return getattr(self.args, name)
 
     def __repr__(self) -> str:
