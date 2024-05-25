@@ -33,11 +33,12 @@ def test_config_file_in_project_root():
     cfp = ConfigFileProvider()
 
     # when we pass the project root as an argument
+    base_path = "/path/to/project"
     args = ["--root", "/path/to/project", "--extra-args", "ignored", "--help"]
     cfp.resolve_config_files(args)
 
     # then the config file should be in the project root
-    assert cfp.provide() == ["/path/to/project/halmos.toml"]
+    assert cfp.provide() == [os.path.join(base_path, "halmos.toml")]
 
 
 def test_load_config_file_not_found():
