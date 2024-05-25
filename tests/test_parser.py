@@ -1,75 +1,123 @@
-import argparse
-from unittest.mock import mock_open, patch
-
+import os
 import pytest
 
-from halmos.parser import load_config_file, parse_config
+from halmos.parser import ConfigFileProvider, ConfigParser, Config
 
 
-@pytest.fixture
-def mock_config():
-    return {
-        "settings": {
-            "depth": 4,
-            "array-lengths": 2,
-        }
-    }
+def mock_config_file_provider(config_file_contents):
+    # use a real object but with a non-existent file and mocked contents
+    provider = ConfigFileProvider(config_files=["mock_halmos.toml"])
+    provider.config_file_contents = config_file_contents
+    return provider
 
 
-@pytest.fixture
-def mock_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--depth", type=int)
-    parser.add_argument("--array-lengths")
-    return parser
+def test_config_file_default_location_is_cwd():
+    cfp = ConfigFileProvider()
+
+    # when we don't pass the project root as an argument
+    cfp.resolve_config_files(args=[])
+
+    # then the config file should be in the default location
+    assert cfp.provide() == [os.path.join(os.getcwd(), "halmos.toml")]
 
 
-@pytest.fixture
-def mock_args():
-    args = argparse.Namespace()
-    args.root = "/fake/path"
-    args.config = "halmos.toml"
-    args.depth = None
-    args.array_lengths = None
-    return args
+def test_config_file_in_project_root():
+    cfp = ConfigFileProvider()
+
+    # when we pass the project root as an argument
+    args = ["--root", "/path/to/project", "--extra-args", "ignored", "--help"]
+    cfp.resolve_config_files(args)
+
+    # then the config file should be in the project root
+    assert cfp.provide() == ["/path/to/project/halmos.toml"]
 
 
-def test_load_config_file_not_found(monkeypatch):
-    monkeypatch.setattr("os.path.exists", lambda x: False)
-    assert load_config_file("not_exist.toml") is None
+def test_load_config_file_not_found():
+    # when we try to load a non-existent config file
+    cfp = ConfigFileProvider(config_files=["nonexistent.toml"])
+    config_parser = ConfigParser(config_file_provider=cfp)
+    config = config_parser.parse_config(args="")
+
+    # then we should get a config object with default values
+    assert "Config File" not in config.format_values()
 
 
-def test_parse_config_success(mock_config, mock_parser, mock_args):
-    updated_args = parse_config(mock_config, mock_parser, mock_args, [])
-    assert updated_args.depth == 4
-    assert updated_args.array_lengths == 2
+def test_load_config_file_missing_section():
+    # mock a valid config file with a missing section
+    cfp = mock_config_file_provider("depth = 42")
+    config_parser = ConfigParser(config_file_provider=cfp)
+
+    # when we parse the config with the missing section
+    config = config_parser.parse_config(args="")
+
+    # then the malformed config file does not contribute to the config object
+    assert "Config File" not in config.format_values()
+    assert config.depth != 42
 
 
-def test_parse_config_invalid_key(mock_parser, mock_args):
-    invalid_key_config = {
-        "settings": {
-            "invalid_key": "invalid",
-        }
-    }
-    updated_args = parse_config(invalid_key_config, mock_parser, mock_args, [])
-    assert not hasattr(updated_args, "invalid_key")
+def test_parse_config_invalid_key():
+    # mock a valid config file with an invalid key
+    cfp = mock_config_file_provider("[global]\ninvalid_key = 42")
+    config_parser = ConfigParser(config_file_provider=cfp)
+
+    # invalid keys result in an error and exit
+    with pytest.raises(SystemExit) as exc_info:
+        config_parser.parse_config(args="")
+    assert exc_info.value.code == 2
 
 
-def test_parse_config_invalid_type(mock_parser, mock_args):
-    invalid_type_config = {
-        "settings": {
-            "depth": "invalid",
-            "array-lengths": 2,
-        }
-    }
-    updated_args = parse_config(invalid_type_config, mock_parser, mock_args, [])
-    assert updated_args.depth is None
-    assert updated_args.array_lengths == 2
+def test_parse_config_invalid_type():
+    cfp = mock_config_file_provider("[global]\ndepth = 'invalid'")
+    config_parser = ConfigParser(config_file_provider=cfp)
+
+    # invalid types result in an error and exit
+    with pytest.raises(SystemExit) as exc_info:
+        config_parser.parse_config(args="")
+    assert exc_info.value.code == 2
 
 
-def test_parse_config_skip_in_commands(mock_config, mock_parser, mock_args):
-    mock_args.depth = 5
-    updated_args = parse_config(mock_config, mock_parser, mock_args, ["--depth", "5"])
+def test_parse_config_success():
+    # mock a valid config file
+    cfp = mock_config_file_provider("[global]\ndepth = 42")
+    config_parser = ConfigParser(config_file_provider=cfp)
 
-    assert updated_args.depth == 5
-    assert updated_args.array_lengths == 2
+    # when we parse the config
+    config = config_parser.parse_config(args="")
+
+    # then we should get a config object with the correct values
+    assert config.depth == 42
+
+
+def test_parse_config_override():
+    # mock a valid config file
+    cfp = mock_config_file_provider("[global]\ndepth = 42\nverbose = 1234")
+    config_parser = ConfigParser(config_file_provider=cfp)
+
+    # when we parse the config with an override
+    config = config_parser.parse_config(args="--depth 123456")
+
+    # then we should get a config object with the overridden value
+    assert config.depth == 123456
+
+    # from config file
+    assert config.verbose == 1234
+
+    # from command line defaults
+    assert config.loop == 2
+
+
+def test_config_extend_does_not_modify_original():
+    # mock a valid config file
+    cfp = mock_config_file_provider("[global]\ndepth = 42\nverbose = 1234")
+    config_parser = ConfigParser(config_file_provider=cfp)
+    config = config_parser.parse_config(args="")
+    assert config.depth == 42
+
+    # when we extend the config
+    new_config = config.extend("--depth=123456")
+
+    # then the new config should have the overridden value
+    assert new_config.depth == 123456
+
+    # and the original config should not be modified
+    assert config.depth == 42

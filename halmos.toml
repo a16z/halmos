@@ -1,9 +1,12 @@
 # This is an example file for configuring the Halmos settings.
 # For configuration values, refer to the options listed under the 'halmos --help' command.
-# You may freely use sections to categorize the settings as needed.
 
-[settings]
-depth = 4
+# for now, every setting must be under the 'global' section
+[global]
 
-[compile-settings]
-array-lengths = 2
+verbose = 3
+debug = true
+statistics = true
+
+depth = 1_000_000
+storage-layout = 'generic'

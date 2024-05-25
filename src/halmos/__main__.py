@@ -18,7 +18,7 @@ from importlib import metadata
 
 from .bytevec import Chunk, ByteVec
 from .calldata import Calldata
-from .parser import mk_arg_parser, load_config_file, parse_config
+from .parser import ConfigParser
 from .sevm import *
 from .utils import (
     NamedTimer,
@@ -41,8 +41,6 @@ from .warnings import *
 
 StrModel = Dict[str, str]
 AnyModel = UnionType[Model, StrModel]
-
-arg_parser = mk_arg_parser()
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -929,8 +927,8 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
             abi,
             setup_info,
             fun_info,
-            extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json)),
-            extend_args(args, parse_devdoc(fun_info.sig, run_args.contract_json)),
+            args.extend(parse_devdoc(setup_info.sig, run_args.contract_json)),
+            args.extend(parse_devdoc(fun_info.sig, run_args.contract_json)),
             libs,
         )
         for fun_info in fun_infos
@@ -949,9 +947,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
     setup_info = extract_setup(run_args.methodIdentifiers)
 
     try:
-        setup_args = extend_args(
-            args, parse_devdoc(setup_info.sig, run_args.contract_json)
-        )
+        setup_args = args.extend(parse_devdoc(setup_info.sig, run_args.contract_json))
         setup_ex = setup(
             run_args.creation_hexcode,
             run_args.deployed_hexcode,
@@ -974,9 +970,8 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             funsig.split("(")[0], funsig, run_args.methodIdentifiers[funsig]
         )
         try:
-            extended_args = extend_args(
-                args, parse_devdoc(funsig, run_args.contract_json)
-            )
+            extended_args = args.extend(parse_devdoc(funsig, run_args.contract_json))
+            debug(extended_args.format_values())
             test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
         except Exception as err:
             print(f"{color_warn('[ERROR]')} {funsig}")
@@ -989,15 +984,6 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
         test_results.append(test_result)
 
     return test_results
-
-
-def extend_args(args: Namespace, more_opts: str) -> Namespace:
-    if more_opts:
-        new_args = deepcopy(args)
-        arg_parser.parse_args(more_opts.split(), new_args)
-        return new_args
-    else:
-        return args
 
 
 @dataclass(frozen=True)
@@ -1398,14 +1384,13 @@ def _main(_args=None) -> MainResult:
     # command line arguments
     #
 
-    args = arg_parser.parse_args(_args)
-
-    if args.config:
-        config = load_config_file(args.config)
-        args = parse_config(config, arg_parser, args, sys.argv[1:])
+    config_parser = ConfigParser()
+    args = config_parser.parse_config(_args)
+    if args.debug:
+        debug(args.format_values())
 
     if args.version:
-        print(f"Halmos {metadata.version('halmos')}")
+        print(f"halmos {metadata.version('halmos')}")
         return MainResult(0)
 
     # quick bytecode execution mode
@@ -1507,7 +1492,7 @@ def _main(_args=None) -> MainResult:
         print(f"\nRunning {num_found} tests for {contract_path}")
 
         # support for `/// @custom:halmos` annotations
-        contract_args = extend_args(args, parse_natspec(natspec)) if natspec else args
+        contract_args = args.extend(parse_natspec(natspec)) if natspec else args
 
         run_args = RunArgs(
             funsigs,

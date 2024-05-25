@@ -1,17 +1,38 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import argparse
+from copy import deepcopy
+
+import configargparse
 import os
-import toml
 
-from typing import Dict, Optional
+from typing import List, Optional
 
-from .utils import warn
+# type hint for the argument parser
+ArgParser = configargparse.ArgParser
+
+# type hint for the arguments
+Args = configargparse.Namespace
 
 
-def mk_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="halmos", epilog="For more information, see https://github.com/a16z/halmos"
+def _mk_root_parser() -> ArgParser:
+    root_parser = configargparse.ArgumentParser()
+    root_parser.add_argument(
+        "--root",
+        metavar="DIRECTORY",
+        default=os.getcwd(),
+    )
+
+    return root_parser
+
+
+def _mk_arg_parser(config_file_provider: "ConfigFileProvider") -> ArgParser:
+    parser = configargparse.ArgParser(
+        prog="halmos",
+        epilog="For more information, see https://github.com/a16z/halmos",
+        default_config_files=config_file_provider.provide(),
+        config_file_parser_class=configargparse.TomlConfigParser(sections=["global"]),
+        add_config_file_help=True,
+        args_for_setting_config_path=["--config"],
     )
 
     parser.add_argument(
@@ -20,6 +41,7 @@ def mk_arg_parser() -> argparse.ArgumentParser:
         default=os.getcwd(),
         help="source root directory (default: current directory)",
     )
+
     parser.add_argument(
         "--contract",
         metavar="CONTRACT_NAME",
@@ -113,14 +135,6 @@ def mk_arg_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--version", action="store_true", help="print the version number"
-    )
-
-    parser.add_argument(
-        "-f",
-        "--config",
-        metavar="CONFIGURE_FILE_PATH",
-        type=str,
-        help="load the configuration from the given TOML file",
     )
 
     # debugging options
@@ -271,51 +285,91 @@ def mk_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_config_file(path: str) -> Optional[Dict]:
-    if not os.path.exists(path):
-        print(f"Configuration file not found: {path}")
-        return None
+class ConfigFileProvider:
+    def __init__(self, config_files: Optional[List[str]] = None):
+        self.root_parser = _mk_root_parser()
+        self.config_files = config_files
 
-    with open(path, "r") as f:
-        return toml.load(f)
+        # for testing purposes
+        self.config_file_contents = None
+
+    def resolve_config_files(self, args: str) -> List[str]:
+        if self.config_files:
+            return self.config_files
+
+        # first, parse find the project root directory (containing foundry.toml)
+        root_args = self.root_parser.parse_known_args(args, ignore_help_args=True)[0]
+
+        # we expect to find halmos.toml in the project root directory
+        self.config_files = [os.path.join(root_args.root, "halmos.toml")]
+        return self.config_files
+
+    def provide(self) -> Optional[List[str]]:
+        return self.config_files
 
 
-def parse_config(
-    config_from_file: Dict,
-    parser: argparse.ArgumentParser,
-    args: argparse.Namespace,
-    commands: list[str],
-) -> argparse.Namespace:
-    if not config_from_file:
-        return args
+class ConfigParser:
+    def __init__(self, config_file_provider: ConfigFileProvider = None):
+        self.config_file_provider = config_file_provider or ConfigFileProvider()
 
-    actions = {
-        action.dest: (action.type, action.option_strings) for action in parser._actions
-    }
+        # initialized in parse_config
+        self.arg_parser = None
 
-    for _, config_group in config_from_file.items():
-        for key, value in config_group.items():
-            # convert to snake_case because argparse converts hyphens to underscores
-            key = key.replace("-", "_")
+    def parse_config(self, args: str) -> "Config":
+        """
+        Parse the configuration file and command line arguments.
 
-            if key not in actions:
-                warn(f"Unknown config key: {key}")
-                continue
+        Resolves the configuration file path based on the --root argument.
+        """
+        self.config_file_provider.resolve_config_files(args)
 
-            value_type, options_strings = actions[key]
+        # construct an argument parser that can parse the configuration file
+        self.arg_parser = _mk_arg_parser(self.config_file_provider)
 
-            if any(option in commands for option in options_strings):
-                warn(f"Skipping config key: {key} (command line argument)")
-                continue
+        # parse the configuration file + command line arguments
+        config_file_contents = self.config_file_provider.config_file_contents
 
-            if value_type is None or isinstance(value, value_type):
-                # Set the value if the type is None or the type is correct
-                setattr(args, key, value)
-            else:
-                expected_type_name = value_type.__name__ if value_type else "Any"
-                warn(
-                    f"Invalid type for {key}: {type(value).__name__}"
-                    f" (expected {expected_type_name})"
-                )
+        namespace = self.arg_parser.parse_args(
+            args, config_file_contents=config_file_contents
+        )
+        return Config(parser=self, args=namespace)
 
-    return args
+    def parse_args(self, args: str, base_config: Optional["Config"] = None) -> "Config":
+        """
+        Parse command line arguments, potentially extending an existing configuration.
+        """
+        base_namespace = deepcopy(base_config.args) if base_config else None
+        new_namespace = self.arg_parser.parse_args(args, namespace=base_namespace)
+
+        if base_config.debug:
+            self.format_values()
+
+        return Config(parser=self, args=new_namespace)
+
+    def format_values(self):
+        return self.arg_parser.format_values()
+
+
+class Config:
+    def __init__(self, parser: ConfigParser = None, args: Args = None):
+        self.parser: ConfigParser = parser if parser else ConfigParser()
+        self.args: Args = args if args else self.parser.parse_config
+
+    def extend(self, more_opts: str) -> "Config":
+        if more_opts:
+            new_config = self.parser.parse_args(more_opts, base_config=self)
+            return new_config
+        else:
+            return self
+
+    def format_values(self):
+        return self.parser.format_values()
+
+    def __getattr__(self, name):
+        return getattr(self.args, name)
+
+    def __repr__(self) -> str:
+        return repr(self.args)
+
+    def __str__(self) -> str:
+        return str(self.args)
