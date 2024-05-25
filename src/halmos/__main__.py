@@ -18,7 +18,7 @@ from importlib import metadata
 
 from .bytevec import Chunk, ByteVec
 from .calldata import Calldata
-from .parser import ConfigParser
+from .parser import get_config_parser
 from .sevm import *
 from .utils import (
     NamedTimer,
@@ -915,11 +915,13 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     )
 
     setup_info = extract_setup(methodIdentifiers)
+    setup_config = args.extend(parse_devdoc(setup_info.sig, run_args.contract_json))
 
     fun_infos = [
         FunctionInfo(funsig.split("(")[0], funsig, methodIdentifiers[funsig])
         for funsig in run_args.funsigs
     ]
+
     single_run_args = [
         SetupAndRunSingleArgs(
             creation_hexcode,
@@ -927,7 +929,7 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
             abi,
             setup_info,
             fun_info,
-            args.extend(parse_devdoc(setup_info.sig, run_args.contract_json)),
+            setup_config,
             args.extend(parse_devdoc(fun_info.sig, run_args.contract_json)),
             libs,
         )
@@ -971,7 +973,6 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
         )
         try:
             extended_args = args.extend(parse_devdoc(funsig, run_args.contract_json))
-            debug(extended_args.format_values())
             test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
         except Exception as err:
             print(f"{color_warn('[ERROR]')} {funsig}")
@@ -1384,7 +1385,7 @@ def _main(_args=None) -> MainResult:
     # command line arguments
     #
 
-    config_parser = ConfigParser()
+    config_parser = get_config_parser()
     args = config_parser.parse_config(_args)
     if args.debug:
         debug(args.format_values())

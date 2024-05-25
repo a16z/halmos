@@ -1053,7 +1053,6 @@ class GenericStorage(Storage):
     @classmethod
     def init(cls, ex: Exec, addr: Any, loc: BitVecRef) -> None:
         assert_address(addr)
-        print(f"{addr = }")
         if loc.size() not in ex.storage[addr]:
             ex.storage[addr][loc.size()] = cls.empty(addr, loc)
 

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import configargparse
+import copy
 import os
 
 from typing import List, Optional
@@ -330,19 +331,19 @@ class ConfigParser:
         namespace = self.arg_parser.parse_args(
             args, config_file_contents=config_file_contents
         )
-        return Config(parser=self, args=namespace)
+        return Config(args=namespace)
 
     def parse_args(self, args: str, base_config: Optional["Config"] = None) -> "Config":
         """
         Parse command line arguments, potentially extending an existing configuration.
         """
-        base_namespace = configargparse.Namespace()
+        base_namespace = copy.copy(base_config.args) if base_config else None
         new_namespace = self.arg_parser.parse_args(args, namespace=base_namespace)
 
         if base_config.debug:
             self.format_values()
 
-        return Config(parser=self, args=new_namespace, parent=base_config)
+        return Config(args=new_namespace)
 
     def format_values(self):
         return self.arg_parser.format_values()
@@ -352,41 +353,40 @@ class Config:
     """
     A wrapper around the parsed configuration with some extras:
 
-    - keeps a reference to its parser
     - can extend itself with more options
-    - can format the values for debugging (shows provenance of each value)
     - can access the values of the underlying namespace as attributes
     - keeps track of its parent configuration, avoiding copies
 
     Not to be instantiated directly, use ConfigParser.parse_config instead.
     """
 
-    def __init__(
-        self, parser: ConfigParser = None, args: Args = None, parent: "Config" = None
-    ):
-        self.parser = parser
+    def __init__(self, args: Args = None):
         self.args = args
-        self.parent = parent
 
     def extend(self, more_opts: str) -> "Config":
         if more_opts:
-            new_config = self.parser.parse_args(more_opts, base_config=self)
+            new_config = config_parser.parse_args(more_opts, base_config=self)
             return new_config
         else:
             return self
 
-    def format_values(self):
-        return self.parser.format_values()
-
     def __getattr__(self, name):
-        if not hasattr(self.args, name):
-            if self.parent:
-                return getattr(self.parent, name)
+        args = self.__dict__.get("args", None)
+        if name == "args":
+            return args
 
-        return getattr(self.args, name)
+        return getattr(args, name)
 
     def __repr__(self) -> str:
         return repr(self.args)
 
     def __str__(self) -> str:
         return str(self.args)
+
+
+# global parser instance
+config_parser = ConfigParser()
+
+
+def get_config_parser() -> ConfigParser:
+    return config_parser
