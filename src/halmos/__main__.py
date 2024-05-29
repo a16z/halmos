@@ -1388,7 +1388,7 @@ def _main(_args=None) -> MainResult:
     config_parser = get_config_parser()
     args = config_parser.parse_config(_args)
     if args.debug:
-        debug(args.format_values())
+        debug(config_parser.format_values())
 
     if args.version:
         print(f"halmos {metadata.version('halmos')}")
