@@ -202,7 +202,12 @@ class Config:
         Use vars(namespace) to pass in the arguments from an argparse parser or
         just a dictionary with the overrides (e.g. from a toml or json file)."""
 
-        return Config(config_parent=self, config_source=source, **overrides)
+        try:
+            return Config(config_parent=self, config_source=source, **overrides)
+        except TypeError as e:
+            # follow argparse error message format and behavior
+            warn(f"error: unrecognized argument: {str(e).split()[-1]}")
+            sys.exit(2)
 
     def value_with_source(self, name: str) -> Tuple[Any, str]:
         # look up value in current object

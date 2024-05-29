@@ -120,10 +120,11 @@ def test_config_file_in_project_root():
     assert config_files == [os.path.join(base_path, "halmos.toml")]
 
 
-def test_config_file_invalid_key(toml_parser):
+def test_config_file_invalid_key(config, toml_parser):
     # invalid keys result in an error and exit
     with pytest.raises(SystemExit) as exc_info:
-        toml_parser.parse_str("[global]\ninvalid_key = 42")
+        data = toml_parser.parse_str("[global]\ninvalid_key = 42")
+        config = config.with_overrides(source="halmos.toml", **data)
     assert exc_info.value.code == 2
 
 
