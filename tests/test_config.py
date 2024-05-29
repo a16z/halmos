@@ -1,7 +1,15 @@
 import argparse
+import os
+import pickle
 import pytest
 
-from halmos.config import Config, default_config, arg_parser
+from halmos.config import (
+    Config,
+    default_config,
+    arg_parser,
+    toml_parser as get_toml_parser,
+    resolve_config_files,
+)
 
 
 @pytest.fixture
@@ -12,6 +20,11 @@ def config():
 @pytest.fixture
 def parser():
     return arg_parser()
+
+
+@pytest.fixture
+def toml_parser():
+    return get_toml_parser()
 
 
 def test_fresh_config_has_only_None_values():
@@ -70,3 +83,96 @@ def test_override(config):
 
     # default values are still available in the override config
     assert override.solver_threads == config.solver_threads
+
+
+def test_toml_parser_expects_single_section(toml_parser):
+    # extra section
+    with pytest.raises(SystemExit):
+        toml_parser.parse_str("[global]\na = 1\n[extra]\nb = 2")
+
+    # missing global
+    with pytest.raises(SystemExit):
+        toml_parser.parse_str("a = 1\nb = 2")
+
+    # single section is not expected one
+    with pytest.raises(SystemExit):
+        toml_parser.parse_str("[weird]\na = 1\nb = 2")
+
+    # works
+    toml_parser.parse_str("[global]")
+
+
+def test_config_file_default_location_is_cwd():
+    # when we don't pass the project root as an argument
+    config_files = resolve_config_files(args=[])
+
+    # then the config file should be in the default location
+    assert config_files == [os.path.join(os.getcwd(), "halmos.toml")]
+
+
+def test_config_file_in_project_root():
+    # when we pass the project root as an argument
+    base_path = "/path/to/project"
+    args = ["--root", base_path, "--extra-args", "ignored"]
+    config_files = resolve_config_files(args)
+
+    # then the config file should be in the project root
+    assert config_files == [os.path.join(base_path, "halmos.toml")]
+
+
+def test_config_file_invalid_key(toml_parser):
+    # invalid keys result in an error and exit
+    with pytest.raises(SystemExit) as exc_info:
+        toml_parser.parse_str("[global]\ninvalid_key = 42")
+    assert exc_info.value.code == 2
+
+
+# TODO: uncomment when type checking is implemented
+# def test_config_file_invalid_type(toml_parser):
+#     # invalid types result in an error and exit
+#     with pytest.raises(SystemExit) as exc_info:
+#         config = toml_parser.parse_str("[global]\ndepth = 'invalid'")
+#         print(config)
+#     assert exc_info.value.code == 2
+
+
+def test_config_file_snake_case(config, toml_parser):
+    config_file_data = toml_parser.parse_str("[global]\nsolver-threads = 42")
+    assert config_file_data["solver_threads"] == 42
+
+    config = config.with_overrides(source="halmos.toml", **config_file_data)
+    assert config.solver_threads == 42
+
+
+def test_config_e2e(config, parser, toml_parser):
+    # when we apply overrides to the default config
+    config_file_data = toml_parser.parse_str(
+        "[global]\nverbose = 42\nsymbolic_storage = true"
+    )
+    config = config.with_overrides(source="halmos.toml", **config_file_data)
+
+    args = parser.parse_args(["-vvv"])
+    config = config.with_overrides(source="command-line", **vars(args))
+
+    # then the config object should have the expected values
+    assert config.verbose == 3
+    assert config.symbolic_storage == True
+    assert config.loop == 2
+
+    # and each value should have the expected source
+    assert config.value_with_source("verbose") == (3, "command-line")
+    assert config.value_with_source("symbolic_storage") == (True, "halmos.toml")
+    assert config.value_with_source("loop") == (2, "default")
+
+
+def test_config_pickle(config, parser):
+    args = parser.parse_args(["-vvv"])
+    config = config.with_overrides(source="command-line", **vars(args))
+
+    # pickle and unpickle the config
+    pickled = pickle.dumps(config)
+    unpickled = pickle.loads(pickled)
+
+    # then the config object should be the same
+    assert config == unpickled
+    assert unpickled.value_with_source("verbose") == (3, "command-line")
