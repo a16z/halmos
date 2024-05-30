@@ -4,13 +4,13 @@ import re
 
 from dataclasses import dataclass
 from typing import List, Dict
-from argparse import Namespace
 from functools import reduce
 
 from z3 import *
 
 from .sevm import con, concat
 from .bytevec import ByteVec
+from .config import Config as HalmosConfig
 
 
 @dataclass(frozen=True)
@@ -83,12 +83,12 @@ class EncodingResult:
 
 
 class Calldata:
-    args: Namespace
+    args: HalmosConfig
     arrlen: Dict[str, int]
     dyn_param_size: List[str]  # to be updated
 
     def __init__(
-        self, args: Namespace, arrlen: Dict[str, int], dyn_param_size: List[str]
+        self, args: HalmosConfig, arrlen: Dict[str, int], dyn_param_size: List[str]
     ) -> None:
         self.args = args
         self.arrlen = arrlen

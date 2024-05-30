@@ -9,8 +9,11 @@ from typing import Any, Dict, List, Optional, Tuple, Union as UnionType
 
 from .utils import warn
 
+# common strings
+internal = "internal"
+
 # groups
-debug, solver, build, experimental = (
+debugging, solver, build, experimental = (
     "Debugging options",
     "Solver options",
     "Build options",
@@ -57,13 +60,13 @@ class Config:
     _parent: "Config" = field(
         repr=False,
         metadata={
-            "internal": True,
+            internal: True,
         },
     )
 
     _source: str = field(
         metadata={
-            "internal": True,
+            internal: True,
         },
     )
 
@@ -93,32 +96,32 @@ class Config:
     )
 
     match_contract: str = arg(
-        help="run tests in contracts matching the given regex. Ignored if the --contract name is given. (default: '%(default)s')",
+        help="run tests in contracts matching the given regex. Ignored if the --contract name is given.",
         global_default="",
         metavar="CONTRACT_NAME_REGEX",
     )
 
     function: str = arg(
-        help="run tests matching the given prefix. Shortcut for `--match-test '^{PREFIX}'`. (default: '%(default)s')",
+        help="run tests matching the given prefix. Shortcut for `--match-test '^{PREFIX}'`.",
         global_default="check_",
         metavar="FUNCTION_NAME_PREFIX",
     )
 
     match_test: str = arg(
-        help="run tests matching the given regex. The --function prefix is automatically added, unless the regex starts with '^'. (default: '%(default)s')",
+        help="run tests matching the given regex. The --function prefix is automatically added, unless the regex starts with '^'.",
         global_default="",
         metavar="FUNCTION_NAME_REGEX",
         short="mt",
     )
 
     loop: int = arg(
-        help="set loop unrolling bounds (default: %(default)s)",
+        help="set loop unrolling bounds",
         global_default=2,
         metavar="MAX_BOUND",
     )
 
     width: int = arg(
-        help="set the max number of paths (default: %(default)s)",
+        help="set the max number of paths",
         global_default=2**64,
         metavar="MAX_WIDTH",
     )
@@ -134,13 +137,13 @@ class Config:
     )
 
     uninterpreted_unknown_calls: str = arg(
-        help="use uninterpreted abstractions for unknown external calls with the given function signatures (default: '%(default)s')",
+        help="use uninterpreted abstractions for unknown external calls with the given function signatures",
         global_default="0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81",
         metavar="SELECTOR1,SELECTOR2,...",
     )
 
     return_size_of_unknown_calls: int = arg(
-        help="set the byte size of return data from uninterpreted unknown external calls (default: %(default)s)",
+        help="set the byte size of return data from uninterpreted unknown external calls",
         global_default=32,
         metavar="BYTE_SIZE",
     )
@@ -181,7 +184,7 @@ class Config:
     verbose: int = arg(
         help="increase verbosity levels: -v, -vv, -vvv, ...",
         global_default=0,
-        group=debug,
+        group=debugging,
         short="v",
         countable=True,
     )
@@ -189,82 +192,82 @@ class Config:
     statistics: bool = arg(
         help="print statistics",
         global_default=False,
-        group=debug,
+        group=debugging,
         short="st",
     )
 
     debug: bool = arg(
         help="run in debug mode",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     log: str = arg(
         help="log every execution steps in JSON",
         global_default=None,
         metavar="LOG_FILE_PATH",
-        group=debug,
+        group=debugging,
     )
 
     json_output: str = arg(
         help="output test results in JSON",
         global_default=None,
         metavar="JSON_FILE_PATH",
-        group=debug,
+        group=debugging,
     )
 
     minimal_json_output: bool = arg(
         help="include minimal information in the JSON output",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     print_steps: bool = arg(
         help="print every execution steps",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     print_states: bool = arg(
         help="print all final execution states",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     print_failed_states: bool = arg(
         help="print failed execution states",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     print_blocked_states: bool = arg(
         help="print blocked execution states",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     print_setup_states: bool = arg(
         help="print setup execution states",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     print_full_model: bool = arg(
         help="print full counterexample model",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     early_exit: bool = arg(
         help="stop after a counterexample is found",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     dump_smt_queries: bool = arg(
         help="dump SMT queries for assertion violations",
         global_default=False,
-        group=debug,
+        group=debugging,
     )
 
     ### Build options
@@ -279,28 +282,28 @@ class Config:
     ### Solver options
 
     smt_exp_by_const: int = arg(
-        help="interpret constant power up to N (default: %(default)s)",
+        help="interpret constant power up to N",
         global_default=2,
         metavar="N",
         group=solver,
     )
 
     solver_timeout_branching: int = arg(
-        help="set timeout (in milliseconds) for solving branching conditions; 0 means no timeout (default: %(default)s)",
+        help="set timeout (in milliseconds) for solving branching conditions; 0 means no timeout",
         global_default=1,
         metavar="TIMEOUT",
         group=solver,
     )
 
     solver_timeout_assertion: int = arg(
-        help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout (default: %(default)s)",
+        help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout",
         global_default=1000,
         metavar="TIMEOUT",
         group=solver,
     )
 
     solver_max_memory: int = arg(
-        help="set memory limit (in megabytes) for the solver; 0 means no limit (default: %(default)s)",
+        help="set memory limit (in megabytes) for the solver; 0 means no limit",
         global_default=0,
         metavar="SIZE",
         group=solver,
@@ -318,7 +321,7 @@ class Config:
     )
 
     solver_threads: int = arg(
-        help="set the number of threads for parallel solvers (default: %(default)s)",
+        help="set the number of threads for parallel solvers",
         global_default=os.cpu_count() or 1,
         metavar="N",
         group=solver,
