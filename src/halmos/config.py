@@ -230,7 +230,13 @@ class Config:
     )
 
     print_steps: bool = arg(
-        help="print every execution steps",
+        help="print every execution step",
+        global_default=False,
+        group=debugging,
+    )
+
+    print_mem: bool = arg(
+        help="when --print-steps is enabled, also print memory contents",
         global_default=False,
         group=debugging,
     )

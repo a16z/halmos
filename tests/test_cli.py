@@ -9,7 +9,7 @@ from halmos.sevm import con, Contract, Instruction
 
 from halmos.__main__ import str_abi, run_bytecode, FunctionInfo
 
-from test_fixtures import args, options
+from test_fixtures import args
 
 
 @pytest.fixture

@@ -2,8 +2,7 @@ import pytest
 
 from halmos.config import default_config
 from halmos.sevm import SEVM
-from halmos.__main__ import mk_options, mk_solver
-import halmos.__main__
+from halmos.__main__ import mk_solver
 
 
 @pytest.fixture
@@ -12,13 +11,8 @@ def args():
 
 
 @pytest.fixture
-def options(args):
-    return mk_options(args)
-
-
-@pytest.fixture
-def sevm(options):
-    return SEVM(options)
+def sevm(args):
+    return SEVM(args)
 
 
 @pytest.fixture

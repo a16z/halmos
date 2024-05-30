@@ -156,7 +156,7 @@ def mk_calldata(
     fun_info: FunctionInfo,
     cd: ByteVec,
     dyn_param_size: List[str],
-    args: Config,
+    args: HalmosConfig,
 ) -> None:
     # find function abi
     fun_abi = find_abi(abi, fun_info)
@@ -196,7 +196,7 @@ def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
 
-def mk_caller(args: Config) -> Address:
+def mk_caller(args: HalmosConfig) -> Address:
     if args.symbolic_msg_sender:
         return mk_addr("msg_sender")
     else:
@@ -207,7 +207,7 @@ def mk_this() -> Address:
     return magic_address + 1
 
 
-def mk_solver(args: Config, logic="QF_AUFBV", ctx=None, assertion=False):
+def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, assertion=False):
     timeout = (
         args.solver_timeout_assertion if assertion else args.solver_timeout_branching
     )
@@ -334,12 +334,11 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
         print(file=file)
 
 
-def run_bytecode(hexcode: str, args: Config) -> List[Exec]:
+def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
     solver = mk_solver(args)
     contract = Contract.from_hexcode(hexcode)
     balance = mk_balance()
     block = mk_block()
-    options = mk_options(args)
     this = mk_this()
 
     message = Message(
@@ -350,7 +349,7 @@ def run_bytecode(hexcode: str, args: Config) -> List[Exec]:
         call_scheme=EVM.CALL,
     )
 
-    sevm = SEVM(options)
+    sevm = SEVM(args)
     ex = sevm.mk_exec(
         code={this: contract},
         storage={this: {}},
@@ -397,7 +396,7 @@ def deploy_test(
     creation_hexcode: str,
     deployed_hexcode: str,
     sevm: SEVM,
-    args: Config,
+    args: HalmosConfig,
     libs: Dict,
 ) -> Exec:
     this = mk_this()
@@ -474,13 +473,13 @@ def setup(
     deployed_hexcode: str,
     abi: List,
     setup_info: FunctionInfo,
-    args: Config,
+    args: HalmosConfig,
     libs: Dict,
 ) -> Exec:
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
-    sevm = SEVM(mk_options(args))
+    sevm = SEVM(args)
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
     setup_timer.create_subtimer("run")
@@ -621,7 +620,7 @@ def run(
     setup_ex: Exec,
     abi: List,
     fun_info: FunctionInfo,
-    args: Config,
+    args: HalmosConfig,
 ) -> TestResult:
     funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
     if args.verbose >= 1:
@@ -654,9 +653,7 @@ def run(
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
 
-    options = mk_options(args)
-    sevm = SEVM(options)
-
+    sevm = SEVM(args)
     solver = mk_solver(args)
     path = Path(solver)
     path.extend_path(setup_ex.path)
@@ -882,8 +879,8 @@ class SetupAndRunSingleArgs:
     abi: List
     setup_info: FunctionInfo
     fun_info: FunctionInfo
-    setup_args: Config
-    args: Config
+    setup_args: HalmosConfig
+    args: HalmosConfig
     libs: Dict
 
 
@@ -951,7 +948,7 @@ class RunArgs:
     abi: List
     methodIdentifiers: Dict[str, str]
 
-    args: Config
+    args: HalmosConfig
     contract_json: Dict
     libs: Dict
 
@@ -1042,7 +1039,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
 
 @dataclass(frozen=True)
 class GenModelArgs:
-    args: Config
+    args: HalmosConfig
     idx: int
     sexpr: str
     dump_dirname: Optional[str] = None
@@ -1053,7 +1050,7 @@ def copy_model(model: Model) -> Dict:
 
 
 def solve(
-    query: str, args: Config, dump_filename: Optional[str] = None
+    query: str, args: HalmosConfig, dump_filename: Optional[str] = None
 ) -> Tuple[CheckSatResult, Model]:
     if args.dump_smt_queries or args.solver_command:
         if not dump_filename:
@@ -1154,7 +1151,7 @@ def package_result(
     model: Optional[UnionType[Model, str]],
     idx: int,
     result: CheckSatResult,
-    args: Config,
+    args: HalmosConfig,
 ) -> ModelWithContext:
     if result == unsat:
         if args.verbose >= 1:
@@ -1220,40 +1217,7 @@ def render_model(model: UnionType[str, StrModel]) -> str:
     return "".join(sorted(formatted)) if formatted else "∅"
 
 
-def mk_options(args: Config) -> Dict:
-    options = {
-        "target": args.root,
-        "verbose": args.verbose,
-        "debug": args.debug,
-        "log": args.log,
-        "expByConst": args.smt_exp_by_const,
-        "timeout": args.solver_timeout_branching,
-        "max_memory": args.solver_max_memory,
-        "sym_jump": args.symbolic_jump,
-        "print_steps": args.print_steps,
-        "unknown_calls_return_size": args.return_size_of_unknown_calls,
-        "ffi": args.ffi,
-        "storage_layout": args.storage_layout,
-    }
-
-    if args.width is not None:
-        options["max_width"] = args.width
-
-    if args.depth is not None:
-        options["max_depth"] = args.depth
-
-    if args.loop is not None:
-        options["max_loop"] = args.loop
-
-    options["unknown_calls"] = []
-    if args.uninterpreted_unknown_calls.strip():
-        for x in args.uninterpreted_unknown_calls.split(","):
-            options["unknown_calls"].append(int(x, 0))
-
-    return options
-
-
-def mk_arrlen(args: Config) -> Dict[str, int]:
+def mk_arrlen(args: HalmosConfig) -> Dict[str, int]:
     arrlen = {}
     if args.array_lengths:
         for assign in [x.split("=") for x in args.array_lengths.split(",")]:
@@ -1263,7 +1227,7 @@ def mk_arrlen(args: Config) -> Dict[str, int]:
     return arrlen
 
 
-def parse_build_out(args: Config) -> Dict:
+def parse_build_out(args: HalmosConfig) -> Dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
     out_path = os.path.join(args.root, args.forge_build_out)
@@ -1322,10 +1286,8 @@ def parse_build_out(args: Config) -> Dict:
                     )
                 contract_map[contract_name] = (json_out, contract_type, natspec)
             except Exception as err:
-                print(
-                    color_warn(
-                        f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
-                    )
+                warn(
+                    f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
                 )
                 if args.debug:
                     traceback.print_exc()

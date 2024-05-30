@@ -349,7 +349,7 @@ class hevm_cheat_code:
                 [filename, contract_name] = path.split(":")
                 path = "out/" + filename + "/" + contract_name + ".json"
 
-            target = sevm.options["target"].rstrip("/")
+            target = sevm.options.root.rstrip("/")
             path = target + "/" + path
 
             with open(path) as f:
@@ -470,14 +470,14 @@ class hevm_cheat_code:
 
         # ffi(string[]) returns (bytes)
         elif funsig == hevm_cheat_code.ffi_sig:
-            if not sevm.options.get("ffi"):
+            if not sevm.options.ffi:
                 error_msg = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
                 raise HalmosException(error_msg)
 
             cmd = extract_string_array_argument(arg, 0)
 
-            debug = sevm.options.get("debug", False)
-            verbose = sevm.options.get("verbose", 0)
+            debug = sevm.options.debug
+            verbose = sevm.options.verbose
             if debug or verbose:
                 print(f"[vm.ffi] {cmd}")
 
