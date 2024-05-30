@@ -122,7 +122,7 @@ class Config:
 
     width: int = arg(
         help="set the max number of paths",
-        global_default=2**64,
+        global_default=2**16,
         metavar="MAX_WIDTH",
     )
 
@@ -529,7 +529,6 @@ def _create_arg_parser() -> argparse.ArgumentParser:
         arg_help = field_info.metadata.get("help", "")
         metavar = field_info.metadata.get("metavar", None)
         group_name = field_info.metadata.get("group", None)
-
         if group_name not in groups:
             groups[group_name] = parser.add_argument_group(group_name)
 
@@ -540,6 +539,11 @@ def _create_arg_parser() -> argparse.ArgumentParser:
         elif field_info.metadata.get("countable", False):
             group.add_argument(*names, help=arg_help, action="count")
         else:
+            # add the default value to the help text
+            default = field_info.metadata.get("global_default", None)
+            if default is not None:
+                arg_help += f" (default: {default!r})"
+
             kwargs = {
                 "help": arg_help,
                 "metavar": metavar,
