@@ -103,9 +103,8 @@ def load_config(_args) -> HalmosConfig:
     config_files = resolve_config_files(_args)
     for config_file in config_files:
         if not os.path.exists(config_file):
-            if cli_overrides.debug:
-                debug(f"Skipping config file {config_file}")
-            continue
+            error(f"Config file not found: {config_file}")
+            sys.exit(2)
 
         overrides = toml_parser().parse_file(config_file)
         config = config.with_overrides(source=config_file, **overrides)

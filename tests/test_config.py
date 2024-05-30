@@ -106,15 +106,22 @@ def test_config_file_default_location_is_cwd():
     # when we don't pass the project root as an argument
     config_files = resolve_config_files(args=[])
 
-    # then the config file should be in the default location
-    assert config_files == [os.path.join(os.getcwd(), "halmos.toml")]
+    # then we don't expect a config file since the default doesn't exist
+    assert config_files == []
+
+    # when we pass a --config argument explicitly
+    args = ["--config", "fake.toml", "--extra-args", "ignored"]
+    config_files = resolve_config_files(args)
+
+    # then we expect the config file to be the one we passed
+    assert config_files == ["fake.toml"]
 
 
 def test_config_file_in_project_root():
     # when we pass the project root as an argument
     base_path = "/path/to/project"
     args = ["--root", base_path, "--extra-args", "ignored"]
-    config_files = resolve_config_files(args)
+    config_files = resolve_config_files(args, include_missing=True)
 
     # then the config file should be in the project root
     assert config_files == [os.path.join(base_path, "halmos.toml")]

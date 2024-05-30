@@ -85,6 +85,12 @@ class Config:
     #
     # We can then layer these Config objects on top of the `default_config()`
 
+    config: str = arg(
+        help="path to the configuration file",
+        global_default=None,
+        metavar="FILE",
+    )
+
     root: str = arg(
         help="Project root directory", global_default=os.getcwd(), metavar="PATH"
     )
@@ -441,21 +447,32 @@ class Config:
         return "\n".join(lines)
 
 
-def resolve_config_files(args: UnionType[str, List[str]]) -> List[str]:
-    root_parser = argparse.ArgumentParser()
-    root_parser.add_argument(
+def resolve_config_files(args: List[str], include_missing: bool = False) -> List[str]:
+    config_parser = argparse.ArgumentParser()
+    config_parser.add_argument(
         "--root",
         metavar="DIRECTORY",
         default=os.getcwd(),
     )
 
+    config_parser.add_argument("--config", metavar="FILE")
+
     # first, parse find the project root directory (containing foundry.toml)
     # beware: errors and help flags will cause a system exit
-    root_args = root_parser.parse_known_args(args)[0]
+    args = config_parser.parse_known_args(args)[0]
+
+    # if --config is passed explicitly, use that
+    # no check for existence is done here, we don't want to silently ignore
+    # missing config files when they are requested explicitly
+    if args.config:
+        return [args.config]
 
     # we expect to find halmos.toml in the project root directory
-    config_files = [os.path.join(root_args.root, "halmos.toml")]
-    return config_files
+    default_config_path = os.path.join(args.root, "halmos.toml")
+    if not include_missing and not os.path.exists(default_config_path):
+        return []
+
+    return [default_config_path]
 
 
 class TomlParser:
