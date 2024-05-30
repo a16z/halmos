@@ -45,7 +45,8 @@ def arg(
     )
 
 
-@dataclass(kw_only=True, frozen=True)
+# TODO: add kw_only=True when we support Python>=3.10
+@dataclass(frozen=True)
 class Config:
     """Configuration object for halmos.
 
