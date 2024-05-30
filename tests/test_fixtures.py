@@ -1,6 +1,6 @@
 import pytest
 
-from halmos.parser import ConfigParser
+from halmos.config import default_config
 from halmos.sevm import SEVM
 from halmos.__main__ import mk_options, mk_solver
 import halmos.__main__
@@ -8,12 +8,7 @@ import halmos.__main__
 
 @pytest.fixture
 def args():
-    args = ConfigParser().parse_config("")
-
-    # set the global args for the main module
-    halmos.__main__.args = args
-
-    return args
+    return default_config()
 
 
 @pytest.fixture

@@ -9,7 +9,7 @@ import sys
 import time
 import traceback
 import uuid
-from argparse import Namespace
+
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -18,7 +18,13 @@ from importlib import metadata
 
 from .bytevec import Chunk, ByteVec
 from .calldata import Calldata
-from .parser import get_config_parser
+from .config import (
+    arg_parser,
+    default_config,
+    resolve_config_files,
+    toml_parser,
+    Config as HalmosConfig,
+)
 from .sevm import *
 from .utils import (
     NamedTimer,
@@ -63,6 +69,53 @@ VERBOSITY_TRACE_PATHS = 4
 VERBOSITY_TRACE_CONSTRUCTOR = 5
 
 
+def with_devdoc(args: HalmosConfig, fn_sig: str, contract_json: Dict) -> HalmosConfig:
+    devdoc = parse_devdoc(fn_sig, contract_json)
+    if not devdoc:
+        return args
+
+    overrides = arg_parser().parse_args(devdoc.split())
+    return args.with_overrides(source=fn_sig, **vars(overrides))
+
+
+def with_natspec(
+    args: HalmosConfig, contract_name: str, contract_natspec: str
+) -> HalmosConfig:
+    if not contract_natspec:
+        return args
+
+    parsed = parse_natspec(contract_natspec)
+    if not parsed:
+        return args
+
+    overrides = arg_parser().parse_args(parsed.split())
+    return args.with_overrides(source=contract_name, **vars(overrides))
+
+
+def load_config(_args) -> HalmosConfig:
+    config = default_config()
+
+    # parse CLI args first, so that can get `--help` out of the way and resolve `--debug`
+    # but don't apply the CLI overrides yet
+    cli_overrides = arg_parser().parse_args(_args)
+
+    # then for each config file, parse it and override the args
+    config_files = resolve_config_files(_args)
+    for config_file in config_files:
+        if not os.path.exists(config_file):
+            if cli_overrides.debug:
+                debug(f"Skipping config file {config_file}")
+            continue
+
+        overrides = toml_parser().parse_file(config_file)
+        config = config.with_overrides(source=config_file, **overrides)
+
+    # finally apply the CLI overrides
+    config = config.with_overrides(source="command line args", **vars(cli_overrides))
+
+    return config
+
+
 @dataclass(frozen=True)
 class FunctionInfo:
     name: Optional[str] = None
@@ -104,7 +157,7 @@ def mk_calldata(
     fun_info: FunctionInfo,
     cd: ByteVec,
     dyn_param_size: List[str],
-    args: Namespace,
+    args: Config,
 ) -> None:
     # find function abi
     fun_abi = find_abi(abi, fun_info)
@@ -144,7 +197,7 @@ def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
 
-def mk_caller(args: Namespace) -> Address:
+def mk_caller(args: Config) -> Address:
     if args.symbolic_msg_sender:
         return mk_addr("msg_sender")
     else:
@@ -155,7 +208,7 @@ def mk_this() -> Address:
     return magic_address + 1
 
 
-def mk_solver(args: Namespace, logic="QF_AUFBV", ctx=None, assertion=False):
+def mk_solver(args: Config, logic="QF_AUFBV", ctx=None, assertion=False):
     timeout = (
         args.solver_timeout_assertion if assertion else args.solver_timeout_branching
     )
@@ -282,7 +335,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
         print(file=file)
 
 
-def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
+def run_bytecode(hexcode: str, args: Config) -> List[Exec]:
     solver = mk_solver(args)
     contract = Contract.from_hexcode(hexcode)
     balance = mk_balance()
@@ -345,7 +398,7 @@ def deploy_test(
     creation_hexcode: str,
     deployed_hexcode: str,
     sevm: SEVM,
-    args: Namespace,
+    args: Config,
     libs: Dict,
 ) -> Exec:
     this = mk_this()
@@ -422,7 +475,7 @@ def setup(
     deployed_hexcode: str,
     abi: List,
     setup_info: FunctionInfo,
-    args: Namespace,
+    args: Config,
     libs: Dict,
 ) -> Exec:
     setup_timer = NamedTimer("setup")
@@ -569,7 +622,7 @@ def run(
     setup_ex: Exec,
     abi: List,
     fun_info: FunctionInfo,
-    args: Namespace,
+    args: Config,
 ) -> TestResult:
     funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
     if args.verbose >= 1:
@@ -830,8 +883,8 @@ class SetupAndRunSingleArgs:
     abi: List
     setup_info: FunctionInfo
     fun_info: FunctionInfo
-    setup_args: Namespace
-    args: Namespace
+    setup_args: Config
+    args: Config
     libs: Dict
 
 
@@ -899,7 +952,7 @@ class RunArgs:
     abi: List
     methodIdentifiers: Dict[str, str]
 
-    args: Namespace
+    args: Config
     contract_json: Dict
     libs: Dict
 
@@ -915,8 +968,7 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     )
 
     setup_info = extract_setup(methodIdentifiers)
-    setup_config = args.extend(parse_devdoc(setup_info.sig, run_args.contract_json))
-
+    setup_config = with_devdoc(args, setup_info.sig, run_args.contract_json)
     fun_infos = [
         FunctionInfo(funsig.split("(")[0], funsig, methodIdentifiers[funsig])
         for funsig in run_args.funsigs
@@ -930,7 +982,7 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
             setup_info,
             fun_info,
             setup_config,
-            args.extend(parse_devdoc(fun_info.sig, run_args.contract_json)),
+            with_devdoc(args, fun_info.sig, run_args.contract_json),
             libs,
         )
         for fun_info in fun_infos
@@ -949,13 +1001,13 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
     setup_info = extract_setup(run_args.methodIdentifiers)
 
     try:
-        setup_args = args.extend(parse_devdoc(setup_info.sig, run_args.contract_json))
+        setup_config = with_devdoc(args, setup_info.sig, run_args.contract_json)
         setup_ex = setup(
             run_args.creation_hexcode,
             run_args.deployed_hexcode,
             run_args.abi,
             setup_info,
-            setup_args,
+            setup_config,
             run_args.libs,
         )
     except Exception as err:
@@ -972,8 +1024,10 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             funsig.split("(")[0], funsig, run_args.methodIdentifiers[funsig]
         )
         try:
-            extended_args = args.extend(parse_devdoc(funsig, run_args.contract_json))
-            test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
+            test_config = with_devdoc(args, funsig, run_args.contract_json)
+            if test_config.debug:
+                debug(f"{test_config.formatted_layers()}")
+            test_result = run(setup_ex, run_args.abi, fun_info, test_config)
         except Exception as err:
             print(f"{color_warn('[ERROR]')} {funsig}")
             print(color_warn(f"{type(err).__name__}: {err}"))
@@ -989,7 +1043,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
 
 @dataclass(frozen=True)
 class GenModelArgs:
-    args: Namespace
+    args: Config
     idx: int
     sexpr: str
     dump_dirname: Optional[str] = None
@@ -1000,7 +1054,7 @@ def copy_model(model: Model) -> Dict:
 
 
 def solve(
-    query: str, args: Namespace, dump_filename: Optional[str] = None
+    query: str, args: Config, dump_filename: Optional[str] = None
 ) -> Tuple[CheckSatResult, Model]:
     if args.dump_smt_queries or args.solver_command:
         if not dump_filename:
@@ -1101,7 +1155,7 @@ def package_result(
     model: Optional[UnionType[Model, str]],
     idx: int,
     result: CheckSatResult,
-    args: Namespace,
+    args: Config,
 ) -> ModelWithContext:
     if result == unsat:
         if args.verbose >= 1:
@@ -1167,7 +1221,7 @@ def render_model(model: UnionType[str, StrModel]) -> str:
     return "".join(sorted(formatted)) if formatted else "∅"
 
 
-def mk_options(args: Namespace) -> Dict:
+def mk_options(args: Config) -> Dict:
     options = {
         "target": args.root,
         "verbose": args.verbose,
@@ -1200,7 +1254,7 @@ def mk_options(args: Namespace) -> Dict:
     return options
 
 
-def mk_arrlen(args: Namespace) -> Dict[str, int]:
+def mk_arrlen(args: Config) -> Dict[str, int]:
     arrlen = {}
     if args.array_lengths:
         for assign in [x.split("=") for x in args.array_lengths.split(",")]:
@@ -1210,7 +1264,7 @@ def mk_arrlen(args: Namespace) -> Dict[str, int]:
     return arrlen
 
 
-def parse_build_out(args: Namespace) -> Dict:
+def parse_build_out(args: Config) -> Dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
     out_path = os.path.join(args.root, args.forge_build_out)
@@ -1385,10 +1439,7 @@ def _main(_args=None) -> MainResult:
     # command line arguments
     #
 
-    config_parser = get_config_parser()
-    args = config_parser.parse_config(_args)
-    if args.debug:
-        debug(config_parser.format_values())
+    args = load_config(_args)
 
     if args.version:
         print(f"halmos {metadata.version('halmos')}")
@@ -1415,6 +1466,9 @@ def _main(_args=None) -> MainResult:
     ]
 
     # run forge without capturing stdout/stderr
+    if args.debug:
+        debug(f"Running {' '.join(build_cmd)}")
+
     build_exitcode = subprocess.run(build_cmd).returncode
 
     if build_exitcode:
@@ -1493,8 +1547,7 @@ def _main(_args=None) -> MainResult:
         print(f"\nRunning {num_found} tests for {contract_path}")
 
         # support for `/// @custom:halmos` annotations
-        contract_args = args.extend(parse_natspec(natspec)) if natspec else args
-
+        contract_args = with_natspec(args, contract_name, natspec)
         run_args = RunArgs(
             funsigs,
             creation_hexcode,

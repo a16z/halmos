@@ -9,20 +9,37 @@ from typing import Any, Dict, List, Optional, Tuple, Union as UnionType
 
 from .utils import warn
 
-# common strings
-help, metavar, group, choices, internal, global_default, short, countable = (
-    "help",
-    "metavar",
-    "group",
-    "choices",
-    "internal",
-    "global_default",
-    "short",
-    "countable",
+# groups
+debug, solver, build, experimental = (
+    "Debugging options",
+    "Solver options",
+    "Build options",
+    "Experimental options",
 )
 
-# groups
-debug, solver = "Debugging options", "Solver options"
+
+# helper to define config fields
+def arg(
+    help: str,
+    global_default: Any,
+    metavar: Optional[str] = None,
+    group: Optional[str] = None,
+    choices: Optional[str] = None,
+    short: Optional[str] = None,
+    countable: bool = False,
+):
+    return field(
+        default=None,
+        metadata={
+            "help": help,
+            "global_default": global_default,
+            "metavar": metavar,
+            "group": group,
+            "choices": choices,
+            "short": short,
+            "countable": countable,
+        },
+    )
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -37,16 +54,16 @@ class Config:
 
     ### Internal fields (not used to generate arg parsers)
 
-    config_parent: "Config" = field(
+    _parent: "Config" = field(
         repr=False,
         metadata={
-            internal: True,
+            "internal": True,
         },
     )
 
-    config_source: str = field(
+    _source: str = field(
         metadata={
-            internal: True,
+            "internal": True,
         },
     )
 
@@ -65,113 +82,272 @@ class Config:
     #
     # We can then layer these Config objects on top of the `default_config()`
 
-    root: str = field(
-        default=None,
-        metadata={
-            help: "Project root directory",
-            metavar: "PATH",
-            global_default: os.getcwd(),
-        },
+    root: str = arg(
+        help="Project root directory", global_default=os.getcwd(), metavar="PATH"
     )
 
-    depth: int = field(
-        default=None,
-        metadata={
-            help: "set the max path length",
-            metavar: "MAX_DEPTH",
-            global_default: None,
-        },
+    contract: str = arg(
+        help="run tests in the given contract. Shortcut for `--match-contract '^{NAME}$'`.",
+        global_default=None,
+        metavar="CONTRACT_NAME",
     )
 
-    loop: int = field(
-        default=None,
-        metadata={
-            help: "set loop unrolling bounds",
-            metavar: "MAX_BOUND",
-            global_default: 2,
-        },
+    match_contract: str = arg(
+        help="run tests in contracts matching the given regex. Ignored if the --contract name is given. (default: '%(default)s')",
+        global_default="",
+        metavar="CONTRACT_NAME_REGEX",
     )
 
-    symbolic_storage: bool = field(
-        default=None,
-        metadata={
-            help: "set default storage values to symbolic",
-            global_default: False,
-        },
+    function: str = arg(
+        help="run tests matching the given prefix. Shortcut for `--match-test '^{PREFIX}'`. (default: '%(default)s')",
+        global_default="check_",
+        metavar="FUNCTION_NAME_PREFIX",
     )
 
-    storage_layout: str = field(
-        default=None,
-        metadata={
-            help: "storage layout file",
-            metavar: "FILE",
-            choices: ["solidity", "generic"],
-            global_default: "solidity",
-        },
+    match_test: str = arg(
+        help="run tests matching the given regex. The --function prefix is automatically added, unless the regex starts with '^'. (default: '%(default)s')",
+        global_default="",
+        metavar="FUNCTION_NAME_REGEX",
+        short="mt",
+    )
+
+    loop: int = arg(
+        help="set loop unrolling bounds (default: %(default)s)",
+        global_default=2,
+        metavar="MAX_BOUND",
+    )
+
+    width: int = arg(
+        help="set the max number of paths (default: %(default)s)",
+        global_default=2**64,
+        metavar="MAX_WIDTH",
+    )
+
+    depth: int = arg(
+        help="set the max path length", global_default=None, metavar="MAX_DEPTH"
+    )
+
+    array_lengths: str = arg(
+        help="set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)",
+        global_default=None,
+        metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
+    )
+
+    uninterpreted_unknown_calls: str = arg(
+        help="use uninterpreted abstractions for unknown external calls with the given function signatures (default: '%(default)s')",
+        global_default="0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81",
+        metavar="SELECTOR1,SELECTOR2,...",
+    )
+
+    return_size_of_unknown_calls: int = arg(
+        help="set the byte size of return data from uninterpreted unknown external calls (default: %(default)s)",
+        global_default=32,
+        metavar="BYTE_SIZE",
+    )
+
+    storage_layout: str = arg(
+        help="Select one of the available storage layout models. The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.",
+        global_default="solidity",
+        choices=["solidity", "generic"],
+    )
+
+    symbolic_storage: bool = arg(
+        help="set default storage values to symbolic",
+        global_default=False,
+    )
+
+    symbolic_msg_sender: bool = arg(
+        help="set msg.sender symbolic",
+        global_default=False,
+    )
+
+    no_test_constructor: bool = arg(
+        help="do not run the constructor of test contracts",
+        global_default=False,
+    )
+
+    ffi: bool = arg(
+        help="allow the usage of FFI to call external functions",
+        global_default=False,
+    )
+
+    version: bool = arg(
+        help="print the version number",
+        global_default=False,
     )
 
     ### Debugging options
 
-    verbose: int = field(
-        default=None,
-        metadata={
-            help: "increase verbosity levels: -v, -vv, -vvv, ...",
-            metavar: "LEVEL",
-            group: debug,
-            global_default: 0,
-            short: "v",
-            countable: True,
-        },
+    verbose: int = arg(
+        help="increase verbosity levels: -v, -vv, -vvv, ...",
+        global_default=0,
+        group=debug,
+        short="v",
+        countable=True,
     )
 
-    statistics: bool = field(
-        default=None,
-        metadata={
-            help: "print statistics",
-            group: debug,
-            global_default: False,
-        },
+    statistics: bool = arg(
+        help="print statistics",
+        global_default=False,
+        group=debug,
+        short="st",
     )
 
-    json_output: str = field(
-        default=None,
-        metadata={
-            help: "output test results in JSON",
-            metavar: "JSON_FILE_PATH",
-            group: debug,
-            global_default: None,
-        },
+    debug: bool = arg(
+        help="run in debug mode",
+        global_default=False,
+        group=debug,
+    )
+
+    log: str = arg(
+        help="log every execution steps in JSON",
+        global_default=None,
+        metavar="LOG_FILE_PATH",
+        group=debug,
+    )
+
+    json_output: str = arg(
+        help="output test results in JSON",
+        global_default=None,
+        metavar="JSON_FILE_PATH",
+        group=debug,
+    )
+
+    minimal_json_output: bool = arg(
+        help="include minimal information in the JSON output",
+        global_default=False,
+        group=debug,
+    )
+
+    print_steps: bool = arg(
+        help="print every execution steps",
+        global_default=False,
+        group=debug,
+    )
+
+    print_states: bool = arg(
+        help="print all final execution states",
+        global_default=False,
+        group=debug,
+    )
+
+    print_failed_states: bool = arg(
+        help="print failed execution states",
+        global_default=False,
+        group=debug,
+    )
+
+    print_blocked_states: bool = arg(
+        help="print blocked execution states",
+        global_default=False,
+        group=debug,
+    )
+
+    print_setup_states: bool = arg(
+        help="print setup execution states",
+        global_default=False,
+        group=debug,
+    )
+
+    print_full_model: bool = arg(
+        help="print full counterexample model",
+        global_default=False,
+        group=debug,
+    )
+
+    early_exit: bool = arg(
+        help="stop after a counterexample is found",
+        global_default=False,
+        group=debug,
+    )
+
+    dump_smt_queries: bool = arg(
+        help="dump SMT queries for assertion violations",
+        global_default=False,
+        group=debug,
+    )
+
+    ### Build options
+
+    forge_build_out: str = arg(
+        help="forge build artifacts directory name (default: 'out/')",
+        metavar="DIRECTORY_NAME",
+        global_default="out",
+        group=build,
     )
 
     ### Solver options
 
-    solver_timeout_assertion: int = field(
-        default=None,
-        metadata={
-            help: "set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout",
-            metavar: "MILLISECONDS",
-            group: solver,
-            global_default: 1000,
-        },
+    smt_exp_by_const: int = arg(
+        help="interpret constant power up to N (default: %(default)s)",
+        global_default=2,
+        metavar="N",
+        group=solver,
     )
 
-    solver_parallel: bool = field(
-        default=None,
-        metadata={
-            help: "run assertion solvers in parallel",
-            group: solver,
-            global_default: False,
-        },
+    solver_timeout_branching: int = arg(
+        help="set timeout (in milliseconds) for solving branching conditions; 0 means no timeout (default: %(default)s)",
+        global_default=1,
+        metavar="TIMEOUT",
+        group=solver,
     )
 
-    solver_threads: int = field(
-        default=None,
-        metadata={
-            help: f"number of threads to use for assertion solving",
-            metavar: "N",
-            group: solver,
-            global_default: os.cpu_count() or 1,
-        },
+    solver_timeout_assertion: int = arg(
+        help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout (default: %(default)s)",
+        global_default=1000,
+        metavar="TIMEOUT",
+        group=solver,
+    )
+
+    solver_max_memory: int = arg(
+        help="set memory limit (in megabytes) for the solver; 0 means no limit (default: %(default)s)",
+        global_default=0,
+        metavar="SIZE",
+        group=solver,
+    )
+
+    solver_command: str = arg(
+        help="use the given command when invoking the solver, e.g. `z3 -model`",
+        global_default=None,
+        metavar="COMMAND",
+        group=solver,
+    )
+
+    solver_parallel: bool = arg(
+        help="run assertion solvers in parallel", global_default=False, group=solver
+    )
+
+    solver_threads: int = arg(
+        help="set the number of threads for parallel solvers (default: %(default)s)",
+        global_default=os.cpu_count() or 1,
+        metavar="N",
+        group=solver,
+    )
+
+    ### Experimental options
+
+    bytecode: str = arg(
+        help="execute the given bytecode",
+        global_default=None,
+        metavar="HEX_STRING",
+        group=experimental,
+    )
+
+    reset_bytecode: str = arg(
+        help="reset the bytecode of given addresses after setUp()",
+        global_default=None,
+        metavar="ADDR1=CODE1,ADDR2=CODE2,...",
+        group=experimental,
+    )
+
+    test_parallel: bool = arg(
+        help="run tests in parallel", global_default=False, group=experimental
+    )
+
+    symbolic_jump: bool = arg(
+        help="support symbolic jump destination",
+        global_default=False,
+        group=experimental,
     )
 
     ### Methods
@@ -190,7 +366,7 @@ class Config:
             return value
 
         # look up value in parent object
-        parent = object.__getattribute__(self, "config_parent")
+        parent = object.__getattribute__(self, "_parent")
         if value is None and parent is not None:
             return getattr(parent, name)
 
@@ -203,7 +379,7 @@ class Config:
         just a dictionary with the overrides (e.g. from a toml or json file)."""
 
         try:
-            return Config(config_parent=self, config_source=source, **overrides)
+            return Config(_parent=self, _source=source, **overrides)
         except TypeError as e:
             # follow argparse error message format and behavior
             warn(f"error: unrecognized argument: {str(e).split()[-1]}")
@@ -213,14 +389,14 @@ class Config:
         # look up value in current object
         value = object.__getattribute__(self, name)
         if value is not None:
-            return (value, self.config_source)
+            return (value, self._source)
 
         # look up value in parent object
-        parent = object.__getattribute__(self, "config_parent")
-        if value is None and self.config_parent is not None:
+        parent = object.__getattribute__(self, "_parent")
+        if value is None and self._parent is not None:
             return parent.value_with_source(name)
 
-        return (value, self.config_source)
+        return (value, self._source)
 
     def values_with_sources(self) -> Dict[str, Tuple[Any, str]]:
         # field -> (value, source)
@@ -232,7 +408,7 @@ class Config:
         return values
 
     def values(self):
-        skip_empty = self.config_parent is not None
+        skip_empty = self._parent is not None
 
         for field in fields(self):
             if field.metadata.get(internal):
@@ -246,11 +422,11 @@ class Config:
 
     def values_by_layer(self) -> Dict[str, Tuple[str, Any]]:
         # source -> {field, value}
-        if self.config_parent is None:
-            return OrderedDict([(self.config_source, dict(self.values()))])
+        if self._parent is None:
+            return OrderedDict([(self._source, dict(self.values()))])
 
-        values = self.config_parent.values_by_layer()
-        values[self.config_source] = dict(self.values())
+        values = self._parent.values_by_layer()
+        values[self._source] = dict(self.values())
         return values
 
     def formatted_layers(self) -> str:
@@ -262,19 +438,13 @@ class Config:
         return "\n".join(lines)
 
 
-def _mk_root_parser() -> argparse.ArgumentParser:
+def resolve_config_files(args: UnionType[str, List[str]]) -> List[str]:
     root_parser = argparse.ArgumentParser()
     root_parser.add_argument(
         "--root",
         metavar="DIRECTORY",
         default=os.getcwd(),
     )
-
-    return root_parser
-
-
-def resolve_config_files(args: UnionType[str, List[str]]) -> List[str]:
-    root_parser = _mk_root_parser()
 
     # first, parse find the project root directory (containing foundry.toml)
     # beware: errors and help flags will cause a system exit
@@ -323,11 +493,11 @@ def _create_default_config() -> "Config":
 
     for field in fields(Config):
         # we build the default config by looking at the global_default metadata field
-        default_value = field.metadata.get(global_default, MISSING)
+        default_value = field.metadata.get("global_default", MISSING)
         if default_value != MISSING:
             values[field.name] = default_value
 
-    return Config(config_parent=None, config_source="default", **values)
+    return Config(_parent=None, _source="default", **values)
 
 
 def _create_arg_parser() -> argparse.ArgumentParser:
@@ -349,7 +519,7 @@ def _create_arg_parser() -> argparse.ArgumentParser:
         long_name = f"--{field_info.name.replace('_', '-')}"
         names = [long_name]
 
-        short_name = field_info.metadata.get(short, None)
+        short_name = field_info.metadata.get("short", None)
         if short_name:
             names.append(f"-{short_name}")
 
@@ -364,7 +534,7 @@ def _create_arg_parser() -> argparse.ArgumentParser:
 
         if field_info.type == bool:
             group.add_argument(*names, help=arg_help, action="store_true", default=None)
-        elif field_info.metadata.get(countable, False):
+        elif field_info.metadata.get("countable", False):
             group.add_argument(*names, help=arg_help, action="count")
         else:
             kwargs = {
@@ -384,8 +554,6 @@ def _create_toml_parser() -> TomlParser:
 
 
 # public singleton accessors
-
-
 def default_config() -> "Config":
     return _default_config
 
@@ -399,7 +567,6 @@ def toml_parser():
 
 
 # init module-level singletons
-
 _arg_parser = _create_arg_parser()
 _default_config = _create_default_config()
 _toml_parser = _create_toml_parser()

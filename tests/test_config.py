@@ -28,7 +28,7 @@ def toml_parser():
 
 
 def test_fresh_config_has_only_None_values():
-    config = Config(config_parent=None, config_source="bogus")
+    config = Config(_parent=None, _source="bogus")
     for field in config.__dataclass_fields__.values():
         if field.metadata.get("internal"):
             continue
@@ -42,11 +42,11 @@ def test_default_config_immutable(config):
 
 def test_unknown_keys_config_constructor_raise():
     with pytest.raises(TypeError):
-        Config(config_parent=None, config_source="bogus", unknown_key=42)
+        Config(_parent=None, _source="bogus", unknown_key=42)
 
 
 def test_unknown_keys_config_object_raise():
-    config = Config(config_parent=None, config_source="bogus")
+    config = Config(_parent=None, _source="bogus")
     with pytest.raises(AttributeError):
         config.unknown_key
 
@@ -73,7 +73,7 @@ def test_choice_arg(config, parser):
 def test_override(config):
     verbose_before = config.verbose
 
-    override = Config(config_parent=config, config_source="override", verbose=42)
+    override = Config(_parent=config, _source="override", verbose=42)
 
     # # the override is reflected in the new config
     assert override.verbose == 42
