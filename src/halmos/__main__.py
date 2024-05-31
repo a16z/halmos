@@ -774,7 +774,8 @@ def run(
         elif not error:
             normal += 1
 
-        if len(result_exs) >= args.width:
+        # 0 width is unlimited
+        if args.width and len(result_exs) >= args.width:
             break
 
     timer.create_subtimer("models")
