@@ -383,7 +383,7 @@ class Config:
 
         # look up value in parent object
         parent = object.__getattribute__(self, "_parent")
-        if value is None and parent is not None:
+        if parent is not None:
             return getattr(parent, name)
 
         return value
@@ -408,8 +408,8 @@ class Config:
             return (value, self._source)
 
         # look up value in parent object
-        parent = object.__getattribute__(self, "_parent")
-        if value is None and self._parent is not None:
+        parent = self._parent
+        if parent is not None:
             return parent.value_with_source(name)
 
         return (value, self._source)
