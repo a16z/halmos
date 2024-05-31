@@ -106,6 +106,7 @@ class Config:
         help="run tests in contracts matching the given regex. Ignored if the --contract name is given.",
         global_default="",
         metavar="CONTRACT_NAME_REGEX",
+        short="mc",
     )
 
     function: str = arg(
@@ -128,13 +129,15 @@ class Config:
     )
 
     width: int = arg(
-        help="set the max number of paths",
-        global_default=2**16,
+        help="set the max number of paths, 0 for unlimited",
+        global_default=0,
         metavar="MAX_WIDTH",
     )
 
     depth: int = arg(
-        help="set the max path length", global_default=None, metavar="MAX_DEPTH"
+        help="set the maximum length in steps of a single path, 0 for unlimited",
+        global_default=0,
+        metavar="MAX_DEPTH",
     )
 
     array_lengths: str = arg(
@@ -143,6 +146,11 @@ class Config:
         metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
     )
 
+    # default set of selectors:
+    # - IERC721.onERC721Received
+    # - IERC1271.isValidSignature
+    # - IERC1155.onERC1155Received
+    # - IERC1155.onERC1155BatchReceived
     uninterpreted_unknown_calls: str = arg(
         help="use uninterpreted abstractions for unknown external calls with the given function signatures",
         global_default="0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81",
