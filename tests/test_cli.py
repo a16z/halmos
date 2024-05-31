@@ -9,7 +9,7 @@ from halmos.sevm import con, Contract, Instruction
 
 from halmos.__main__ import str_abi, run_bytecode, FunctionInfo
 
-from test_fixtures import args, options
+from test_fixtures import args
 
 
 @pytest.fixture
@@ -103,8 +103,7 @@ def test_decode_mixed_bytecode():
 
 
 def test_run_bytecode(args):
-    # sets the flag in the global args for the main module
-    args.symbolic_jump = True
+    args = args.with_overrides(source="test_run_bytecode", symbolic_jump=True)
 
     hexcode = "34381856FDFDFDFDFDFD5B00"
     exs = run_bytecode(hexcode, args)

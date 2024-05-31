@@ -27,7 +27,7 @@ from halmos.sevm import (
 
 from halmos.__main__ import mk_block
 
-from test_fixtures import args, options, sevm, solver
+from test_fixtures import args, sevm, solver
 
 caller = BitVec("msg_sender", 160)
 

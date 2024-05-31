@@ -9,7 +9,7 @@ import sys
 import time
 import traceback
 import uuid
-from argparse import Namespace
+
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -18,7 +18,13 @@ from importlib import metadata
 
 from .bytevec import Chunk, ByteVec
 from .calldata import Calldata
-from .parser import mk_arg_parser, load_config_file, parse_config
+from .config import (
+    arg_parser,
+    default_config,
+    resolve_config_files,
+    toml_parser,
+    Config as HalmosConfig,
+)
 from .sevm import *
 from .utils import (
     NamedTimer,
@@ -42,8 +48,6 @@ from .warnings import *
 StrModel = Dict[str, str]
 AnyModel = UnionType[Model, StrModel]
 
-arg_parser = mk_arg_parser()
-
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)
@@ -63,6 +67,52 @@ VERBOSITY_TRACE_COUNTEREXAMPLE = 2
 VERBOSITY_TRACE_SETUP = 3
 VERBOSITY_TRACE_PATHS = 4
 VERBOSITY_TRACE_CONSTRUCTOR = 5
+
+
+def with_devdoc(args: HalmosConfig, fn_sig: str, contract_json: Dict) -> HalmosConfig:
+    devdoc = parse_devdoc(fn_sig, contract_json)
+    if not devdoc:
+        return args
+
+    overrides = arg_parser().parse_args(devdoc.split())
+    return args.with_overrides(source=fn_sig, **vars(overrides))
+
+
+def with_natspec(
+    args: HalmosConfig, contract_name: str, contract_natspec: str
+) -> HalmosConfig:
+    if not contract_natspec:
+        return args
+
+    parsed = parse_natspec(contract_natspec)
+    if not parsed:
+        return args
+
+    overrides = arg_parser().parse_args(parsed.split())
+    return args.with_overrides(source=contract_name, **vars(overrides))
+
+
+def load_config(_args) -> HalmosConfig:
+    config = default_config()
+
+    # parse CLI args first, so that can get `--help` out of the way and resolve `--debug`
+    # but don't apply the CLI overrides yet
+    cli_overrides = arg_parser().parse_args(_args)
+
+    # then for each config file, parse it and override the args
+    config_files = resolve_config_files(_args)
+    for config_file in config_files:
+        if not os.path.exists(config_file):
+            error(f"Config file not found: {config_file}")
+            sys.exit(2)
+
+        overrides = toml_parser().parse_file(config_file)
+        config = config.with_overrides(source=config_file, **overrides)
+
+    # finally apply the CLI overrides
+    config = config.with_overrides(source="command line args", **vars(cli_overrides))
+
+    return config
 
 
 @dataclass(frozen=True)
@@ -106,7 +156,7 @@ def mk_calldata(
     fun_info: FunctionInfo,
     cd: ByteVec,
     dyn_param_size: List[str],
-    args: Namespace,
+    args: HalmosConfig,
 ) -> None:
     # find function abi
     fun_abi = find_abi(abi, fun_info)
@@ -146,7 +196,7 @@ def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
 
-def mk_caller(args: Namespace) -> Address:
+def mk_caller(args: HalmosConfig) -> Address:
     if args.symbolic_msg_sender:
         return mk_addr("msg_sender")
     else:
@@ -157,7 +207,7 @@ def mk_this() -> Address:
     return magic_address + 1
 
 
-def mk_solver(args: Namespace, logic="QF_AUFBV", ctx=None, assertion=False):
+def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, assertion=False):
     timeout = (
         args.solver_timeout_assertion if assertion else args.solver_timeout_branching
     )
@@ -284,12 +334,11 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
         print(file=file)
 
 
-def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
+def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
     solver = mk_solver(args)
     contract = Contract.from_hexcode(hexcode)
     balance = mk_balance()
     block = mk_block()
-    options = mk_options(args)
     this = mk_this()
 
     message = Message(
@@ -300,7 +349,7 @@ def run_bytecode(hexcode: str, args: Namespace) -> List[Exec]:
         call_scheme=EVM.CALL,
     )
 
-    sevm = SEVM(options)
+    sevm = SEVM(args)
     ex = sevm.mk_exec(
         code={this: contract},
         storage={this: {}},
@@ -347,7 +396,7 @@ def deploy_test(
     creation_hexcode: str,
     deployed_hexcode: str,
     sevm: SEVM,
-    args: Namespace,
+    args: HalmosConfig,
     libs: Dict,
 ) -> Exec:
     this = mk_this()
@@ -424,13 +473,13 @@ def setup(
     deployed_hexcode: str,
     abi: List,
     setup_info: FunctionInfo,
-    args: Namespace,
+    args: HalmosConfig,
     libs: Dict,
 ) -> Exec:
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
-    sevm = SEVM(mk_options(args))
+    sevm = SEVM(args)
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
 
     setup_timer.create_subtimer("run")
@@ -571,7 +620,7 @@ def run(
     setup_ex: Exec,
     abi: List,
     fun_info: FunctionInfo,
-    args: Namespace,
+    args: HalmosConfig,
 ) -> TestResult:
     funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
     if args.verbose >= 1:
@@ -604,9 +653,7 @@ def run(
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
 
-    options = mk_options(args)
-    sevm = SEVM(options)
-
+    sevm = SEVM(args)
     solver = mk_solver(args)
     path = Path(solver)
     path.extend_path(setup_ex.path)
@@ -727,7 +774,8 @@ def run(
         elif not error:
             normal += 1
 
-        if len(result_exs) >= args.width:
+        # 0 width is unlimited
+        if args.width and len(result_exs) >= args.width:
             break
 
     timer.create_subtimer("models")
@@ -832,8 +880,8 @@ class SetupAndRunSingleArgs:
     abi: List
     setup_info: FunctionInfo
     fun_info: FunctionInfo
-    setup_args: Namespace
-    args: Namespace
+    setup_args: HalmosConfig
+    args: HalmosConfig
     libs: Dict
 
 
@@ -901,7 +949,7 @@ class RunArgs:
     abi: List
     methodIdentifiers: Dict[str, str]
 
-    args: Namespace
+    args: HalmosConfig
     contract_json: Dict
     libs: Dict
 
@@ -917,11 +965,12 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     )
 
     setup_info = extract_setup(methodIdentifiers)
-
+    setup_config = with_devdoc(args, setup_info.sig, run_args.contract_json)
     fun_infos = [
         FunctionInfo(funsig.split("(")[0], funsig, methodIdentifiers[funsig])
         for funsig in run_args.funsigs
     ]
+
     single_run_args = [
         SetupAndRunSingleArgs(
             creation_hexcode,
@@ -929,8 +978,8 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
             abi,
             setup_info,
             fun_info,
-            extend_args(args, parse_devdoc(setup_info.sig, run_args.contract_json)),
-            extend_args(args, parse_devdoc(fun_info.sig, run_args.contract_json)),
+            setup_config,
+            with_devdoc(args, fun_info.sig, run_args.contract_json),
             libs,
         )
         for fun_info in fun_infos
@@ -949,15 +998,13 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
     setup_info = extract_setup(run_args.methodIdentifiers)
 
     try:
-        setup_args = extend_args(
-            args, parse_devdoc(setup_info.sig, run_args.contract_json)
-        )
+        setup_config = with_devdoc(args, setup_info.sig, run_args.contract_json)
         setup_ex = setup(
             run_args.creation_hexcode,
             run_args.deployed_hexcode,
             run_args.abi,
             setup_info,
-            setup_args,
+            setup_config,
             run_args.libs,
         )
     except Exception as err:
@@ -974,10 +1021,10 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             funsig.split("(")[0], funsig, run_args.methodIdentifiers[funsig]
         )
         try:
-            extended_args = extend_args(
-                args, parse_devdoc(funsig, run_args.contract_json)
-            )
-            test_result = run(setup_ex, run_args.abi, fun_info, extended_args)
+            test_config = with_devdoc(args, funsig, run_args.contract_json)
+            if test_config.debug:
+                debug(f"{test_config.formatted_layers()}")
+            test_result = run(setup_ex, run_args.abi, fun_info, test_config)
         except Exception as err:
             print(f"{color_warn('[ERROR]')} {funsig}")
             print(color_warn(f"{type(err).__name__}: {err}"))
@@ -991,18 +1038,9 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
     return test_results
 
 
-def extend_args(args: Namespace, more_opts: str) -> Namespace:
-    if more_opts:
-        new_args = deepcopy(args)
-        arg_parser.parse_args(more_opts.split(), new_args)
-        return new_args
-    else:
-        return args
-
-
 @dataclass(frozen=True)
 class GenModelArgs:
-    args: Namespace
+    args: HalmosConfig
     idx: int
     sexpr: str
     dump_dirname: Optional[str] = None
@@ -1013,7 +1051,7 @@ def copy_model(model: Model) -> Dict:
 
 
 def solve(
-    query: str, args: Namespace, dump_filename: Optional[str] = None
+    query: str, args: HalmosConfig, dump_filename: Optional[str] = None
 ) -> Tuple[CheckSatResult, Model]:
     if args.dump_smt_queries or args.solver_command:
         if not dump_filename:
@@ -1114,7 +1152,7 @@ def package_result(
     model: Optional[UnionType[Model, str]],
     idx: int,
     result: CheckSatResult,
-    args: Namespace,
+    args: HalmosConfig,
 ) -> ModelWithContext:
     if result == unsat:
         if args.verbose >= 1:
@@ -1180,40 +1218,7 @@ def render_model(model: UnionType[str, StrModel]) -> str:
     return "".join(sorted(formatted)) if formatted else "∅"
 
 
-def mk_options(args: Namespace) -> Dict:
-    options = {
-        "target": args.root,
-        "verbose": args.verbose,
-        "debug": args.debug,
-        "log": args.log,
-        "expByConst": args.smt_exp_by_const,
-        "timeout": args.solver_timeout_branching,
-        "max_memory": args.solver_max_memory,
-        "sym_jump": args.symbolic_jump,
-        "print_steps": args.print_steps,
-        "unknown_calls_return_size": args.return_size_of_unknown_calls,
-        "ffi": args.ffi,
-        "storage_layout": args.storage_layout,
-    }
-
-    if args.width is not None:
-        options["max_width"] = args.width
-
-    if args.depth is not None:
-        options["max_depth"] = args.depth
-
-    if args.loop is not None:
-        options["max_loop"] = args.loop
-
-    options["unknown_calls"] = []
-    if args.uninterpreted_unknown_calls.strip():
-        for x in args.uninterpreted_unknown_calls.split(","):
-            options["unknown_calls"].append(int(x, 0))
-
-    return options
-
-
-def mk_arrlen(args: Namespace) -> Dict[str, int]:
+def mk_arrlen(args: HalmosConfig) -> Dict[str, int]:
     arrlen = {}
     if args.array_lengths:
         for assign in [x.split("=") for x in args.array_lengths.split(",")]:
@@ -1223,7 +1228,7 @@ def mk_arrlen(args: Namespace) -> Dict[str, int]:
     return arrlen
 
 
-def parse_build_out(args: Namespace) -> Dict:
+def parse_build_out(args: HalmosConfig) -> Dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
     out_path = os.path.join(args.root, args.forge_build_out)
@@ -1282,10 +1287,8 @@ def parse_build_out(args: Namespace) -> Dict:
                     )
                 contract_map[contract_name] = (json_out, contract_type, natspec)
             except Exception as err:
-                print(
-                    color_warn(
-                        f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
-                    )
+                warn(
+                    f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
                 )
                 if args.debug:
                     traceback.print_exc()
@@ -1398,14 +1401,10 @@ def _main(_args=None) -> MainResult:
     # command line arguments
     #
 
-    args = arg_parser.parse_args(_args)
-
-    if args.config:
-        config = load_config_file(args.config)
-        args = parse_config(config, arg_parser, args, sys.argv[1:])
+    args = load_config(_args)
 
     if args.version:
-        print(f"Halmos {metadata.version('halmos')}")
+        print(f"halmos {metadata.version('halmos')}")
         return MainResult(0)
 
     # quick bytecode execution mode
@@ -1429,6 +1428,9 @@ def _main(_args=None) -> MainResult:
     ]
 
     # run forge without capturing stdout/stderr
+    if args.debug:
+        debug(f"Running {' '.join(build_cmd)}")
+
     build_exitcode = subprocess.run(build_cmd).returncode
 
     if build_exitcode:
@@ -1507,8 +1509,7 @@ def _main(_args=None) -> MainResult:
         print(f"\nRunning {num_found} tests for {contract_path}")
 
         # support for `/// @custom:halmos` annotations
-        contract_args = extend_args(args, parse_natspec(natspec)) if natspec else args
-
+        contract_args = with_natspec(args, contract_name, natspec)
         run_args = RunArgs(
             funsigs,
             creation_hexcode,

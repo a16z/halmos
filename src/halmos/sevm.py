@@ -6,7 +6,7 @@ import re
 from copy import deepcopy
 from collections import defaultdict
 from dataclasses import dataclass, field
-from functools import reduce, lru_cache
+from functools import reduce
 from typing import (
     Any,
     Callable,
@@ -24,13 +24,13 @@ from z3 import *
 
 from .bytevec import Chunk, ByteVec
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
+from .config import Config as HalmosConfig
 from .console import console
 from .exceptions import *
 from .utils import *
 from .warnings import (
     warn,
     LIBRARY_PLACEHOLDER,
-    INTERNAL_ERROR,
 )
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
@@ -1228,17 +1228,22 @@ class Worklist:
 
 
 class SEVM:
-    options: Dict
+    options: HalmosConfig
     storage_model: Type[SomeStorage]
     logs: HalmosLogs
     steps: Steps
 
-    def __init__(self, options: Dict) -> None:
+    def __init__(self, options: HalmosConfig) -> None:
         self.options = options
         self.logs = HalmosLogs()
         self.steps: Steps = {}
 
-        is_generic = self.options["storage_layout"] == "generic"
+        # init unknown calls
+        hex_string = options.uninterpreted_unknown_calls.strip()
+        self.unknown_calls: List[int] = [int(x, 16) for x in hex_string.split(",") if x]
+
+        # init storage model
+        is_generic = self.options.storage_layout == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
 
     def div_xy_y(self, w1: Word, w2: Word) -> Word:
@@ -1378,7 +1383,7 @@ class SEVM:
                 if i2 == 1:
                     return w1
 
-                if i2 <= self.options.get("expByConst"):
+                if i2 <= self.options.smt_exp_by_const:
                     exp = w1
                     for _ in range(i2 - 1):
                         exp = exp * w1
@@ -1434,21 +1439,19 @@ class SEVM:
             return target
 
         # set new timeout temporarily for this task
-        ex.path.solver.set(timeout=max(1000, self.options["timeout"]))
+        ex.path.solver.set(timeout=max(1000, self.options.solver_timeout_branching))
 
         if target not in ex.alias:
             for addr in ex.code:
                 if ex.check(target != addr) == unsat:  # target == addr
-                    if self.options.get("debug"):
-                        print(
-                            f"[DEBUG] Address alias: {hexify(addr)} for {hexify(target)}"
-                        )
+                    if self.options.debug:
+                        debug(f"Address alias: {hexify(addr)} for {hexify(target)}")
                     ex.alias[target] = addr
                     ex.path.append(target == addr)
                     break
 
         # reset timeout
-        ex.path.solver.set(timeout=self.options["timeout"])
+        ex.path.solver.set(timeout=self.options.solver_timeout_branching)
 
         return ex.alias.get(target)
 
@@ -1643,7 +1646,7 @@ class SEVM:
                 # FIX: this doesn't capture the case of returndatasize != ret_size
                 actual_ret_size = ret_size
             else:
-                actual_ret_size = self.options["unknown_calls_return_size"]
+                actual_ret_size = self.options.return_size_of_unknown_calls
 
             ret = ByteVec()
             if actual_ret_size > 0:
@@ -1761,7 +1764,7 @@ class SEVM:
 
         # uninterpreted unknown calls
         funsig = extract_funsig(arg)
-        if funsig in self.options["unknown_calls"]:
+        if funsig in self.unknown_calls:
             self.logs.add_uninterpreted_unknown_call(funsig, to, arg)
             call_unknown()
             return
@@ -1955,8 +1958,8 @@ class SEVM:
 
         if potential_true and potential_false:
             # for loop unrolling
-            follow_true = visited[True] < self.options["max_loop"]
-            follow_false = visited[False] < self.options["max_loop"]
+            follow_true = visited[True] < self.options.loop
+            follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
         else:
@@ -2005,14 +2008,10 @@ class SEVM:
             stack.push(ex, step_id)
 
         # otherwise, create a new execution for feasible targets
-        elif self.options["sym_jump"]:
+        elif self.options.symbolic_jump:
             for target in ex.pgm.valid_jump_destinations():
                 target_reachable = simplify(dst == target)
                 if ex.check(target_reachable) != unsat:  # jump
-                    if self.options.get("debug"):
-                        print(
-                            f"We can jump to {target} with model {ex.path.solver.model()}"
-                        )
                     new_ex = self.create_branch(ex, target_reachable, target)
                     stack.push(new_ex, step_id)
         else:
@@ -2098,12 +2097,11 @@ class SEVM:
                 insn = ex.current_instruction()
                 opcode = insn.opcode
 
-                max_depth = self.options.get("max_depth", 0)
-                if max_depth and step_id > max_depth:
+                if (max_depth := self.options.depth) and step_id > max_depth:
                     continue
 
                 # TODO: clean up
-                if self.options.get("log"):
+                if self.options.log:
                     if opcode == EVM.JUMPI:
                         self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
                     # elif opcode == EVM.CALL:
@@ -2112,8 +2110,8 @@ class SEVM:
                         # self.steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
                         self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
-                if self.options.get("print_steps"):
-                    print(ex.dump(print_mem=self.options.get("print_mem", False)))
+                if self.options.print_steps:
+                    print(ex.dump(print_mem=self.options.print_mem))
 
                 if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
@@ -2430,7 +2428,7 @@ class SEVM:
                                 )
                             )
                     else:
-                        if self.options["debug"]:
+                        if self.options.debug:
                             print(
                                 f"Warning: the use of symbolic BYTE indexing may potentially impact the performance of symbolic reasoning: BYTE {idx} {w}"
                             )
@@ -2482,7 +2480,7 @@ class SEVM:
                 continue
 
             except HalmosException as err:
-                if self.options["debug"]:
+                if self.options.debug:
                     print(err)
 
                 ex.halt(data=None, error=err)

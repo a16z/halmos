@@ -3,7 +3,7 @@ import pytest
 import subprocess
 
 from dataclasses import dataclass
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, Optional
 
 from z3 import *
 
@@ -12,7 +12,6 @@ from halmos.bytevec import ByteVec
 from halmos.exceptions import *
 from halmos.sevm import (
     CallContext,
-    CallOutput,
     Contract,
     EventLog,
     Exec,
@@ -25,7 +24,7 @@ from halmos.sevm import (
     int_of,
 )
 from halmos.utils import EVM
-from test_fixtures import args, options, sevm
+from test_fixtures import args, sevm
 
 import halmos.sevm
 
