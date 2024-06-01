@@ -29,7 +29,7 @@ from .console import console
 from .exceptions import *
 from .utils import *
 from .warnings import (
-    warn,
+    warn_code,
     LIBRARY_PLACEHOLDER,
 )
 
@@ -393,7 +393,9 @@ class Contract:
             raise ValueError(hexcode)
 
         if "__" in hexcode:
-            warn(LIBRARY_PLACEHOLDER, f"contract hexcode contains library placeholder")
+            warn_code(
+                LIBRARY_PLACEHOLDER, f"contract hexcode contains library placeholder"
+            )
 
         try:
             bytecode = bytes.fromhex(stripped(hexcode))
@@ -2429,8 +2431,9 @@ class SEVM:
                             )
                     else:
                         if self.options.debug:
-                            print(
-                                f"Warning: the use of symbolic BYTE indexing may potentially impact the performance of symbolic reasoning: BYTE {idx} {w}"
+                            warn(
+                                f"Warning: the use of symbolic BYTE indexing may potentially "
+                                f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
                             )
                         ex.st.push(self.sym_byte_of(idx, w))
 
