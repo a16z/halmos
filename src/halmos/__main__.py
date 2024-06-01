@@ -1289,7 +1289,7 @@ def parse_build_out(args: HalmosConfig) -> Dict:
             except Exception as err:
                 warn(
                     PARSING_ERROR,
-                    f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}"
+                    f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}",
                 )
                 if args.debug:
                     traceback.print_exc()
