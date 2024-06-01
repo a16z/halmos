@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from .utils import color_warn
 
-logger = logging.getLogger("Halmos")
+logger = logging.getLogger("halmos")
 logging.basicConfig()
 
 WARNINGS_BASE_URL = "https://github.com/a16z/halmos/wiki/warnings"
@@ -21,7 +21,6 @@ class ErrorCode:
 PARSING_ERROR = ErrorCode("parsing-error")
 INTERNAL_ERROR = ErrorCode("internal-error")
 LIBRARY_PLACEHOLDER = ErrorCode("library-placeholder")
-
 COUNTEREXAMPLE_INVALID = ErrorCode("counterexample-invalid")
 COUNTEREXAMPLE_UNKNOWN = ErrorCode("counterexample-unknown")
 UNSUPPORTED_OPCODE = ErrorCode("unsupported-opcode")
@@ -30,5 +29,5 @@ LOOP_BOUND = ErrorCode("loop-bound")
 UNINTERPRETED_UNKNOWN_CALLS = ErrorCode("uninterpreted-unknown-calls")
 
 
-def warn(error_code: ErrorCode, msg: str):
+def warn_code(error_code: ErrorCode, msg: str):
     logger.warning(f"{color_warn(msg)}\n(see {error_code.url()})")

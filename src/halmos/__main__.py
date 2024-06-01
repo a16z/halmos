@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from importlib import metadata
 
-from .bytevec import Chunk, ByteVec
+from .bytevec import ByteVec
 from .calldata import Calldata
 from .config import (
     arg_parser,
@@ -28,10 +28,6 @@ from .config import (
 from .sevm import *
 from .utils import (
     NamedTimer,
-    color_error,
-    color_good,
-    color_info,
-    color_warn,
     create_solver,
     cyan,
     error,
@@ -233,7 +229,7 @@ def rendered_initcode(context: CallContext) -> str:
     else:
         initcode_str = hexify(data)
 
-    return f"{initcode_str}({color_info(args_str)})"
+    return f"{initcode_str}({cyan(args_str)})"
 
 
 def render_output(context: CallContext, file=sys.stdout) -> None:
@@ -271,10 +267,9 @@ def render_output(context: CallContext, file=sys.stdout) -> None:
 def rendered_log(log: EventLog) -> str:
     opcode_str = f"LOG{len(log.topics)}"
     topics = [
-        f"{color_info(f'topic{i}')}={hexify(topic)}"
-        for i, topic in enumerate(log.topics)
+        f"{cyan(f'topic{i}')}={hexify(topic)}" for i, topic in enumerate(log.topics)
     ]
-    data_str = f"{color_info('data')}={hexify(log.data)}"
+    data_str = f"{cyan('data')}={hexify(log.data)}"
     args_str = ", ".join(topics + [data_str])
 
     return f"{opcode_str}({args_str})"
@@ -372,7 +367,7 @@ def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
         returndata = ex.context.output.data
 
         if error:
-            warn(
+            warn_code(
                 INTERNAL_ERROR,
                 f"{mnemonic(opcode)} failed, error={error}, returndata={returndata}",
             )
@@ -519,7 +514,7 @@ def setup(
 
             else:
                 if opcode not in [EVM.REVERT, EVM.INVALID]:
-                    warn(
+                    warn_code(
                         INTERNAL_ERROR,
                         f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {error}",
                     )
@@ -563,7 +558,7 @@ def setup(
             print(setup_ex)
 
         if sevm.logs.bounded_loops:
-            warn(
+            warn_code(
                 LOOP_BOUND,
                 f"{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
             )
@@ -716,13 +711,13 @@ def run(
                 print(red(f"Counterexample: {render_model(model)}"))
                 counterexamples.append(model)
             else:
-                warn(
+                warn_code(
                     COUNTEREXAMPLE_INVALID,
                     f"Counterexample (potentially invalid): {render_model(model)}",
                 )
                 counterexamples.append(model)
         else:
-            warn(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
+            warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
 
         if args.print_failed_states:
             print(f"# {idx+1}")
@@ -798,23 +793,23 @@ def run(
 
     counter = Counter(str(m.result) for m in models)
     if counter["sat"] > 0:
-        passfail = color_warn("[FAIL]")
+        passfail = red("[FAIL]")
         exitcode = Exitcode.COUNTEREXAMPLE.value
     elif counter["unknown"] > 0:
-        passfail = color_warn("[TIMEOUT]")
+        passfail = yellow("[TIMEOUT]")
         exitcode = Exitcode.TIMEOUT.value
     elif len(stuck) > 0:
-        passfail = color_warn("[ERROR]")
+        passfail = red("[ERROR]")
         exitcode = Exitcode.STUCK.value
     elif normal == 0:
-        passfail = color_warn("[ERROR]")
+        passfail = red("[ERROR]")
         exitcode = Exitcode.REVERT_ALL.value
-        warn(
+        warn_code(
             REVERT_ALL,
             f"{funsig}: all paths have been reverted; the setup state or inputs may have been too restrictive.",
         )
     else:
-        passfail = color_good("[PASS]")
+        passfail = green("[PASS]")
         exitcode = Exitcode.PASS.value
 
     timer.stop()
@@ -826,13 +821,13 @@ def run(
     )
 
     for idx, ex, err in stuck:
-        warn(INTERNAL_ERROR, f"Encountered {err}")
+        warn_code(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
             print(f"\nPath #{idx+1}")
             print(traces[idx], end="")
 
     if logs.bounded_loops:
-        warn(
+        warn_code(
             LOOP_BOUND,
             f"{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
         )
@@ -840,7 +835,7 @@ def run(
             print("\n".join(logs.bounded_loops))
 
     if logs.unknown_calls:
-        warn(
+        warn_code(
             UNINTERPRETED_UNKNOWN_CALLS,
             f"{funsig}: unknown calls have been assumed to be static: {', '.join(logs.unknown_calls)}",
         )
@@ -911,7 +906,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
             fn_args.args,
         )
     except Exception as err:
-        print(f"{color_warn('[ERROR]')} {fn_args.fun_info.sig}")
+        print(f"{color_error('[ERROR]')} {fn_args.fun_info.sig}")
         error(f"{type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
@@ -1008,9 +1003,7 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
             run_args.libs,
         )
     except Exception as err:
-        print(
-            color_warn(f"Error: {setup_info.sig} failed: {type(err).__name__}: {err}")
-        )
+        error(f"Error: {setup_info.sig} failed: {type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
         return []
@@ -1026,8 +1019,8 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
                 debug(f"{test_config.formatted_layers()}")
             test_result = run(setup_ex, run_args.abi, fun_info, test_config)
         except Exception as err:
-            print(f"{color_warn('[ERROR]')} {funsig}")
-            print(color_warn(f"{type(err).__name__}: {err}"))
+            print(f"{color_error('[ERROR]')} {funsig}")
+            error(f"{type(err).__name__}: {err}")
             if args.debug:
                 traceback.print_exc()
             test_results.append(TestResult(funsig, Exitcode.EXCEPTION.value))
@@ -1287,7 +1280,7 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                     )
                 contract_map[contract_name] = (json_out, contract_type, natspec)
             except Exception as err:
-                warn(
+                warn_code(
                     PARSING_ERROR,
                     f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}",
                 )
@@ -1435,14 +1428,14 @@ def _main(_args=None) -> MainResult:
     build_exitcode = subprocess.run(build_cmd).returncode
 
     if build_exitcode:
-        print(color_warn(f"Build failed: {build_cmd}"))
+        error(f"Build failed: {build_cmd}")
         return MainResult(1)
 
     timer.create_subtimer("load")
     try:
         build_out = parse_build_out(args)
     except Exception as err:
-        print(color_warn(f"Build output parsing failed: {type(err).__name__}: {err}"))
+        error(f"Build output parsing failed: {type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
         return MainResult(1)
@@ -1547,12 +1540,11 @@ def _main(_args=None) -> MainResult:
         print(f"\n[time] {timer.report()}")
 
     if total_found == 0:
-        error_msg = (
+        error(
             f"Error: No tests with"
             + f" --match-contract '{contract_regex(args)}'"
             + f" --match-test '{test_regex(args)}'"
         )
-        print(color_warn(error_msg))
         return MainResult(1)
 
     exitcode = 0 if total_failed == 0 else 1

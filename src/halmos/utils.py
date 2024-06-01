@@ -464,7 +464,7 @@ def color_error(text: str) -> str:
 
 
 def color_warn(text: str) -> str:
-    return red(text)
+    return yellow(text)
 
 
 def color_info(text: str) -> str:
