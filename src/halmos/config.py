@@ -88,7 +88,7 @@ class Config:
 
     config: str = arg(
         help="path to the configuration file",
-        global_default=None,
+        global_default=os.path.join(os.getcwd(), "halmos.toml"),
         metavar="FILE",
     )
 
@@ -98,7 +98,7 @@ class Config:
 
     contract: str = arg(
         help="run tests in the given contract. Shortcut for `--match-contract '^{NAME}$'`.",
-        global_default=None,
+        global_default="",
         metavar="CONTRACT_NAME",
     )
 
@@ -129,13 +129,13 @@ class Config:
     )
 
     width: int = arg(
-        help="set the max number of paths, 0 for unlimited",
+        help="set the max number of paths; 0 means unlimited",
         global_default=0,
         metavar="MAX_WIDTH",
     )
 
     depth: int = arg(
-        help="set the maximum length in steps of a single path, 0 for unlimited",
+        help="set the maximum length in steps of a single path; 0 means unlimited",
         global_default=0,
         metavar="MAX_DEPTH",
     )
@@ -294,7 +294,7 @@ class Config:
     ### Build options
 
     forge_build_out: str = arg(
-        help="forge build artifacts directory name (default: 'out/')",
+        help="forge build artifacts directory name",
         metavar="DIRECTORY_NAME",
         global_default="out",
         group=build,
@@ -331,7 +331,7 @@ class Config:
     )
 
     solver_command: str = arg(
-        help="use the given command when invoking the solver, e.g. `z3 -model`",
+        help="use the given command when invoking the solver",
         global_default=None,
         metavar="COMMAND",
         group=solver,
@@ -611,8 +611,67 @@ _default_config = _create_default_config()
 _toml_parser = _create_toml_parser()
 
 
-if __name__ == "__main__":
-    parser = arg_parser()
-    args = parser.parse_args()
+# can generate a sample config file using:
+# python -m halmos.config ARGS > halmos.toml
+def main():
+    def _to_toml_str(value: Any, type) -> str:
+        assert value is not None
+        if type == str:
+            return f'"{value}"'
+        if type == bool:
+            return str(value).lower()
+        return str(value)
+
+    args = arg_parser().parse_args()
     config = default_config().with_overrides(source="command-line", **vars(args))
-    print(config.formatted_layers())
+
+    # devs can have a little easter egg
+    lines = [
+        "#     ___       ___       ___       ___       ___       ___",
+        "#    /\\__\\     /\\  \\     /\\__\\     /\\__\\     /\\  \\     /\\  \\",
+        "#   /:/__/_   /::\\  \\   /:/  /    /::L_L_   /::\\  \\   /::\\  \\",
+        "#  /::\\/\\__\\ /::\\:\\__\\ /:/__/    /:/L:\\__\\ /:/\\:\\__\\ /\\:\\:\\__\\",
+        "#  \\/\\::/  / \\/\\::/  / \\:\\  \\    \\/_/:/  / \\:\\/:/  / \\:\\:\\/__/",
+        "#    /:/  /    /:/  /   \\:\\__\\     /:/  /   \\::/  /   \\::/  /",
+        "#    \\/__/     \\/__/     \\/__/     \\/__/     \\/__/     \\/__/",
+    ]
+
+    lines.append("\n[global]")
+    current_group_name = None
+
+    for field_info in fields(config):
+        if field_info.metadata.get(internal, False):
+            # skip internal fields
+            continue
+
+        name = field_info.name.replace("_", "-")
+        if name in ["config", "root", "version"]:
+            # skip fields that don't make sense in a config file
+            continue
+
+        group_name = field_info.metadata.get("group", None)
+        if group_name != current_group_name:
+            separator = "#" * 80
+            lines.append(f"\n{separator}")
+            lines.append(f"# {group_name: ^76} #")
+            lines.append(separator)
+            current_group_name = group_name
+
+        arg_help = field_info.metadata.get("help", "")
+        arg_help_tokens = arg_help.split(". ")  # split on sentences
+        arg_help_str = "\n# ".join(arg_help_tokens)
+        lines.append(f"\n# {arg_help_str}")
+
+        value = getattr(config, field_info.name)
+        if value is None:
+            metavar = field_info.metadata.get("metavar", None)
+            lines.append(f"# {name} = {metavar}")
+        else:
+            value_str = _to_toml_str(value, field_info.type)
+            lines.append(f"{name} = {value_str}")
+
+    print("\n".join(lines))
+
+
+if __name__ == "__main__":
+    main()
