@@ -455,24 +455,11 @@ def magenta(text: str) -> str:
     return f"\033[35m{text}\033[0m"
 
 
-def color_good(text: str) -> str:
-    return green(text)
-
-
-def color_error(text: str) -> str:
-    return red(text)
-
-
-def color_warn(text: str) -> str:
-    return yellow(text)
-
-
-def color_info(text: str) -> str:
-    return cyan(text)
-
-
-def color_debug(text: str) -> str:
-    return magenta(text)
+color_good = green
+color_debug = magenta
+color_info = cyan
+color_warn = yellow
+color_error = red
 
 
 def error(text: str) -> None:
