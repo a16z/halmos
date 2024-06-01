@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ghcr.io/emperororokusaki/solvers:0.1.0
+    container: ghcr.io/a16z/halmos:0.1.0
 
     strategy:
       fail-fast: false
@@ -24,10 +24,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install halmos
-        run: |
-          python3 -m pip install -e .
 
       - name: Run Pytest
         run: |
