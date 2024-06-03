@@ -88,12 +88,12 @@ class Config:
 
     config: str = arg(
         help="path to the configuration file",
-        global_default=os.path.join(os.getcwd(), "halmos.toml"),
+        global_default=lambda: os.path.join(os.getcwd(), "halmos.toml"),
         metavar="FILE",
     )
 
     root: str = arg(
-        help="Project root directory", global_default=os.getcwd(), metavar="PATH"
+        help="Project root directory", global_default=os.getcwd, metavar="PATH"
     )
 
     contract: str = arg(
@@ -343,7 +343,7 @@ class Config:
 
     solver_threads: int = arg(
         help="set the number of threads for parallel solvers",
-        global_default=os.cpu_count() or 1,
+        global_default=(lambda: os.cpu_count() or 1),
         metavar="N",
         group=solver,
     )
@@ -528,9 +528,11 @@ def _create_default_config() -> "Config":
 
     for field in fields(Config):
         # we build the default config by looking at the global_default metadata field
-        default_value = field.metadata.get("global_default", MISSING)
-        if default_value != MISSING:
-            values[field.name] = default_value
+        default = field.metadata.get("global_default", MISSING)
+        if default == MISSING:
+            continue
+
+        values[field.name] = default() if callable(default) else default
 
     return Config(_parent=None, _source="default", **values)
 
@@ -662,8 +664,13 @@ def main():
         arg_help_str = "\n# ".join(arg_help_tokens)
         lines.append(f"\n# {arg_help_str}")
 
-        value = getattr(config, field_info.name)
-        if value is None:
+        (value, source) = config.value_with_source(field_info.name)
+        default = field_info.metadata.get("global_default", None)
+
+        # callable defaults mean that the default value is not a hardcoded constant
+        # it depends on the context, so don't emit it in the config file unless it
+        # is explicitly set by the user on the command line
+        if value is None or (callable(default) and source != "command-line"):
             metavar = field_info.metadata.get("metavar", None)
             lines.append(f"# {name} = {metavar}")
         else:
