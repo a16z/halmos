@@ -89,17 +89,17 @@ class Config:
     # We can then layer these Config objects on top of the `default_config()`
 
     root: str = arg(
-        help="Project root directory",
-        metavar="PROJECT_ROOT",
+        help="project root directory",
+        metavar="ROOT",
         global_default=os.getcwd,
-        global_default_str="'.'",
+        global_default_str="current working directory",
     )
 
     config: str = arg(
-        help="path to the configuration file",
+        help="path to the config file",
         metavar="FILE",
         global_default=lambda: os.path.join(os.getcwd(), "halmos.toml"),
-        global_default_str="PROJECT_ROOT/halmos.toml",
+        global_default_str="ROOT/halmos.toml",
     )
 
     contract: str = arg(
