@@ -3,6 +3,9 @@ name: Demo Push
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat-packages
 
   # This creates an environment variable called `IMAGE_NAME ` with the value `solvers`.
 env:
