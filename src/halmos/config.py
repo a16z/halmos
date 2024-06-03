@@ -30,6 +30,7 @@ def arg(
     choices: Optional[str] = None,
     short: Optional[str] = None,
     countable: bool = False,
+    global_default_str: Optional[str] = None,
 ):
     return field(
         default=None,
@@ -41,6 +42,7 @@ def arg(
             "choices": choices,
             "short": short,
             "countable": countable,
+            "global_default_str": global_default_str,
         },
     )
 
@@ -86,14 +88,18 @@ class Config:
     #
     # We can then layer these Config objects on top of the `default_config()`
 
-    config: str = arg(
-        help="path to the configuration file",
-        global_default=lambda: os.path.join(os.getcwd(), "halmos.toml"),
-        metavar="FILE",
+    root: str = arg(
+        help="Project root directory",
+        metavar="PROJECT_ROOT",
+        global_default=os.getcwd,
+        global_default_str="'.'",
     )
 
-    root: str = arg(
-        help="Project root directory", global_default=os.getcwd, metavar="PATH"
+    config: str = arg(
+        help="path to the configuration file",
+        metavar="FILE",
+        global_default=lambda: os.path.join(os.getcwd(), "halmos.toml"),
+        global_default_str="PROJECT_ROOT/halmos.toml",
     )
 
     contract: str = arg(
@@ -343,9 +349,10 @@ class Config:
 
     solver_threads: int = arg(
         help="set the number of threads for parallel solvers",
-        global_default=(lambda: os.cpu_count() or 1),
         metavar="N",
         group=solver,
+        global_default=(lambda: os.cpu_count() or 1),
+        global_default_str="number of CPUs",
     )
 
     ### Experimental options
@@ -576,7 +583,9 @@ def _create_arg_parser() -> argparse.ArgumentParser:
             # add the default value to the help text
             default = field_info.metadata.get("global_default", None)
             if default is not None:
-                arg_help += f" (default: {default!r})"
+                default_str = field_info.metadata.get("global_default_str", None)
+                default_str = repr(default) if default_str is None else default_str
+                arg_help += f" (default: {default_str})"
 
             kwargs = {
                 "help": arg_help,
