@@ -4,7 +4,6 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y \
     curl \
     git \
-    python3-pip \
     build-essential \
     wget \
     unzip \
@@ -12,9 +11,9 @@ RUN apt-get update && apt-get install -y \
     software-properties-common \
     libffi-dev \
     cmake \
-    python3.10-venv \
-    python3 python3-setuptools \
-    python3-wheel ninja-build \
+    python3 \
+    python3-pip \
+    ninja-build \
     g++ zlib1g-dev libboost-all-dev flex bison
 
 # Install Z3

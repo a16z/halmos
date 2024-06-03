@@ -1,5 +1,5 @@
 # based on https://docs.github.com/en/packages/managing-github-packages-using-github-actions-workflows/publishing-and-installing-a-package-with-github-actions#upgrading-a-workflow-that-accesses-a-registry-using-a-personal-access-token
-name: Demo Push
+name: Push solvers package
 
 on:
   workflow_dispatch:
