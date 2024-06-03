@@ -1,0 +1,148 @@
+[global]
+
+# run tests in the given contract
+# Shortcut for `--match-contract '^{NAME}$'`.
+contract = ""
+
+# run tests in contracts matching the given regex
+# Ignored if the --contract name is given.
+match-contract = ""
+
+# run tests matching the given prefix
+# Shortcut for `--match-test '^{PREFIX}'`.
+function = "check_"
+
+# run tests matching the given regex
+# The --function prefix is automatically added, unless the regex starts with '^'.
+match-test = ""
+
+# set loop unrolling bounds
+loop = 2
+
+# set the max number of paths; 0 means unlimited
+width = 0
+
+# set the maximum length in steps of a single path; 0 means unlimited
+depth = 0
+
+# set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)
+# array-lengths = NAME1=LENGTH1,NAME2=LENGTH2,...
+
+# use uninterpreted abstractions for unknown external calls with the given function signatures
+uninterpreted-unknown-calls = "0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81"
+
+# set the byte size of return data from uninterpreted unknown external calls
+return-size-of-unknown-calls = 32
+
+# Select one of the available storage layout models
+# The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.
+storage-layout = "solidity"
+
+# set default storage values to symbolic
+symbolic-storage = false
+
+# set msg.sender symbolic
+symbolic-msg-sender = false
+
+# do not run the constructor of test contracts
+no-test-constructor = false
+
+# allow the usage of FFI to call external functions
+ffi = false
+
+################################################################################
+#                              Debugging options                               #
+################################################################################
+
+# increase verbosity levels: -v, -vv, -vvv, ...
+verbose = 0
+
+# print statistics
+statistics = false
+
+# run in debug mode
+debug = false
+
+# log every execution steps in JSON
+# log = LOG_FILE_PATH
+
+# output test results in JSON
+# json-output = JSON_FILE_PATH
+
+# include minimal information in the JSON output
+minimal-json-output = false
+
+# print every execution step
+print-steps = false
+
+# when --print-steps is enabled, also print memory contents
+print-mem = false
+
+# print all final execution states
+print-states = false
+
+# print failed execution states
+print-failed-states = false
+
+# print blocked execution states
+print-blocked-states = false
+
+# print setup execution states
+print-setup-states = false
+
+# print full counterexample model
+print-full-model = false
+
+# stop after a counterexample is found
+early-exit = false
+
+# dump SMT queries for assertion violations
+dump-smt-queries = false
+
+################################################################################
+#                                Build options                                 #
+################################################################################
+
+# forge build artifacts directory name
+forge-build-out = "out"
+
+################################################################################
+#                                Solver options                                #
+################################################################################
+
+# interpret constant power up to N
+smt-exp-by-const = 2
+
+# set timeout (in milliseconds) for solving branching conditions; 0 means no timeout
+solver-timeout-branching = 1
+
+# set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout
+solver-timeout-assertion = 1000
+
+# set memory limit (in megabytes) for the solver; 0 means no limit
+solver-max-memory = 0
+
+# use the given command when invoking the solver
+# solver-command = COMMAND
+
+# run assertion solvers in parallel
+solver-parallel = false
+
+# set the number of threads for parallel solvers
+# solver-threads = N
+
+################################################################################
+#                             Experimental options                             #
+################################################################################
+
+# execute the given bytecode
+# bytecode = HEX_STRING
+
+# reset the bytecode of given addresses after setUp()
+# reset-bytecode = ADDR1=CODE1,ADDR2=CODE2,...
+
+# run tests in parallel
+test-parallel = false
+
+# support symbolic jump destination
+symbolic-jump = false

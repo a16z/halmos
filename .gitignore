@@ -21,3 +21,6 @@ venv/
 # Foundry build files
 cache/
 out/
+
+# VS Code
+.vscode/
