@@ -129,7 +129,7 @@ solver-max-memory = 0
 solver-parallel = false
 
 # set the number of threads for parallel solvers
-solver-threads = 20
+# solver-threads = N
 
 ################################################################################
 #                             Experimental options                             #
