@@ -60,7 +60,7 @@ RUN git clone --depth 1 https://github.com/bitwuzla/bitwuzla && \
     pip3 install meson && \
     ./configure.py && \
     cd build && \
-    ninja install \
+    ninja install && \
     cd / && rm -rf /tmp/bitwuzla
 
 # Install Boolector
