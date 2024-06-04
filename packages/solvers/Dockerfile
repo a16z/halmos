@@ -1,5 +1,5 @@
 # TODO: migrate to ubuntu:24.04 when yices is available in the repository
-FROM ubuntu:22.04
+FROM homebrew/ubuntu22.04
 
 # Install necessary packages
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -34,12 +34,8 @@ RUN git clone --depth 1 https://github.com/stp/stp.git && \
     make install && \
     cd / && rm -rf /tmp/stp
 
-# Install Yices (depends on software-properties-common)
-RUN add-apt-repository ppa:sri-csl/formal-methods -y && \
-    apt-get update && \
-    apt-get install -y \
-    gnupg2 \
-    yices2
+# Install Yices
+RUN brew install SRI-CSL/sri-csl/yices2
 
 # Build cvc5 from source
 # RUN git clone --depth 1 https://github.com/cvc5/cvc5.git && cd cvc5 && ./configure.sh --auto-download && \
