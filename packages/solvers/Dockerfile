@@ -2,7 +2,7 @@
 FROM ubuntu:22.04
 
 # Install necessary packages
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install --no-install-recommends -y \
     curl \
     git \
     build-essential \
@@ -21,22 +21,24 @@ RUN apt-get update && apt-get install -y \
 RUN apt-get install -y z3
 
 # Install STP
-RUN git clone https://github.com/stp/minisat.git && cd minisat && mkdir build && cd build && \
+RUN git clone --depth 1 https://github.com/stp/minisat.git && cd minisat && mkdir build && cd build && \
     cmake .. && \
     make && \
-    make install
+    make install && \
+    cd / && rm -rf /tmp/minisat
 
-RUN git clone https://github.com/stp/stp.git && \
+RUN git clone --depth 1 https://github.com/stp/stp.git && \
     cd stp && mkdir build && cd build && \
     cmake .. && \
     make && \
-    make install
+    make install && \
+    cd / && rm -rf /tmp/stp
 
 # Install Yices
 RUN add-apt-repository ppa:sri-csl/formal-methods -y && apt-get update && apt-get install -y yices2
 
 # Build cvc5 from source
-# RUN git clone https://github.com/cvc5/cvc5.git && cd cvc5 && ./configure.sh --auto-download && \
+# RUN git clone --depth 1 https://github.com/cvc5/cvc5.git && cd cvc5 && ./configure.sh --auto-download && \
 #    cd ./build && \
 #    make && \
 #    make check && \
@@ -50,20 +52,22 @@ RUN wget https://github.com/cvc5/cvc5/releases/download/cvc5-1.1.2/cvc5-Linux-st
     rm /tmp/cvc5-Linux-static.zip
 
 # Install Bitwuzla
-RUN git clone https://github.com/bitwuzla/bitwuzla && \
+RUN git clone --depth 1 https://github.com/bitwuzla/bitwuzla && \
     cd bitwuzla && \
     pip3 install meson && \
     ./configure.py && \
     cd build && \
-    ninja install
+    ninja install \
+    cd / && rm -rf /tmp/bitwuzla
 
 # Install Boolector
-RUN git clone https://github.com/boolector/boolector && cd boolector && ./contrib/setup-lingeling.sh && \
+RUN git clone --depth 1 https://github.com/boolector/boolector && cd boolector && ./contrib/setup-lingeling.sh && \
     ./contrib/setup-btor2tools.sh && \
     ./configure.sh && \
     cd build && \
     make && \
-    ln -s /boolector/build/bin/boolector /usr/local/bin/boolector
+    ln -s /boolector/build/bin/boolector /usr/local/bin/boolector \
+    cd / && rm -rf /tmp/boolector
 
 # Set the default command for the container
 CMD ["bash"]
