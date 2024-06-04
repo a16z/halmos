@@ -25,7 +25,7 @@ COPY --from=msoos/stp /usr/local/bin/stp /usr/local/bin/stp
 # Install Yices from the release binaries
 WORKDIR /yices
 ARG YICES_VERSION=2.6.4
-RUN wget https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4/yices-${YICES_VERSION}}-x86_64-pc-linux-gnu.tar.gz -O yices.tar.gz && \
+RUN wget https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4/yices-${YICES_VERSION}-x86_64-pc-linux-gnu.tar.gz -O yices.tar.gz && \
     tar -xzvf yices.tar.gz --strip-components=1 && \
     mv /yices/bin/* /usr/local/bin/ && \
     mv /yices/lib/* /usr/local/lib/ && \
@@ -35,7 +35,7 @@ RUN wget https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4/yices-$
 # Install cvc5 from release binaries
 WORKDIR /cvc5
 ARG CVC5_VERSION=1.1.2
-RUN wget https://github.com/cvc5/cvc5/releases/download/cvc5-${CVC5_VERSION}}/cvc5-Linux-static.zip -O cvc5-Linux-static.zip && \
+RUN wget https://github.com/cvc5/cvc5/releases/download/cvc5-${CVC5_VERSION}/cvc5-Linux-static.zip -O cvc5-Linux-static.zip && \
     unzip cvc5-Linux-static.zip && \
     mv cvc5-Linux-static/bin/cvc5 /usr/local/bin/cvc5 && \
     chmod +x /usr/local/bin/cvc5 && \
