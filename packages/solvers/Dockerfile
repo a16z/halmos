@@ -52,6 +52,7 @@ RUN wget https://github.com/cvc5/cvc5/releases/download/cvc5-1.1.2/cvc5-Linux-st
 # Install Bitwuzla
 RUN git clone https://github.com/bitwuzla/bitwuzla && \
     cd bitwuzla && \
+    pip3 install meson && \
     ./configure.py && \
     cd build && \
     ninja install
