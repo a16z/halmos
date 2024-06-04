@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     unzip \
     autoconf \
     libffi-dev \
+    libm4ri-dev \
+    zlib1g-dev \
     cmake \
     python3 \
     python3-pip \
@@ -20,22 +22,42 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     software-properties-common \
     g++ zlib1g-dev libboost-all-dev flex bison
 
+
 # Install Z3
 RUN apt-get install -y z3
 
-# Install STP
-RUN git clone --depth 1 https://github.com/stp/minisat.git && cd minisat && mkdir build && cd build && \
-    cmake .. && \
-    make && \
-    make install && \
-    cd / && rm -rf /tmp/minisat
 
-RUN git clone --depth 1 https://github.com/stp/stp.git && \
-    cd stp && mkdir build && cd build && \
-    cmake .. && \
-    make && \
-    make install && \
-    cd / && rm -rf /tmp/stp
+# Build CMS
+WORKDIR /cms
+RUN wget -O cryptominisat.tgz https://github.com/msoos/cryptominisat/archive/5.8.0.tar.gz \
+ && tar xvf cryptominisat.tgz --strip-components 1 \
+ && mkdir build && cd build \
+ && cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DENABLE_ASSERTIONS=OFF \
+        -DSTATICCOMPILE=ON \
+ && cmake --build . \
+ && cmake --install .
+
+# Build MiniSat
+WORKDIR /minisat
+RUN wget -O minisat.tgz https://github.com/stp/minisat/archive/releases/2.2.1.tar.gz \
+ && tar xvf minisat.tgz --strip-components 1 \
+ && mkdir build && cd build \
+ && cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+ && cmake --build . \
+ && cmake --install .
+
+# Build STP
+WORKDIR /stp/build
+COPY . /stp
+RUN cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DENABLE_ASSERTIONS=OFF \
+        -DSTATICCOMPILE=ON \
+ && cmake --build . \
+ && cmake --install .
 
 # Install Yices from the release binaries
 RUN wget https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4/yices-2.6.4-x86_64-pc-linux-gnu.tar.gz -O /tmp/yices.tar.gz && \
