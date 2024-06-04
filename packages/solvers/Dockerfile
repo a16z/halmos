@@ -69,7 +69,7 @@ RUN git clone --depth 1 https://github.com/boolector/boolector && cd boolector &
     ./configure.sh && \
     cd build && \
     make && \
-    ln -s /boolector/build/bin/boolector /usr/local/bin/boolector \
+    ln -s /boolector/build/bin/boolector /usr/local/bin/boolector && \
     cd / && rm -rf /tmp/boolector
 
 # Clean up
