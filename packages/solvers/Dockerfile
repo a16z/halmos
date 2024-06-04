@@ -14,8 +14,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     python3 \
     python3-pip \
     ninja-build \
-    g++ zlib1g-dev libboost-all-dev flex bison && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    g++ zlib1g-dev libboost-all-dev flex bison
 
 # Install Z3
 RUN apt-get install -y z3
@@ -73,6 +72,9 @@ RUN git clone --depth 1 https://github.com/boolector/boolector && cd boolector &
     make && \
     ln -s /boolector/build/bin/boolector /usr/local/bin/boolector \
     cd / && rm -rf /tmp/boolector
+
+# Clean up
+RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Set the default command for the container
 CMD ["bash"]
