@@ -31,7 +31,6 @@ for solver in bitwuzla boolector cvc5 stp yices-smt2 z3 ; do \
     echo -n "$solver: " && \
     docker run --rm -v .:/workspace solvers $solver checkSanity.smt2 ; \
 done
-
 ```
 
 ## Available solvers
