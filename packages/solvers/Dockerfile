@@ -1,5 +1,5 @@
 # TODO: migrate to ubuntu:24.04 when yices is available in the repository
-FROM ubuntu:22.04
+FROM ubuntu:22.04 as builder
 
 # homebrew sets the user to 'linuxbrew'
 USER root
@@ -75,11 +75,14 @@ RUN git clone --depth 1 https://github.com/boolector/boolector && cd boolector &
     ./configure.sh && \
     cd build && \
     make && \
-    ln -s /boolector/build/bin/boolector /usr/local/bin/boolector && \
+    mv /boolector/build/bin/* /usr/local/bin/ && \
     cd / && rm -rf /tmp/boolector
 
-# Clean up
-RUN apt-get clean && rm -rf /var/lib/apt/lists/*
+# Create the final image
+FROM ubuntu:22.04
+
+# Copy installed files from builder
+COPY --from=builder /usr/local /usr/local
 
 # Set the default command for the container
 CMD ["bash"]
