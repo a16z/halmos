@@ -1,8 +1,11 @@
 # TODO: migrate to ubuntu:24.04 when yices is available in the repository
 FROM homebrew/ubuntu22.04
 
+# homebrew sets the user to 'linuxbrew'
+USER root
+
 # Install necessary packages
-RUN sudo apt-get update && apt-get install --no-install-recommends -y \
+RUN apt-get update && apt-get install --no-install-recommends -y \
     curl \
     git \
     build-essential \
