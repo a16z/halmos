@@ -7,11 +7,9 @@ on:
     branches:
       - feat-packages
 
-  # This creates an environment variable called `IMAGE_NAME ` with the value `solvers`.
 env:
   IMAGE_NAME: solvers
 
-#
 jobs:
   # This pushes the image to GitHub Packages.
   push:
@@ -35,10 +33,13 @@ jobs:
 
           # This changes all uppercase characters to lowercase.
           IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+
           # This strips the git ref prefix from the version.
           VERSION=$(echo "${{ github.ref }}" | sed -e 's,.*/\(.*\),\1,')
+
           # This strips the "v" prefix from the tag name.
           [[ "${{ github.ref }}" == "refs/tags/"* ]] && VERSION=$(echo $VERSION | sed -e 's/^v//')
+
           # This uses the Docker `latest` tag convention.
           [ "$VERSION" == "main" ] && VERSION=latest
           echo IMAGE_ID=$IMAGE_ID
