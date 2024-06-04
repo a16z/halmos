@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     python3 \
     python3-pip \
     ninja-build \
+    software-properties-common \
     g++ zlib1g-dev libboost-all-dev flex bison
 
 # Install Z3
@@ -33,12 +34,11 @@ RUN git clone --depth 1 https://github.com/stp/stp.git && \
     make install && \
     cd / && rm -rf /tmp/stp
 
-# Install Yices
+# Install Yices (depends on software-properties-common)
 RUN add-apt-repository ppa:sri-csl/formal-methods -y && \
     apt-get update && \
     apt-get install -y \
     gnupg2 \
-    software-properties-common \
     yices2
 
 # Build cvc5 from source
