@@ -1,5 +1,5 @@
 # TODO: migrate to ubuntu:24.04 when yices is available in the repository
-FROM homebrew/ubuntu22.04
+FROM ubuntu:22.04
 
 # homebrew sets the user to 'linuxbrew'
 USER root
@@ -37,8 +37,14 @@ RUN git clone --depth 1 https://github.com/stp/stp.git && \
     make install && \
     cd / && rm -rf /tmp/stp
 
-# Install Yices
-RUN brew install SRI-CSL/sri-csl/yices2
+# Install Yices from the release binaries
+RUN wget https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4/yices-2.6.4-x86_64-pc-linux-gnu.tar.gz -O /tmp/yices.tar.gz && \
+    mkdir -p /tmp/yices && \
+    tar -xzvf /tmp/yices.tar.gz -C /tmp/yices --strip-components=1 && \
+    mv /tmp/yices/bin/* /usr/local/bin/ && \
+    mv /tmp/yices/lib/* /usr/local/lib/ && \
+    mv /tmp/yices/include/* /usr/local/include/ && \
+    rm -rf /tmp/yices /tmp/yices.tar.gz
 
 # Build cvc5 from source
 # RUN git clone --depth 1 https://github.com/cvc5/cvc5.git && cd cvc5 && ./configure.sh --auto-download && \
