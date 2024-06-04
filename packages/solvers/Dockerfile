@@ -2,7 +2,7 @@
 FROM homebrew/ubuntu22.04
 
 # Install necessary packages
-RUN apt-get update && apt-get install --no-install-recommends -y \
+RUN sudo apt-get update && apt-get install --no-install-recommends -y \
     curl \
     git \
     build-essential \
