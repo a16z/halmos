@@ -65,7 +65,12 @@ RUN git clone --depth 1 https://github.com/boolector/boolector . && \
 FROM ubuntu:24.04
 
 # Copy installed files from builder
-COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /usr/local/bin/z3 /usr/local/bin/
+COPY --from=builder /usr/local/bin/stp /usr/local/bin/
+COPY --from=builder /usr/local/bin/cvc5 /usr/local/bin/
+COPY --from=builder /usr/local/bin/yices /usr/local/bin/
+COPY --from=builder /usr/local/bin/bitwuzla /usr/local/bin/
+COPY --from=builder /usr/local/bin/boolector /usr/local/bin/
 
 # Set the default command for the container
 WORKDIR /workspace
