@@ -2,10 +2,8 @@
 name: Push solvers package
 
 on:
+  # only trigger manually, this is independent from halmos releases
   workflow_dispatch:
-  push:
-    branches:
-      - feat-packages
 
 env:
   IMAGE_NAME: solvers
