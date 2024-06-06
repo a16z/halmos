@@ -1,4 +1,4 @@
-FROM ubuntu:22.04 as builder
+FROM ubuntu:24.04 as builder
 
 # Install necessary packages
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -25,7 +25,7 @@ COPY --from=msoos/stp /usr/local/bin/stp /usr/local/bin/stp
 # Install Yices from the release binaries
 WORKDIR /yices
 ARG YICES_VERSION=2.6.4
-RUN wget https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4/yices-${YICES_VERSION}-x86_64-pc-linux-gnu.tar.gz -O yices.tar.gz && \
+RUN wget https://github.com/SRI-CSL/yices2/releases/download/Yices-${YICES_VERSION}/yices-${YICES_VERSION}-x86_64-pc-linux-gnu.tar.gz -O yices.tar.gz && \
     tar -xzvf yices.tar.gz --strip-components=1 && \
     mv /yices/bin/* /usr/local/bin/ && \
     mv /yices/lib/* /usr/local/lib/ && \
