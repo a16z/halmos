@@ -20,14 +20,23 @@ jobs:
           - testname: "examples/tokens/ERC721"
 
     steps:
+      - name: Install Git
+        run: sudo apt-get install -y git
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install halmos
+      - name: Install Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.12'
+
+      - name: Install halmos and dev dependencies
         run: |
           python3 -m pip install -e .
+          python3 -m pip install -r requirements-dev.txt
 
       - name: Run Pytest
         run: |
