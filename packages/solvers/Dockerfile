@@ -72,6 +72,7 @@ COPY --from=builder /usr/local/bin/z3 /usr/local/bin/
 COPY --from=builder /usr/local/bin/stp /usr/local/bin/
 COPY --from=builder /usr/local/bin/cvc5 /usr/local/bin/
 COPY --from=builder /usr/local/bin/yices /usr/local/bin/
+COPY --from=builder /usr/local/bin/yices-smt2 /usr/local/bin/
 COPY --from=builder /usr/local/bin/bitwuzla /usr/local/bin/
 COPY --from=builder /usr/local/bin/boolector /usr/local/bin/
 
