@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     cmake \
     python3 \
     python3-pip \
+    python3-venv \
     ninja-build \
     software-properties-common \
     g++ zlib1g-dev libboost-all-dev flex bison
@@ -44,7 +45,9 @@ RUN wget https://github.com/cvc5/cvc5/releases/download/cvc5-${CVC5_VERSION}/cvc
 # Install Bitwuzla
 WORKDIR /bitwuzla
 RUN git clone --depth 1 https://github.com/bitwuzla/bitwuzla . && \
-    pip3 install meson && \
+    python3 -m venv .venv && \
+    . .venv/bin/activate && \
+    python3 -m pip install meson && \
     ./configure.py && \
     cd build && \
     ninja install && \
