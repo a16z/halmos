@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ghcr.io/emperororokusaki/solvers:0.1.0
+    container: ghcr.io/a16z/solvers
 
     strategy:
       fail-fast: false
