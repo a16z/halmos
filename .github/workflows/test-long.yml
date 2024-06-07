@@ -37,6 +37,6 @@ jobs:
         run: |
           docker build -t halmos . --file packages/halmos/Dockerfile
 
-      - name: Run Pytest
+      - name: Run pytest
         run: |
           docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
