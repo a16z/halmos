@@ -1,4 +1,6 @@
 # FROM ghcr.io/a16z/halmos-builder:latest
+
+# TODO: switch to :latest as soon as the image is available
 FROM ghcr.io/a16z/halmos-builder:chore-workflows
 
 # Enable the virtual environment
