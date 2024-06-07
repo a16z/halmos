@@ -12,7 +12,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ghcr.io/emperororokusaki/solvers:0.1.0
 
     strategy:
       fail-fast: false

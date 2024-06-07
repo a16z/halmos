@@ -2,7 +2,7 @@ name: Test long
 
 on:
   push:
-    branches: [main]
+    branches: [main, chore-workflows]
     paths:
       - .github/workflows/test-long.yml
   workflow_dispatch:
@@ -21,17 +21,17 @@ jobs:
           - testname: "examples/tokens/ERC721"
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Build image
         run: |

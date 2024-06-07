@@ -2,7 +2,7 @@ name: Test FFI
 
 on:
   push:
-    branches: [main]
+    branches: [main, chore-workflows]
     paths:
       - .github/workflows/test-ffi.yml
   pull_request:
@@ -20,10 +20,6 @@ jobs:
         - testname: "tests/ffi"
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -31,9 +27,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Build image
         run: |
           docker build -t halmos . --file packages/halmos/Dockerfile
 
       - name: Run pytest
-        run: pytest -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="--ffi -v -st --solver-timeout-assertion 0"
+        run: docker run -v .:/workspace --entrypoint pytest halmos -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="--ffi -v -st --solver-timeout-assertion 0"
