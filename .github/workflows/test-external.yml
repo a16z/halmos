@@ -3,6 +3,8 @@ name: Test external projects
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/test-external.yml
 # pull_request:
 #   branches: [main]
   workflow_dispatch:
@@ -10,7 +12,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ghcr.io/emperororokusaki/solvers:0.1.0
 
     strategy:
       fail-fast: false

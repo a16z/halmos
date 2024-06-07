@@ -2,7 +2,9 @@ name: Test long
 
 on:
   push:
-    branches: [main]
+    branches: [main, chore-workflows]
+    paths:
+      - .github/workflows/test-long.yml
   workflow_dispatch:
 
 jobs:
@@ -19,11 +21,6 @@ jobs:
           - testname: "examples/tokens/ERC721"
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -31,10 +28,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
       - name: Build image
         run: |
           docker build -t halmos . --file packages/halmos/Dockerfile
 
-      - name: Run Pytest
+      - name: Run pytest
         run: |
           docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
