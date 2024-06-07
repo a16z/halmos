@@ -2,12 +2,15 @@
 name: Push halmos package
 
 on:
-  # only trigger manually, this is independent from halmos releases
   workflow_dispatch:
   push:
     paths:
       - packages/halmos/**/*
       - .github/workflows/publish-halmos-package.yml
+    tags:
+      # push when we release a new tagged version
+      - 'v*'
+
 
 env:
   IMAGE_NAME: halmos
