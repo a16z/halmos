@@ -702,12 +702,15 @@ def assertLt_uint256_uint256(arg: ByteVec) -> ByteVec:
 def assertNotEqDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 def assertLe_int256_int256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 def assertNotEq_uint256_array_uint256_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 def assertLtDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
