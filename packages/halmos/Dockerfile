@@ -1,4 +1,5 @@
-FROM ghcr.io/a16z/halmos-builder:latest
+# FROM ghcr.io/a16z/halmos-builder:latest
+FROM ghcr.io/a16z/halmos-builder:chore-workflows
 
 # Enable the virtual environment
 ENV PATH="/halmos/.venv/bin:$PATH"
