@@ -3,6 +3,8 @@ name: Test external projects
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/test-external.yml
 # pull_request:
 #   branches: [main]
   workflow_dispatch:

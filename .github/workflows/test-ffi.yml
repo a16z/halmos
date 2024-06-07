@@ -3,6 +3,8 @@ name: Test FFI
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/test-ffi.yml
   pull_request:
     branches: [main]
 

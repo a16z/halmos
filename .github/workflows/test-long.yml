@@ -3,6 +3,8 @@ name: Test long
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/test-long.yml
   workflow_dispatch:
 
 jobs:
