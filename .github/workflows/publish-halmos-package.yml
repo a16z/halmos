@@ -21,17 +21,20 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Build image
-        run: docker build . --file packages/halmos/Dockerfile --tag $IMAGE_NAME --label "runnumber=${GITHUB_RUN_ID}"
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v4
+        with:
+          # we may need tests/lib for the workflows using this image
+          submodules: recursive
+
+      - name: Build image
+        run: docker build . --file packages/halmos/Dockerfile --tag $IMAGE_NAME --label "runnumber=${GITHUB_RUN_ID}"
 
       - name: Push image
         run: |
