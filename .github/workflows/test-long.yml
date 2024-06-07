@@ -8,7 +8,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ghcr.io/a16z/solvers
 
     strategy:
       fail-fast: false
@@ -20,24 +19,15 @@ jobs:
           - testname: "examples/tokens/ERC721"
 
     steps:
-      - name: Install Git
-        run: apt-get update && apt-get install -y git
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Install Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.12'
-
-      - name: Install halmos and dev dependencies
+      - name: Build image
         run: |
-          python3 -m pip install -e .
-          python3 -m pip install -r requirements-dev.txt
+          docker build -t halmos . --file packages/halmos/Dockerfile
 
       - name: Run Pytest
         run: |
-          pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
+          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
