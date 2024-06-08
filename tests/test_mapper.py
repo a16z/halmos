@@ -91,3 +91,86 @@ def test_append_node_to_nonexistent_contract(mapper):
     )
     with pytest.raises(ValueError, match=r"Contract NonexistentContract not found"):
         mapper.append_node("NonexistentContract", new_node)
+
+
+def test_parse_simple_ast(mapper):
+    example_ast = {
+        "nodeType": "ContractDefinition",
+        "id": 1,
+        "name": "ExampleContract",
+        "nodes": [
+            {
+                "nodeType": "FunctionDefinition",
+                "id": 2,
+                "name": "exampleFunction",
+                "functionSelector": "abcdef",
+                "visibility": "public",
+                "nodes": [],
+            }
+        ],
+    }
+    mapper.parse_ast(example_ast)
+    contract_info = mapper.get_contract_mapping_info_by_name("ExampleContract")
+
+    assert contract_info is not None
+    assert contract_info.contract_name == "ExampleContract"
+    assert len(contract_info.nodes) == 1
+    assert contract_info.nodes[0].name == "exampleFunction"
+
+
+def test_parse_complex_ast(mapper):
+    complex_ast = {
+        "nodeType": "ContractDefinition",
+        "id": 1,
+        "name": "ComplexContract",
+        "nodes": [
+            {
+                "nodeType": "VariableDeclaration",
+                "id": 2,
+                "name": "var1",
+                "functionSelector": "",
+                "visibility": "private",
+            },
+            {
+                "nodeType": "FunctionDefinition",
+                "id": 3,
+                "name": "func1",
+                "functionSelector": "222222",
+                "visibility": "public",
+                "nodes": [
+                    {
+                        "nodeType": "Block",
+                        "id": 4,
+                        "name": "innerBlock",
+                        "functionSelector": "",
+                        "visibility": "",
+                    }
+                ],
+            },
+            {
+                "nodeType": "EventDefinition",
+                "id": 5,
+                "name": "event1",
+                "eventSelector": "444444",
+                "visibility": "public",
+            },
+            {
+                "nodeType": "ErrorDefinition",
+                "id": 6,
+                "name": "error1",
+                "errorSelector": "555555",
+                "visibility": "public",
+            },
+        ],
+    }
+    mapper.parse_ast(complex_ast)
+    contract_info = mapper.get_contract_mapping_info_by_name("ComplexContract")
+    assert contract_info is not None
+    assert contract_info.contract_name == "ComplexContract"
+    assert len(contract_info.nodes) == 4
+
+    node_names = [node.name for node in contract_info.nodes]
+    assert "var1" in node_names
+    assert "func1" in node_names
+    assert "event1" in node_names
+    assert "error1" in node_names

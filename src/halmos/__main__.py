@@ -9,7 +9,6 @@ import sys
 import time
 import traceback
 import uuid
-
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -18,13 +17,9 @@ from importlib import metadata
 
 from .bytevec import ByteVec
 from .calldata import Calldata
-from .config import (
-    arg_parser,
-    default_config,
-    resolve_config_files,
-    toml_parser,
-    Config as HalmosConfig,
-)
+from .config import Config as HalmosConfig
+from .config import arg_parser, default_config, resolve_config_files, toml_parser
+from .mapper import Mapper
 from .sevm import *
 from .utils import (
     NamedTimer,
@@ -1279,6 +1274,29 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                         sol_dirname,
                     )
                 contract_map[contract_name] = (json_out, contract_type, natspec)
+
+                try:
+                    bytecode = contract_map[contract_name][0]["bytecode"]["object"]
+                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
+                        contract_name
+                    )
+
+                    if contract_mapping_info is None:
+                        Mapper().add_contract_mapping_info(
+                            contract_name=contract_name,
+                            bytecode=bytecode,
+                            nodes=[],
+                        )
+                    else:
+                        contract_mapping_info.bytecode = bytecode
+
+                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
+                        contract_name
+                    )
+                    Mapper().parse_ast(contract_map[contract_name][0]["ast"])
+
+                except Exception:
+                    pass
             except Exception as err:
                 warn_code(
                     PARSING_ERROR,
