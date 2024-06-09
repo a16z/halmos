@@ -106,7 +106,7 @@ class Mapper(metaclass=SingletonMeta):
         return (
             node.get("id", ""),
             node.get("name", ""),
-            self._get_node_address(node, node_type),
+            "0x" + self._get_node_address(node, node_type),
             node.get("visibility", ""),
         )
 
