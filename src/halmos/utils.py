@@ -1,13 +1,15 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
-
 from timeit import default_timer as timer
-from typing import Dict, Tuple, Any, Optional, Union as UnionType
+from typing import Any, Dict, Optional, Tuple
+from typing import Union as UnionType
 
 from z3 import *
 
-from .exceptions import NotConcreteError, HalmosException
+from halmos.mapper import Mapper
+
+from .exceptions import HalmosException, NotConcreteError
 
 # order of the secp256k1 curve
 secp256k1n = (
@@ -319,13 +321,13 @@ def hexify(x):
     elif isinstance(x, int):
         return f"0x{x:02x}"
     elif isinstance(x, bytes):
-        return "0x" + x.hex()
+        return Mapper().find_nodes_by_address("0x" + x.hex())
     elif hasattr(x, "unwrap"):
         return hexify(x.unwrap())
     elif is_bv_value(x):
         # maintain the byte size of x
         num_bytes = byte_length(x, strict=False)
-        return f"0x{x.as_long():0{num_bytes * 2}x}"
+        return Mapper().find_nodes_by_address(f"0x{x.as_long():0{num_bytes * 2}x}")
     elif is_app(x):
         return f"{str(x.decl())}({', '.join(map(hexify, x.children()))})"
     else:

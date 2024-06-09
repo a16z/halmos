@@ -126,3 +126,15 @@ class Mapper(metaclass=SingletonMeta):
             if node["nodeType"] == "ContractDefinition"
             else contract_name
         )
+
+    def find_nodes_by_address(self, address: str):
+        result = ""
+        for contract_name, contract_info in self._contracts.items():
+            matching_nodes = [
+                node for node in contract_info.nodes if node.address == address
+            ]
+
+            for node in matching_nodes:
+                result += f"{contract_name}.{node.name} "
+
+        return result.strip() if result != "" and address != "0x" else address
