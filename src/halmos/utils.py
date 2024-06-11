@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
+from functools import partial
 from timeit import default_timer as timer
 from typing import Any, Dict, Optional, Tuple
 from typing import Union as UnionType
@@ -315,23 +316,25 @@ def decode_hex(hexstring: str) -> Optional[bytes]:
         return None
 
 
-def hexify(x):
+def hexify(x, contract_name: str = None):
     if isinstance(x, str):
         return re.sub(r"\b(\d+)\b", lambda match: hex(int(match.group(1))), x)
     elif isinstance(x, int):
         return f"0x{x:02x}"
     elif isinstance(x, bytes):
-        return Mapper().find_nodes_by_address("0x" + x.hex())
+        return Mapper().find_nodes_by_address("0x" + x.hex(), contract_name)
     elif hasattr(x, "unwrap"):
-        return hexify(x.unwrap())
+        return hexify(x.unwrap(), contract_name)
     elif is_bv_value(x):
         # maintain the byte size of x
         num_bytes = byte_length(x, strict=False)
-        return Mapper().find_nodes_by_address(f"0x{x.as_long():0{num_bytes * 2}x}")
+        return Mapper().find_nodes_by_address(
+            f"0x{x.as_long():0{num_bytes * 2}x}", contract_name
+        )
     elif is_app(x):
-        return f"{str(x.decl())}({', '.join(map(hexify, x.children()))})"
+        return f"{str(x.decl())}({', '.join(map(partial(hexify, contract_name=contract_name), x.children()))})"
     else:
-        return hexify(str(x))
+        return hexify(str(x), contract_name)
 
 
 def render_uint(x: BitVecRef) -> str:

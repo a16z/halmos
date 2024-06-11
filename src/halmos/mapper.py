@@ -59,7 +59,7 @@ class Mapper(metaclass=SingletonMeta):
         self, bytecode: str
     ) -> Optional[ContractMappingInfo]:
         for contract_mapping_info in self._contracts.values():
-            if contract_mapping_info.bytecode == bytecode:
+            if contract_mapping_info.bytecode.endswith(bytecode):
                 return contract_mapping_info
 
         return None
@@ -127,14 +127,47 @@ class Mapper(metaclass=SingletonMeta):
             else contract_name
         )
 
-    def find_nodes_by_address(self, address: str):
+    def find_nodes_by_address(self, address: str, contract_name: str = None):
+        if contract_name:
+            contract_mapping_info = self.get_contract_mapping_info_by_name(
+                contract_name
+            )
+
+            if contract_mapping_info:
+                for node in contract_mapping_info.nodes:
+                    if node.address == address:
+                        return node.name
+
         result = ""
-        for contract_name, contract_info in self._contracts.items():
+        for key, contract_info in self._contracts.items():
             matching_nodes = [
                 node for node in contract_info.nodes if node.address == address
             ]
 
             for node in matching_nodes:
-                result += f"{contract_name}.{node.name} "
+                result += f"{key}.{node.name} "
 
         return result.strip() if result != "" and address != "0x" else address
+
+
+class DeployAddressMapper(metaclass=SingletonMeta):
+    def __init__(self):
+        self._deployed_contracts: Dict[str, str] = {}
+
+        # Set up some default mappings
+        self.add_deployed_contract(
+            "0x7109709ecfa91a80626ff3989d68f67f5b1dd12d", "HEVM_ADDRESS"
+        )
+        self.add_deployed_contract(
+            "0xf3993a62377bcd56ae39d773740a5390411e8bc9", "SVM_ADDRESS"
+        )
+
+    def add_deployed_contract(
+        self,
+        address: str,
+        contract_name: str,
+    ):
+        self._deployed_contracts[address] = contract_name
+
+    def get_deployed_contract(self, address: str) -> Optional[str]:
+        return self._deployed_contracts.get(address, address)
