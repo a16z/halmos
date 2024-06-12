@@ -715,7 +715,6 @@ def assertLtDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
-
 class hevm_cheat_code:
     # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
 
@@ -853,309 +852,287 @@ class hevm_cheat_code:
         0x95FD154E: assertLe_int256_int256,
         0x56F29CBA: assertNotEq_uint256_array_uint256_array,
         0x40F0B4E0: assertLtDecimal_int256_int256_uint256_string,
+        0x4C63E562: assume_bool,
+        0x8D1CC925: getCode_string,
+        0xCA669FA7: prank_address,
+        0x06447D56: startPrank_address,
+        0x90C5013B: stopPrank,
+        0xC88A5E6D: deal_address_uint256,
+        0x70CA10BB: store_address_bytes32_bytes32,
+        0x667F9D70: load_address_bytes32,
+        0x39B37AB0: fee_uint256,
+        0x4049DDD2: chainId_uint256,
+        0xFF483C54: coinbase_address,
+        0x46CC92D9: difficulty_uint256,
+        0x1F7B4F30: roll_uint256,
+        0xE5D6BF02: warp_uint256,
+        0xB4D6C782: etch_address_bytes,
+        0x89160467: ffi_string_array,
+        0xFFA18649: addr_uint256,
+        0xE341EAA4: sign_uint256_bytes32,
+        0xC657C718: label_address_string,
     }
 
-    # bytes4(keccak256("assume(bool)"))
-    assume_sig: int = 0x4C63E562
+    @staticmethod
+    def assume_bool(sevm, ex, ret, arg):
+        # vm.assume(bool)
+        assume_cond = simplify(is_non_zero(arg.get_word(4)))
+        ex.path.append(assume_cond)
+        return ret
 
-    # bytes4(keccak256("getCode(string)"))
-    get_code_sig: int = 0x8D1CC925
+    @staticmethod
+    def getCode_string(sevm, ex, ret, arg):
+        # vm.getCode(string)
+        path_len = arg.get_word(36)
+        path = arg[68:68 + path_len].unwrap().decode("utf-8")
 
-    # bytes4(keccak256("prank(address)"))
-    prank_sig: int = 0xCA669FA7
+        if ":" in path:
+            filename, contract_name = path.split(":")
+            path = f"out/{filename}/{contract_name}.json"
 
-    # bytes4(keccak256("startPrank(address)"))
-    start_prank_sig: int = 0x06447D56
+        target = sevm.options.root.rstrip("/")
+        path = f"{target}/{path}"
 
-    # bytes4(keccak256("stopPrank()"))
-    stop_prank_sig: int = 0x90C5013B
+        with open(path) as f:
+            artifact = json.loads(f.read())
 
-    # bytes4(keccak256("deal(address,uint256)"))
-    deal_sig: int = 0xC88A5E6D
+        bytecode = artifact["bytecode"]["object"].replace("0x", "") if artifact["bytecode"]["object"] else artifact["bytecode"].replace("0x", "")
+        return stringified_bytes_to_bytes(bytecode)
 
-    # bytes4(keccak256("store(address,bytes32,bytes32)"))
-    store_sig: int = 0x70CA10BB
+    @staticmethod
+    def prank_address(sevm, ex, ret, arg):
+        # vm.prank(address)
+        address = uint160(arg.get_word(4))
+        result = ex.prank.prank(address)
+        if not result:
+            raise HalmosException("You have an active prank already.")
+        return ret
 
-    # bytes4(keccak256("load(address,bytes32)"))
-    load_sig: int = 0x667F9D70
+    @staticmethod
+    def startPrank_address(sevm, ex, ret, arg):
+        # vm.startPrank(address)
+        address = uint160(arg.get_word(4))
+        result = ex.prank.startPrank(address)
+        if not result:
+            raise HalmosException("You have an active prank already.")
+        return ret
 
-    # bytes4(keccak256("fee(uint256)"))
-    fee_sig: int = 0x39B37AB0
+    @staticmethod
+    def stopPrank(sevm, ex, ret, arg):
+        # vm.stopPrank()
+        ex.prank.stopPrank()
+        return ret
 
-    # bytes4(keccak256("chainId(uint256)"))
-    chainid_sig: int = 0x4049DDD2
+    @staticmethod
+    def deal_address_uint256(sevm, ex, ret, arg):
+        # vm.deal(address,uint256)
+        who = uint160(arg.get_word(4))
+        amount = uint256(arg.get_word(36))
+        ex.balance_update(who, amount)
+        return ret
 
-    # bytes4(keccak256("coinbase(address)"))
-    coinbase_sig: int = 0xFF483C54
+    @staticmethod
+    def store_address_bytes32_bytes32(sevm, ex, ret, arg):
+        # vm.store(address,bytes32,bytes32)
+        if arg == hevm_cheat_code.fail_payload:
+            raise FailCheatcode()
 
-    # bytes4(keccak256("difficulty(uint256)"))
-    difficulty_sig: int = 0x46CC92D9
+        store_account = uint160(arg.get_word(4))
+        store_slot = uint256(arg.get_word(36))
+        store_value = uint256(arg.get_word(68))
+        store_account_addr = sevm.resolve_address_alias(ex, store_account)
+        if store_account_addr is None:
+            raise HalmosException(f"uninitialized account: {hexify(store_account)}")
 
-    # bytes4(keccak256("roll(uint256)"))
-    roll_sig: int = 0x1F7B4F30
+        sevm.sstore(ex, store_account_addr, store_slot, store_value)
+        return ret
 
-    # bytes4(keccak256("warp(uint256)"))
-    warp_sig: int = 0xE5D6BF02
+    @staticmethod
+    def load_address_bytes32(sevm, ex, ret, arg):
+        # vm.load(address,bytes32)
+        load_account = uint160(arg.get_word(4))
+        load_slot = uint256(arg.get_word(36))
+        load_account_addr = sevm.resolve_address_alias(ex, load_account)
+        if load_account_addr is None:
+            raise HalmosException(f"uninitialized account: {load_account}")
 
-    # bytes4(keccak256("etch(address,bytes)"))
-    etch_sig: int = 0xB4D6C782
+        return ByteVec(sevm.sload(ex, load_account_addr, load_slot))
 
-    # bytes4(keccak256("ffi(string[])"))
-    ffi_sig: int = 0x89160467
+    @staticmethod
+    def fee_uint256(sevm, ex, ret, arg):
+        # vm.fee(uint256)
+        ex.block.basefee = arg.get_word(4)
+        return ret
 
-    # addr(uint256)
-    addr_sig: int = 0xFFA18649
+    @staticmethod
+    def chainId_uint256(sevm, ex, ret, arg):
+        # vm.chainId(uint256)
+        ex.block.chainid = arg.get_word(4)
+        return ret
 
-    # sign(uint256,bytes32)
-    sign_sig: int = 0xE341EAA4
+    @staticmethod
+    def coinbase_address(sevm, ex, ret, arg):
+        # vm.coinbase(address)
+        ex.block.coinbase = uint160(arg.get_word(4))
+        return ret
 
-    # label(address,string)
-    label_sig: int = 0xC657C718
+    @staticmethod
+    def difficulty_uint256(sevm, ex, ret, arg):
+        # vm.difficulty(uint256)
+        ex.block.difficulty = arg.get_word(4)
+        return ret
+
+    @staticmethod
+    def roll_uint256(sevm, ex, ret, arg):
+        # vm.roll(uint256)
+        ex.block.number = arg.get_word(4)
+        return ret
+
+    @staticmethod
+    def warp_uint256(sevm, ex, ret, arg):
+        # vm.warp(uint256)
+        ex.block.timestamp = arg.get_word(4)
+        return ret
+
+    @staticmethod
+    def etch_address_bytes(sevm, ex, ret, arg):
+        # vm.etch(address, bytes)
+        who = uint160(arg.get_word(4))
+
+        # who must be concrete
+        if not is_bv_value(who):
+            error_msg = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
+            raise HalmosException(error_msg)
+
+        # code must be concrete
+        code_offset = int_of(arg.get_word(36), "symbolic code offset")
+        code_length = int_of(arg.get_word(4 + code_offset), "symbolic code length")
+
+        code_loc = 4 + code_offset + 32
+        code_bytes = arg[code_loc:code_loc + code_length]
+        ex.set_code(who, code_bytes)
+
+        return ret
+
+    @staticmethod
+    def ffi_string_array(sevm, ex, ret, arg):
+        # ffi(string[]) returns (bytes)
+        if not sevm.options.ffi:
+            error_msg = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
+            raise HalmosException(error_msg)
+
+        cmd = extract_string_array_argument(arg, 0)
+        debug = sevm.options.debug
+        verbose = sevm.options.verbose
+
+        if debug or verbose:
+            print(f"[vm.ffi] {cmd}")
+
+        process = Popen(cmd, stdout=PIPE, stderr=PIPE)
+        stdout, stderr = process.communicate()
+
+        if stderr:
+            stderr_str = stderr.decode("utf-8")
+            print(f"[vm.ffi] {cmd}, stderr: {red(stderr_str)}")
+
+        out_str = stdout.decode("utf-8").strip()
+
+        if debug:
+            print(f"[vm.ffi] {cmd}, stdout: {green(out_str)}")
+
+        if decode_hex(out_str) is not None:
+            # encode hex strings as is for compatibility with foundry's ffi
+            pass
+        else:
+            # encode non-hex strings as hex
+            out_str = out_str.encode("utf-8").hex()
+
+        return stringified_bytes_to_bytes(out_str)
+
+    @staticmethod
+    def addr_uint256(sevm, ex, ret, arg):
+        # vm.addr(uint256)
+        private_key = uint256(extract_bytes(arg, 4, 32))
+
+        # TODO: handle concrete private key (return directly the corresponding address)
+        # TODO: check (or assume?) private_key is valid
+        #  - less than curve order
+        #  - not zero
+        # TODO: add constraints that the generated addresses are reasonable
+        #  - not zero
+        #  - not the address of a known contract
+
+        addr = apply_vmaddr(ex, private_key)
+        ret.append(uint256(addr))
+        return ret
+
+    @staticmethod
+    def sign_uint256_bytes32(sevm, ex, ret, arg):
+        # vm.sign(uint256, bytes32)
+        key = extract_bytes(arg, 4, 32)
+        digest = extract_bytes(arg, 4 + 32, 32)
+
+        # TODO: handle concrete private key + digest (generate concrete signature)
+
+        # check for an existing signature
+        known_sigs = ex.known_sigs
+        (v, r, s) = known_sigs.get((key, digest), (None, None, None))
+        if (v, r, s) == (None, None, None):
+            # if not, create a new signature
+            v, r, s = (f(key, digest) for f in (f_sign_v, f_sign_r, f_sign_s))
+
+            # associate the new signature with the private key and digest
+            known_sigs[(key, digest)] = (v, r, s)
+
+            # constrain values to their expected ranges
+            in_range = And(
+                Or(v == 27, v == 28),
+                ULT(0, r),
+                ULT(r, secp256k1n),
+                ULT(0, s),
+                ULT(s, secp256k1n),
+            )
+            ex.path.append(in_range)
+
+            # explicitly model malleability
+            recover = f_ecrecover(digest, v, r, s)
+            recover_malleable = f_ecrecover(digest, v ^ 1, r, secp256k1n - s)
+
+            addr = apply_vmaddr(ex, key)
+            ex.path.append(recover == addr)
+            ex.path.append(recover_malleable == addr)
+
+            # mark signatures as distinct if key or digest are distinct
+            # NOTE: the condition `And(r != _r, s != _s)` is stronger than `Or(v != _v, r != _r, s != _s)` which is sound
+            # TODO: we need to figure out whether this stronger condition is necessary and whether it could lead to unsound results in practical cases
+            for (_key, _digest), (_v, _r, _s) in known_sigs.items():
+                distinct = Implies(
+                    Or(key != _key, digest != _digest),
+                    Or(v != _v, r != _r, s != _s),
+                )
+                ex.path.append(distinct)
+
+        ret.append(uint256(v))
+        ret.append(r)
+        ret.append(s)
+        return ret
+
+    @staticmethod
+    def label_address_string(sevm, ex, ret, arg):
+        # vm.label(address, string)
+        addr = extract_bytes(arg, 4, 32)
+        label = extract_string_argument(arg, 1)
+
+        # TODO: no-op for now
+        return ret
 
     @staticmethod
     def handle(sevm, ex, arg: ByteVec) -> Optional[ByteVec]:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 
-        # vm.assume(bool)
-        if funsig == hevm_cheat_code.assume_sig:
-            assume_cond = simplify(is_non_zero(arg.get_word(4)))
-            ex.path.append(assume_cond)
-            return ret
-
-        # vm.getCode(string)
-        elif funsig == hevm_cheat_code.get_code_sig:
-            path_len = arg.get_word(36)
-            path = arg[68 : 68 + path_len].unwrap().decode("utf-8")
-
-            if ":" in path:
-                [filename, contract_name] = path.split(":")
-                path = "out/" + filename + "/" + contract_name + ".json"
-
-            target = sevm.options.root.rstrip("/")
-            path = target + "/" + path
-
-            with open(path) as f:
-                artifact = json.loads(f.read())
-
-            if artifact["bytecode"]["object"]:
-                bytecode = artifact["bytecode"]["object"].replace("0x", "")
-            else:
-                bytecode = artifact["bytecode"].replace("0x", "")
-
-            return stringified_bytes_to_bytes(bytecode)
-
-        # vm.prank(address)
-        elif funsig == hevm_cheat_code.prank_sig:
-            address = uint160(arg.get_word(4))
-            result = ex.prank.prank(address)
-            if not result:
-                raise HalmosException("You have an active prank already.")
-            return ret
-
-        # vm.startPrank(address)
-        elif funsig == hevm_cheat_code.start_prank_sig:
-            address = uint160(arg.get_word(4))
-            result = ex.prank.startPrank(address)
-            if not result:
-                raise HalmosException("You have an active prank already.")
-            return ret
-
-        # vm.stopPrank()
-        elif funsig == hevm_cheat_code.stop_prank_sig:
-            ex.prank.stopPrank()
-            return ret
-
-        # vm.deal(address,uint256)
-        elif funsig == hevm_cheat_code.deal_sig:
-            who = uint160(arg.get_word(4))
-            amount = uint256(arg.get_word(36))
-            ex.balance_update(who, amount)
-            return ret
-
-        # vm.store(address,bytes32,bytes32)
-        elif funsig == hevm_cheat_code.store_sig:
-            if arg == hevm_cheat_code.fail_payload:
-                # there isn't really a vm.fail() cheatcode, calling DSTest.fail()
-                # really triggers vm.store(HEVM_ADDRESS, "failed", 1)
-                # let's intercept it and raise an exception instead of actually storing
-                # since HEVM_ADDRESS is an uninitialized account
-                raise FailCheatcode()
-
-            store_account = uint160(arg.get_word(4))
-            store_slot = uint256(arg.get_word(36))
-            store_value = uint256(arg.get_word(68))
-            store_account_addr = sevm.resolve_address_alias(ex, store_account)
-            if store_account_addr is None:
-                raise HalmosException(f"uninitialized account: {hexify(store_account)}")
-
-            sevm.sstore(ex, store_account_addr, store_slot, store_value)
-            return ret
-
-        # vm.load(address,bytes32)
-        elif funsig == hevm_cheat_code.load_sig:
-            load_account = uint160(arg.get_word(4))
-            load_slot = uint256(arg.get_word(36))
-            load_account_addr = sevm.resolve_address_alias(ex, load_account)
-            if load_account_addr is None:
-                raise HalmosException(f"uninitialized account: {load_account}")
-
-            return ByteVec(sevm.sload(ex, load_account_addr, load_slot))
-
-        # vm.fee(uint256)
-        elif funsig == hevm_cheat_code.fee_sig:
-            ex.block.basefee = arg.get_word(4)
-            return ret
-
-        # vm.chainId(uint256)
-        elif funsig == hevm_cheat_code.chainid_sig:
-            ex.block.chainid = arg.get_word(4)
-            return ret
-
-        # vm.coinbase(address)
-        elif funsig == hevm_cheat_code.coinbase_sig:
-            ex.block.coinbase = uint160(arg.get_word(4))
-            return ret
-
-        # vm.difficulty(uint256)
-        elif funsig == hevm_cheat_code.difficulty_sig:
-            ex.block.difficulty = arg.get_word(4)
-            return ret
-
-        # vm.roll(uint256)
-        elif funsig == hevm_cheat_code.roll_sig:
-            ex.block.number = arg.get_word(4)
-            return ret
-
-        # vm.warp(uint256)
-        elif funsig == hevm_cheat_code.warp_sig:
-            ex.block.timestamp = arg.get_word(4)
-            return ret
-
-        # vm.etch(address,bytes)
-        elif funsig == hevm_cheat_code.etch_sig:
-            who = uint160(arg.get_word(4))
-
-            # who must be concrete
-            if not is_bv_value(who):
-                error_msg = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
-                raise HalmosException(error_msg)
-
-            # code must be concrete
-            code_offset = int_of(arg.get_word(36), "symbolic code offset")
-            code_length = int_of(arg.get_word(4 + code_offset), "symbolic code length")
-
-            code_loc = 4 + code_offset + 32
-            code_bytes = arg[code_loc : code_loc + code_length]
-            ex.set_code(who, code_bytes)
-
-            return ret
-
-        # ffi(string[]) returns (bytes)
-        elif funsig == hevm_cheat_code.ffi_sig:
-            if not sevm.options.ffi:
-                error_msg = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
-                raise HalmosException(error_msg)
-
-            cmd = extract_string_array_argument(arg, 0)
-
-            debug = sevm.options.debug
-            verbose = sevm.options.verbose
-            if debug or verbose:
-                print(f"[vm.ffi] {cmd}")
-
-            process = Popen(cmd, stdout=PIPE, stderr=PIPE)
-            (stdout, stderr) = process.communicate()
-
-            if stderr:
-                stderr_str = stderr.decode("utf-8")
-                print(f"[vm.ffi] {cmd}, stderr: {red(stderr_str)}")
-
-            out_str = stdout.decode("utf-8").strip()
-
-            if debug:
-                print(f"[vm.ffi] {cmd}, stdout: {green(out_str)}")
-
-            if decode_hex(out_str) is not None:
-                # encode hex strings as is for compatibility with foundry's ffi
-                pass
-            else:
-                # encode non-hex strings as hex
-                out_str = out_str.encode("utf-8").hex()
-
-            return stringified_bytes_to_bytes(out_str)
-
-        elif funsig == hevm_cheat_code.addr_sig:
-            private_key = uint256(extract_bytes(arg, 4, 32))
-
-            # TODO: handle concrete private key (return directly the corresponding address)
-            # TODO: check (or assume?) private_key is valid
-            #  - less than curve order
-            #  - not zero
-            # TODO: add constraints that the generated addresses are reasonable
-            #  - not zero
-            #  - not the address of a known contract
-
-            addr = apply_vmaddr(ex, private_key)
-            ret.append(uint256(addr))
-            return ret
-
-        elif funsig == hevm_cheat_code.sign_sig:
-            key = extract_bytes(arg, 4, 32)
-            digest = extract_bytes(arg, 4 + 32, 32)
-
-            # TODO: handle concrete private key + digest (generate concrete signature)
-
-            # check for an existing signature
-            known_sigs = ex.known_sigs
-            (v, r, s) = known_sigs.get((key, digest), (None, None, None))
-            if (v, r, s) == (None, None, None):
-                # if not, create a new signature
-                v, r, s = (f(key, digest) for f in (f_sign_v, f_sign_r, f_sign_s))
-
-                # associate the new signature with the private key and digest
-                known_sigs[(key, digest)] = (v, r, s)
-
-                # constrain values to their expected ranges
-                in_range = And(
-                    Or(v == 27, v == 28),
-                    ULT(0, r),
-                    ULT(r, secp256k1n),
-                    ULT(0, s),
-                    ULT(s, secp256k1n),
-                )
-                ex.path.append(in_range)
-
-                # explicitly model malleability
-                recover = f_ecrecover(digest, v, r, s)
-                recover_malleable = f_ecrecover(digest, v ^ 1, r, secp256k1n - s)
-
-                addr = apply_vmaddr(ex, key)
-                ex.path.append(recover == addr)
-                ex.path.append(recover_malleable == addr)
-
-                # mark signatures as distinct if key or digest are distinct
-                # NOTE: the condition `And(r != _r, s != _s)` is stronger than `Or(v != _v, r != _r, s != _s)` which is sound
-                # TODO: we need to figure out whether this stronger condition is necessary and whether it could lead to unsound results in practical cases
-                for (_key, _digest), (_v, _r, _s) in known_sigs.items():
-                    distinct = Implies(
-                        Or(key != _key, digest != _digest),
-                        Or(v != _v, r != _r, s != _s),
-                    )
-                    ex.path.append(distinct)
-
-            ret.append(uint256(v))
-            ret.append(r)
-            ret.append(s)
-            return ret
-
-        elif funsig == hevm_cheat_code.label_sig:
-            addr = extract_bytes(arg, 4, 32)
-            label = extract_string_argument(arg, 1)
-
-            # TODO: no-op for now
-            return ret
-
+        if handler := hevm_cheat_code.signatures.get(funsig):
+            return handler(sevm, ex, ret, arg)
         else:
             # TODO: support other cheat codes
             msg = f"Unsupported cheat code: calldata = {hexify(arg)}"
