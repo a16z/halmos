@@ -251,469 +251,594 @@ class halmos_cheat_code:
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
         raise HalmosException(error_msg)
 
+
 def assertApproxEqAbsDecimal_uint256_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
-def assertApproxEqAbsDecimal_uint256_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
+
+def assertApproxEqAbsDecimal_uint256_uint256_uint256_uint256_string(
+    arg: ByteVec,
+) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertApproxEqAbsDecimal_int256_int256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
-def assertApproxEqAbsDecimal_int256_int256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
+
+def assertApproxEqAbsDecimal_int256_int256_uint256_uint256_string(
+    arg: ByteVec,
+) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertApproxEqAbs_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertApproxEqAbs_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertApproxEqAbs_int256_int256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertApproxEqAbs_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertApproxEqRelDecimal_uint256_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
-def assertApproxEqRelDecimal_uint256_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
+
+def assertApproxEqRelDecimal_uint256_uint256_uint256_uint256_string(
+    arg: ByteVec,
+) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertApproxEqRelDecimal_int256_int256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
-def assertApproxEqRelDecimal_int256_int256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
+
+def assertApproxEqRelDecimal_int256_int256_uint256_uint256_string(
+    arg: ByteVec,
+) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertApproxEqRel_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertApproxEqRel_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertApproxEqRel_int256_int256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertApproxEqRel_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEqDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEqDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEqDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEqDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_bool_bool(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_bool_bool_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_string_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_string_string_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_bytes_bytes(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_bytes_bytes_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_bool_array_bool_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_bool_array_bool_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_uint256_array_uint256_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_uint256_array_uint256_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_int256_array_int256_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_int256_array_int256_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_address_array_address_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_address_array_address_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_bytes32_array_bytes32_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_bytes32_array_bytes32_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_string_array_string_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_string_array_string_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_bytes_array_bytes_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_bytes_array_bytes_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_int256_int256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_int256_int256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_address_address(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_address_address_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertEq_bytes32_bytes32(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertEq_bytes32_bytes32_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertFalse_bool(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertFalse_bool_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_bytes_array_bytes_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bool_bool(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_int256_int256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGeDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLeDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEqDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertGeDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bool_array_bool_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLe_int256_int256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGe_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLt_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_string_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_string_string_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGe_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLt_int256_int256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGt_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertGtDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGt_int256_int256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLeDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGtDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertTrue_bool(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGe_int256_int256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertGt_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEqDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bytes32_array_bytes32_array_string(arg: ByteVec) -> ByteVec:
-   # todo: placeholder
-   pass
+    # todo: placeholder
+    pass
+
 
 def assertGtDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bytes_array_bytes_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_int256_array_int256_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_address_array_address_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertGtDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGeDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_string_array_string_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_address_array_address_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertTrue_bool_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGeDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLtDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEqDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bytes32_bytes32_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLe_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bytes_bytes_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_bytes32_bytes32(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGe_int256_int256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_address_address(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_string_array_string_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLe_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertGt_int256_int256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_bool_array_bool_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bytes_bytes(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLtDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bool_bool_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLt_int256_int256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_uint256_array_uint256_array_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_address_address_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertNotEq_int256_int256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertLeDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLtDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_int256_array_int256_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLeDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_bytes32_array_bytes32_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLt_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEqDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 def assertLe_int256_int256(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertNotEq_uint256_array_uint256_array(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
 
+
 def assertLtDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
     # todo: placeholder
     pass
+
 
 class hevm_cheat_code:
     # https://github.com/dapphub/ds-test/blob/cd98eff28324bfac652e63a239a60632a761790b/src/test.sol
@@ -884,7 +1009,7 @@ class hevm_cheat_code:
     def getCode_string(sevm, ex, ret, arg):
         # vm.getCode(string)
         path_len = arg.get_word(36)
-        path = arg[68:68 + path_len].unwrap().decode("utf-8")
+        path = arg[68 : 68 + path_len].unwrap().decode("utf-8")
 
         if ":" in path:
             filename, contract_name = path.split(":")
@@ -896,7 +1021,11 @@ class hevm_cheat_code:
         with open(path) as f:
             artifact = json.loads(f.read())
 
-        bytecode = artifact["bytecode"]["object"].replace("0x", "") if artifact["bytecode"]["object"] else artifact["bytecode"].replace("0x", "")
+        bytecode = (
+            artifact["bytecode"]["object"].replace("0x", "")
+            if artifact["bytecode"]["object"]
+            else artifact["bytecode"].replace("0x", "")
+        )
         return stringified_bytes_to_bytes(bytecode)
 
     @staticmethod
@@ -1009,7 +1138,7 @@ class hevm_cheat_code:
         code_length = int_of(arg.get_word(4 + code_offset), "symbolic code length")
 
         code_loc = 4 + code_offset + 32
-        code_bytes = arg[code_loc:code_loc + code_length]
+        code_bytes = arg[code_loc : code_loc + code_length]
         ex.set_code(who, code_bytes)
 
         return ret
