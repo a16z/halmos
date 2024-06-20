@@ -1128,15 +1128,12 @@ def is_unknown(result: CheckSatResult, model: Model) -> bool:
 
 
 def refine(query: str) -> str:
-    # replace uninterpreted abstraction with actual symbols for assertion solving
-    # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
-    #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
-    query = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
-    # remove the uninterpreted function symbols
-    # TODO: this will be no longer needed once is_model_valid is properly implemented
+    # replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
+    # similarly for bvurem, bvsdiv, and bvsrem
+    # NOTE: (bvudiv x (_ bv0 N)) is *defined* to (bvneg (_ bv1 N)); while (div x 0) is undefined
     return re.sub(
-        r"\(\s*declare-fun\s+evm_(bv[a-z]+)(_[0-9]+)?\b",
-        r"(declare-fun dummy_\1\2",
+        r"\(declare-fun evm_(bv[a-z]+)_([0-9]+) \(\(_ BitVec \2\) \(_ BitVec \2\)\) \(_ BitVec \2\)\)",
+        r"(define-fun evm_\1_\2 ((x (_ BitVec \2)) (y (_ BitVec \2))) (_ BitVec \2) (ite (= y (_ bv0 \2)) (_ bv0 \2) (\1 x y)))",
         query,
     )
 

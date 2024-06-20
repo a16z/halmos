@@ -61,15 +61,16 @@ f_gasprice = Function("gasprice", BitVecSort256)
 f_origin = Function("origin", BitVecSort160)
 
 # uninterpreted arithmetic
-f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
+# NOTE: do not introduce new symbols starting `evm_bv`; see __main__.refine()
+f_div = Function("evm_bvudiv_256", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
-    256: Function("evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
+    256: Function("evm_bvurem_256", BitVecSort256, BitVecSort256, BitVecSort256),
     264: Function("evm_bvurem_264", BitVecSort264, BitVecSort264, BitVecSort264),
     512: Function("evm_bvurem_512", BitVecSort512, BitVecSort512, BitVecSort512),
 }
-f_sdiv = Function("evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
-f_smod = Function("evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
-f_exp = Function("evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
+f_sdiv = Function("evm_bvsdiv_256", BitVecSort256, BitVecSort256, BitVecSort256)
+f_smod = Function("evm_bvsrem_256", BitVecSort256, BitVecSort256, BitVecSort256)
+f_exp = Function("evm_exp_256", BitVecSort256, BitVecSort256, BitVecSort256)
 
 magic_address: int = 0xAAAA0000
 
