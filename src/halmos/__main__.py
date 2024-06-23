@@ -1079,13 +1079,15 @@ def solve(
         with open(dump_filename, "w") as f:
             if args.verbose >= 1:
                 print(f"Writing SMT query to {dump_filename}")
-            f.write("(set-option :produce-unsat-cores true)\n")
+            if args.cache_solver:
+                f.write("(set-option :produce-unsat-cores true)\n")
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query.smtlib)
             f.write(named_assertions)
             f.write("(check-sat)\n")
             f.write("(get-model)\n")
-            f.write("(get-unsat-core)\n")
+            if args.cache_solver:
+                f.write("(get-unsat-core)\n")
 
     if args.solver_command:
         if args.verbose >= 1:
@@ -1129,7 +1131,7 @@ def solve(
         model = copy_model(solver.model()) if result == sat else None
 
         unsat_core = None
-        if result == unsat:
+        if args.cache_solver and result == unsat:
             uc = solver.unsat_core()
             print(uc)
             unsat_core = [str(core) for core in uc]

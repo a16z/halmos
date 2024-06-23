@@ -355,6 +355,10 @@ class Config:
         global_default_str="number of CPUs",
     )
 
+    cache_solver: bool = arg(
+        help="cache unsat queries using unsat cores", global_default=False, group=solver
+    )
+
     ### Experimental options
 
     bytecode: str = arg(
