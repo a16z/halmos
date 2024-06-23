@@ -477,16 +477,13 @@ class Path:
     solver: Solver
     num_scopes: int
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
-    # TODO: separate these two types of constraints, so that we can display only branching conditions to users
-    conditions: List
-    branching: List  # indexes of conditions
+    conditions: Dict  # cond -> bool (true if explicit branching conditions)
     pending: List
 
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
-        self.conditions = []
-        self.branching = []
+        self.conditions = {}
         self.pending = []
         self.forked = False
 
@@ -494,9 +491,8 @@ class Path:
         raise NotImplementedError(f"use the branch() method instead of deepcopy()")
 
     def __str__(self) -> str:
-        branching_conds = [self.conditions[idx] for idx in self.branching]
         return "".join(
-            [f"- {cond}\n" for cond in branching_conds if str(cond) != "True"]
+            [f"- {cond}\n" for cond in self.conditions if self.conditions[cond] and str(cond) != "True"]
         )
 
     def to_smt2(self) -> str:
@@ -553,11 +549,9 @@ class Path:
         if is_true(cond):
             return
 
-        self.solver.add(cond)
-        self.conditions.append(cond)
-
-        if branching:
-            self.branching.append(len(self.conditions) - 1)
+        if cond not in self.conditions:
+            self.solver.add(cond)
+            self.conditions[cond] = branching
 
     def extend(self, conds, branching=False):
         for cond in conds:
@@ -565,7 +559,7 @@ class Path:
 
     def extend_path(self, path):
         # branching conditions are not preserved
-        self.extend(path.conditions)
+        self.extend(path.conditions.keys())
 
 
 class Exec:  # an execution path
