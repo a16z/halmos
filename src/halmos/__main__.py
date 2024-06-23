@@ -376,7 +376,7 @@ def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
             print(f"Return data: {returndata}")
             dump_dirname = f"/tmp/halmos-{uuid.uuid4().hex}"
             model_with_context = gen_model_from_sexpr(
-                GenModelArgs(args, idx, ex.path.solver.to_smt2(), dump_dirname)
+                GenModelArgs(args, idx, ex.path.to_smt2(), dump_dirname)
             )
             print(f"Input example: {model_with_context.model}")
 
@@ -510,7 +510,7 @@ def setup(
             error = setup_ex.context.output.error
 
             if error is None:
-                setup_exs_no_error.append((setup_ex, setup_ex.path.solver.to_smt2()))
+                setup_exs_no_error.append((setup_ex, setup_ex.path.to_smt2()))
 
             else:
                 if opcode not in [EVM.REVERT, EVM.INVALID]:
@@ -753,7 +753,7 @@ def run(
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 traces[idx] = rendered_trace(ex.context)
 
-            query = ex.path.solver.to_smt2()
+            query = ex.path.to_smt2()
 
             future_model = thread_pool.submit(
                 gen_model_from_sexpr, GenModelArgs(args, idx, query, dump_dirname)
