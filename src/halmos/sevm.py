@@ -499,6 +499,12 @@ class Path:
             [f"- {cond}\n" for cond in branching_conds if str(cond) != "True"]
         )
 
+    def to_smt2(self) -> str:
+        return self.solver.to_smt2()
+
+    def check(self, cond):
+        return self.solver.check(cond)
+
     def branch(self, cond):
         if len(self.pending) > 0:
             raise ValueError("branching from an inactive path", self)
@@ -737,7 +743,7 @@ class Exec:  # an execution path
         if is_false(cond):
             return unsat
 
-        return self.path.solver.check(cond)
+        return self.path.check(cond)
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
