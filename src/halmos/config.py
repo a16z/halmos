@@ -13,11 +13,12 @@ from .utils import warn
 internal = "internal"
 
 # groups
-debugging, solver, build, experimental = (
+debugging, solver, build, experimental, deprecated = (
     "Debugging options",
     "Solver options",
     "Build options",
     "Experimental options",
+    "Deprecated options",
 )
 
 
@@ -343,10 +344,6 @@ class Config:
         group=solver,
     )
 
-    solver_parallel: bool = arg(
-        help="run assertion solvers in parallel", global_default=False, group=solver
-    )
-
     solver_threads: int = arg(
         help="set the number of threads for parallel solvers",
         metavar="N",
@@ -383,6 +380,12 @@ class Config:
         help="support symbolic jump destination",
         global_default=False,
         group=experimental,
+    )
+
+    ### Deprecated
+
+    solver_parallel: bool = arg(
+        help="(Deprecated; no-op; use --solver-threads instead) run assertion solvers in parallel", global_default=False, group=deprecated
     )
 
     ### Methods
