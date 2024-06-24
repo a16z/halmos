@@ -44,21 +44,21 @@ MAX_MEMORY_SIZE = 2**20
 
 # symbolic states
 # calldataload(index)
-f_calldataload = Function("calldataload", BitVecSort256, BitVecSort256)
+f_calldataload = Function("f_calldataload", BitVecSort256, BitVecSort256)
 # calldatasize()
-f_calldatasize = Function("calldatasize", BitVecSort256)
+f_calldatasize = Function("f_calldatasize", BitVecSort256)
 # extcodesize(target address)
-f_extcodesize = Function("extcodesize", BitVecSort160, BitVecSort256)
+f_extcodesize = Function("f_extcodesize", BitVecSort160, BitVecSort256)
 # extcodehash(target address)
-f_extcodehash = Function("extcodehash", BitVecSort160, BitVecSort256)
+f_extcodehash = Function("f_extcodehash", BitVecSort160, BitVecSort256)
 # blockhash(block number)
-f_blockhash = Function("blockhash", BitVecSort256, BitVecSort256)
+f_blockhash = Function("f_blockhash", BitVecSort256, BitVecSort256)
 # gas(cnt)
-f_gas = Function("gas", BitVecSort256, BitVecSort256)
+f_gas = Function("f_gas", BitVecSort256, BitVecSort256)
 # gasprice()
-f_gasprice = Function("gasprice", BitVecSort256)
+f_gasprice = Function("f_gasprice", BitVecSort256)
 # origin()
-f_origin = Function("origin", BitVecSort160)
+f_origin = Function("f_origin", BitVecSort160)
 
 # uninterpreted arithmetic
 f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
@@ -811,7 +811,7 @@ class Exec:  # an execution path
             if isinstance(data, bytes):
                 data = bytes_to_bv_value(data)
 
-            f_sha3 = Function(f"sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256)
+            f_sha3 = Function(f"f_sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256)
             sha3_expr = f_sha3(data)
         else:
             sha3_expr = BitVec("sha3_0", BitVecSort256)
@@ -1004,17 +1004,17 @@ class SolidityStorage(Storage):
     def decode(cls, loc: Any) -> Any:
         loc = normalize(loc)
         # m[k] : hash(k.m)
-        if loc.decl().name() == "sha3_512":
+        if loc.decl().name() == "f_sha3_512":
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
             return cls.decode(base) + (offset, con(0))
         # a[i] : hash(a) + i
-        elif loc.decl().name() == "sha3_256":
+        elif loc.decl().name() == "f_sha3_256":
             base = loc.arg(0)
             return cls.decode(base) + (con(0),)
         # m[k] : hash(k.m)  where |k| != 256-bit
-        elif loc.decl().name().startswith("sha3_"):
+        elif loc.decl().name().startswith("f_sha3_"):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat" and sha3_input.num_args() == 2:
                 offset = simplify(sha3_input.arg(0))
@@ -1105,12 +1105,12 @@ class GenericStorage(Storage):
     @classmethod
     def decode(cls, loc: Any) -> Any:
         loc = normalize(loc)
-        if loc.decl().name() == "sha3_512":  # hash(hi,lo), recursively
+        if loc.decl().name() == "f_sha3_512":  # hash(hi,lo), recursively
             args = loc.arg(0)
             hi = cls.decode(simplify(Extract(511, 256, args)))
             lo = cls.decode(simplify(Extract(255, 0, args)))
             return cls.simple_hash(Concat(hi, lo))
-        elif loc.decl().name().startswith("sha3_"):
+        elif loc.decl().name().startswith("f_sha3_"):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat":
                 decoded_sha3_input_args = [
@@ -1639,7 +1639,7 @@ class SEVM:
 
             if arg_size > 0:
                 f_call = Function(
-                    "call_" + str(arg_size * 8),
+                    "f_call_" + str(arg_size * 8),
                     BitVecSort256,  # cnt
                     BitVecSort256,  # gas
                     BitVecSort160,  # to
@@ -1654,7 +1654,7 @@ class SEVM:
                 exit_code = f_call(con(call_id), gas, to, fund, arg_bv)
             else:
                 f_call = Function(
-                    "call_" + str(arg_size * 8),
+                    "f_call_" + str(arg_size * 8),
                     BitVecSort256,  # cnt
                     BitVecSort256,  # gas
                     BitVecSort160,  # to
@@ -1674,7 +1674,7 @@ class SEVM:
             ret = ByteVec()
             if actual_ret_size > 0:
                 f_ret = Function(
-                    "ret_" + str(actual_ret_size * 8),
+                    "f_ret_" + str(actual_ret_size * 8),
                     BitVecSort256,
                     BitVecSorts[actual_ret_size * 8],
                 )
