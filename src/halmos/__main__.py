@@ -1071,11 +1071,6 @@ def solve(
         if not dump_filename:
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
 
-        if args.cache_solver:
-            named_assertions = "".join(
-                [f"(assert (! |{assert_id}| :named <{assert_id}>))\n" for assert_id in query.assertions]
-            )
-
         with open(dump_filename, "w") as f:
             if args.verbose >= 1:
                 print(f"Writing SMT query to {dump_filename}")
@@ -1083,8 +1078,6 @@ def solve(
                 f.write("(set-option :produce-unsat-cores true)\n")
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query.smtlib)
-            if args.cache_solver:
-                f.write(named_assertions)
             f.write("(check-sat)\n")
             f.write("(get-model)\n")
             if args.cache_solver:
