@@ -1058,10 +1058,9 @@ def parse_unsat_core(output) -> Optional[List]:
     match = re.search(r"unsat\s*\(\s*error\s+[^)]*\)\s*\(\s*((<[0-9]+>\s*)*)\)", output)
     if match:
         result = [re.sub(r"<([0-9]+)>", r"\1", name) for name in match.group(1).split()]
-        print(result)
         return result
     else:
-        print(f"error parse_unsat_core: {output}")
+        warn(f"error in parsing unsat core: {output}")
         return None
 
 
@@ -1138,7 +1137,6 @@ def solve(
         unsat_core = None
         if args.cache_solver and result == unsat:
             uc = solver.unsat_core()
-            print(uc)
             unsat_core = [str(core) for core in uc]
 
         return result, model, unsat_core
