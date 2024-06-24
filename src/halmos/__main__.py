@@ -1181,13 +1181,13 @@ def is_unknown(result: CheckSatResult, model: Model) -> bool:
 def refine(query: SMTQuery) -> SMTQuery:
     smtlib = query.smtlib
     # replace uninterpreted abstraction with actual symbols for assertion solving
-    # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
-    #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
-    smtlib = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", smtlib)
+    # TODO: replace `(f_evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
+    #       as bvudiv is undefined when y = 0; also similarly for f_evm_bvurem
+    smtlib = re.sub(r"(\(\s*)f_evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", smtlib)
     # remove the uninterpreted function symbols
     # TODO: this will be no longer needed once is_model_valid is properly implemented
     smtlib = re.sub(
-        r"\(\s*declare-fun\s+evm_(bv[a-z]+)(_[0-9]+)?\b",
+        r"\(\s*declare-fun\s+f_evm_(bv[a-z]+)(_[0-9]+)?\b",
         r"(declare-fun dummy_\1\2",
         smtlib,
     )
@@ -1229,21 +1229,21 @@ def package_result(
 
 
 def is_model_valid(model: AnyModel) -> bool:
-    # TODO: evaluate the path condition against the given model after excluding evm_* symbols,
-    #       since the evm_* symbols may still appear in valid models.
+    # TODO: evaluate the path condition against the given model after excluding f_evm_* symbols,
+    #       since the f_evm_* symbols may still appear in valid models.
 
     # model is a filename, containing solver output
     if isinstance(model, str):
         with open(model, "r") as f:
             for line in f:
-                if "evm_" in line:
+                if "f_evm_" in line:
                     return False
         return True
 
     # z3 model object
     else:
         for decl in model:
-            if str(decl).startswith("evm_"):
+            if str(decl).startswith("f_evm_"):
                 return False
         return True
 

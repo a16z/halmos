@@ -61,15 +61,15 @@ f_gasprice = Function("f_gasprice", BitVecSort256)
 f_origin = Function("f_origin", BitVecSort160)
 
 # uninterpreted arithmetic
-f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
+f_div = Function("f_evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
-    256: Function("evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
-    264: Function("evm_bvurem_264", BitVecSort264, BitVecSort264, BitVecSort264),
-    512: Function("evm_bvurem_512", BitVecSort512, BitVecSort512, BitVecSort512),
+    256: Function("f_evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
+    264: Function("f_evm_bvurem_264", BitVecSort264, BitVecSort264, BitVecSort264),
+    512: Function("f_evm_bvurem_512", BitVecSort512, BitVecSort512, BitVecSort512),
 }
-f_sdiv = Function("evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
-f_smod = Function("evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
-f_exp = Function("evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
+f_sdiv = Function("f_evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
+f_smod = Function("f_evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
+f_exp = Function("f_evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
 
 magic_address: int = 0xAAAA0000
 
@@ -587,9 +587,7 @@ class Path:
                     self.variables[term] = term.decl().sexpr()
 
         else:
-            if is_func_decl(decl) and (
-                decl.name().startswith("f_") or decl.name().startswith("evm_")
-            ):
+            if is_func_decl(decl) and decl.name().startswith("f_"):
                 if decl not in self.variables:
                     self.variables[decl] = decl.sexpr()
 
@@ -838,7 +836,7 @@ class Exec:  # an execution path
             )
             sha3_expr = f_sha3(data)
         else:
-            sha3_expr = BitVec("sha3_0", BitVecSort256)
+            sha3_expr = BitVec("f_sha3_0", BitVecSort256)
 
         # assume hash values are sufficiently smaller than the uint max
         self.path.append(ULE(sha3_expr, 2**256 - 2**64))
