@@ -4,6 +4,22 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      solver-threads:
+        description: "--solver-threads N"
+        required: true
+        type: number
+        default: 2
+      solver-command:
+        description: "--solver-command COMMAND"
+        required: true
+        type: string
+        default: "yices-smt2"
+      halmos-options:
+        description: "additional halmos options"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   test:
@@ -37,4 +53,4 @@ jobs:
 
       - name: Run Pytest
         run: |
-          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
+          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads ${{ inputs.solver-threads }} --solver-command ${{ inputs.solver-command }} ${{ inputs.halmos-options }}' -s --log-cli-level=
