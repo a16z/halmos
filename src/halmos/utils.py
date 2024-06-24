@@ -61,7 +61,12 @@ BitVecSort512 = BitVecSorts[512]
 
 # ecrecover(digest, v, r, s)
 f_ecrecover = Function(
-    "f_ecrecover", BitVecSort256, BitVecSort8, BitVecSort256, BitVecSort256, BitVecSort160
+    "f_ecrecover",
+    BitVecSort256,
+    BitVecSort8,
+    BitVecSort256,
+    BitVecSort256,
+    BitVecSort160,
 )
 
 
@@ -171,9 +176,6 @@ def is_concat(x: BitVecRef) -> bool:
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
-
-#   # enable unsat core
-#   solver.set(unsat_core=True)
 
     # set timeout
     solver.set(timeout=timeout)

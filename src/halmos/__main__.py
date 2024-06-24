@@ -760,7 +760,8 @@ def run(
             query = ex.path.to_smt2(args)
 
             future_model = thread_pool.submit(
-                gen_model_from_sexpr, GenModelArgs(args, idx, query, unsat_cores, dump_dirname)
+                gen_model_from_sexpr,
+                GenModelArgs(args, idx, query, unsat_cores, dump_dirname),
             )
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
@@ -1108,7 +1109,8 @@ def solve(
                 print(f"    {res_str_head}")
 
             if res_str_head == "unsat":
-                return unsat, None, parse_unsat_core(res_str)
+                unsat_core = parse_unsat_core(res_str) if args.cache_solver else None
+                return unsat, None, unsat_core
             elif res_str_head == "sat":
                 return sat, f"{dump_filename}.out", None
             else:
@@ -1121,17 +1123,17 @@ def solve(
         solver = mk_solver(args, ctx=ctx, assertion=True)
         solver.from_string(query.smtlib)
         if args.cache_solver:
+            solver.set(unsat_core=True)
             ids = [Bool(f"{x}", ctx) for x in query.assertions]
             result = solver.check(*ids)
         else:
             result = solver.check()
         model = copy_model(solver.model()) if result == sat else None
-
-        unsat_core = None
-        if args.cache_solver and result == unsat:
-            uc = solver.unsat_core()
-            unsat_core = [str(core) for core in uc]
-
+        unsat_core = (
+            [str(core) for core in solver.unsat_core()]
+            if args.cache_solver and result == unsat
+            else None
+        )
         return result, model, unsat_core
 
 

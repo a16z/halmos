@@ -508,16 +508,17 @@ class Path:
         )
 
     def to_smt2(self, args) -> SMTQuery:
-        ids = [str(cond.get_id()) for cond in self.conditions]
-
         decls = [f"{decl}\n" for decl in self.variables.values()]
         if args.cache_solver:
-            asserts = [f"(assert (! {sexpr} :named <{cond.get_id()}>))\n" for cond, (_, sexpr) in self.conditions.items()]
+            asserts = [
+                f"(assert (! {sexpr} :named <{cond.get_id()}>))\n"
+                for cond, (_, sexpr) in self.conditions.items()
+            ]
         else:
             asserts = [f"(assert {sexpr})\n" for _, sexpr in self.conditions.values()]
 
         query = "".join(decls + asserts)
-
+        ids = [str(cond.get_id()) for cond in self.conditions]
         return SMTQuery(query, ids)
 
     def check(self, cond):
@@ -586,7 +587,9 @@ class Path:
                     self.variables[term] = term.decl().sexpr()
 
         else:
-            if is_func_decl(decl) and (decl.name().startswith("f_") or decl.name().startswith("evm_")):
+            if is_func_decl(decl) and (
+                decl.name().startswith("f_") or decl.name().startswith("evm_")
+            ):
                 if decl not in self.variables:
                     self.variables[decl] = decl.sexpr()
 
@@ -830,7 +833,9 @@ class Exec:  # an execution path
             if isinstance(data, bytes):
                 data = bytes_to_bv_value(data)
 
-            f_sha3 = Function(f"f_sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256)
+            f_sha3 = Function(
+                f"f_sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256
+            )
             sha3_expr = f_sha3(data)
         else:
             sha3_expr = BitVec("sha3_0", BitVecSort256)
