@@ -508,10 +508,13 @@ class Path:
     def to_smt2(self, args) -> SMTQuery:
         ids = [str(cond.get_id()) for cond in self.conditions]
 
-        tmp_solver = SolverFor("QF_AUFBV")
-        for cond in self.conditions:
-            tmp_solver.assert_and_track(cond, str(cond.get_id()))
-        query = tmp_solver.to_smt2()
+        if args.cache_solver:
+            tmp_solver = SolverFor("QF_AUFBV")
+            for cond in self.conditions:
+                tmp_solver.assert_and_track(cond, str(cond.get_id()))
+            query = tmp_solver.to_smt2()
+        else:
+            query = self.solver.to_smt2()
         query = query.replace("(check-sat)", "")  # see __main__.solve()
 
         return SMTQuery(query, ids)

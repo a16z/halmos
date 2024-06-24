@@ -1072,9 +1072,10 @@ def solve(
         if not dump_filename:
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
 
-        named_assertions = "".join(
-            [f"(assert (! |{assert_id}| :named <{assert_id}>))\n" for assert_id in query.assertions]
-        )
+        if args.cache_solver:
+            named_assertions = "".join(
+                [f"(assert (! |{assert_id}| :named <{assert_id}>))\n" for assert_id in query.assertions]
+            )
 
         with open(dump_filename, "w") as f:
             if args.verbose >= 1:
@@ -1083,7 +1084,8 @@ def solve(
                 f.write("(set-option :produce-unsat-cores true)\n")
             f.write("(set-logic QF_AUFBV)\n")
             f.write(query.smtlib)
-            f.write(named_assertions)
+            if args.cache_solver:
+                f.write(named_assertions)
             f.write("(check-sat)\n")
             f.write("(get-model)\n")
             if args.cache_solver:
@@ -1126,8 +1128,11 @@ def solve(
         ctx = Context()
         solver = mk_solver(args, ctx=ctx, assertion=True)
         solver.from_string(query.smtlib)
-        ids = [Bool(f"{x}", ctx) for x in query.assertions]
-        result = solver.check(*ids)
+        if args.cache_solver:
+            ids = [Bool(f"{x}", ctx) for x in query.assertions]
+            result = solver.check(*ids)
+        else:
+            result = solver.check()
         model = copy_model(solver.model()) if result == sat else None
 
         unsat_core = None
