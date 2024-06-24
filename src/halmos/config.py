@@ -385,7 +385,9 @@ class Config:
     ### Deprecated
 
     solver_parallel: bool = arg(
-        help="(Deprecated; no-op; use --solver-threads instead) run assertion solvers in parallel", global_default=False, group=deprecated
+        help="(Deprecated; no-op; use --solver-threads instead) run assertion solvers in parallel",
+        global_default=False,
+        group=deprecated,
     )
 
     ### Methods
