@@ -3,14 +3,11 @@ name: Test external projects
 on:
   push:
     branches: [main]
-# pull_request:
-#   branches: [main]
   workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ghcr.io/emperororokusaki/solvers:0.1.0
 
     strategy:
       fail-fast: false
@@ -53,6 +50,17 @@ jobs:
           ref: ${{ matrix.branch }}
           submodules: recursive
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: docker build -t halmos . --file packages/halmos/Dockerfile
+        working-directory: halmos
+
       - name: Test external repo
-        run: ${{ matrix.cmd }} --statistics --debug --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 --cache-solver
+        run: docker run -v .:/workspace ${{ matrix.cmd }} --statistics --debug --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 --cache-solver
         working-directory: ${{ matrix.dir }}
