@@ -5,30 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      cache-solver:
-        description: 'cache-solver'
+      halmos-options:
+        description: "additional halmos options"
         required: false
+        type: string
         default: ""
-        type: choice
-        options:
-          - ""
-          - "--cache-solver"
-      debug:
-        description: 'debug'
-        required: false
-        default: ""
-        type: choice
-        options:
-          - ""
-          - "--debug"
-      verbose:
-        description: 'verbose'
-        required: false
-        default: ""
-        type: choice
-        options:
-          - ""
-          - "--verbose"
 
 jobs:
   test:
@@ -87,5 +68,5 @@ jobs:
         working-directory: halmos
 
       - name: Test external repo
-        run: docker run -v .:/workspace ${{ matrix.cmd }} ${{ inputs.verbose }} --statistics ${{ inputs.debug }} --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ inputs.cache-solver }}
+        run: docker run -v .:/workspace ${{ matrix.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ inputs.halmos-options }}
         working-directory: ${{ matrix.dir }}
