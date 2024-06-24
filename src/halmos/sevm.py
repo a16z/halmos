@@ -484,14 +484,12 @@ class Path:
     num_scopes: int
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
     conditions: Dict  # cond -> bool (true if explicit branching conditions)
-    variables: Dict
     pending: List
 
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = {}
-        self.variables = {}
         self.pending = []
         self.forked = False
 
@@ -503,22 +501,22 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-                if self.conditions[cond][0] and str(cond) != "True"
+                if self.conditions[cond] and str(cond) != "True"
             ]
         )
 
     def to_smt2(self, args) -> SMTQuery:
-        decls = [f"{decl}\n" for decl in self.variables.values()]
-        if args.cache_solver:
-            asserts = [
-                f"(assert (! {sexpr} :named <{cond.get_id()}>))\n"
-                for cond, (_, sexpr) in self.conditions.items()
-            ]
-        else:
-            asserts = [f"(assert {sexpr})\n" for _, sexpr in self.conditions.values()]
-
-        query = "".join(decls + asserts)
         ids = [str(cond.get_id()) for cond in self.conditions]
+
+        if args.cache_solver:
+            tmp_solver = SolverFor("QF_AUFBV")
+            for cond in self.conditions:
+                tmp_solver.assert_and_track(cond, str(cond.get_id()))
+            query = tmp_solver.to_smt2()
+        else:
+            query = self.solver.to_smt2()
+        query = query.replace("(check-sat)", "")  # see __main__.solve()
+
         return SMTQuery(query, ids)
 
     def check(self, cond):
@@ -543,7 +541,6 @@ class Path:
         # shallow copy because existing conditions won't change
         # note: deep copy would be needed later for advanced query optimizations (eg, constant propagation)
         path.conditions = self.conditions.copy()
-        path.variables = self.variables.copy()
 
         # store the branching condition aside until the new path is activated.
         path.pending.append(cond)
@@ -575,24 +572,7 @@ class Path:
 
         if cond not in self.conditions:
             self.solver.add(cond)
-            self.conditions[cond] = (branching, cond.sexpr())
-            self.update_vars(cond)
-
-    def update_vars(self, term):
-        decl = term.decl()
-
-        if is_const(term):
-            if decl.kind() == Z3_OP_UNINTERPRETED:  # variable
-                if term not in self.variables:
-                    self.variables[term] = term.decl().sexpr()
-
-        else:
-            if is_func_decl(decl) and decl.name().startswith("f_"):
-                if decl not in self.variables:
-                    self.variables[decl] = decl.sexpr()
-
-            for child in term.children():
-                self.update_vars(child)
+            self.conditions[cond] = branching
 
     def extend(self, conds, branching=False):
         for cond in conds:
