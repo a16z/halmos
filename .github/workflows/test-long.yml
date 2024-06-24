@@ -18,6 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        cache-solver: ["", "--cache-solver"]
         include:
           - testname: "tests/solver"
           - testname: "examples/simple"
@@ -43,4 +44,4 @@ jobs:
 
       - name: Run Pytest
         run: |
-          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ inputs.halmos-options }}' -s --log-cli-level=
+          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}' -s --log-cli-level=
