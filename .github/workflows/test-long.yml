@@ -19,11 +19,11 @@ jobs:
       fail-fast: false
       matrix:
         cache-solver: ["", "--cache-solver"]
-        include:
-          - testname: "tests/solver"
-          - testname: "examples/simple"
-          - testname: "examples/tokens/ERC20"
-          - testname: "examples/tokens/ERC721"
+        testname:
+          - "tests/solver"
+          - "examples/simple"
+          - "examples/tokens/ERC20"
+          - "examples/tokens/ERC721"
 
     steps:
       - name: Checkout repository

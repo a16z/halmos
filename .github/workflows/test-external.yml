@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         cache-solver: ["", "--cache-solver"]
-        include:
+        project:
           - repo: "morpho-org/morpho-data-structures"
             dir: "morpho-data-structures"
             cmd: "halmos --function testProve --loop 4 --symbolic-storage"
@@ -52,9 +52,9 @@ jobs:
       - name: Checkout external repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ matrix.repo }}
-          path: ${{ matrix.dir }}
-          ref: ${{ matrix.branch }}
+          repository: ${{ matrix.project.repo }}
+          path: ${{ matrix.project.dir }}
+          ref: ${{ matrix.project.branch }}
           submodules: recursive
 
       - name: Login to GitHub Container Registry
@@ -69,5 +69,5 @@ jobs:
         working-directory: halmos
 
       - name: Test external repo
-        run: docker run -v .:/workspace ${{ matrix.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
-        working-directory: ${{ matrix.dir }}
+        run: docker run -v .:/workspace ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
+        working-directory: ${{ matrix.project.dir }}
