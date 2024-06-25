@@ -82,7 +82,7 @@ jobs:
         run: python -m pip install -e ./halmos
 
       - name: Install Vyper
-        if: ${{ matrix.project.dir == "snekmate" }}
+        if: ${{ matrix.project.dir == 'snekmate' }}
         run: python -m pip install vyper
 
       - name: Install Yices 2 SMT solver
