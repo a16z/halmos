@@ -18,11 +18,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - testname: "tests/solver"
-          - testname: "examples/simple"
-          - testname: "examples/tokens/ERC20"
-          - testname: "examples/tokens/ERC721"
+        cache-solver: ["", "--cache-solver"]
+        testname:
+          - "tests/solver"
+          - "examples/simple"
+          - "examples/tokens/ERC20"
+          - "examples/tokens/ERC721"
 
     steps:
       - name: Checkout repository
@@ -43,4 +44,4 @@ jobs:
 
       - name: Run Pytest
         run: |
-          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ inputs.halmos-options }}' -s --log-cli-level=
+          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}' -s --log-cli-level=

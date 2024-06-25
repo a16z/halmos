@@ -470,6 +470,12 @@ class CodeIterator:
             raise StopIteration
 
 
+@dataclass(frozen=True)
+class SMTQuery:
+    smtlib: str
+    assertions: List  # list of assertion ids
+
+
 class Path:
     # a Path object represents a prefix of the path currently being executed
     # initially, it's an empty path at the beginning of execution
@@ -499,8 +505,43 @@ class Path:
             ]
         )
 
-    def to_smt2(self) -> str:
-        return self.solver.to_smt2()
+    def to_smt2(self, args) -> SMTQuery:
+        # Serialize self.conditions into the SMTLIB format.
+        #
+        # Each `c` in the conditions can be serialized to an SMTLIB assertion:
+        #   `(assert c)`
+        #
+        # To compute the unsat-core later, a named assertion is needed:
+        #   `(assert (! c :named id))` where `id` is the unique id of `c`
+        #
+        # However, z3.Solver.to_smt2() doesn't serialize into named assertions. Instead,
+        # - `Solver.add(c)` is serialized as: `(assert c)`
+        # - `Solver.assert_and_track(c, id)` is serialized as: `(assert (=> |id| c))`
+        #
+        # Thus, named assertions can be generated using `to_smt2()` as follows:
+        # - add constraints using `assert_and_track(c, id)` for each c and id,
+        # - execute `to_smt2()` to generate implication assertions, `(assert (=> |id| c))`, and
+        # - generate named assertions, `(assert (! |id| :named <id>))`, for each id.
+        #
+        # The first two steps are performed here. The last step is done in `__main__.solve()`.
+        #
+        # NOTE: although both `to_smt2()` and `sexpr()` can generate SMTLIB assertions,
+        #       sexpr()-generated SMTLIB queries are often less efficient to solve than to_smt2().
+        #
+        # TODO: leverage more efficient serialization by representing constraints in pickle-friendly objects, instead of Z3 objects.
+
+        ids = [str(cond.get_id()) for cond in self.conditions]
+
+        if args.cache_solver:
+            tmp_solver = SolverFor("QF_AUFBV")
+            for cond in self.conditions:
+                tmp_solver.assert_and_track(cond, str(cond.get_id()))
+            query = tmp_solver.to_smt2()
+        else:
+            query = self.solver.to_smt2()
+        query = query.replace("(check-sat)", "")  # see __main__.solve()
+
+        return SMTQuery(query, ids)
 
     def check(self, cond):
         return self.solver.check(cond)
