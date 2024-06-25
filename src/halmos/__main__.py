@@ -1074,7 +1074,10 @@ def solve(
 
         if args.cache_solver:
             named_assertions = "".join(
-                [f"(assert (! |{assert_id}| :named <{assert_id}>))\n" for assert_id in query.assertions]
+                [
+                    f"(assert (! |{assert_id}| :named <{assert_id}>))\n"
+                    for assert_id in query.assertions
+                ]
             )
 
         with open(dump_filename, "w") as f:
