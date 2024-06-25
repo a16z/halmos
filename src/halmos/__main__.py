@@ -1072,6 +1072,9 @@ def solve(
         if not dump_filename:
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
 
+        # for each implication assertion, `(assert (=> |id| c))`, in query.smtlib,
+        # generate a corresponding named assertion, `(assert (! |id| :named <id>))`.
+        # see `svem.Path.to_smt2()` for more details.
         if args.cache_solver:
             named_assertions = "".join(
                 [
@@ -1148,6 +1151,7 @@ def solve(
 
 
 def check_unsat_cores(query, unsat_cores) -> bool:
+    # return true if the given query contains any given unsat core
     for unsat_core in unsat_cores:
         if all(core in query.assertions for core in unsat_core):
             return True
@@ -1168,6 +1172,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
         print(f"Checking path condition (path id: {idx+1})")
 
     if check_unsat_cores(sexpr, fn_args.known_unsat_cores):
+        # if the given query contains an unsat-core, it is unsat; no need to run the solver.
         if args.verbose >= 1:
             print("  Already proven unsat")
         return package_result(None, idx, unsat, None, args)
