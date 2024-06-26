@@ -1515,6 +1515,8 @@ class SEVM:
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
+        if is_false(balance_cond):
+            raise InfeasiblePath("transfer_value: balance is not enough")
         ex.path.append(balance_cond)
 
         # conditional transfer
@@ -2519,6 +2521,10 @@ class SEVM:
 
                 ex.next_pc()
                 stack.push(ex, step_id)
+
+            except InfeasiblePath as err:
+                # ignore infeasible path
+                continue
 
             except EvmException as err:
                 ex.halt(data=ByteVec(), error=err)

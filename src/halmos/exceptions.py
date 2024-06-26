@@ -8,6 +8,10 @@ Note: this is a modified version execution-specs' src/ethereum/<fork>/vm/excepti
 """
 
 
+class InfeasiblePath(Exception):
+    pass
+
+
 class HalmosException(Exception):
     pass
 
