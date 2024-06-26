@@ -31,6 +31,7 @@ from .utils import *
 from .warnings import (
     warn_code,
     LIBRARY_PLACEHOLDER,
+    INTERNAL_ERROR,
 )
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
@@ -589,6 +590,10 @@ class Path:
 
         if is_true(cond):
             return
+
+        if is_false(cond):
+            # false shouldn't have been added; raise InfeasiblePath before append() if false
+            warn_code(INTERNAL_ERROR, f"path.append(false)")
 
         if cond not in self.conditions:
             self.solver.add(cond)
