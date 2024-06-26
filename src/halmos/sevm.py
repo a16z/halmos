@@ -491,7 +491,6 @@ class Path:
         self.num_scopes = 0
         self.conditions = {}
         self.pending = []
-        self.forked = False
 
     def __deepcopy__(self, memo):
         raise NotImplementedError(f"use the branch() method instead of deepcopy()")
@@ -587,9 +586,6 @@ class Path:
 
     def append(self, cond, branching=False):
         cond = simplify(cond)
-
-        if self.forked:
-            warn(f"attempting to append cond {cond} to forked path {id(self)}")
 
         if is_true(cond):
             return
