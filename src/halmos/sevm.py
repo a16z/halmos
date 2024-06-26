@@ -544,12 +544,6 @@ class Path:
         return SMTQuery(query, ids)
 
     def check(self, cond):
-        if cond in self.conditions:
-            return sat
-
-        if simplify(Not(cond)) in self.conditions:
-            return unsat
-
         return self.solver.check(cond)
 
     def branch(self, cond):
@@ -2303,7 +2297,7 @@ class SEVM:
                             or eq(account, halmos_cheat_code.address)
                             or eq(account, console.address)
                         ):
-                            ex.path.append(codesize != 0)
+                            ex.path.append(codesize > 0)
                     ex.st.push(codesize)
 
                 # TODO: define f_extcodehash for known addresses in advance
