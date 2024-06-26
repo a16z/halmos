@@ -740,7 +740,7 @@ def run(
 
         if args.verbose >= VERBOSITY_TRACE_PATHS:
             print(f"Path #{idx+1}:")
-            print(indent_text(str(ex.path)))
+            print(indent_text(hexify(ex.path)))
 
             print("\nTrace:")
             render_trace(ex.context)
@@ -769,7 +769,7 @@ def run(
         elif ex.context.is_stuck():
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
             if args.print_blocked_states:
-                traces[idx] = rendered_trace(ex.context)
+                traces[idx] = f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
 
         elif not error:
             normal += 1
