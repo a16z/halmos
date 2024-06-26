@@ -3,7 +3,8 @@ src = 'src'
 out = 'out'
 libs = ["../../tests/lib", 'lib']
 
-# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+evm_version = 'cancun'
 
+force = false
 # compile options used by halmos (to prevent unnecessary recompilation when running forge test and halmos together)
 extra_output = ["storageLayout", "metadata"]
