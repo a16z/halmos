@@ -31,6 +31,7 @@ from .utils import *
 from .warnings import (
     warn_code,
     LIBRARY_PLACEHOLDER,
+    INTERNAL_ERROR,
 )
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
@@ -491,7 +492,6 @@ class Path:
         self.num_scopes = 0
         self.conditions = {}
         self.pending = []
-        self.forked = False
 
     def __deepcopy__(self, memo):
         raise NotImplementedError(f"use the branch() method instead of deepcopy()")
@@ -588,11 +588,12 @@ class Path:
     def append(self, cond, branching=False):
         cond = simplify(cond)
 
-        if self.forked:
-            warn(f"attempting to append cond {cond} to forked path {id(self)}")
-
         if is_true(cond):
             return
+
+        if is_false(cond):
+            # false shouldn't have been added; raise InfeasiblePath before append() if false
+            warn_code(INTERNAL_ERROR, f"path.append(false)")
 
         if cond not in self.conditions:
             self.solver.add(cond)
@@ -1519,6 +1520,8 @@ class SEVM:
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
+        if is_false(balance_cond):
+            raise InfeasiblePath("transfer_value: balance is not enough")
         ex.path.append(balance_cond)
 
         # conditional transfer
@@ -2523,6 +2526,10 @@ class SEVM:
 
                 ex.next_pc()
                 stack.push(ex, step_id)
+
+            except InfeasiblePath as err:
+                # ignore infeasible path
+                continue
 
             except EvmException as err:
                 ex.halt(data=ByteVec(), error=err)
