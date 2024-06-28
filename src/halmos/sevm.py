@@ -2128,6 +2128,9 @@ class SEVM:
             if ex.callback is None:
                 yield ex
 
+            elif isinstance(ex.context.output.error, FailCheatcode):
+                yield ex
+
             # otherwise, execute the callback to return to the parent execution context
             # note: `yield from` is used as the callback may yield the current execution state that got stuck
             else:
