@@ -1741,7 +1741,7 @@ class SEVM:
             # vm cheat code
             elif eq(to, hevm_cheat_code.address):
                 exit_code = con(1)
-                ret = hevm_cheat_code.handle(self, ex, arg)
+                ret = hevm_cheat_code.handle(self, ex, arg, stack, step_id)
 
             # console
             elif eq(to, console.address):
@@ -2145,6 +2145,10 @@ class SEVM:
 
                 if not ex.path.is_activated():
                     ex.path.activate()
+
+                if isinstance(ex.context.output.error, FailCheatcode):
+                    yield ex
+                    continue
 
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)

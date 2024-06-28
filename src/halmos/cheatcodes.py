@@ -329,8 +329,11 @@ class hevm_cheat_code:
     # label(address,string)
     label_sig: int = 0xC657C718
 
+    # assertEq(uint256,uint256)
+    assertEq_uint256_uint256: int = 0x98296C54
+
     @staticmethod
-    def handle(sevm, ex, arg: ByteVec) -> Optional[ByteVec]:
+    def handle(sevm, ex, arg: ByteVec, stack, step_id) -> Optional[ByteVec]:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 
@@ -340,6 +343,21 @@ class hevm_cheat_code:
             if is_false(assume_cond):
                 raise InfeasiblePath("vm.assume(false)")
             ex.path.append(assume_cond)
+            return ret
+
+        # vm.assertEq(uint256,uint256)
+        elif funsig == hevm_cheat_code.assertEq_uint256_uint256:
+            v1 = uint256(arg.get_word(4))
+            v2 = uint256(arg.get_word(36))
+
+            cond_neq = simplify(v1 != v2)
+            check_neq = ex.check(cond_neq)
+
+            if check_neq != unsat:
+                new_ex = sevm.create_branch(ex, cond_neq, ex.pc)
+                new_ex.halt(data=ByteVec(), error=FailCheatcode())
+                stack.push(new_ex, step_id)
+
             return ret
 
         # vm.getCode(string)
