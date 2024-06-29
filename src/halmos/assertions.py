@@ -11,6 +11,7 @@ class VmAssertion:
     """
     Forge Standard Assertions
     """
+
     cond: BitVecRef
     msg: Optional
 
@@ -68,40 +69,48 @@ def vm_assert(bop: str, typ: str, log: bool = False):
     if not arr:
         # bool, uint256, int256, address, bytes32
         if not is_bytes:
+
             def _f(arg):
                 v1 = extract_bytes(arg, 4, 32)
                 v2 = extract_bytes(arg, 36, 32)
                 cond = mk_cond(bop, v1, v2)
                 msg = extract_string_argument(arg, 2) if log else None
                 return VmAssertion(cond, msg)
+
             return _f
 
         # bytes, string
         else:
+
             def _f(arg):
                 v1 = extract_bytes_argument(arg, 0)
                 v2 = extract_bytes_argument(arg, 1)
                 cond = mk_cond(bop, v1, v2)
                 msg = extract_string_argument(arg, 2) if log else None
                 return VmAssertion(cond, msg)
+
             return _f
 
     else:
         # bool[], uint256[], int256[], address[], bytes32[]
         if not is_bytes:
+
             def _f(arg):
                 v1 = extract_bytes32_array_argument(arg, 0)
                 v2 = extract_bytes32_array_argument(arg, 1)
                 cond = mk_cond(bop, v1, v2)
                 msg = extract_string_argument(arg, 2) if log else None
                 return VmAssertion(cond, msg)
+
             return _f
 
         # bytes[], string[]
         else:
+
             def _f(arg):
                 # TODO: implement extract_bytes_array
                 raise NotImplementedError(f"assert {bop} {typ}[]")
+
             return _f
 
 
@@ -111,6 +120,7 @@ def vm_assert0(expected: bool, log: bool = False):
         cond = test(actual, expected)
         msg = extract_string_argument(arg, 1) if log else None
         return VmAssertion(cond, msg)
+
     return _f
 
 
