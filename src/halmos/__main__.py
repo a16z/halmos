@@ -753,6 +753,7 @@ def run(
         ) or is_global_fail_set(ex.context):
             if args.verbose >= 1:
                 print(f"Found potential path (id: {idx+1})")
+                print(f"{ex.context.output.error}")
 
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 traces[idx] = rendered_trace(ex.context)

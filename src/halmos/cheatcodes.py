@@ -336,12 +336,12 @@ class hevm_cheat_code:
         ret = ByteVec()
 
         if funsig in assert_cheatcode_handler:
-            cond = assert_cheatcode_handler[funsig](arg)
-            not_cond = simplify(Not(cond))
+            vm_assert = assert_cheatcode_handler[funsig](arg)
+            not_cond = simplify(Not(vm_assert.cond))
 
             if ex.check(not_cond) != unsat:
                 new_ex = sevm.create_branch(ex, not_cond, ex.pc)
-                new_ex.halt(data=ByteVec(), error=FailCheatcode())
+                new_ex.halt(data=ByteVec(), error=FailCheatcode(f"{vm_assert}"))
                 stack.push(new_ex, step_id)
 
             return ret
