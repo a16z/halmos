@@ -427,7 +427,7 @@
             {
                 "name": "check_call1_fail(uint256)",
                 "exitcode": 1,
-                "num_models": 2,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,

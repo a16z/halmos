@@ -120,8 +120,8 @@ contract MulticallerWithSenderSymTest is SymTest, Test {
         impl = new MulticallerWithSenderMock();
         spec = new MulticallerWithSenderSpec();
 
-        assert(impl.sender() == spec.sender());
-        assert(impl.reentrancyUnlocked() == spec.reentrancyUnlocked());
+        assertEq(impl.sender(), spec.sender());
+        assertEq(impl.reentrancyUnlocked(), spec.reentrancyUnlocked());
 
         vm.deal(address(this), 100_000_000 ether);
         vm.assume(address(impl).balance == address(spec).balance);
@@ -134,21 +134,21 @@ contract MulticallerWithSenderSymTest is SymTest, Test {
         (bool success_spec, bytes memory retdata_spec) = address(spec).call{value: value}(data);
 
         // Check: `impl` succeeds if and only if `spec` succeeds.
-        assert(success_impl == success_spec);
+        assertEq(success_impl, success_spec);
         // Check: the return data must be identical.
-        assert(keccak256(retdata_impl) == keccak256(retdata_spec));
+        assertEq(keccak256(retdata_impl), keccak256(retdata_spec));
 
         // Check: the storage states must remain the same.
-        assert(impl.sender() == spec.sender());
-        assert(impl.reentrancyUnlocked() == spec.reentrancyUnlocked());
+        assertEq(impl.sender(), spec.sender());
+        assertEq(impl.reentrancyUnlocked(), spec.reentrancyUnlocked());
 
         // Check: the remaining balances must be equal.
-        assert(address(impl).balance == address(spec).balance);
+        assertEq(address(impl).balance, address(spec).balance);
         // Check: the total amounts sent to each target must be equal.
         for (uint i = 0; i < targetMocks.length; i++) {
             bytes32 target_balance_impl = vm.load(targetMocks[i], keccak256(abi.encode(impl, _BALANCEOF_SLOT)));
             bytes32 target_balance_spec = vm.load(targetMocks[i], keccak256(abi.encode(spec, _BALANCEOF_SLOT)));
-            assert(target_balance_impl == target_balance_spec);
+            assertEq(target_balance_impl, target_balance_spec);
         }
     }
 

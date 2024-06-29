@@ -33,7 +33,7 @@ abstract contract ERC20Test is SymTest, Test {
 
         // ensure that the caller cannot spend other' tokens without approvals
         if (newBalanceOther < oldBalanceOther) {
-            assert(oldAllowance >= oldBalanceOther - newBalanceOther);
+            assertGe(oldAllowance, oldBalanceOther - newBalanceOther);
         }
     }
 
@@ -51,17 +51,17 @@ abstract contract ERC20Test is SymTest, Test {
         IERC20(token).transfer(receiver, amount);
 
         if (sender != receiver) {
-            assert(IERC20(token).balanceOf(sender) <= oldBalanceSender); // ensure no subtraction overflow
-            assert(IERC20(token).balanceOf(sender) == oldBalanceSender - amount);
-            assert(IERC20(token).balanceOf(receiver) >= oldBalanceReceiver); // ensure no addition overflow
-            assert(IERC20(token).balanceOf(receiver) == oldBalanceReceiver + amount);
+            assertLe(IERC20(token).balanceOf(sender), oldBalanceSender); // ensure no subtraction overflow
+            assertEq(IERC20(token).balanceOf(sender), oldBalanceSender - amount);
+            assertGe(IERC20(token).balanceOf(receiver), oldBalanceReceiver); // ensure no addition overflow
+            assertEq(IERC20(token).balanceOf(receiver), oldBalanceReceiver + amount);
         } else {
             // sender and receiver may be the same
-            assert(IERC20(token).balanceOf(sender) == oldBalanceSender);
-            assert(IERC20(token).balanceOf(receiver) == oldBalanceReceiver);
+            assertEq(IERC20(token).balanceOf(sender), oldBalanceSender);
+            assertEq(IERC20(token).balanceOf(receiver), oldBalanceReceiver);
         }
         // make sure other balance is not affected
-        assert(IERC20(token).balanceOf(other) == oldBalanceOther);
+        assertEq(IERC20(token).balanceOf(other), oldBalanceOther);
     }
 
     function check_transferFrom(address caller, address from, address to, address other, uint256 amount) public virtual {
@@ -78,17 +78,17 @@ abstract contract ERC20Test is SymTest, Test {
         IERC20(token).transferFrom(from, to, amount);
 
         if (from != to) {
-            assert(IERC20(token).balanceOf(from) <= oldBalanceFrom);
-            assert(IERC20(token).balanceOf(from) == oldBalanceFrom - amount);
-            assert(IERC20(token).balanceOf(to) >= oldBalanceTo);
-            assert(IERC20(token).balanceOf(to) == oldBalanceTo + amount);
+            assertLe(IERC20(token).balanceOf(from), oldBalanceFrom);
+            assertEq(IERC20(token).balanceOf(from), oldBalanceFrom - amount);
+            assertGe(IERC20(token).balanceOf(to), oldBalanceTo);
+            assertEq(IERC20(token).balanceOf(to), oldBalanceTo + amount);
 
-            assert(oldAllowance >= amount); // ensure allowance was enough
-            assert(oldAllowance == type(uint256).max || IERC20(token).allowance(from, caller) == oldAllowance - amount); // allowance decreases if not max
+            assertGe(oldAllowance, amount); // ensure allowance was enough
+            assertTrue(oldAllowance == type(uint256).max || IERC20(token).allowance(from, caller) == oldAllowance - amount); // allowance decreases if not max
         } else {
-            assert(IERC20(token).balanceOf(from) == oldBalanceFrom);
-            assert(IERC20(token).balanceOf(to) == oldBalanceTo);
+            assertEq(IERC20(token).balanceOf(from), oldBalanceFrom);
+            assertEq(IERC20(token).balanceOf(to), oldBalanceTo);
         }
-        assert(IERC20(token).balanceOf(other) == oldBalanceOther);
+        assertEq(IERC20(token).balanceOf(other), oldBalanceOther);
     }
 }
