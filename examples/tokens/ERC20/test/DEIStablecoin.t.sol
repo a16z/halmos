@@ -33,7 +33,7 @@ contract DEIStablecoinTest is ERC20Test {
 
         lossless = address(new SymAccount());
         token_.initialize(1_000_000_000e18, address(this), address(this), 0, lossless);
-        assert(token_.balanceOf(address(this)) == 1_000_000_000e18);
+        assertEq(token_.balanceOf(address(this)), 1_000_000_000e18);
 
         holders = new address[](3);
         holders[0] = address(0x1001);

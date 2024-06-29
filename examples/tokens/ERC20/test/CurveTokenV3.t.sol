@@ -43,7 +43,7 @@ contract CurveTokenV3Test is ERC20Test {
         minter = token_.minter();
         vm.prank(minter);
         token_.mint(address(this), 1_000_000_000e18);
-        assert(token_.balanceOf(address(this)) == 1_000_000_000e18);
+        assertEq(token_.balanceOf(address(this)), 1_000_000_000e18);
 
         holders = new address[](3);
         holders[0] = address(0x1001);
