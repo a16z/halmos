@@ -11,6 +11,7 @@ from z3 import *
 from .bytevec import ByteVec
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
 from .utils import *
+from .assertions import *
 
 
 # f_vmaddr(key) -> address
@@ -329,35 +330,28 @@ class hevm_cheat_code:
     # label(address,string)
     label_sig: int = 0xC657C718
 
-    # assertEq(uint256,uint256)
-    assertEq_uint256_uint256: int = 0x98296C54
-
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack, step_id) -> Optional[ByteVec]:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 
+        if funsig in assert_cheatcode_handler:
+            cond = assert_cheatcode_handler[funsig](arg)
+            not_cond = simplify(Not(cond))
+
+            if ex.check(not_cond) != unsat:
+                new_ex = sevm.create_branch(ex, not_cond, ex.pc)
+                new_ex.halt(data=ByteVec(), error=FailCheatcode())
+                stack.push(new_ex, step_id)
+
+            return ret
+
         # vm.assume(bool)
-        if funsig == hevm_cheat_code.assume_sig:
+        elif funsig == hevm_cheat_code.assume_sig:
             assume_cond = simplify(is_non_zero(arg.get_word(4)))
             if is_false(assume_cond):
                 raise InfeasiblePath("vm.assume(false)")
             ex.path.append(assume_cond)
-            return ret
-
-        # vm.assertEq(uint256,uint256)
-        elif funsig == hevm_cheat_code.assertEq_uint256_uint256:
-            v1 = uint256(arg.get_word(4))
-            v2 = uint256(arg.get_word(36))
-
-            cond_neq = simplify(v1 != v2)
-            check_neq = ex.check(cond_neq)
-
-            if check_neq != unsat:
-                new_ex = sevm.create_branch(ex, cond_neq, ex.pc)
-                new_ex.halt(data=ByteVec(), error=FailCheatcode())
-                stack.push(new_ex, step_id)
-
             return ret
 
         # vm.getCode(string)
