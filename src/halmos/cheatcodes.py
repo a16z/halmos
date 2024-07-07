@@ -252,592 +252,27 @@ class halmos_cheat_code:
         raise HalmosException(error_msg)
 
 
-def assertApproxEqAbsDecimal_uint256_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
+def vm_assert(bop: str, typ: str, log: bool = False):
     pass
 
 
-def assertApproxEqAbsDecimal_uint256_uint256_uint256_uint256_string(
-    arg: ByteVec,
-) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqAbsDecimal_int256_int256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqAbsDecimal_int256_int256_uint256_uint256_string(
-    arg: ByteVec,
-) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqAbs_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqAbs_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqAbs_int256_int256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqAbs_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqRelDecimal_uint256_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqRelDecimal_uint256_uint256_uint256_uint256_string(
-    arg: ByteVec,
-) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqRelDecimal_int256_int256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqRelDecimal_int256_int256_uint256_uint256_string(
-    arg: ByteVec,
-) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqRel_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqRel_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqRel_int256_int256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertApproxEqRel_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEqDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEqDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEqDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEqDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bool_bool(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bool_bool_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_string_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_string_string_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bytes_bytes(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bytes_bytes_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bool_array_bool_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bool_array_bool_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_uint256_array_uint256_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_uint256_array_uint256_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_int256_array_int256_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_int256_array_int256_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_address_array_address_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_address_array_address_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bytes32_array_bytes32_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bytes32_array_bytes32_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_string_array_string_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_string_array_string_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bytes_array_bytes_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bytes_array_bytes_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_int256_int256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_int256_int256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_address_address(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_address_address_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bytes32_bytes32(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertEq_bytes32_bytes32_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertFalse_bool(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertFalse_bool_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bytes_array_bytes_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bool_bool(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_int256_int256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGeDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLeDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEqDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGeDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bool_array_bool_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
+def mk_assert_handler(signature):
+    start_idx = signature.index("assert") + len("assert")
+    end_idx = signature.index("(")
 
-def assertLe_int256_int256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGe_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLt_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_string_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_string_string_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGe_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLt_int256_int256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGt_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGtDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGt_int256_int256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLeDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGtDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertTrue_bool(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGe_int256_int256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGt_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEqDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bytes32_array_bytes32_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGtDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bytes_array_bytes_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_int256_array_int256_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_address_array_address_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGtDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGeDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_string_array_string_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_address_array_address_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertTrue_bool_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGeDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLtDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEqDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
+    comparison = signature[start_idx:end_idx].strip()
+    parameters = signature[end_idx:].strip("()")
+    params_list = [param.strip() for param in parameters.split(",")]
+    log = (len(params_list) > 2) and (params_list[-1] == "string")
+    data_types = [param for param in params_list]
 
+    if data_types:
+        data_type = data_types[0]
+    else:
+        raise HalmosException(f"No data type found in signature: {signature}")
 
-def assertNotEq_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bytes32_bytes32_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLe_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bytes_bytes_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bytes32_bytes32(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGe_int256_int256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_address_address(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_string_array_string_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLe_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertGt_int256_int256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bool_array_bool_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bytes_bytes(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLtDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bool_bool_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLt_int256_int256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_uint256_array_uint256_array_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_address_address_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_int256_int256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLeDecimal_uint256_uint256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLtDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_int256_array_int256_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLeDecimal_int256_int256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_bytes32_array_bytes32_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLt_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEqDecimal_uint256_uint256_uint256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLe_int256_int256(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertNotEq_uint256_array_uint256_array(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
-
-
-def assertLtDecimal_int256_int256_uint256_string(arg: ByteVec) -> ByteVec:
-    # todo: placeholder
-    pass
+    # Calls vm_assert with the parsed values
+    vm_assert(comparison, data_type, log)
 
 
 class hevm_cheat_code:
@@ -861,141 +296,160 @@ class hevm_cheat_code:
     )
 
     signatures = {
-        0x045C55CE: assertApproxEqAbsDecimal_uint256_uint256_uint256_uint256,
-        0x60429EB2: assertApproxEqAbsDecimal_uint256_uint256_uint256_uint256_string,
-        0x3D5BC8BC: assertApproxEqAbsDecimal_int256_int256_uint256_uint256,
-        0x6A5066D4: assertApproxEqAbsDecimal_int256_int256_uint256_uint256_string,
-        0x16D207C6: assertApproxEqAbs_uint256_uint256_uint256,
-        0xF710B062: assertApproxEqAbs_uint256_uint256_uint256_string,
-        0x240F839D: assertApproxEqAbs_int256_int256_uint256,
-        0x8289E621: assertApproxEqAbs_int256_int256_uint256_string,
-        0x21ED2977: assertApproxEqRelDecimal_uint256_uint256_uint256_uint256,
-        0x82D6C8FD: assertApproxEqRelDecimal_uint256_uint256_uint256_uint256_string,
-        0xABBF21CC: assertApproxEqRelDecimal_int256_int256_uint256_uint256,
-        0xFCCC11C4: assertApproxEqRelDecimal_int256_int256_uint256_uint256_string,
-        0x8CF25EF4: assertApproxEqRel_uint256_uint256_uint256,
-        0x1ECB7D33: assertApproxEqRel_uint256_uint256_uint256_string,
-        0xFEA2D14F: assertApproxEqRel_int256_int256_uint256,
-        0xEF277D72: assertApproxEqRel_int256_int256_uint256_string,
-        0x27AF7D9C: assertEqDecimal_uint256_uint256_uint256,
-        0xD0CBBDEF: assertEqDecimal_uint256_uint256_uint256_string,
-        0x48016C04: assertEqDecimal_int256_int256_uint256,
-        0x7E77B0C5: assertEqDecimal_int256_int256_uint256_string,
-        0xF7FE3477: assertEq_bool_bool,
-        0x4DB19E7E: assertEq_bool_bool_string,
-        0xF320D963: assertEq_string_string,
-        0x36F656D8: assertEq_string_string_string,
-        0x97624631: assertEq_bytes_bytes,
-        0xE24FED00: assertEq_bytes_bytes_string,
-        0x707DF785: assertEq_bool_array_bool_array,
-        0xE48A8F8D: assertEq_bool_array_bool_array_string,
-        0x975D5A12: assertEq_uint256_array_uint256_array,
-        0x5D18C73A: assertEq_uint256_array_uint256_array_string,
-        0x711043AC: assertEq_int256_array_int256_array,
-        0x191F1B30: assertEq_int256_array_int256_array_string,
-        0x98296C54: assertEq_uint256_uint256,
-        0x3868AC34: assertEq_address_array_address_array,
-        0x3E9173C5: assertEq_address_array_address_array_string,
-        0x0CC9EE84: assertEq_bytes32_array_bytes32_array,
-        0xE03E9177: assertEq_bytes32_array_bytes32_array_string,
-        0xCF1C049C: assertEq_string_array_string_array,
-        0xEFF6B27D: assertEq_string_array_string_array_string,
-        0xE5FB9B4A: assertEq_bytes_array_bytes_array,
-        0xF413F0B6: assertEq_bytes_array_bytes_array_string,
-        0x88B44C85: assertEq_uint256_uint256_string,
-        0xFE74F05B: assertEq_int256_int256,
-        0x714A2F13: assertEq_int256_int256_string,
-        0x515361F6: assertEq_address_address,
-        0x2F2769D1: assertEq_address_address_string,
-        0x7C84C69B: assertEq_bytes32_bytes32,
-        0xC1FA1ED0: assertEq_bytes32_bytes32_string,
-        0xA5982885: assertFalse_bool,
-        0x7BA04809: assertFalse_bool_string,
-        0x1DCD1F68: assertNotEq_bytes_array_bytes_array_string,
-        0x236E4D66: assertNotEq_bool_bool,
-        0xF4C004E3: assertNotEq_int256_int256,
-        0x8BFF9133: assertGeDecimal_uint256_uint256_uint256_string,
-        0xAA5CF788: assertLeDecimal_int256_int256_uint256_string,
-        0x33949F0B: assertNotEqDecimal_int256_int256_uint256_string,
-        0x3D1FE08A: assertGeDecimal_uint256_uint256_uint256,
-        0x286FAFEA: assertNotEq_bool_array_bool_array,
-        0x4DFE692C: assertLe_int256_int256_string,
-        0xA8D4D1D9: assertGe_uint256_uint256,
-        0x65D5C135: assertLt_uint256_uint256_string,
-        0x6A8237B3: assertNotEq_string_string,
-        0x78BDCEA7: assertNotEq_string_string_string,
-        0xE25242C0: assertGe_uint256_uint256_string,
-        0x9FF531E3: assertLt_int256_int256_string,
-        0xD9A3C4D2: assertGt_uint256_uint256_string,
-        0x64949A8D: assertGtDecimal_uint256_uint256_uint256_string,
-        0x5A362D45: assertGt_int256_int256,
-        0xC304AAB7: assertLeDecimal_uint256_uint256_uint256,
-        0x78611F0E: assertGtDecimal_int256_int256_uint256,
-        0x0C9FD581: assertTrue_bool,
-        0xA84328DD: assertGe_int256_int256_string,
-        0xDB07FCD2: assertGt_uint256_uint256,
-        0x14E75680: assertNotEqDecimal_int256_int256_uint256,
-        0xB873634C: assertNotEq_bytes32_array_bytes32_array_string,
-        0x04A5C7AB: assertGtDecimal_int256_int256_uint256_string,
-        0xEDECD035: assertNotEq_bytes_array_bytes_array,
-        0xD3977322: assertNotEq_int256_array_int256_array_string,
-        0x46D0B252: assertNotEq_address_array_address_array,
-        0xECCDA437: assertGtDecimal_uint256_uint256_uint256,
-        0x5DF93C9B: assertGeDecimal_int256_int256_uint256_string,
-        0xBDFACBE8: assertNotEq_string_array_string_array,
-        0x72C7E0B5: assertNotEq_address_array_address_array_string,
-        0xA34EDC03: assertTrue_bool_string,
-        0xDC28C0F1: assertGeDecimal_int256_int256_uint256,
-        0xA972D037: assertLtDecimal_uint256_uint256_uint256_string,
-        0xF5A55558: assertNotEqDecimal_uint256_uint256_uint256_string,
-        0xB7909320: assertNotEq_uint256_uint256,
-        0xB2332F51: assertNotEq_bytes32_bytes32_string,
-        0xD17D4B0D: assertLe_uint256_uint256_string,
-        0x9507540E: assertNotEq_bytes_bytes_string,
-        0x898E83FC: assertNotEq_bytes32_bytes32,
-        0x0A30B771: assertGe_int256_int256,
-        0xB12E1694: assertNotEq_address_address,
-        0xB67187F3: assertNotEq_string_array_string_array_string,
-        0x8466F415: assertLe_uint256_uint256,
-        0xF8D33B9B: assertGt_int256_int256_string,
-        0x62C6F9FB: assertNotEq_bool_array_bool_array_string,
-        0x3CF78E28: assertNotEq_bytes_bytes,
-        0x2077337E: assertLtDecimal_uint256_uint256_uint256,
-        0x1091A261: assertNotEq_bool_bool_string,
-        0x3E914080: assertLt_int256_int256,
-        0x98F9BDBD: assertNotEq_uint256_uint256_string,
-        0x9A7FBD8F: assertNotEq_uint256_array_uint256_array_string,
-        0x8775A591: assertNotEq_address_address_string,
-        0x4724C5B9: assertNotEq_int256_int256_string,
-        0x7FEFBBE0: assertLeDecimal_uint256_uint256_uint256_string,
-        0xDBE8D88B: assertLtDecimal_int256_int256_uint256,
-        0x0B72F4EF: assertNotEq_int256_array_int256_array,
-        0x11D1364A: assertLeDecimal_int256_int256_uint256,
-        0x0603EA68: assertNotEq_bytes32_array_bytes32_array,
-        0xB12FC005: assertLt_uint256_uint256,
-        0x669EFCA7: assertNotEqDecimal_uint256_uint256_uint256,
-        0x95FD154E: assertLe_int256_int256,
-        0x56F29CBA: assertNotEq_uint256_array_uint256_array,
-        0x40F0B4E0: assertLtDecimal_int256_int256_uint256_string,
-        0x4C63E562: assume_bool,
-        0x8D1CC925: getCode_string,
-        0xCA669FA7: prank_address,
-        0x06447D56: startPrank_address,
-        0x90C5013B: stopPrank,
-        0xC88A5E6D: deal_address_uint256,
-        0x70CA10BB: store_address_bytes32_bytes32,
-        0x667F9D70: load_address_bytes32,
-        0x39B37AB0: fee_uint256,
-        0x4049DDD2: chainId_uint256,
-        0xFF483C54: coinbase_address,
-        0x46CC92D9: difficulty_uint256,
-        0x1F7B4F30: roll_uint256,
-        0xE5D6BF02: warp_uint256,
-        0xB4D6C782: etch_address_bytes,
-        0x89160467: ffi_string_array,
-        0xFFA18649: addr_uint256,
-        0xE341EAA4: sign_uint256_bytes32,
-        0xC657C718: label_address_string,
+        0x045C55CE: mk_assert_handler(
+            "assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256)"
+        ),
+        0x60429EB2: mk_assert_handler(
+            "assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256,string)"
+        ),
+        0x3D5BC8BC: mk_assert_handler(
+            "assertApproxEqAbsDecimal(int256,int256,uint256,uint256)"
+        ),
+        0x6A5066D4: mk_assert_handler(
+            "assertApproxEqAbsDecimal(int256,int256,uint256,uint256,string)"
+        ),
+        0x16D207C6: mk_assert_handler("assertApproxEqAbs(uint256,uint256,uint256)"),
+        0xF710B062: mk_assert_handler(
+            "assertApproxEqAbs(uint256,uint256,uint256,string)"
+        ),
+        0x240F839D: mk_assert_handler("assertApproxEqAbs(int256,int256,uint256)"),
+        0x8289E621: mk_assert_handler(
+            "assertApproxEqAbs(int256,int256,uint256,string)"
+        ),
+        0x21ED2977: mk_assert_handler(
+            "assertApproxEqRelDecimal(uint256,uint256,uint256,uint256)"
+        ),
+        0x82D6C8FD: mk_assert_handler(
+            "assertApproxEqRelDecimal(uint256,uint256,uint256,uint256,string)"
+        ),
+        0xABBF21CC: mk_assert_handler(
+            "assertApproxEqRelDecimal(int256,int256,uint256,uint256)"
+        ),
+        0xFCCC11C4: mk_assert_handler(
+            "assertApproxEqRelDecimal(int256,int256,uint256,uint256,string)"
+        ),
+        0x8CF25EF4: mk_assert_handler("assertApproxEqRel(uint256,uint256,uint256)"),
+        0x1ECB7D33: mk_assert_handler(
+            "assertApproxEqRel(uint256,uint256,uint256,string)"
+        ),
+        0xFEA2D14F: mk_assert_handler("assertApproxEqRel(int256,int256,uint256)"),
+        0xEF277D72: mk_assert_handler(
+            "assertApproxEqRel(int256,int256,uint256,string)"
+        ),
+        0x27AF7D9C: mk_assert_handler("assertEqDecimal(uint256,uint256,uint256)"),
+        0xD0CBBDEF: mk_assert_handler(
+            "assertEqDecimal(uint256,uint256,uint256,string)"
+        ),
+        0x48016C04: mk_assert_handler("assertEqDecimal(int256,int256,uint256)"),
+        0x7E77B0C5: mk_assert_handler("assertEqDecimal(int256,int256,uint256,string)"),
+        0xF7FE3477: mk_assert_handler("assertEq(bool,bool)"),
+        0x4DB19E7E: mk_assert_handler("assertEq(bool,bool,string)"),
+        0xF320D963: mk_assert_handler("assertEq(string,string)"),
+        0x36F656D8: mk_assert_handler("assertEq(string,string,string)"),
+        0x97624631: mk_assert_handler("assertEq(bytes,bytes)"),
+        0xE24FED00: mk_assert_handler("assertEq(bytes,bytes,string)"),
+        0x707DF785: mk_assert_handler("assertEq(bool[],bool[])"),
+        0xE48A8F8D: mk_assert_handler("assertEq(bool[],bool[],string)"),
+        0x975D5A12: mk_assert_handler("assertEq(uint256[],uint256[])"),
+        0x5D18C73A: mk_assert_handler("assertEq(uint256[],uint256[],string)"),
+        0x711043AC: mk_assert_handler("assertEq(int256[],int256[])"),
+        0x191F1B30: mk_assert_handler("assertEq(int256[],int256[],string)"),
+        0x98296C54: mk_assert_handler("assertEq(uint256,uint256)"),
+        0x3868AC34: mk_assert_handler("assertEq(address[],address[])"),
+        0x3E9173C5: mk_assert_handler("assertEq(address[],address[],string)"),
+        0x0CC9EE84: mk_assert_handler("assertEq(bytes32[],bytes32[])"),
+        0xE03E9177: mk_assert_handler("assertEq(bytes32[],bytes32[],string)"),
+        0xCF1C049C: mk_assert_handler("assertEq(string[],string[])"),
+        0xEFF6B27D: mk_assert_handler("assertEq(string[],string[],string)"),
+        0xE5FB9B4A: mk_assert_handler("assertEq(bytes[],bytes[])"),
+        0xF413F0B6: mk_assert_handler("assertEq(bytes[],bytes[],string)"),
+        0x88B44C85: mk_assert_handler("assertEq(uint256,uint256,string)"),
+        0xFE74F05B: mk_assert_handler("assertEq(int256,int256)"),
+        0x714A2F13: mk_assert_handler("assertEq(int256,int256,string)"),
+        0x515361F6: mk_assert_handler("assertEq(address,address)"),
+        0x2F2769D1: mk_assert_handler("assertEq(address,address,string)"),
+        0x7C84C69B: mk_assert_handler("assertEq(bytes32,bytes32)"),
+        0xC1FA1ED0: mk_assert_handler("assertEq(bytes32,bytes32,string)"),
+        0xA5982885: mk_assert_handler("assertFalse(bool)"),
+        0x7BA04809: mk_assert_handler("assertFalse(bool,string)"),
+        0x1DCD1F68: mk_assert_handler("assertNotEq(bytes[],bytes[],string)"),
+        0x236E4D66: mk_assert_handler("assertNotEq(bool,bool)"),
+        0xF4C004E3: mk_assert_handler("assertNotEq(int256,int256)"),
+        0x8BFF9133: mk_assert_handler(
+            "assertGeDecimal(uint256,uint256,uint256,string)"
+        ),
+        0xAA5CF788: mk_assert_handler("assertLeDecimal(int256,int256,uint256,string)"),
+        0x33949F0B: mk_assert_handler(
+            "assertNotEqDecimal(int256,int256,uint256,string)"
+        ),
+        0x3D1FE08A: mk_assert_handler("assertGeDecimal(uint256,uint256,uint256)"),
+        0x286FAFEA: mk_assert_handler("assertNotEq(bool[],bool[])"),
+        0x4DFE692C: mk_assert_handler("assertLe(int256,int256,string)"),
+        0xA8D4D1D9: mk_assert_handler("assertGe(uint256,uint256)"),
+        0x65D5C135: mk_assert_handler("assertLt(uint256,uint256,string)"),
+        0x6A8237B3: mk_assert_handler("assertNotEq(string,string)"),
+        0x78BDCEA7: mk_assert_handler("assertNotEq(string,string,string)"),
+        0xE25242C0: mk_assert_handler("assertGe(uint256,uint256,string)"),
+        0x9FF531E3: mk_assert_handler("assertLt(int256,int256,string)"),
+        0xD9A3C4D2: mk_assert_handler("assertGt(uint256,uint256,string)"),
+        0x64949A8D: mk_assert_handler(
+            "assertGtDecimal(uint256,uint256,uint256,string)"
+        ),
+        0x5A362D45: mk_assert_handler("assertGt(int256,int256)"),
+        0xC304AAB7: mk_assert_handler("assertLeDecimal(uint256,uint256,uint256)"),
+        0x78611F0E: mk_assert_handler("assertGtDecimal(int256,int256,uint256)"),
+        0x0C9FD581: mk_assert_handler("assertTrue(bool)"),
+        0xA84328DD: mk_assert_handler("assertGe(int256,int256,string)"),
+        0xDB07FCD2: mk_assert_handler("assertGt(uint256,uint256)"),
+        0x14E75680: mk_assert_handler("assertNotEqDecimal(int256,int256,uint256)"),
+        0xB873634C: mk_assert_handler("assertNotEq(bytes32[],bytes32[],string)"),
+        0x04A5C7AB: mk_assert_handler("assertGtDecimal(int256,int256,uint256,string)"),
+        0xEDECD035: mk_assert_handler("assertNotEq(bytes[],bytes[])"),
+        0xD3977322: mk_assert_handler("assertNotEq(int256[],int256[],string)"),
+        0x46D0B252: mk_assert_handler("assertNotEq(address[],address[])"),
+        0xECCDA437: mk_assert_handler("assertGtDecimal(uint256,uint256,uint256)"),
+        0x5DF93C9B: mk_assert_handler("assertGeDecimal(int256,int256,uint256,string)"),
+        0xBDFACBE8: mk_assert_handler("assertNotEq(string[],string[])"),
+        0x72C7E0B5: mk_assert_handler("assertNotEq(address[],address[],string)"),
+        0xA34EDC03: mk_assert_handler("assertTrue(bool,string)"),
+        0xDC28C0F1: mk_assert_handler("assertGeDecimal(int256,int256,uint256)"),
+        0xA972D037: mk_assert_handler(
+            "assertLtDecimal(uint256,uint256,uint256,string)"
+        ),
+        0xF5A55558: mk_assert_handler(
+            "assertNotEqDecimal(uint256,uint256,uint256,string)"
+        ),
+        0xB7909320: mk_assert_handler("assertNotEq(uint256,uint256)"),
+        0xB2332F51: mk_assert_handler("assertNotEq(bytes32,bytes32,string)"),
+        0xD17D4B0D: mk_assert_handler("assertLe(uint256,uint256,string)"),
+        0x9507540E: mk_assert_handler("assertNotEq(bytes,bytes,string)"),
+        0x898E83FC: mk_assert_handler("assertNotEq(bytes32,bytes32)"),
+        0x0A30B771: mk_assert_handler("assertGe(int256,int256)"),
+        0xB12E1694: mk_assert_handler("assertNotEq(address,address)"),
+        0xB67187F3: mk_assert_handler("assertNotEq(string[],string[],string)"),
+        0x8466F415: mk_assert_handler("assertLe(uint256,uint256)"),
+        0xF8D33B9B: mk_assert_handler("assertGt(int256,int256,string)"),
+        0x62C6F9FB: mk_assert_handler("assertNotEq(bool[],bool[],string)"),
+        0x3CF78E28: mk_assert_handler("assertNotEq(bytes,bytes)"),
+        0x2077337E: mk_assert_handler("assertLtDecimal(uint256,uint256,uint256)"),
+        0x1091A261: mk_assert_handler("assertNotEq(bool,bool,string)"),
+        0x3E914080: mk_assert_handler("assertLt(int256,int256)"),
+        0x98F9BDBD: mk_assert_handler("assertNotEq(uint256,uint256,string)"),
+        0x9A7FBD8F: mk_assert_handler("assertNotEq(uint256[],uint256[],string)"),
+        0x8775A591: mk_assert_handler("assertNotEq(address,address,string)"),
+        0x4724C5B9: mk_assert_handler("assertNotEq(int256,int256,string)"),
+        0x7FEFBBE0: mk_assert_handler(
+            "assertLeDecimal(uint256,uint256,uint256,string)"
+        ),
+        0xDBE8D88B: mk_assert_handler("assertLtDecimal(int256,int256,uint256)"),
+        0x0B72F4EF: mk_assert_handler("assertNotEq(int256[],int256[])"),
+        0x11D1364A: mk_assert_handler("assertLeDecimal(int256,int256,uint256)"),
+        0x0603EA68: mk_assert_handler("assertNotEq(bytes32[],bytes32[])"),
+        0xB12FC005: mk_assert_handler("assertLt(uint256,uint256)"),
+        0x669EFCA7: mk_assert_handler("assertNotEqDecimal(uint256,uint256,uint256)"),
+        0x95FD154E: mk_assert_handler("assertLe(int256,int256)"),
+        0x56F29CBA: mk_assert_handler("assertNotEq(uint256[],uint256[])"),
+        0x40F0B4E0: mk_assert_handler("assertLtDecimal(int256,int256,uint256,string)"),
     }
 
     @staticmethod
