@@ -64,7 +64,12 @@ BitVecSort512 = BitVecSorts[512]
 
 # ecrecover(digest, v, r, s)
 f_ecrecover = Function(
-    "ecrecover", BitVecSort256, BitVecSort8, BitVecSort256, BitVecSort256, BitVecSort160
+    "f_ecrecover",
+    BitVecSort256,
+    BitVecSort8,
+    BitVecSort256,
+    BitVecSort256,
+    BitVecSort160,
 )
 
 
