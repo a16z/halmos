@@ -1,1 +1,4 @@
 multicaller/=../../tests/lib/multicaller/src/
+openzeppelin/=../../tests/lib/openzeppelin-contracts/contracts/
+ds-test/=../../tests/lib/forge-std/lib/ds-test/src/
+forge-std/=../../tests/lib/forge-std/src/
