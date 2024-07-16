@@ -58,6 +58,14 @@ class Mapper(metaclass=SingletonMeta):
     def get_contract_mapping_info_by_bytecode(
         self, bytecode: str
     ) -> Optional[ContractMappingInfo]:
+        # TODO: Handle cases for contracts with immutable variables
+        # Current implementation might not work correctly if the following code is added the test solidity file
+        #
+        # address immutable public owner;
+        # constructor() {
+        #     owner = msg.sender;
+        # }
+
         for contract_mapping_info in self._contracts.values():
             if contract_mapping_info.bytecode.endswith(bytecode):
                 return contract_mapping_info
