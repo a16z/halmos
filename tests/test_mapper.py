@@ -63,7 +63,7 @@ def test_get_contract_mapping_info_by_name_nonexistent(mapper):
 
 def test_get_contract_mapping_info_by_bytecode(mapper, ast_nodes):
     mapper.add_contract_mapping_info("ContractA", "bytecodeA", ast_nodes)
-    contract_info = mapper.get_contarct_mapping_info_by_bytecode("bytecodeA")
+    contract_info = mapper.get_contract_mapping_info_by_bytecode("bytecodeA")
     assert contract_info is not None
     assert contract_info.bytecode == "bytecodeA"
 
