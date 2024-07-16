@@ -21,6 +21,22 @@ contract DeepFailer is Test {
     }
 }
 
+contract EarlyFailTest is Test {
+    function do_fail() external {
+        fail();
+    }
+
+    function check_early_fail_cheatcode(uint x) public {
+        address(this).call(abi.encodeWithSelector(this.do_fail.selector, ""));
+
+        // this shouldn't be reached due to the early fail() semantics.
+        // if this assertion is executed, two counterexamples will be generated:
+        // - counterexample caused by fail(): x > 0
+        // - counterexample caused by assert(x > 0): x == 0
+        assert(x > 0);
+    }
+}
+
 contract FoundryTest is Test {
     /* TODO: support checkFail prefix
     function checkFail() public {

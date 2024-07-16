@@ -777,6 +777,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Foundry.t.sol:EarlyFailTest": [
+            {
+                "name": "check_early_fail_cheatcode(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Foundry.t.sol:FoundryTest": [
             {
                 "name": "check_assume(uint256)",
