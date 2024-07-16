@@ -766,6 +766,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Foundry.t.sol:DeepFailer": [
+            {
+                "name": "check_fail_cheatcode()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Foundry.t.sol:FoundryTest": [
             {
                 "name": "check_assume(uint256)",

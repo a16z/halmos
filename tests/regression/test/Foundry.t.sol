@@ -16,7 +16,7 @@ contract DeepFailer is Test {
         }
     }
 
-    function test_fail_cheatcode() public {
+    function check_fail_cheatcode() public {
         DeepFailer(address(this)).do_test(0);
     }
 }
