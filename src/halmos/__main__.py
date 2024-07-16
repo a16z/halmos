@@ -284,6 +284,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
     message = context.message
     addr = unbox_int(message.target)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
+    # check if we have a contract name for this address in our deployment mapper
     addr_str = DeployAddressMapper().get_deployed_contract(addr_str)
 
     value = unbox_int(message.value)
