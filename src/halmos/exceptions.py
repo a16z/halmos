@@ -20,6 +20,22 @@ class NotConcreteError(HalmosException):
     pass
 
 
+class HalmosTargetReached(Exception):
+    """
+    A separate exception that signals the search target has been reached, such as assertion violations.
+    """
+
+    pass
+
+
+class FailCheatcode(HalmosTargetReached):
+    """
+    Raised when invoking hevm's vm.fail() cheatcode
+    """
+
+    pass
+
+
 class EvmException(Exception):
     """
     Base class for all EVM exceptions.
@@ -131,14 +147,6 @@ class InvalidParameter(ExceptionalHalt):
 class InvalidContractPrefix(ExceptionalHalt):
     """
     Raised when the new contract code starts with 0xEF.
-    """
-
-    pass
-
-
-class FailCheatcode(ExceptionalHalt):
-    """
-    Raised when invoking hevm's vm.fail() cheatcode
     """
 
     pass

@@ -2128,9 +2128,6 @@ class SEVM:
             if ex.callback is None:
                 yield ex
 
-            elif isinstance(ex.context.output.error, FailCheatcode):
-                yield ex
-
             # otherwise, execute the callback to return to the parent execution context
             # note: `yield from` is used as the callback may yield the current execution state that got stuck
             else:
@@ -2545,6 +2542,12 @@ class SEVM:
 
                 ex.halt(data=None, error=err)
                 yield from finalize(ex)
+                continue
+
+            except HalmosTargetReached as err:
+                # return data shouldn't be None, as it is considered being stuck
+                ex.halt(data=ByteVec(), error=err)
+                yield ex  # early exit; do not call finalize()
                 continue
 
     def mk_exec(
