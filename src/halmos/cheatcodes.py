@@ -585,5 +585,5 @@ class hevm_cheat_code:
 
         else:
             # TODO: support other cheat codes
-            msg = f"Unsupported cheat code: calldata = {hexify(arg)} {funsig}"
+            msg = f"Unsupported cheat code: calldata = {hexify(arg)}"
             raise HalmosException(msg)
