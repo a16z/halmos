@@ -55,7 +55,7 @@ class Mapper(metaclass=SingletonMeta):
     ) -> Optional[ContractMappingInfo]:
         return self._contracts.get(contract_name, None)
 
-    def get_contarct_mapping_info_by_bytecode(
+    def get_contract_mapping_info_by_bytecode(
         self, bytecode: str
     ) -> Optional[ContractMappingInfo]:
         for contract_mapping_info in self._contracts.values():
