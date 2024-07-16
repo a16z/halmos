@@ -9,7 +9,7 @@ from typing import List, Dict, Set, Tuple, Any
 from z3 import *
 
 from .bytevec import ByteVec
-from .exceptions import FailCheatcode, HalmosException
+from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
 from .utils import *
 
 
@@ -455,9 +455,12 @@ class hevm_cheat_code:
     @staticmethod
     def assume_bool(sevm, ex, ret, arg):
         # vm.assume(bool)
-        assume_cond = simplify(is_non_zero(arg.get_word(4)))
-        ex.path.append(assume_cond)
-        return ret
+        if funsig == hevm_cheat_code.assume_sig:
+            assume_cond = simplify(is_non_zero(arg.get_word(4)))
+            if is_false(assume_cond):
+                raise InfeasiblePath("vm.assume(false)")
+            ex.path.append(assume_cond)
+            return ret
 
     @staticmethod
     def getCode_string(sevm, ex, ret, arg):

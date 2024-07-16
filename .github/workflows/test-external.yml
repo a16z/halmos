@@ -3,39 +3,53 @@ name: Test external projects
 on:
   push:
     branches: [main]
-# pull_request:
-#   branches: [main]
   workflow_dispatch:
+    inputs:
+      halmos-options:
+        description: "additional halmos options"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: ghcr.io/emperororokusaki/solvers:0.1.0
 
     strategy:
       fail-fast: false
       matrix:
-        include:
+        cache-solver: ["", "--cache-solver"]
+        project:
           - repo: "morpho-org/morpho-data-structures"
             dir: "morpho-data-structures"
             cmd: "halmos --function testProve --loop 4 --symbolic-storage"
             branch: ""
+            profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
             cmd: "halmos --contract LibUint1024Test --function testProve --loop 256"
             branch: ""
+            profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
             cmd: "halmos --contract LibPrimeTest --function testProve --loop 256"
             branch: ""
+            profile: ""
           - repo: "farcasterxyz/contracts"
             dir: "farcaster-contracts"
             cmd: "halmos"
             branch: ""
+            profile: ""
           - repo: "zobront/halmos-solady"
             dir: "halmos-solady"
             cmd: "halmos --function testCheck"
             branch: ""
+            profile: ""
+          - repo: "pcaversaccio/snekmate"
+            dir: "snekmate"
+            cmd: "halmos --config test/halmos.toml"
+            branch: ""
+            profile: "halmos"
 
     steps:
       - name: Checkout
@@ -48,11 +62,40 @@ jobs:
       - name: Checkout external repo
         uses: actions/checkout@v4
         with:
-          repository: ${{ matrix.repo }}
-          path: ${{ matrix.dir }}
-          ref: ${{ matrix.branch }}
+          repository: ${{ matrix.project.repo }}
+          path: ${{ matrix.project.dir }}
+          ref: ${{ matrix.project.branch }}
           submodules: recursive
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip
+
+      - name: Install Halmos
+        run: python -m pip install -e ./halmos
+
+      - name: Install Vyper
+        if: ${{ matrix.project.dir == 'snekmate' }}
+        run: python -m pip install vyper
+
+      - name: Install Yices 2 SMT solver
+        run: |
+          wget https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4/yices-2.6.4-x86_64-pc-linux-gnu.tar.gz
+          tar -xzvf yices-2.6.4-x86_64-pc-linux-gnu.tar.gz
+          sudo mv yices-2.6.4/bin/* /usr/local/bin/
+          sudo mv yices-2.6.4/lib/* /usr/local/lib/
+          sudo mv yices-2.6.4/include/* /usr/local/include/
+          rm -rf yices-2.6.4
+
       - name: Test external repo
-        run: ${{ matrix.cmd }} --statistics --debug --solver-timeout-assertion 0 --solver-threads 4 --solver-command=yices-smt2
-        working-directory: ${{ matrix.dir }}
+        run: ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
+        working-directory: ${{ matrix.project.dir }}
+        env:
+          FOUNDRY_PROFILE: ${{ matrix.project.profile }}
