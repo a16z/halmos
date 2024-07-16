@@ -303,7 +303,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
                 bytecode = context.output.data.unwrap().hex()
                 contract_name = (
                     Mapper()
-                    .get_contarct_mapping_info_by_bytecode(bytecode)
+                    .get_contract_mapping_info_by_bytecode(bytecode)
                     .contract_name
                 )
 
