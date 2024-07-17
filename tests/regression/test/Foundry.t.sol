@@ -27,6 +27,8 @@ contract EarlyFailTest is Test {
     }
 
     function check_early_fail_cheatcode(uint x) public {
+        // we want `fail()` to happen in a nested context,
+        // to test that it ends not just the current context but the whole run
         address(this).call(abi.encodeWithSelector(this.do_fail.selector, ""));
 
         // this shouldn't be reached due to the early fail() semantics.
