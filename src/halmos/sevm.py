@@ -2551,6 +2551,12 @@ class SEVM:
                 yield from finalize(ex)
                 continue
 
+            except FailCheatcode as err:
+                # return data shouldn't be None, as it is considered being stuck
+                ex.halt(data=ByteVec(), error=err)
+                yield ex  # early exit; do not call finalize()
+                continue
+
     def mk_exec(
         self,
         #

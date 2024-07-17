@@ -9,7 +9,6 @@ import sys
 import time
 import traceback
 import uuid
-
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -18,13 +17,9 @@ from importlib import metadata
 
 from .bytevec import ByteVec
 from .calldata import Calldata
-from .config import (
-    arg_parser,
-    default_config,
-    resolve_config_files,
-    toml_parser,
-    Config as HalmosConfig,
-)
+from .config import Config as HalmosConfig
+from .config import arg_parser, default_config, resolve_config_files, toml_parser
+from .mapper import DeployAddressMapper, Mapper
 from .sevm import *
 from .utils import (
     NamedTimer,
@@ -281,18 +276,16 @@ def rendered_trace(context: CallContext) -> str:
         return output.getvalue()
 
 
-def rendered_calldata(calldata: ByteVec) -> str:
-    return hexify(calldata.unwrap()) if calldata else "0x"
+def rendered_calldata(calldata: ByteVec, contract_name: str = None) -> str:
+    return hexify(calldata.unwrap(), contract_name) if calldata else "0x"
 
 
 def render_trace(context: CallContext, file=sys.stdout) -> None:
-    # TODO: label for known addresses
-    # TODO: decode calldata
-    # TODO: decode logs
-
     message = context.message
     addr = unbox_int(message.target)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
+    # check if we have a contract name for this address in our deployment mapper
+    addr_str = DeployAddressMapper().get_deployed_contract(addr_str)
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
@@ -303,13 +296,29 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
     if message.is_create():
         # TODO: select verbosity level to render full initcode
         # initcode_str = rendered_initcode(context)
+
+        try:
+            if context.output.error is None:
+                target = hex(int(str(message.target)))
+                bytecode = context.output.data.unwrap().hex()
+                contract_name = (
+                    Mapper()
+                    .get_contract_mapping_info_by_bytecode(bytecode)
+                    .contract_name
+                )
+
+                DeployAddressMapper().add_deployed_contract(target, contract_name)
+                addr_str = contract_name
+        except:
+            pass
+
         initcode_str = f"<{byte_length(message.data)} bytes of initcode>"
         print(
             f"{indent}{call_scheme_str}{addr_str}::{initcode_str}{value_str}", file=file
         )
 
     else:
-        calldata = rendered_calldata(message.data)
+        calldata = rendered_calldata(message.data, addr_str)
         call_str = f"{addr_str}::{calldata}"
         static_str = yellow(" [static]") if message.is_static else ""
         print(f"{indent}{call_scheme_str}{call_str}{static_str}{value_str}", file=file)
@@ -1349,6 +1358,29 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                         sol_dirname,
                     )
                 contract_map[contract_name] = (json_out, contract_type, natspec)
+
+                try:
+                    bytecode = contract_map[contract_name][0]["bytecode"]["object"]
+                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
+                        contract_name
+                    )
+
+                    if contract_mapping_info is None:
+                        Mapper().add_contract_mapping_info(
+                            contract_name=contract_name,
+                            bytecode=bytecode,
+                            nodes=[],
+                        )
+                    else:
+                        contract_mapping_info.bytecode = bytecode
+
+                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
+                        contract_name
+                    )
+                    Mapper().parse_ast(contract_map[contract_name][0]["ast"])
+
+                except Exception:
+                    pass
             except Exception as err:
                 warn_code(
                     PARSING_ERROR,
@@ -1571,6 +1603,9 @@ def _main(_args=None) -> MainResult:
 
         contract_path = f"{contract_json['ast']['absolutePath']}:{contract_name}"
         print(f"\nRunning {num_found} tests for {contract_path}")
+
+        # Set 0xaaaa0001 in DeployAddressMapper
+        DeployAddressMapper().add_deployed_contract("0xaaaa0001", contract_name)
 
         # support for `/// @custom:halmos` annotations
         contract_args = with_natspec(args, contract_name, natspec)
