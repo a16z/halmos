@@ -7,7 +7,7 @@ class AstNode:
     node_type: str
     id: int
     name: str
-    address: str
+    address: str  # TODO: rename it to `selector` or `signature` to better reflect the meaning
     visibility: str
 
 
@@ -29,6 +29,10 @@ class SingletonMeta(type):
 
 
 class Mapper(metaclass=SingletonMeta):
+    """
+    Mapping from a contract name to its runtime bytecode and the signatures of functions/events/errors declared in the contract
+    """
+
     _PARSING_IGNORED_NODE_TYPES = [
         "StructDefinition",
         "EnumDefinition",
@@ -67,6 +71,7 @@ class Mapper(metaclass=SingletonMeta):
         # }
 
         for contract_mapping_info in self._contracts.values():
+            # TODO: use regex instaed of `endswith` to better handle immutables or constructors with arguments
             if contract_mapping_info.bytecode.endswith(bytecode):
                 return contract_mapping_info
 
@@ -136,6 +141,7 @@ class Mapper(metaclass=SingletonMeta):
         )
 
     def find_nodes_by_address(self, address: str, contract_name: str = None):
+        # if the given signature is declared in the given contract, return its name.
         if contract_name:
             contract_mapping_info = self.get_contract_mapping_info_by_name(
                 contract_name
@@ -146,6 +152,8 @@ class Mapper(metaclass=SingletonMeta):
                     if node.address == address:
                         return node.name
 
+        # otherwise, search for the signature in other contracts, and return all the contracts that declare it.
+        # note: ambiguity may occur if multiple compilation units exist.
         result = ""
         for key, contract_info in self._contracts.items():
             matching_nodes = [
@@ -158,7 +166,12 @@ class Mapper(metaclass=SingletonMeta):
         return result.strip() if result != "" and address != "0x" else address
 
 
+# TODO: create a new instance or reset for each test
 class DeployAddressMapper(metaclass=SingletonMeta):
+    """
+    Mapping from deployed addresses to contract names
+    """
+
     def __init__(self):
         self._deployed_contracts: Dict[str, str] = {}
 
