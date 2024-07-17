@@ -20,6 +20,14 @@ jobs:
         - testname: "tests/ffi"
 
     steps:
+      # TODO: remove this step once halmos-builder package is public
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/checkout@v4
         with:
           submodules: recursive
