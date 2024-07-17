@@ -2544,7 +2544,7 @@ class SEVM:
                 yield from finalize(ex)
                 continue
 
-            except HalmosTargetReached as err:
+            except FailCheatcode as err:
                 # return data shouldn't be None, as it is considered being stuck
                 ex.halt(data=ByteVec(), error=err)
                 yield ex  # early exit; do not call finalize()
