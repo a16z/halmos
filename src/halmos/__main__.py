@@ -9,7 +9,6 @@ import sys
 import time
 import traceback
 import uuid
-
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import asdict, dataclass
@@ -18,13 +17,9 @@ from importlib import metadata
 
 from .bytevec import ByteVec
 from .calldata import Calldata
-from .config import (
-    arg_parser,
-    default_config,
-    resolve_config_files,
-    toml_parser,
-    Config as HalmosConfig,
-)
+from .config import Config as HalmosConfig
+from .config import arg_parser, default_config, resolve_config_files, toml_parser
+from .mapper import DeployAddressMapper, Mapper
 from .sevm import *
 from .utils import (
     NamedTimer,
@@ -281,18 +276,16 @@ def rendered_trace(context: CallContext) -> str:
         return output.getvalue()
 
 
-def rendered_calldata(calldata: ByteVec) -> str:
-    return hexify(calldata.unwrap()) if calldata else "0x"
+def rendered_calldata(calldata: ByteVec, contract_name: str = None) -> str:
+    return hexify(calldata.unwrap(), contract_name) if calldata else "0x"
 
 
 def render_trace(context: CallContext, file=sys.stdout) -> None:
-    # TODO: label for known addresses
-    # TODO: decode calldata
-    # TODO: decode logs
-
     message = context.message
     addr = unbox_int(message.target)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
+    # check if we have a contract name for this address in our deployment mapper
+    addr_str = DeployAddressMapper().get_deployed_contract(addr_str)
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
@@ -303,13 +296,29 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
     if message.is_create():
         # TODO: select verbosity level to render full initcode
         # initcode_str = rendered_initcode(context)
+
+        try:
+            if context.output.error is None:
+                target = hex(int(str(message.target)))
+                bytecode = context.output.data.unwrap().hex()
+                contract_name = (
+                    Mapper()
+                    .get_contract_mapping_info_by_bytecode(bytecode)
+                    .contract_name
+                )
+
+                DeployAddressMapper().add_deployed_contract(target, contract_name)
+                addr_str = contract_name
+        except:
+            pass
+
         initcode_str = f"<{byte_length(message.data)} bytes of initcode>"
         print(
             f"{indent}{call_scheme_str}{addr_str}::{initcode_str}{value_str}", file=file
         )
 
     else:
-        calldata = rendered_calldata(message.data)
+        calldata = rendered_calldata(message.data, addr_str)
         call_str = f"{addr_str}::{calldata}"
         static_str = yellow(" [static]") if message.is_static else ""
         print(f"{indent}{call_scheme_str}{call_str}{static_str}{value_str}", file=file)
@@ -376,7 +385,7 @@ def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
             print(f"Return data: {returndata}")
             dump_dirname = f"/tmp/halmos-{uuid.uuid4().hex}"
             model_with_context = gen_model_from_sexpr(
-                GenModelArgs(args, idx, ex.path.solver.to_smt2(), dump_dirname)
+                GenModelArgs(args, idx, ex.path.to_smt2(args), {}, dump_dirname)
             )
             print(f"Input example: {model_with_context.model}")
 
@@ -510,7 +519,7 @@ def setup(
             error = setup_ex.context.output.error
 
             if error is None:
-                setup_exs_no_error.append((setup_ex, setup_ex.path.solver.to_smt2()))
+                setup_exs_no_error.append((setup_ex, setup_ex.path.to_smt2(args)))
 
             else:
                 if opcode not in [EVM.REVERT, EVM.INVALID]:
@@ -531,7 +540,7 @@ def setup(
 
         if len(setup_exs_no_error) > 1:
             for setup_ex, query in setup_exs_no_error:
-                res, _ = solve(query, args)
+                res, _, _ = solve(query, args)
                 if res != unsat:
                     setup_exs.append(setup_ex)
                     if len(setup_exs) > 1:
@@ -584,6 +593,7 @@ class ModelWithContext:
     is_valid: Optional[bool]
     index: int
     result: CheckSatResult
+    unsat_core: Optional[List]
 
 
 @dataclass(frozen=True)
@@ -695,6 +705,7 @@ def run(
     result_exs = []
     future_models = []
     counterexamples = []
+    unsat_cores = []
     traces = {}
 
     def future_callback(future_model):
@@ -703,6 +714,8 @@ def run(
 
         model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
         if result == unsat:
+            if m.unsat_core:
+                unsat_cores.append(m.unsat_core)
             return
 
         # model could be an empty dict here
@@ -736,7 +749,7 @@ def run(
 
         if args.verbose >= VERBOSITY_TRACE_PATHS:
             print(f"Path #{idx+1}:")
-            print(indent_text(str(ex.path)))
+            print(indent_text(hexify(ex.path)))
 
             print("\nTrace:")
             render_trace(ex.context)
@@ -753,10 +766,11 @@ def run(
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 traces[idx] = rendered_trace(ex.context)
 
-            query = ex.path.solver.to_smt2()
+            query = ex.path.to_smt2(args)
 
             future_model = thread_pool.submit(
-                gen_model_from_sexpr, GenModelArgs(args, idx, query, dump_dirname)
+                gen_model_from_sexpr,
+                GenModelArgs(args, idx, query, unsat_cores, dump_dirname),
             )
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
@@ -764,7 +778,7 @@ def run(
         elif ex.context.is_stuck():
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
             if args.print_blocked_states:
-                traces[idx] = rendered_trace(ex.context)
+                traces[idx] = f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
 
         elif not error:
             normal += 1
@@ -1035,7 +1049,8 @@ def run_sequential(run_args: RunArgs) -> List[TestResult]:
 class GenModelArgs:
     args: HalmosConfig
     idx: int
-    sexpr: str
+    sexpr: SMTQuery
+    known_unsat_cores: List[List]
     dump_dirname: Optional[str] = None
 
 
@@ -1043,19 +1058,53 @@ def copy_model(model: Model) -> Dict:
     return {decl: model[decl] for decl in model}
 
 
+def parse_unsat_core(output) -> Optional[List]:
+    # parsing example:
+    #   unsat
+    #   (error "the context is unsatisfiable")
+    #   (<41702> <37030> <36248> <47880>)
+    # result:
+    #   [41702, 37030, 36248, 47880]
+    match = re.search(r"unsat\s*\(\s*error\s+[^)]*\)\s*\(\s*((<[0-9]+>\s*)*)\)", output)
+    if match:
+        result = [re.sub(r"<([0-9]+)>", r"\1", name) for name in match.group(1).split()]
+        return result
+    else:
+        warn(f"error in parsing unsat core: {output}")
+        return None
+
+
 def solve(
-    query: str, args: HalmosConfig, dump_filename: Optional[str] = None
-) -> Tuple[CheckSatResult, Model]:
+    query: SMTQuery, args: HalmosConfig, dump_filename: Optional[str] = None
+) -> Tuple[CheckSatResult, Model, Optional[List]]:
     if args.dump_smt_queries or args.solver_command:
         if not dump_filename:
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
 
+        # for each implication assertion, `(assert (=> |id| c))`, in query.smtlib,
+        # generate a corresponding named assertion, `(assert (! |id| :named <id>))`.
+        # see `svem.Path.to_smt2()` for more details.
+        if args.cache_solver:
+            named_assertions = "".join(
+                [
+                    f"(assert (! |{assert_id}| :named <{assert_id}>))\n"
+                    for assert_id in query.assertions
+                ]
+            )
+
         with open(dump_filename, "w") as f:
             if args.verbose >= 1:
                 print(f"Writing SMT query to {dump_filename}")
+            if args.cache_solver:
+                f.write("(set-option :produce-unsat-cores true)\n")
             f.write("(set-logic QF_AUFBV)\n")
-            f.write(query)
+            f.write(query.smtlib)
+            if args.cache_solver:
+                f.write(named_assertions)
+            f.write("(check-sat)\n")
             f.write("(get-model)\n")
+            if args.cache_solver:
+                f.write("(get-unsat-core)\n")
 
     if args.solver_command:
         if args.verbose >= 1:
@@ -1082,20 +1131,40 @@ def solve(
                 print(f"    {res_str_head}")
 
             if res_str_head == "unsat":
-                return unsat, None
+                unsat_core = parse_unsat_core(res_str) if args.cache_solver else None
+                return unsat, None, unsat_core
             elif res_str_head == "sat":
-                return sat, f"{dump_filename}.out"
+                return sat, f"{dump_filename}.out", None
             else:
-                return unknown, None
+                return unknown, None, None
         except subprocess.TimeoutExpired:
-            return unknown, None
+            return unknown, None, None
 
     else:
-        solver = mk_solver(args, ctx=Context(), assertion=True)
-        solver.from_string(query)
-        result = solver.check()
+        ctx = Context()
+        solver = mk_solver(args, ctx=ctx, assertion=True)
+        solver.from_string(query.smtlib)
+        if args.cache_solver:
+            solver.set(unsat_core=True)
+            ids = [Bool(f"{x}", ctx) for x in query.assertions]
+            result = solver.check(*ids)
+        else:
+            result = solver.check()
         model = copy_model(solver.model()) if result == sat else None
-        return result, model
+        unsat_core = (
+            [str(core) for core in solver.unsat_core()]
+            if args.cache_solver and result == unsat
+            else None
+        )
+        return result, model, unsat_core
+
+
+def check_unsat_cores(query, unsat_cores) -> bool:
+    # return true if the given query contains any given unsat core
+    for unsat_core in unsat_cores:
+        if all(core in query.assertions for core in unsat_core):
+            return True
+    return False
 
 
 def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
@@ -1111,46 +1180,55 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
     if args.verbose >= 1:
         print(f"Checking path condition (path id: {idx+1})")
 
-    res, model = solve(sexpr, args, dump_filename)
+    if check_unsat_cores(sexpr, fn_args.known_unsat_cores):
+        # if the given query contains an unsat-core, it is unsat; no need to run the solver.
+        if args.verbose >= 1:
+            print("  Already proven unsat")
+        return package_result(None, idx, unsat, None, args)
+
+    res, model, unsat_core = solve(sexpr, args, dump_filename)
 
     if res == sat and not is_model_valid(model):
         if args.verbose >= 1:
             print(f"  Checking again with refinement")
 
         refined_filename = dump_filename.replace(".smt2", ".refined.smt2")
-        res, model = solve(refine(sexpr), args, refined_filename)
+        res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
 
-    return package_result(model, idx, res, args)
+    return package_result(model, idx, res, unsat_core, args)
 
 
 def is_unknown(result: CheckSatResult, model: Model) -> bool:
     return result == unknown or (result == sat and not is_model_valid(model))
 
 
-def refine(query: str) -> str:
+def refine(query: SMTQuery) -> SMTQuery:
+    smtlib = query.smtlib
     # replace uninterpreted abstraction with actual symbols for assertion solving
-    # TODO: replace `(evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
-    #       as bvudiv is undefined when y = 0; also similarly for evm_bvurem
-    query = re.sub(r"(\(\s*)evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", query)
+    # TODO: replace `(f_evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
+    #       as bvudiv is undefined when y = 0; also similarly for f_evm_bvurem
+    smtlib = re.sub(r"(\(\s*)f_evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", smtlib)
     # remove the uninterpreted function symbols
     # TODO: this will be no longer needed once is_model_valid is properly implemented
-    return re.sub(
-        r"\(\s*declare-fun\s+evm_(bv[a-z]+)(_[0-9]+)?\b",
+    smtlib = re.sub(
+        r"\(\s*declare-fun\s+f_evm_(bv[a-z]+)(_[0-9]+)?\b",
         r"(declare-fun dummy_\1\2",
-        query,
+        smtlib,
     )
+    return SMTQuery(smtlib, query.assertions)
 
 
 def package_result(
     model: Optional[UnionType[Model, str]],
     idx: int,
     result: CheckSatResult,
+    unsat_core: Optional[List],
     args: HalmosConfig,
 ) -> ModelWithContext:
     if result == unsat:
         if args.verbose >= 1:
             print(f"  Invalid path; ignored (path id: {idx+1})")
-        return ModelWithContext(None, None, idx, result)
+        return ModelWithContext(None, None, idx, result, unsat_core)
 
     if result == sat:
         if args.verbose >= 1:
@@ -1166,30 +1244,30 @@ def package_result(
                 is_valid = is_model_valid(model)
                 model = to_str_model(model, args.print_full_model)
 
-        return ModelWithContext(model, is_valid, idx, result)
+        return ModelWithContext(model, is_valid, idx, result, None)
 
     else:
         if args.verbose >= 1:
             print(f"  Timeout (path id: {idx+1})")
-        return ModelWithContext(None, None, idx, result)
+        return ModelWithContext(None, None, idx, result, None)
 
 
 def is_model_valid(model: AnyModel) -> bool:
-    # TODO: evaluate the path condition against the given model after excluding evm_* symbols,
-    #       since the evm_* symbols may still appear in valid models.
+    # TODO: evaluate the path condition against the given model after excluding f_evm_* symbols,
+    #       since the f_evm_* symbols may still appear in valid models.
 
     # model is a filename, containing solver output
     if isinstance(model, str):
         with open(model, "r") as f:
             for line in f:
-                if "evm_" in line:
+                if "f_evm_" in line:
                     return False
         return True
 
     # z3 model object
     else:
         for decl in model:
-            if str(decl).startswith("evm_"):
+            if str(decl).startswith("f_evm_"):
                 return False
         return True
 
@@ -1279,6 +1357,29 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                         sol_dirname,
                     )
                 contract_map[contract_name] = (json_out, contract_type, natspec)
+
+                try:
+                    bytecode = contract_map[contract_name][0]["bytecode"]["object"]
+                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
+                        contract_name
+                    )
+
+                    if contract_mapping_info is None:
+                        Mapper().add_contract_mapping_info(
+                            contract_name=contract_name,
+                            bytecode=bytecode,
+                            nodes=[],
+                        )
+                    else:
+                        contract_mapping_info.bytecode = bytecode
+
+                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
+                        contract_name
+                    )
+                    Mapper().parse_ast(contract_map[contract_name][0]["ast"])
+
+                except Exception:
+                    pass
             except Exception as err:
                 warn_code(
                     PARSING_ERROR,
@@ -1501,6 +1602,9 @@ def _main(_args=None) -> MainResult:
 
         contract_path = f"{contract_json['ast']['absolutePath']}:{contract_name}"
         print(f"\nRunning {num_found} tests for {contract_path}")
+
+        # Set 0xaaaa0001 in DeployAddressMapper
+        DeployAddressMapper().add_deployed_contract("0xaaaa0001", contract_name)
 
         # support for `/// @custom:halmos` annotations
         contract_args = with_natspec(args, contract_name, natspec)

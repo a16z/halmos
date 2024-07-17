@@ -6,6 +6,12 @@ on:
     paths:
       - .github/workflows/test-long.yml
   workflow_dispatch:
+    inputs:
+      halmos-options:
+        description: "additional halmos options"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   test:
@@ -14,11 +20,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - testname: "tests/solver"
-          - testname: "examples/simple"
-          - testname: "examples/tokens/ERC20"
-          - testname: "examples/tokens/ERC721"
+        cache-solver: ["", "--cache-solver"]
+        testname:
+          - "tests/solver"
+          - "examples/simple"
+          - "examples/tokens/ERC20"
+          - "examples/tokens/ERC721"
 
     steps:
       - name: Login to GitHub Container Registry
@@ -39,4 +46,4 @@ jobs:
 
       - name: Run pytest
         run: |
-          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-v -st --solver-timeout-assertion 0 --solver-threads 6 --solver-command=yices-smt2' -s --log-cli-level=
+          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}' -s --log-cli-level=

@@ -8,11 +8,43 @@ Note: this is a modified version execution-specs' src/ethereum/<fork>/vm/excepti
 """
 
 
-class HalmosException(Exception):
+class PathEndingException(Exception):
+    """
+    Base class for any exception that should stop the current path exploration.
+
+    Stopping path exploration means stopping not only the current EVM context but also its parent contexts if any.
+    """
+
+    pass
+
+
+class HalmosException(PathEndingException):
+    """
+    Base class for unexpected internal errors happening during a test run.
+    Inherits from RunEndingException because it should stop further path exploration.
+    """
+
     pass
 
 
 class NotConcreteError(HalmosException):
+    pass
+
+
+class InfeasiblePath(PathEndingException):
+    """
+    Raise when the current path condition turns out to be infeasible.
+    """
+
+    pass
+
+
+class FailCheatcode(PathEndingException):
+    """
+    Raised when invoking DSTest's fail() pseudo-cheatcode.
+    Inherits from RunEndingException because it should stop further path exploration.
+    """
+
     pass
 
 
@@ -127,14 +159,6 @@ class InvalidParameter(ExceptionalHalt):
 class InvalidContractPrefix(ExceptionalHalt):
     """
     Raised when the new contract code starts with 0xEF.
-    """
-
-    pass
-
-
-class FailCheatcode(ExceptionalHalt):
-    """
-    Raised when invoking hevm's vm.fail() cheatcode
     """
 
     pass

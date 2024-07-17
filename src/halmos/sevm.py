@@ -31,6 +31,7 @@ from .utils import *
 from .warnings import (
     warn_code,
     LIBRARY_PLACEHOLDER,
+    INTERNAL_ERROR,
 )
 
 Steps = Dict[int, Dict[str, Any]]  # execution tree
@@ -44,32 +45,32 @@ MAX_MEMORY_SIZE = 2**20
 
 # symbolic states
 # calldataload(index)
-f_calldataload = Function("calldataload", BitVecSort256, BitVecSort256)
+f_calldataload = Function("f_calldataload", BitVecSort256, BitVecSort256)
 # calldatasize()
-f_calldatasize = Function("calldatasize", BitVecSort256)
+f_calldatasize = Function("f_calldatasize", BitVecSort256)
 # extcodesize(target address)
-f_extcodesize = Function("extcodesize", BitVecSort160, BitVecSort256)
+f_extcodesize = Function("f_extcodesize", BitVecSort160, BitVecSort256)
 # extcodehash(target address)
-f_extcodehash = Function("extcodehash", BitVecSort160, BitVecSort256)
+f_extcodehash = Function("f_extcodehash", BitVecSort160, BitVecSort256)
 # blockhash(block number)
-f_blockhash = Function("blockhash", BitVecSort256, BitVecSort256)
+f_blockhash = Function("f_blockhash", BitVecSort256, BitVecSort256)
 # gas(cnt)
-f_gas = Function("gas", BitVecSort256, BitVecSort256)
+f_gas = Function("f_gas", BitVecSort256, BitVecSort256)
 # gasprice()
-f_gasprice = Function("gasprice", BitVecSort256)
+f_gasprice = Function("f_gasprice", BitVecSort256)
 # origin()
-f_origin = Function("origin", BitVecSort160)
+f_origin = Function("f_origin", BitVecSort160)
 
 # uninterpreted arithmetic
-f_div = Function("evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
+f_div = Function("f_evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
-    256: Function("evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
-    264: Function("evm_bvurem_264", BitVecSort264, BitVecSort264, BitVecSort264),
-    512: Function("evm_bvurem_512", BitVecSort512, BitVecSort512, BitVecSort512),
+    256: Function("f_evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
+    264: Function("f_evm_bvurem_264", BitVecSort264, BitVecSort264, BitVecSort264),
+    512: Function("f_evm_bvurem_512", BitVecSort512, BitVecSort512, BitVecSort512),
 }
-f_sdiv = Function("evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
-f_smod = Function("evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
-f_exp = Function("evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
+f_sdiv = Function("f_evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
+f_smod = Function("f_evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
+f_exp = Function("f_evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
 
 magic_address: int = 0xAAAA0000
 
@@ -470,6 +471,12 @@ class CodeIterator:
             raise StopIteration
 
 
+@dataclass(frozen=True)
+class SMTQuery:
+    smtlib: str
+    assertions: List  # list of assertion ids
+
+
 class Path:
     # a Path object represents a prefix of the path currently being executed
     # initially, it's an empty path at the beginning of execution
@@ -477,27 +484,67 @@ class Path:
     solver: Solver
     num_scopes: int
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
-    # TODO: separate these two types of constraints, so that we can display only branching conditions to users
-    conditions: List
-    branching: List  # indexes of conditions
+    conditions: Dict  # cond -> bool (true if explicit branching conditions)
     pending: List
 
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
-        self.conditions = []
-        self.branching = []
+        self.conditions = {}
         self.pending = []
-        self.forked = False
 
     def __deepcopy__(self, memo):
         raise NotImplementedError(f"use the branch() method instead of deepcopy()")
 
     def __str__(self) -> str:
-        branching_conds = [self.conditions[idx] for idx in self.branching]
         return "".join(
-            [f"- {cond}\n" for cond in branching_conds if str(cond) != "True"]
+            [
+                f"- {cond}\n"
+                for cond in self.conditions
+                if self.conditions[cond] and str(cond) != "True"
+            ]
         )
+
+    def to_smt2(self, args) -> SMTQuery:
+        # Serialize self.conditions into the SMTLIB format.
+        #
+        # Each `c` in the conditions can be serialized to an SMTLIB assertion:
+        #   `(assert c)`
+        #
+        # To compute the unsat-core later, a named assertion is needed:
+        #   `(assert (! c :named id))` where `id` is the unique id of `c`
+        #
+        # However, z3.Solver.to_smt2() doesn't serialize into named assertions. Instead,
+        # - `Solver.add(c)` is serialized as: `(assert c)`
+        # - `Solver.assert_and_track(c, id)` is serialized as: `(assert (=> |id| c))`
+        #
+        # Thus, named assertions can be generated using `to_smt2()` as follows:
+        # - add constraints using `assert_and_track(c, id)` for each c and id,
+        # - execute `to_smt2()` to generate implication assertions, `(assert (=> |id| c))`, and
+        # - generate named assertions, `(assert (! |id| :named <id>))`, for each id.
+        #
+        # The first two steps are performed here. The last step is done in `__main__.solve()`.
+        #
+        # NOTE: although both `to_smt2()` and `sexpr()` can generate SMTLIB assertions,
+        #       sexpr()-generated SMTLIB queries are often less efficient to solve than to_smt2().
+        #
+        # TODO: leverage more efficient serialization by representing constraints in pickle-friendly objects, instead of Z3 objects.
+
+        ids = [str(cond.get_id()) for cond in self.conditions]
+
+        if args.cache_solver:
+            tmp_solver = SolverFor("QF_AUFBV")
+            for cond in self.conditions:
+                tmp_solver.assert_and_track(cond, str(cond.get_id()))
+            query = tmp_solver.to_smt2()
+        else:
+            query = self.solver.to_smt2()
+        query = query.replace("(check-sat)", "")  # see __main__.solve()
+
+        return SMTQuery(query, ids)
+
+    def check(self, cond):
+        return self.solver.check(cond)
 
     def branch(self, cond):
         if len(self.pending) > 0:
@@ -541,17 +588,16 @@ class Path:
     def append(self, cond, branching=False):
         cond = simplify(cond)
 
-        if self.forked:
-            warn(f"attempting to append cond {cond} to forked path {id(self)}")
-
         if is_true(cond):
             return
 
-        self.solver.add(cond)
-        self.conditions.append(cond)
+        if is_false(cond):
+            # false shouldn't have been added; raise InfeasiblePath before append() if false
+            warn_code(INTERNAL_ERROR, f"path.append(false)")
 
-        if branching:
-            self.branching.append(len(self.conditions) - 1)
+        if cond not in self.conditions:
+            self.solver.add(cond)
+            self.conditions[cond] = branching
 
     def extend(self, conds, branching=False):
         for cond in conds:
@@ -559,7 +605,7 @@ class Path:
 
     def extend_path(self, path):
         # branching conditions are not preserved
-        self.extend(path.conditions)
+        self.extend(path.conditions.keys())
 
 
 class Exec:  # an execution path
@@ -737,7 +783,7 @@ class Exec:  # an execution path
         if is_false(cond):
             return unsat
 
-        return self.path.solver.check(cond)
+        return self.path.check(cond)
 
     def select(self, array: Any, key: Word, arrays: Dict) -> Word:
         if array in arrays:
@@ -790,10 +836,12 @@ class Exec:  # an execution path
             if isinstance(data, bytes):
                 data = bytes_to_bv_value(data)
 
-            f_sha3 = Function(f"sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256)
+            f_sha3 = Function(
+                f"f_sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256
+            )
             sha3_expr = f_sha3(data)
         else:
-            sha3_expr = BitVec("sha3_0", BitVecSort256)
+            sha3_expr = BitVec("f_sha3_0", BitVecSort256)
 
         # assume hash values are sufficiently smaller than the uint max
         self.path.append(ULE(sha3_expr, 2**256 - 2**64))
@@ -983,17 +1031,17 @@ class SolidityStorage(Storage):
     def decode(cls, loc: Any) -> Any:
         loc = normalize(loc)
         # m[k] : hash(k.m)
-        if loc.decl().name() == "sha3_512":
+        if loc.decl().name() == "f_sha3_512":
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
             return cls.decode(base) + (offset, con(0))
         # a[i] : hash(a) + i
-        elif loc.decl().name() == "sha3_256":
+        elif loc.decl().name() == "f_sha3_256":
             base = loc.arg(0)
             return cls.decode(base) + (con(0),)
         # m[k] : hash(k.m)  where |k| != 256-bit
-        elif loc.decl().name().startswith("sha3_"):
+        elif loc.decl().name().startswith("f_sha3_"):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat" and sha3_input.num_args() == 2:
                 offset = simplify(sha3_input.arg(0))
@@ -1084,12 +1132,12 @@ class GenericStorage(Storage):
     @classmethod
     def decode(cls, loc: Any) -> Any:
         loc = normalize(loc)
-        if loc.decl().name() == "sha3_512":  # hash(hi,lo), recursively
+        if loc.decl().name() == "f_sha3_512":  # hash(hi,lo), recursively
             args = loc.arg(0)
             hi = cls.decode(simplify(Extract(511, 256, args)))
             lo = cls.decode(simplify(Extract(255, 0, args)))
             return cls.simple_hash(Concat(hi, lo))
-        elif loc.decl().name().startswith("sha3_"):
+        elif loc.decl().name().startswith("f_sha3_"):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat":
                 decoded_sha3_input_args = [
@@ -1472,6 +1520,8 @@ class SEVM:
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
+        if is_false(balance_cond):
+            raise InfeasiblePath("transfer_value: balance is not enough")
         ex.path.append(balance_cond)
 
         # conditional transfer
@@ -1618,7 +1668,7 @@ class SEVM:
 
             if arg_size > 0:
                 f_call = Function(
-                    "call_" + str(arg_size * 8),
+                    "f_call_" + str(arg_size * 8),
                     BitVecSort256,  # cnt
                     BitVecSort256,  # gas
                     BitVecSort160,  # to
@@ -1633,7 +1683,7 @@ class SEVM:
                 exit_code = f_call(con(call_id), gas, to, fund, arg_bv)
             else:
                 f_call = Function(
-                    "call_" + str(arg_size * 8),
+                    "f_call_" + str(arg_size * 8),
                     BitVecSort256,  # cnt
                     BitVecSort256,  # gas
                     BitVecSort160,  # to
@@ -1653,7 +1703,7 @@ class SEVM:
             ret = ByteVec()
             if actual_ret_size > 0:
                 f_ret = Function(
-                    "ret_" + str(actual_ret_size * 8),
+                    "f_ret_" + str(actual_ret_size * 8),
                     BitVecSort256,
                     BitVecSorts[actual_ret_size * 8],
                 )
@@ -2477,6 +2527,10 @@ class SEVM:
                 ex.next_pc()
                 stack.push(ex, step_id)
 
+            except InfeasiblePath as err:
+                # ignore infeasible path
+                continue
+
             except EvmException as err:
                 ex.halt(data=ByteVec(), error=err)
                 yield from finalize(ex)
@@ -2488,6 +2542,12 @@ class SEVM:
 
                 ex.halt(data=None, error=err)
                 yield from finalize(ex)
+                continue
+
+            except FailCheatcode as err:
+                # return data shouldn't be None, as it is considered being stuck
+                ex.halt(data=ByteVec(), error=err)
+                yield ex  # early exit; do not call finalize()
                 continue
 
     def mk_exec(
