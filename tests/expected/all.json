@@ -117,6 +117,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/BlockNumber.t.sol:BlockNumberTest": [
+            {
+                "name": "check_GetBlockNumber()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_GetBlockNumber_AfterAdvance()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Buffers.t.sol:BuffersTest": [
             {
                 "name": "check_calldatacopy_large_offset()",
