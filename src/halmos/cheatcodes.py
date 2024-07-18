@@ -330,6 +330,9 @@ class hevm_cheat_code:
     # label(address,string)
     label_sig: int = 0xC657C718
 
+    # bytes4(keccak256("getBlockNumber()"))
+    get_block_nunber_sig: int = 0x42CBB15C
+
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack, step_id) -> Optional[ByteVec]:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
@@ -585,6 +588,11 @@ class hevm_cheat_code:
             label = extract_string_argument(arg, 1)
 
             # TODO: no-op for now
+            return ret
+
+        # getBlockNumber() return (uint256)
+        elif funsig == hevm_cheat_code.get_block_nunber_sig:
+            ret.append(uint256(ex.block.number))
             return ret
 
         else:
