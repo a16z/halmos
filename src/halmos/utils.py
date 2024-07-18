@@ -190,6 +190,22 @@ def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     return solver
 
 
+def extract_bytes32_array_argument(calldata: BitVecRef, arg_idx: int):
+    """Extracts idx-th argument of bytes32[] from calldata"""
+    offset = int_of(
+        extract_bytes(calldata, 4 + arg_idx * 32, 32),
+        "symbolic offset for bytes argument",
+    )
+    length = int_of(
+        extract_bytes(calldata, 4 + offset, 32),
+        "symbolic size for bytes argument",
+    )
+    if length == 0:
+        return b""
+
+    return extract_bytes(calldata, 4 + offset + 32, length * 32)
+
+
 def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
     """Extracts idx-th argument of string from calldata"""
     offset = int_of(
