@@ -34,7 +34,7 @@ jobs:
             profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
-            cmd: "--contract LibPrimeTest --function testProve --loop 256 --solver-command yices-smt2"
+            cmd: "--contract LibPrimeTest --function testProve --loop 256 --solver-command bitwuzla"
             branch: ""
             profile: ""
           - repo: "farcasterxyz/contracts"
