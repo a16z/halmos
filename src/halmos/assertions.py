@@ -25,6 +25,8 @@ def mk_cond(bop, v1, v2):
     if not is_bv(v2):
         raise ValueError(f"mk_cond: not bv: {v2}")
 
+    # for eq and neq, the bitsize can be arbitrary, e.g., arrays
+
     if v1.size() != v2.size():
         if bop == "eq":
             return BoolVal(False)
@@ -37,27 +39,30 @@ def mk_cond(bop, v1, v2):
         return v1 == v2
     elif bop == "neq":
         return v1 != v2
+
+    # for comparison operators, the bitsize must be 256-bit
+
+    if v1.size() != 256 or v2.size() != 256:
+        raise ValueError(f"mk_cond: incompatible size: {v1} {bop} {v2}")
+
+    if bop == "ult":
+        return ULT(v1, v2)
+    elif bop == "ugt":
+        return UGT(v1, v2)
+    elif bop == "ule":
+        return ULE(v1, v2)
+    elif bop == "uge":
+        return UGE(v1, v2)
+    elif bop == "slt":
+        return v1 < v2
+    elif bop == "sgt":
+        return v1 > v2
+    elif bop == "sle":
+        return v1 <= v2
+    elif bop == "sge":
+        return v1 >= v2
     else:
-        if v1.size() != 256 or v2.size() != 256:
-            raise ValueError(f"mk_cond: incompatible size: {v1} {bop} {v2}")
-        elif bop == "ult":
-            return ULT(v1, v2)
-        elif bop == "ugt":
-            return UGT(v1, v2)
-        elif bop == "ule":
-            return ULE(v1, v2)
-        elif bop == "uge":
-            return UGE(v1, v2)
-        elif bop == "slt":
-            return v1 < v2
-        elif bop == "sgt":
-            return v1 > v2
-        elif bop == "sle":
-            return v1 <= v2
-        elif bop == "sge":
-            return v1 >= v2
-        else:
-            raise ValueError(f"mk_cond: unknown bop: {bop}")
+        raise ValueError(f"mk_cond: unknown bop: {bop}")
 
 
 def vm_assert(bop: str, typ: str, log: bool = False):

@@ -698,6 +698,9 @@ class Exec:  # an execution path
         output.error = error
         output.return_scheme = self.current_opcode()
 
+    def is_halted(self) -> bool:
+        return self.context.output.data is not None
+
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
 
@@ -2128,9 +2131,6 @@ class SEVM:
             if ex.callback is None:
                 yield ex
 
-            elif isinstance(ex.context.output.error, FailCheatcode):
-                yield ex
-
             # otherwise, execute the callback to return to the parent execution context
             # note: `yield from` is used as the callback may yield the current execution state that got stuck
             else:
@@ -2146,9 +2146,10 @@ class SEVM:
                 if not ex.path.is_activated():
                     ex.path.activate()
 
-                if isinstance(ex.context.output.error, FailCheatcode):
-                    yield ex
-                    continue
+                # PathEndingException may not be immediately raised; it could be delayed until it comes out of the worklist
+                # see the assert cheatcode hanlder logic for the delayed case
+                if isinstance(ex.context.output.error, PathEndingException):
+                    raise ex.context.output.error
 
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
@@ -2552,8 +2553,9 @@ class SEVM:
                 continue
 
             except FailCheatcode as err:
-                # return data shouldn't be None, as it is considered being stuck
-                ex.halt(data=ByteVec(), error=err)
+                if not ex.is_halted():
+                    # return data shouldn't be None, as it is considered being stuck
+                    ex.halt(data=ByteVec(), error=err)
                 yield ex  # early exit; do not call finalize()
                 continue
 
