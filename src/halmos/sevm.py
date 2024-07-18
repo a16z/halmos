@@ -698,6 +698,9 @@ class Exec:  # an execution path
         output.error = error
         output.return_scheme = self.current_opcode()
 
+    def is_halted(self) -> bool:
+        return self.context.output.data is not None
+
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
 
@@ -1741,7 +1744,7 @@ class SEVM:
             # vm cheat code
             elif eq(to, hevm_cheat_code.address):
                 exit_code = con(1)
-                ret = hevm_cheat_code.handle(self, ex, arg)
+                ret = hevm_cheat_code.handle(self, ex, arg, stack, step_id)
 
             # console
             elif eq(to, console.address):
@@ -2143,6 +2146,11 @@ class SEVM:
                 if not ex.path.is_activated():
                     ex.path.activate()
 
+                # PathEndingException may not be immediately raised; it could be delayed until it comes out of the worklist
+                # see the assert cheatcode hanlder logic for the delayed case
+                if isinstance(ex.context.output.error, PathEndingException):
+                    raise ex.context.output.error
+
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
 
@@ -2542,6 +2550,13 @@ class SEVM:
 
                 ex.halt(data=None, error=err)
                 yield from finalize(ex)
+                continue
+
+            except FailCheatcode as err:
+                if not ex.is_halted():
+                    # return data shouldn't be None, as it is considered being stuck
+                    ex.halt(data=ByteVec(), error=err)
+                yield ex  # early exit; do not call finalize()
                 continue
 
     def mk_exec(

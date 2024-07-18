@@ -16,8 +16,26 @@ contract DeepFailer is Test {
         }
     }
 
-    function test_fail_cheatcode() public {
+    function check_fail_cheatcode() public {
         DeepFailer(address(this)).do_test(0);
+    }
+}
+
+contract EarlyFailTest is Test {
+    function do_fail() external {
+        fail();
+    }
+
+    function check_early_fail_cheatcode(uint x) public {
+        // we want `fail()` to happen in a nested context,
+        // to test that it ends not just the current context but the whole run
+        address(this).call(abi.encodeWithSelector(this.do_fail.selector, ""));
+
+        // this shouldn't be reached due to the early fail() semantics.
+        // if this assertion is executed, two counterexamples will be generated:
+        // - counterexample caused by fail(): x > 0
+        // - counterexample caused by assert(x > 0): x == 0
+        assert(x > 0);
     }
 }
 

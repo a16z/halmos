@@ -1,13 +1,16 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
-
+from functools import partial
 from timeit import default_timer as timer
-from typing import Dict, Tuple, Any, Optional, Union as UnionType
+from typing import Any, Dict, Optional, Tuple
+from typing import Union as UnionType
 
 from z3 import *
 
-from .exceptions import NotConcreteError, HalmosException
+from halmos.mapper import Mapper
+
+from .exceptions import HalmosException, NotConcreteError
 
 # order of the secp256k1 curve
 secp256k1n = (
@@ -187,6 +190,22 @@ def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     return solver
 
 
+def extract_bytes32_array_argument(calldata: BitVecRef, arg_idx: int):
+    """Extracts idx-th argument of bytes32[] from calldata"""
+    offset = int_of(
+        extract_bytes(calldata, 4 + arg_idx * 32, 32),
+        "symbolic offset for bytes argument",
+    )
+    length = int_of(
+        extract_bytes(calldata, 4 + offset, 32),
+        "symbolic size for bytes argument",
+    )
+    if length == 0:
+        return b""
+
+    return extract_bytes(calldata, 4 + offset + 32, length * 32)
+
+
 def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
     """Extracts idx-th argument of string from calldata"""
     offset = int_of(
@@ -318,23 +337,25 @@ def decode_hex(hexstring: str) -> Optional[bytes]:
         return None
 
 
-def hexify(x):
+def hexify(x, contract_name: str = None):
     if isinstance(x, str):
         return re.sub(r"\b(\d+)\b", lambda match: hex(int(match.group(1))), x)
     elif isinstance(x, int):
         return f"0x{x:02x}"
     elif isinstance(x, bytes):
-        return "0x" + x.hex()
+        return Mapper().find_nodes_by_address("0x" + x.hex(), contract_name)
     elif hasattr(x, "unwrap"):
-        return hexify(x.unwrap())
+        return hexify(x.unwrap(), contract_name)
     elif is_bv_value(x):
         # maintain the byte size of x
         num_bytes = byte_length(x, strict=False)
-        return f"0x{x.as_long():0{num_bytes * 2}x}"
+        return Mapper().find_nodes_by_address(
+            f"0x{x.as_long():0{num_bytes * 2}x}", contract_name
+        )
     elif is_app(x):
-        return f"{str(x.decl())}({', '.join(map(hexify, x.children()))})"
+        return f"{str(x.decl())}({', '.join(map(partial(hexify, contract_name=contract_name), x.children()))})"
     else:
-        return hexify(str(x))
+        return hexify(str(x), contract_name)
 
 
 def render_uint(x: BitVecRef) -> str:

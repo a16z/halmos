@@ -163,7 +163,7 @@ contract ContextTest is Test {
         assertEq(returndatasize(), 0); // empty returndata after create
         ensure_test_context();
 
-        assertTrue(ctx1.flag());
+        assert(ctx1.flag()); // do not use assertTrue() as it updates returndatasize()
         assertEq(returndatasize(), 32);
         ensure_test_context();
 
@@ -174,7 +174,7 @@ contract ContextTest is Test {
         assertEq(returndatasize(), 100); // returndata for create failure
         ensure_test_context();
 
-        assertFalse(ctx2.flag());
+        assert(!ctx2.flag()); // do not use assertFalse() as it updates returndatasize()
         assertEq(returndatasize(), 32);
         ensure_test_context();
     }
