@@ -54,10 +54,9 @@ jobs:
             profile: "halmos"
 
     steps:
-      - name: Checkout
+      - name: Checkout halmos
         uses: actions/checkout@v4
         with:
-          path: halmos
           # we won't be needing tests/lib for this workflow
           submodules: false
 
