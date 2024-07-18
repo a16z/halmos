@@ -43,8 +43,8 @@ jobs:
 
       - name: Build image
         run: |
-          docker build -t halmos . --file packages/halmos/Dockerfile
+          docker build -t halmos-image . --file packages/halmos/Dockerfile
 
       - name: Run pytest
         run: |
-          docker run -v .:/workspace --entrypoint pytest halmos -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}' -s --log-cli-level=
+          docker run -v .:/workspace --entrypoint pytest halmos-image -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}' -s --log-cli-level=
