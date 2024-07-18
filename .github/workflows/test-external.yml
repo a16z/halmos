@@ -29,27 +29,27 @@ jobs:
             profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
-            cmd: "--contract LibUint1024Test --function testProve --loop 256"
+            cmd: "--contract LibUint1024Test --function testProve --loop 256 --solver-command yices-smt2"
             branch: ""
             profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
-            cmd: "--contract LibPrimeTest --function testProve --loop 256"
+            cmd: "--contract LibPrimeTest --function testProve --loop 256 --solver-command yices-smt2"
             branch: ""
             profile: ""
           - repo: "farcasterxyz/contracts"
             dir: "farcaster-contracts"
-            cmd: ""
+            cmd: "--solver-command yices-smt2"
             branch: ""
             profile: ""
           - repo: "zobront/halmos-solady"
             dir: "halmos-solady"
-            cmd: "--function testCheck"
+            cmd: "--function testCheck --solver-command yices-smt2"
             branch: ""
             profile: ""
           - repo: "pcaversaccio/snekmate"
             dir: "snekmate"
-            cmd: "--config test/halmos.toml"
+            cmd: "--config test/halmos.toml --solver-command yices-smt2"
             branch: ""
             profile: "halmos"
 
@@ -86,7 +86,7 @@ jobs:
           submodules: recursive
 
       - name: Test external repo
-        run: docker run -v .:/workspace halmos-image ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 4 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
+        run: docker run -v .:/workspace halmos-image ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 4 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
         working-directory: ${{ matrix.project.dir }}
         env:
           FOUNDRY_PROFILE: ${{ matrix.project.profile }}
