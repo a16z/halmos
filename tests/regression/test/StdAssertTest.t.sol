@@ -77,6 +77,18 @@ contract StdAssertPassTest is Test {
         assertEq(x, y);
     }
 
+    /* TODO:
+    function check_assertEq(string[] memory x, string[] memory y) public {
+        vm.assume(keccak256(abi.encode(x)) == keccak256(abi.encode(y)));
+        assertEq(x, y);
+    }
+
+    function check_assertEq(bytes[] memory x, bytes[] memory y) public {
+        vm.assume(keccak256(abi.encode(x)) == keccak256(abi.encode(y)));
+        assertEq(x, y);
+    }
+    */
+
     function check_assertNotEq(bool x, bool y) public {
         vm.assume(x != y);
         assertNotEq(x, y);
@@ -136,6 +148,18 @@ contract StdAssertPassTest is Test {
         vm.assume(keccak256(abi.encode(x)) != keccak256(abi.encode(y)));
         assertNotEq(x, y);
     }
+
+    /* TODO:
+    function check_assertNotEq(string[] memory x, string[] memory y) public {
+        vm.assume(keccak256(abi.encode(x)) != keccak256(abi.encode(y)));
+        assertNotEq(x, y);
+    }
+
+    function check_assertNotEq(bytes[] memory x, bytes[] memory y) public {
+        vm.assume(keccak256(abi.encode(x)) != keccak256(abi.encode(y)));
+        assertNotEq(x, y);
+    }
+    */
 
     function check_assertLt(uint x, uint y) public {
         vm.assume(x < y);
@@ -252,6 +276,18 @@ contract StdAssertFailTest is Test {
         assertEq(x, y);
     }
 
+    /* TODO:
+    function check_assertEq(string[] memory x, string[] memory y) public {
+        vm.assume(!(keccak256(abi.encode(x)) == keccak256(abi.encode(y))));
+        assertEq(x, y);
+    }
+
+    function check_assertEq(bytes[] memory x, bytes[] memory y) public {
+        vm.assume(!(keccak256(abi.encode(x)) == keccak256(abi.encode(y))));
+        assertEq(x, y);
+    }
+    */
+
     function check_assertNotEq(bool x, bool y) public {
         vm.assume(!(x != y));
         assertNotEq(x, y);
@@ -311,6 +347,18 @@ contract StdAssertFailTest is Test {
         vm.assume(!(keccak256(abi.encode(x)) != keccak256(abi.encode(y))));
         assertNotEq(x, y);
     }
+
+    /* TODO:
+    function check_assertNotEq(string[] memory x, string[] memory y) public {
+        vm.assume(!(keccak256(abi.encode(x)) != keccak256(abi.encode(y))));
+        assertNotEq(x, y);
+    }
+
+    function check_assertNotEq(bytes[] memory x, bytes[] memory y) public {
+        vm.assume(!(keccak256(abi.encode(x)) != keccak256(abi.encode(y))));
+        assertNotEq(x, y);
+    }
+    */
 
     function check_assertLt(uint x, uint y) public {
         vm.assume(!(x < y));
@@ -427,6 +475,18 @@ contract StdAssertFailLogTest is Test {
         assertEq(x, y, "");
     }
 
+    /* TODO:
+    function check_assertEq(string[] memory x, string[] memory y) public {
+        vm.assume(!(keccak256(abi.encode(x)) == keccak256(abi.encode(y))));
+        assertEq(x, y, "");
+    }
+
+    function check_assertEq(bytes[] memory x, bytes[] memory y) public {
+        vm.assume(!(keccak256(abi.encode(x)) == keccak256(abi.encode(y))));
+        assertEq(x, y, "");
+    }
+    */
+
     function check_assertNotEq(bool x, bool y) public {
         vm.assume(!(x != y));
         assertNotEq(x, y, "");
@@ -486,6 +546,18 @@ contract StdAssertFailLogTest is Test {
         vm.assume(!(keccak256(abi.encode(x)) != keccak256(abi.encode(y))));
         assertNotEq(x, y, "");
     }
+
+    /* TODO:
+    function check_assertNotEq(string[] memory x, string[] memory y) public {
+        vm.assume(!(keccak256(abi.encode(x)) != keccak256(abi.encode(y))));
+        assertNotEq(x, y, "");
+    }
+
+    function check_assertNotEq(bytes[] memory x, bytes[] memory y) public {
+        vm.assume(!(keccak256(abi.encode(x)) != keccak256(abi.encode(y))));
+        assertNotEq(x, y, "");
+    }
+    */
 
     function check_assertLt(uint x, uint y) public {
         vm.assume(!(x < y));
