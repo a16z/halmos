@@ -45,7 +45,7 @@ contract BadElectionsTest is SymTest, Test {
 
         // when we vote again with the same signature, it reverts
         try elections.vote(proposalId, support, voter, signature) {
-            assertTrue(false);
+            assert(false);
         } catch {
             // expected
         }

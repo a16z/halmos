@@ -3,10 +3,8 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../src/IsPowerOfTwo.sol";
 
-import {Test} from "forge-std/Test.sol";
-
 /// @custom:halmos --solver-timeout-assertion 0
-contract IsPowerOfTwoTest is Test {
+contract IsPowerOfTwoTest {
     IsPowerOfTwo target;
 
     function setUp() public {
@@ -16,7 +14,7 @@ contract IsPowerOfTwoTest is Test {
     function check_isPowerOfTwo_small(uint8 x) public view {
         bool result1 = target.isPowerOfTwo(x);
         bool result2 = x == 1 || x == 2 || x == 4 || x == 8 || x == 16 || x == 32 || x == 64 || x == 128;
-        assertEq(result1, result2);
+        assert(result1 == result2);
     }
 
     /// @custom:halmos --loop 256
@@ -29,13 +27,13 @@ contract IsPowerOfTwoTest is Test {
                 break;
             }
         }
-        assertEq(result1, result2);
+        assert(result1 == result2);
     }
 
     /// @custom:halmos --loop 256
     function check_eq_isPowerOfTwo_isPowerOfTwoIter(uint x) public view {
         bool result1 = target.isPowerOfTwo(x);
         bool result2 = target.isPowerOfTwoIter(x);
-        assertEq(result1, result2);
+        assert(result1 == result2);
     }
 }

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-import {Test} from "forge-std/Test.sol";
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 import {Vault} from "../src/Vault.sol";
@@ -17,7 +16,7 @@ contract VaultMock is Vault {
 }
 
 /// @custom:halmos --solver-timeout-assertion 0
-contract VaultTest is SymTest, Test {
+contract VaultTest is SymTest {
     VaultMock vault;
 
     function setUp() public {
@@ -39,7 +38,7 @@ contract VaultTest is SymTest, Test {
         uint S2 = vault.totalShares();
 
         // assert(A1 / S1 <= A2 / S2);
-        assertLe(A1 * S2, A2 * S1); // no counterexample
+        assert(A1 * S2 <= A2 * S1); // no counterexample
     }
 
     function check_mint(uint shares) public {
@@ -52,6 +51,6 @@ contract VaultTest is SymTest, Test {
         uint S2 = vault.totalShares();
 
         // assert(A1 / S1 <= A2 / S2);
-        assertLe(A1 * S2, A2 * S1); // counterexamples exist
+        assert(A1 * S2 <= A2 * S1); // counterexamples exist
     }
 }
