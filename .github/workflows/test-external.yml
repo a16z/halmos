@@ -73,7 +73,9 @@ jobs:
 
       - name: Install Vyper
         if: ${{ matrix.project.dir == 'snekmate' }}
-        run: docker run --entrypoint uv halmos-image pip install vyper
+        run: |
+          docker run --name halmos-vyper --entrypoint uv halmos-image pip install vyper
+          docker commit halmos-vyper halmos-image
 
       - name: Checkout external repo
         uses: actions/checkout@v4
