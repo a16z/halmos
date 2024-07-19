@@ -85,6 +85,9 @@ jobs:
           ref: ${{ matrix.project.branch }}
           submodules: recursive
 
+      - name: Print halmos version
+        run: docker run -v .:/workspace halmos-image --version
+
       - name: Test external repo
         run: docker run -v .:/workspace halmos-image ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 4 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
         working-directory: ${{ matrix.project.dir }}
