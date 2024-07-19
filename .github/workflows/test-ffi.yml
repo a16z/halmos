@@ -37,7 +37,7 @@ jobs:
           docker build -t halmos-image . --file packages/halmos/Dockerfile
 
       - name: Print halmos version
-        run: docker run -v .:/workspace halmos-image --version
+        run: docker run halmos-image --version
 
       - name: Run pytest
         run: docker run -v .:/workspace --entrypoint pytest halmos-image -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="--ffi -v -st --solver-timeout-assertion 0"
