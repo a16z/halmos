@@ -2,7 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [main]
+    branches: [main, chore-workflows]
+    paths:
+      - .github/workflows/test.yml
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -31,14 +33,15 @@ jobs:
         storage-layout: ["solidity", "generic"]
 
     steps:
-      - uses: actions/checkout@v4
-        # with:
-        #   submodules: recursive
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: false
 
-      - name: Install Foundry
+      - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
@@ -48,7 +51,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
-      - name: Install Halmos
+      - name: Install halmos
         run: python -m pip install -e .
 
       - name: Run pytest
