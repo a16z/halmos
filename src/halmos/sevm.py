@@ -2313,13 +2313,15 @@ class SEVM:
 
                 # TODO: define f_extcodehash for known addresses in advance
                 elif opcode == EVM.EXTCODEHASH:
-                    account = uint160(ex.st.pop())
-                    account_addr = self.resolve_address_alias(ex, account)
+                    account_addr = self.resolve_address_alias(ex, uint160(ex.st.pop()))
+                    account_code: Optional[Contract] = ex.code.get(account_addr, None)
+
                     codehash = (
                         f_extcodehash(account_addr)
-                        if account_addr is not None
-                        else f_extcodehash(account)
+                        if account_code is None
+                        else ex.sha3_data(account_code._code.unwrap())
                     )
+
                     ex.st.push(codehash)
 
                 elif opcode == EVM.CODESIZE:
