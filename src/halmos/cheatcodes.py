@@ -188,7 +188,7 @@ def create_string(ex, arg):
 
 def create_bytes4(ex, arg):
     name = name_of(extract_string_argument(arg, 0))
-    return uint256(create_generic(ex, 32, name, "bytes4"))
+    return Concat(create_generic(ex, 32, name, "bytes4"), con(0, size_bits=224))
 
 
 def create_bytes32(ex, arg):

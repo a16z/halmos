@@ -931,9 +931,18 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createBytes4()",
+                "name": "check_createBytes4_basic()",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createBytes4_finds_selector()",
+                "exitcode": 1,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,

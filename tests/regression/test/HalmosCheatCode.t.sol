@@ -1,9 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
+import "forge-std/Test.sol";
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
-contract HalmosCheatCodeTest is SymTest {
+contract Beep {
+    function boop() public pure returns (uint256) {
+        return 42;
+    }
+}
+
+contract HalmosCheatCodeTest is SymTest, Test {
     function check_createUint() public {
         uint x = svm.createUint(256, 'x');
         uint y = svm.createUint(160, 'y');
@@ -52,13 +59,34 @@ contract HalmosCheatCodeTest is SymTest {
         assert(0 <= y && y <= type(uint256).max);
     }
 
-    function check_createBytes4() public {
+    function check_createBytes4_basic() public {
         bytes4 x = svm.createBytes4('x');
+
+        uint256 r;
+        assembly {
+            r := returndatasize()
+        }
+        assert(r == 32);
+
         uint256 x_uint = uint256(uint32(x));
-        assert(0 <= x_uint && x_uint <= type(uint32).max);
+        assertLe(x_uint, type(uint32).max);
         uint y; assembly { y := x }
-        assert(0 <= y && y <= type(uint256).max);
+        assertLe(y, type(uint256).max);
     }
+
+    /// @dev we expect a counterexample
+    ///      (meaning that createBytes4 is able to find the selector for boop())
+    function check_createBytes4_finds_selector() public {
+        Beep beep = new Beep();
+
+        bytes4 selector = svm.createBytes4("selector");
+        (bool succ, bytes memory ret) = address(beep).call(abi.encode(selector));
+        vm.assume(succ);
+        uint256 val = abi.decode(ret, (uint256));
+
+        assertNotEq(val, 42);
+    }
+
 
     function check_createAddress() public {
         address x = svm.createAddress('x');
