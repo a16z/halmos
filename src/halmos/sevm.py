@@ -37,6 +37,7 @@ from .warnings import (
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
+EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470)
 MAX_CALL_DEPTH = 1024
 
 # TODO: make this configurable
@@ -844,7 +845,7 @@ class Exec:  # an execution path
             )
             sha3_expr = f_sha3(data)
         else:
-            sha3_expr = BitVec("f_sha3_0", BitVecSort256)
+            sha3_expr = EMPTY_KECCAK
 
         # assume hash values are sufficiently smaller than the uint max
         self.path.append(ULE(sha3_expr, 2**256 - 2**64))
@@ -2311,13 +2312,35 @@ class SEVM:
                             ex.path.append(codesize > 0)
                     ex.st.push(codesize)
 
-                # TODO: define f_extcodehash for known addresses in advance
-                elif opcode == EVM.EXTCODEHASH:
+                elif opcode == EVM.EXTCODECOPY:
                     account_addr = self.resolve_address_alias(ex, uint160(ex.st.pop()))
-                    account_code: Optional[Contract] = ex.code.get(account_addr, None)
+                    account_code: Contract = (
+                        ex.code.get(account_addr, None) or ByteVec()
+                    )
+
+                    loc: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    offset: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    size: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
+                    end_loc = loc + size
+
+                    if end_loc > MAX_MEMORY_SIZE:
+                        raise HalmosException("EXTCODECOPY > MAX_MEMORY_SIZE")
+
+                    if size > 0:
+                        codeslice: ByteVec = account_code._code.slice(
+                            offset, offset + size
+                        )
+                        ex.st.memory.set_slice(loc, end_loc, codeslice)
+
+                elif opcode == EVM.EXTCODEHASH:
+                    account_addr = uint160(ex.st.pop())
+                    alias_addr = self.resolve_address_alias(ex, account_addr)
+                    addr = alias_addr if alias_addr is not None else account_addr
+
+                    account_code: Optional[Contract] = ex.code.get(addr, None)
 
                     codehash = (
-                        f_extcodehash(account_addr)
+                        f_extcodehash(addr)
                         if account_code is None
                         else ex.sha3_data(account_code._code.unwrap())
                     )
