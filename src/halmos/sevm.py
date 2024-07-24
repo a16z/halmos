@@ -2313,30 +2313,28 @@ class SEVM:
                     ex.st.push(codesize)
 
                 elif opcode == EVM.EXTCODECOPY:
-                    account = uint160(ex.st.pop())
-
-                    # TODO: handle the case where account may alias multiple addresses
-                    account_addr = self.resolve_address_alias(ex, account)
-                    if account_addr is None:
-                        # this could be unsound if the solver in resolve_address_alias
-                        # returns unknown, meaning that there is in fact a must-alias
-                        # address, but we didn't find it in time
-                        warn(
-                            f"EXTCODECOPY: unknown address {hexify(account)} "
-                            "is assumed to have empty bytecode"
-                        )
-
-                    account_code: Contract = ex.code.get(account_addr) or ByteVec()
-
+                    account: Address = uint160(ex.st.pop())
                     loc: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
                     offset: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
                     size: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
-                    end_loc = loc + size
-
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("EXTCODECOPY > MAX_MEMORY_SIZE")
 
                     if size > 0:
+                        end_loc = loc + size
+                        if end_loc > MAX_MEMORY_SIZE:
+                            raise HalmosException("EXTCODECOPY > MAX_MEMORY_SIZE")
+
+                        # TODO: handle the case where account may alias multiple addresses
+                        account_addr = self.resolve_address_alias(ex, account)
+                        if account_addr is None:
+                            # this could be unsound if the solver in resolve_address_alias
+                            # returns unknown, meaning that there is in fact a must-alias
+                            # address, but we didn't find it in time
+                            warn(
+                                f"EXTCODECOPY: unknown address {hexify(account)} "
+                                "is assumed to have empty bytecode"
+                            )
+
+                        account_code: Contract = ex.code.get(account_addr) or ByteVec()
                         codeslice: ByteVec = account_code._code.slice(
                             offset, offset + size
                         )
