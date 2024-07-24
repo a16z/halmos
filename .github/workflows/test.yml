@@ -3,8 +3,6 @@ name: Test
 on:
   push:
     branches: [main, chore-workflows]
-    paths:
-      - .github/workflows/test.yml
   pull_request:
     branches: [main]
   workflow_dispatch:

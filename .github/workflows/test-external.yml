@@ -3,9 +3,6 @@ name: Test external projects
 on:
   push:
     branches: [main, chore-workflows]
-  push:
-    paths:
-      - .github/workflows/test-external.yml
   workflow_dispatch:
     inputs:
       halmos-options:
