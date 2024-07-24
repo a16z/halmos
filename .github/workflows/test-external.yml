@@ -47,7 +47,7 @@ jobs:
             profile: ""
           - repo: "pcaversaccio/snekmate"
             dir: "snekmate"
-            cmd: "--config test/halmos.toml --solver-command yices-smt2"
+            cmd: "--config test/halmos.toml --solver-command bitwuzla"
             branch: ""
             profile: "halmos"
 
