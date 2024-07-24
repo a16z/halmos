@@ -18,4 +18,3 @@ COPY --from=ghcr.io/foundry-rs/foundry:latest \
 ADD --chmod=755 https://astral.sh/uv/install.sh /install.sh
 RUN /install.sh && rm /install.sh
 ENV PATH="/root/.cargo/bin:${PATH}"
-
