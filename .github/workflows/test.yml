@@ -39,7 +39,7 @@ jobs:
       - name: Checkout submodules
         run: |
           git config --global submodule.recurse true
-          git submodule update --init --recursive --depth 1
+          git submodule update --init --recursive --depth 1 --jobs 4
 
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1
