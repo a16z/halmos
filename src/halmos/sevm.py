@@ -2313,10 +2313,20 @@ class SEVM:
                     ex.st.push(codesize)
 
                 elif opcode == EVM.EXTCODECOPY:
-                    account_addr = self.resolve_address_alias(ex, uint160(ex.st.pop()))
-                    account_code: Contract = (
-                        ex.code.get(account_addr, None) or ByteVec()
-                    )
+                    account = uint160(ex.st.pop())
+
+                    # TODO: handle the case where account may alias multiple addresses
+                    account_addr = self.resolve_address_alias(ex, account)
+                    if account_addr is None:
+                        # this could be unsound if the solver in resolve_address_alias
+                        # returns unknown, meaning that there is in fact a must-alias
+                        # address, but we didn't find it in time
+                        warn(
+                            f"EXTCODECOPY: unknown address {hexify(account)} "
+                            "is assumed to have empty bytecode"
+                        )
+
+                    account_code: Contract = ex.code.get(account_addr) or ByteVec()
 
                     loc: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
                     offset: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
