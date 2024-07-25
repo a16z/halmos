@@ -284,6 +284,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
     message = context.message
     addr = unbox_int(message.target)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
+
     # check if we have a contract name for this address in our deployment mapper
     addr_str = DeployAddressMapper().get_deployed_contract(addr_str)
 
@@ -301,11 +302,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
             if context.output.error is None:
                 target = hex(int(str(message.target)))
                 bytecode = context.output.data.unwrap().hex()
-                contract_name = (
-                    Mapper()
-                    .get_contract_mapping_info_by_bytecode(bytecode)
-                    .contract_name
-                )
+                contract_name = Mapper().get_by_bytecode(bytecode).contract_name
 
                 DeployAddressMapper().add_deployed_contract(target, contract_name)
                 addr_str = contract_name
@@ -761,8 +758,7 @@ def run(
             and unbox_int(ex.context.output.data) == ASSERT_FAIL
         ) or is_global_fail_set(ex.context):
             if args.verbose >= 1:
-                print(f"Found potential path (id: {idx+1})")
-                print(f"{ex.context.output.error}")
+                print(f"Found potential path (id: {idx+1})\n{ex.context.output.error}")
 
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 traces[idx] = rendered_trace(ex.context)
@@ -1300,8 +1296,24 @@ def mk_arrlen(args: HalmosConfig) -> Dict[str, int]:
     return arrlen
 
 
+def parse_symbols(args: HalmosConfig, contract_map, contract_name):
+    try:
+        bytecode = contract_map[contract_name][0]["bytecode"]["object"]
+        contract_mapping_info = Mapper().get_or_create_by_name(contract_name)
+        contract_mapping_info.bytecode = bytecode
+
+        ast = contract_map[contract_name][0]["ast"]
+        Mapper().parse_ast(ast, contract_name=contract_name)
+
+    except Exception:
+        if args.debug:
+            debug(f"error parsing symbols for contract {contract_name}")
+            debug(traceback.format_exc())
+
+
 def parse_build_out(args: HalmosConfig) -> Dict:
-    result = {}  # compiler version -> source filename -> contract name -> (json, type)
+    # compiler version -> source filename -> contract name -> (json, type)
+    result = defaultdict(lambda: defaultdict(dict))
 
     out_path = os.path.join(args.root, args.forge_build_out)
     if not os.path.exists(out_path):
@@ -1318,21 +1330,17 @@ def parse_build_out(args: HalmosConfig) -> Dict:
             continue
 
         for json_filename in os.listdir(sol_path):  # for each contract name
+            if not json_filename.endswith(".json"):
+                continue
+            if json_filename.startswith("."):
+                continue
+
+            json_path = os.path.join(sol_path, json_filename)
+            with open(json_path, encoding="utf8") as f:
+                json_out = json.load(f)
+
             try:
-                if not json_filename.endswith(".json"):
-                    continue
-                if json_filename.startswith("."):
-                    continue
-
-                json_path = os.path.join(sol_path, json_filename)
-                with open(json_path, encoding="utf8") as f:
-                    json_out = json.load(f)
-
                 compiler_version = json_out["metadata"]["compiler"]["version"]
-                if compiler_version not in result:
-                    result[compiler_version] = {}
-                if sol_dirname not in result[compiler_version]:
-                    result[compiler_version][sol_dirname] = {}
                 contract_map = result[compiler_version][sol_dirname]
 
                 # cut off compiler version number as well
@@ -1348,6 +1356,7 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                         contract_type = abstract + node["contractKind"]
                         natspec = node.get("documentation")
                         break
+
                 if contract_type is None:
                     raise ValueError("no contract type", contract_name)
 
@@ -1357,30 +1366,19 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                         contract_name,
                         sol_dirname,
                     )
+
                 contract_map[contract_name] = (json_out, contract_type, natspec)
+                parse_symbols(args, contract_map, contract_name)
 
-                try:
-                    bytecode = contract_map[contract_name][0]["bytecode"]["object"]
-                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
-                        contract_name
-                    )
-
-                    if contract_mapping_info is None:
-                        Mapper().add_contract_mapping_info(
-                            contract_name=contract_name,
-                            bytecode=bytecode,
-                            nodes=[],
+            except KeyError as err:
+                if str(err) in ["ast", "metadata"]:
+                    # somewhat expected, e.g. for sol files containing only libraries
+                    if args.debug:
+                        debug(
+                            f"Skipped {json_filename} due to parsing failure: "
+                            "{type(err).__name__}: {err}"
                         )
-                    else:
-                        contract_mapping_info.bytecode = bytecode
 
-                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
-                        contract_name
-                    )
-                    Mapper().parse_ast(contract_map[contract_name][0]["ast"])
-
-                except Exception:
-                    pass
             except Exception as err:
                 warn_code(
                     PARSING_ERROR,

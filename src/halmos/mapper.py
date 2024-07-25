@@ -44,24 +44,19 @@ class Mapper(metaclass=SingletonMeta):
     def __init__(self):
         self._contracts: Dict[str, ContractMappingInfo] = {}
 
-    def add_contract_mapping_info(
-        self, contract_name: str, bytecode: str, nodes: List[AstNode]
-    ):
-        if contract_name in self._contracts:
-            raise ValueError(f"Contract {contract_name} already exists")
-
-        self._contracts[contract_name] = ContractMappingInfo(
-            contract_name, bytecode, nodes
-        )
-
-    def get_contract_mapping_info_by_name(
-        self, contract_name: str
-    ) -> Optional[ContractMappingInfo]:
+    def get_by_name(self, contract_name: str) -> Optional[ContractMappingInfo]:
         return self._contracts.get(contract_name, None)
 
-    def get_contract_mapping_info_by_bytecode(
-        self, bytecode: str
-    ) -> Optional[ContractMappingInfo]:
+    def get_or_create_by_name(self, contract_name: str) -> ContractMappingInfo:
+        contract_mapping_info = self.get_by_name(contract_name)
+
+        if contract_mapping_info is None:
+            contract_mapping_info = ContractMappingInfo(contract_name, "", [])
+            self._contracts[contract_name] = contract_mapping_info
+
+        return contract_mapping_info
+
+    def get_by_bytecode(self, bytecode: str) -> Optional[ContractMappingInfo]:
         # TODO: Handle cases for contracts with immutable variables
         # Current implementation might not work correctly if the following code is added the test solidity file
         #
@@ -78,7 +73,7 @@ class Mapper(metaclass=SingletonMeta):
         return None
 
     def append_node(self, contract_name: str, node: AstNode):
-        contract_mapping_info = self.get_contract_mapping_info_by_name(contract_name)
+        contract_mapping_info = self.get_by_name(contract_name)
 
         if contract_mapping_info is None:
             raise ValueError(f"Contract {contract_name} not found")
@@ -94,12 +89,7 @@ class Mapper(metaclass=SingletonMeta):
         current_contract = self._get_current_contract(node, contract_name)
 
         if node_type == "ContractDefinition":
-            if current_contract not in self._contracts:
-                self.add_contract_mapping_info(
-                    contract_name=current_contract, bytecode="", nodes=[]
-                )
-
-            if self.get_contract_mapping_info_by_name(current_contract).nodes:
+            if self.get_or_create_by_name(current_contract).nodes:
                 return
         elif node_type != "SourceUnit":
             id, name, address, visibility = self._get_node_info(node, node_type)
@@ -143,9 +133,7 @@ class Mapper(metaclass=SingletonMeta):
     def find_nodes_by_address(self, address: str, contract_name: str = None):
         # if the given signature is declared in the given contract, return its name.
         if contract_name:
-            contract_mapping_info = self.get_contract_mapping_info_by_name(
-                contract_name
-            )
+            contract_mapping_info = self.get_by_name(contract_name)
 
             if contract_mapping_info:
                 for node in contract_mapping_info.nodes:
