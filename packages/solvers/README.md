@@ -45,6 +45,21 @@ done
 | Z3 | 4.13.1 | [Z3Prover/z3](https://github.com/Z3Prover/z3) | Includes a [Dockerfile](https://github.com/Z3Prover/z3/blob/master/docker/ubuntu-20-04.Dockerfile) and a package but no `latest` tag |
 
 
+## Contributing
+
+Everyone is welcome to contribute new solvers or new versions to the image via pull requests. If a solver is competitive at [SMT-COMP](https://smt-comp.github.io), it would be great to have it included in the image. 
+
+When possible, we prefer release binaries from an official source like the Github releases for the project to minimize the time it takes to build the image. If you're unsure about a particular solver or how to integrate it, consider reaching out on the [Halmos Dev Chat](https://t.me/+4UhzHduai3MzZmUx). 
+
+Before opening the pull request, please test your changes by verifying:
+
+* that you can build the image locally
+* that you can correctly invoke the solver as described in the [Quick Start](https://github.com/a16z/halmos/tree/main/packages/solvers#quick-start) section
+* update this README with the name, version and source of the solver
+
+Thank you in advance!
+
+
 ## Credit
 
 Based on [EmperorOrokuSaki/solvers](https://github.com/EmperorOrokuSaki/solvers)
