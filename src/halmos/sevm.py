@@ -37,6 +37,7 @@ from .warnings import (
 Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
+EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470)
 MAX_CALL_DEPTH = 1024
 
 # TODO: make this configurable
@@ -844,7 +845,7 @@ class Exec:  # an execution path
             )
             sha3_expr = f_sha3(data)
         else:
-            sha3_expr = BitVec("f_sha3_0", BitVecSort256)
+            sha3_expr = EMPTY_KECCAK
 
         # assume hash values are sufficiently smaller than the uint max
         self.path.append(ULE(sha3_expr, 2**256 - 2**64))
@@ -2311,15 +2312,47 @@ class SEVM:
                             ex.path.append(codesize > 0)
                     ex.st.push(codesize)
 
-                # TODO: define f_extcodehash for known addresses in advance
+                elif opcode == EVM.EXTCODECOPY:
+                    account: Address = uint160(ex.st.pop())
+                    loc: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    offset: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    size: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
+
+                    if size > 0:
+                        end_loc = loc + size
+                        if end_loc > MAX_MEMORY_SIZE:
+                            raise HalmosException("EXTCODECOPY > MAX_MEMORY_SIZE")
+
+                        # TODO: handle the case where account may alias multiple addresses
+                        account_addr = self.resolve_address_alias(ex, account)
+                        if account_addr is None:
+                            # this could be unsound if the solver in resolve_address_alias
+                            # returns unknown, meaning that there is in fact a must-alias
+                            # address, but we didn't find it in time
+                            warn(
+                                f"EXTCODECOPY: unknown address {hexify(account)} "
+                                "is assumed to have empty bytecode"
+                            )
+
+                        account_code: Contract = ex.code.get(account_addr) or ByteVec()
+                        codeslice: ByteVec = account_code._code.slice(
+                            offset, offset + size
+                        )
+                        ex.st.memory.set_slice(loc, end_loc, codeslice)
+
                 elif opcode == EVM.EXTCODEHASH:
-                    account = uint160(ex.st.pop())
-                    account_addr = self.resolve_address_alias(ex, account)
+                    account_addr = uint160(ex.st.pop())
+                    alias_addr = self.resolve_address_alias(ex, account_addr)
+                    addr = alias_addr if alias_addr is not None else account_addr
+
+                    account_code: Optional[Contract] = ex.code.get(addr, None)
+
                     codehash = (
-                        f_extcodehash(account_addr)
-                        if account_addr is not None
-                        else f_extcodehash(account)
+                        f_extcodehash(addr)
+                        if account_code is None
+                        else ex.sha3_data(account_code._code.unwrap())
                     )
+
                     ex.st.push(codehash)
 
                 elif opcode == EVM.CODESIZE:
