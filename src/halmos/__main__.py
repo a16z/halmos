@@ -1308,7 +1308,7 @@ def parse_symbols(args: HalmosConfig, contract_map, contract_name):
     except Exception:
         if args.debug:
             debug(f"error parsing symbols for contract {contract_name}")
-            debug(traceback.format_exc())
+            error(traceback.format_exc())
 
 
 def parse_build_out(args: HalmosConfig) -> Dict:
@@ -1370,23 +1370,21 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                 contract_map[contract_name] = (json_out, contract_type, natspec)
                 parse_symbols(args, contract_map, contract_name)
 
-            except KeyError as err:
-                if str(err) in ["ast", "metadata"]:
-                    # somewhat expected, e.g. for sol files containing only libraries
-                    if args.debug:
-                        debug(
-                            f"Skipped {json_filename} due to parsing failure: "
-                            "{type(err).__name__}: {err}"
-                        )
-
             except Exception as err:
-                warn_code(
-                    PARSING_ERROR,
-                    f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}",
-                )
-                if args.debug:
-                    traceback.print_exc()
-                continue
+                # somewhat expected, e.g. for sol files containing only libraries
+                # or leftover files from previous builds without metadata/ast
+                known_error = isinstance(err, KeyError) and str(err) in [
+                    "'ast'",
+                    "'metadata'",
+                ]
+
+                if (known_error and args.debug) or not known_error:
+                    warn_code(
+                        PARSING_ERROR,
+                        f"Skipped {json_filename} due to parsing failure: {type(err).__name__}: {err}",
+                    )
+                    if args.debug:
+                        error(traceback.format_exc())
 
     return result
 
