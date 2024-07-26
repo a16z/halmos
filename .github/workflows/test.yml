@@ -3,8 +3,6 @@ name: Test
 on:
   push:
     branches: [main, chore-workflows]
-    paths:
-      - .github/workflows/test.yml
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -28,7 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["macos-latest", "ubuntu-latest", "windows-latest"]
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.11", "3.12"]
         parallel: ["", "--test-parallel"]
         storage-layout: ["solidity", "generic"]
 

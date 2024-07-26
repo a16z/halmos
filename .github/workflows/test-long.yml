@@ -3,8 +3,6 @@ name: Test long
 on:
   push:
     branches: [main, chore-workflows]
-    paths:
-      - .github/workflows/test-long.yml
   workflow_dispatch:
     inputs:
       halmos-options:
