@@ -1300,6 +1300,19 @@ def mk_arrlen(args: HalmosConfig) -> Dict[str, int]:
     return arrlen
 
 
+def get_contract_type(
+    ast_nodes: Dict, contract_name: str
+) -> Tuple[str | None, str | None]:
+    for node in ast_nodes:
+        if node["nodeType"] == "ContractDefinition" and node["name"] == contract_name:
+            abstract = "abstract " if node.get("abstract") else ""
+            contract_type = abstract + node["contractKind"]
+            natspec = node.get("documentation")
+            return contract_type, natspec
+
+    return None, None
+
+
 def parse_build_out(args: HalmosConfig) -> Dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
@@ -1328,28 +1341,25 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                 with open(json_path, encoding="utf8") as f:
                     json_out = json.load(f)
 
-                compiler_version = json_out["metadata"]["compiler"]["version"]
-                if compiler_version not in result:
-                    result[compiler_version] = {}
-                if sol_dirname not in result[compiler_version]:
-                    result[compiler_version][sol_dirname] = {}
-                contract_map = result[compiler_version][sol_dirname]
-
                 # cut off compiler version number as well
                 contract_name = json_filename.split(".")[0]
+                ast_nodes = json_out["ast"]["nodes"]
+                contract_type, natspec = get_contract_type(ast_nodes, contract_name)
 
-                contract_type = None
-                for node in json_out["ast"]["nodes"]:
-                    if (
-                        node["nodeType"] == "ContractDefinition"
-                        and node["name"] == contract_name
-                    ):
-                        abstract = "abstract " if node.get("abstract") else ""
-                        contract_type = abstract + node["contractKind"]
-                        natspec = node.get("documentation")
-                        break
+                # can happen to solidity files for multiple reasons:
+                # - import only (like console2.log)
+                # - defines only structs or enums
+                # - defines only free functions
+                # - ...
                 if contract_type is None:
-                    raise ValueError("no contract type", contract_name)
+                    if args.debug:
+                        debug(f"Skipped {json_filename}, no contract definition found")
+                    continue
+
+                compiler_version = json_out["metadata"]["compiler"]["version"]
+                result.setdefault(compiler_version, {})
+                result[compiler_version].setdefault(sol_dirname, {})
+                contract_map = result[compiler_version][sol_dirname]
 
                 if contract_name in contract_map:
                     raise ValueError(
@@ -1357,6 +1367,7 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                         contract_name,
                         sol_dirname,
                     )
+
                 contract_map[contract_name] = (json_out, contract_type, natspec)
 
                 try:
