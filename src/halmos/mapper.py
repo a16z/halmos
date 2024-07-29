@@ -44,24 +44,23 @@ class Mapper(metaclass=SingletonMeta):
     def __init__(self):
         self._contracts: Dict[str, ContractMappingInfo] = {}
 
-    def add_contract_mapping_info(
-        self, contract_name: str, bytecode: str, nodes: List[AstNode]
-    ):
+    def add(self, contract_name: str, bytecode: str, nodes: List[AstNode]):
         if contract_name in self._contracts:
             raise ValueError(f"Contract {contract_name} already exists")
 
-        self._contracts[contract_name] = ContractMappingInfo(
-            contract_name, bytecode, nodes
-        )
+        value = ContractMappingInfo(contract_name, bytecode, nodes)
+        self._contracts[contract_name] = value
 
-    def get_contract_mapping_info_by_name(
-        self, contract_name: str
-    ) -> Optional[ContractMappingInfo]:
+    def get_or_create(self, contract_name: str) -> ContractMappingInfo:
+        if contract_name not in self._contracts:
+            self.add(contract_name, "", [])
+
+        return self._contracts[contract_name]
+
+    def get_by_name(self, contract_name: str) -> Optional[ContractMappingInfo]:
         return self._contracts.get(contract_name, None)
 
-    def get_contract_mapping_info_by_bytecode(
-        self, bytecode: str
-    ) -> Optional[ContractMappingInfo]:
+    def get_by_bytecode(self, bytecode: str) -> Optional[ContractMappingInfo]:
         # TODO: Handle cases for contracts with immutable variables
         # Current implementation might not work correctly if the following code is added the test solidity file
         #
@@ -78,42 +77,28 @@ class Mapper(metaclass=SingletonMeta):
         return None
 
     def append_node(self, contract_name: str, node: AstNode):
-        contract_mapping_info = self.get_contract_mapping_info_by_name(contract_name)
-
-        if contract_mapping_info is None:
-            raise ValueError(f"Contract {contract_name} not found")
-
+        contract_mapping_info = self._contracts[contract_name]
         contract_mapping_info.nodes.append(node)
 
-    def parse_ast(self, node: Dict, contract_name: str = ""):
+    def parse_ast(self, node: Dict, contract_name: str):
         node_type = node["nodeType"]
-
         if node_type in self._PARSING_IGNORED_NODE_TYPES:
             return
 
-        current_contract = self._get_current_contract(node, contract_name)
-
         if node_type == "ContractDefinition":
-            if current_contract not in self._contracts:
-                self.add_contract_mapping_info(
-                    contract_name=current_contract, bytecode="", nodes=[]
-                )
-
-            if self.get_contract_mapping_info_by_name(current_contract).nodes:
+            if self.get_or_create(contract_name).nodes:
                 return
+
         elif node_type != "SourceUnit":
             id, name, address, visibility = self._get_node_info(node, node_type)
-
-            self.append_node(
-                current_contract,
-                AstNode(node_type, id, name, address, visibility),
-            )
+            ast_node = AstNode(node_type, id, name, address, visibility)
+            self.append_node(contract_name, ast_node)
 
         for child_node in node.get("nodes", []):
-            self.parse_ast(child_node, current_contract)
+            self.parse_ast(child_node, contract_name)
 
         if "body" in node:
-            self.parse_ast(node["body"], current_contract)
+            self.parse_ast(node["body"], contract_name)
 
     def _get_node_info(self, node: Dict, node_type: str) -> Dict:
         return (
@@ -133,19 +118,10 @@ class Mapper(metaclass=SingletonMeta):
 
         return node.get(address_fields.get(node_type, ""), "")
 
-    def _get_current_contract(self, node: Dict, contract_name: str) -> str:
-        return (
-            node.get("name", "")
-            if node["nodeType"] == "ContractDefinition"
-            else contract_name
-        )
-
     def find_nodes_by_address(self, address: str, contract_name: str = None):
         # if the given signature is declared in the given contract, return its name.
         if contract_name:
-            contract_mapping_info = self.get_contract_mapping_info_by_name(
-                contract_name
-            )
+            contract_mapping_info = self.get_by_name(contract_name)
 
             if contract_mapping_info:
                 for node in contract_mapping_info.nodes:
