@@ -75,58 +75,68 @@ def stringified_bytes_to_bytes(hexstring: str) -> ByteVec:
     return ByteVec(ret_bytes)
 
 
+@dataclass
+class PrankResult:
+    sender: Address | None
+    origin: Address | None
+
+
 class Prank:
-    addr: Any  # prank address
+    sender: Address | None  # prank msg.sender address
+    origin: Address | None  # prank tx.origin address
     keep: bool  # start / stop prank
 
-    def __init__(self, addr: Any = None, keep: bool = False) -> None:
-        if addr is not None:
-            assert_address(addr)
-        self.addr = addr
-        self.keep = keep
+    def __init__(self) -> None:
+        self.sender = None
+        self.origin = None
+        self.keep = False
+
+    def __bool__(self) -> bool:
+        return self.sender is not None or self.origin is not None
 
     def __str__(self) -> str:
-        if self.addr:
-            if self.keep:
-                return f"startPrank({str(self.addr)})"
-            else:
-                return f"prank({str(self.addr)})"
-        else:
-            return "None"
+        if not self:
+            return "no active prank"
 
-    def lookup(self, this: Any, to: Any) -> Any:
-        assert_address(this)
+        fn_name = "startPrank" if self.keep else "prank"
+        if self.origin is not None:
+            return f"{fn_name}({hexify(self.sender)}, {hexify(self.origin)})"
+        else:
+            return f"{fn_name}({hexify(self.sender)})"
+
+    def lookup(self, to: Address) -> PrankResult:
         assert_address(to)
-        caller = this
+        result = PrankResult()
         if (
-            self.addr is not None
+            self
             and not eq(to, hevm_cheat_code.address)
             and not eq(to, halmos_cheat_code.address)
         ):
-            caller = self.addr
+            result.caller = self.sender
+            result.origin = self.origin
             if not self.keep:
-                self.addr = None
-        return caller
+                self.stopPrank()
+        return result
 
-    def prank(self, addr: Any) -> bool:
-        assert_address(addr)
-        if self.addr is not None:
+    def prank(self, sender: Address) -> bool:
+        if self.sender is not None:
             return False
-        self.addr = addr
+        self.sender = sender
         self.keep = False
         return True
 
-    def startPrank(self, addr: Any) -> bool:
+    def startPrank(self, addr: Address) -> bool:
         assert_address(addr)
-        if self.addr is not None:
+        if self.sender is not None:
             return False
-        self.addr = addr
+        self.sender = addr
         self.keep = True
         return True
 
     def stopPrank(self) -> bool:
         # stopPrank is allowed to call even when no active prank exists
-        self.addr = None
+        self.sender = None
+        self.origin = None
         self.keep = False
         return True
 
@@ -282,8 +292,14 @@ class hevm_cheat_code:
     # bytes4(keccak256("prank(address)"))
     prank_sig: int = 0xCA669FA7
 
+    # bytes4(keccak256("prank(address,address)"))
+    prank_addr_addr_sig: int = 0x42424242
+
     # bytes4(keccak256("startPrank(address)"))
     start_prank_sig: int = 0x06447D56
+
+    # bytes4(keccak256("startPrank(address,address)"))
+    start_prank_addr_addr_sig: int = 0x42424242
 
     # bytes4(keccak256("stopPrank()"))
     stop_prank_sig: int = 0x90C5013B
@@ -381,8 +397,17 @@ class hevm_cheat_code:
 
         # vm.prank(address)
         elif funsig == hevm_cheat_code.prank_sig:
-            address = uint160(arg.get_word(4))
-            result = ex.prank.prank(address)
+            sender = uint160(arg.get_word(4))
+            result = ex.prank.prank(sender)
+            if not result:
+                raise HalmosException("You have an active prank already.")
+            return ret
+
+        # vm.prank(address sender, address origin)
+        elif funsig == hevm_cheat_code.prank_addr_addr_sig:
+            sender = uint160(arg.get_word(4))
+            origin = uint160(arg.get_word(36))
+            result = ex.prank.prank(sender, origin)
             if not result:
                 raise HalmosException("You have an active prank already.")
             return ret
@@ -391,6 +416,15 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.start_prank_sig:
             address = uint160(arg.get_word(4))
             result = ex.prank.startPrank(address)
+            if not result:
+                raise HalmosException("You have an active prank already.")
+            return ret
+
+        # vm.startPrank(address sender, address origin)
+        elif funsig == hevm_cheat_code.start_prank_addr_addr_sig:
+            sender = uint160(arg.get_word(4))
+            origin = uint160(arg.get_word(36))
+            result = ex.prank.startPrank(sender, origin)
             if not result:
                 raise HalmosException("You have an active prank already.")
             return ret

@@ -1558,7 +1558,9 @@ class SEVM:
         if not ret_size >= 0:
             raise ValueError(ret_size)
 
-        caller = ex.prank.lookup(ex.this, to)
+        prank_result = ex.prank.lookup(to)
+        caller = ex.this if prank_result.sender is None else prank_result.sender
+        origin = f_origin() if prank_result.origin is None else prank_result.origin
         arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
         def send_callvalue(condition=None) -> None:
