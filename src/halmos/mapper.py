@@ -11,10 +11,11 @@ SELECTOR_FIELDS = {
 
 @dataclass
 class AstNode:
+    # TODO: trim some fields
     node_type: str
     id: int
     name: str
-    address: str  # TODO: rename it to `selector` or `signature` to better reflect the meaning
+    selector: str
     visibility: str
 
 
@@ -165,28 +166,26 @@ class Mapper(metaclass=SingletonMeta):
         # free functions don't have a function selector
         return node.get(selector_field, "")
 
-    def find_nodes_by_address(self, address: str, contract_name: str = None):
+    def lookup_selector(self, selector: str, contract_name: str | None = None) -> str:
+        if selector == "0x":
+            return selector
+
         # if the given signature is declared in the given contract, return its name.
         if contract_name:
             contract_mapping_info = self.get_by_name(contract_name)
-
             if contract_mapping_info:
                 for node in contract_mapping_info.nodes:
-                    if node.address == address:
+                    if node.selector == selector:
                         return node.name
 
-        # otherwise, search for the signature in other contracts, and return all the contracts that declare it.
+        # otherwise, search for the signature in other contracts and return the first match.
         # note: ambiguity may occur if multiple compilation units exist.
-        result = ""
-        for key, contract_info in self._contracts.items():
-            matching_nodes = [
-                node for node in contract_info.nodes if node.address == address
-            ]
+        for contract_info in self._contracts.values():
+            for node in contract_info.nodes:
+                if node.selector == selector:
+                    return node.name
 
-            for node in matching_nodes:
-                result += f"{key}.{node.name} "
-
-        return result.strip() if result != "" and address != "0x" else address
+        return selector
 
 
 # TODO: create a new instance or reset for each test

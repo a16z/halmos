@@ -25,10 +25,18 @@ def read_json_file(request):
 def ast_nodes() -> List[AstNode]:
     return [
         AstNode(
-            node_type="type1", id=1, name="Node1", address="0x123", visibility="public"
+            node_type="type1",
+            id=1,
+            name="Node1",
+            selector="0x1234",
+            visibility="public",
         ),
         AstNode(
-            node_type="type2", id=2, name="Node2", address="0x456", visibility="private"
+            node_type="type2",
+            id=2,
+            name="Node2",
+            selector="0x5678",
+            visibility="private",
         ),
     ]
 
@@ -92,7 +100,7 @@ def test_get_by_bytecode_nonexistent(mapper):
 def test_append_node(mapper, ast_nodes):
     mapper.add("ContractA", "bytecodeA", ast_nodes)
     new_node = AstNode(
-        node_type="type3", id=3, name="Node3", address="0x789", visibility="public"
+        node_type="type3", id=3, name="Node3", selector="0x789", visibility="public"
     )
     mapper.append_node("ContractA", new_node)
     contract_info = mapper.get_by_name("ContractA")
@@ -103,7 +111,7 @@ def test_append_node(mapper, ast_nodes):
 
 def test_append_node_to_never_seen_before_contract(mapper):
     new_node = AstNode(
-        node_type="type3", id=3, name="Node3", address="0x789", visibility="public"
+        node_type="type3", id=3, name="Node3", selector="0x789", visibility="public"
     )
 
     mapper.append_node("NeverSeenBefore", new_node)
@@ -212,11 +220,12 @@ def test_parse_multicontract_ast(read_json_file, mapper):
     assert len(not_in_contract.nodes) == 2
     assert not_in_contract.nodes[0].name == "Log"
     assert (
-        not_in_contract.nodes[0].address
+        not_in_contract.nodes[0].selector
         == "0x909c57d5c6ac08245cf2a6de3900e2b868513fa59099b92b27d8db823d92df9c"
     )
     assert not_in_contract.nodes[1].name == "Unauthorized"
-    assert not_in_contract.nodes[1].address == "0x82b42900"
+    assert not_in_contract.nodes[1].selector == "0x82b42900"
+    assert mapper.lookup_selector("0x82b42900") == "Unauthorized"
 
     # there are 2 contracts in the AST
     # this would be visible as:
@@ -236,7 +245,8 @@ def test_parse_multicontract_ast(read_json_file, mapper):
     assert contract_TestA is not None
     assert len(contract_TestA.nodes) == 1
     assert contract_TestA.nodes[0].name == "test_foo"
-    assert contract_TestA.nodes[0].address == "0xdc24e7f1"
+    assert contract_TestA.nodes[0].selector == "0xdc24e7f1"
+    assert mapper.lookup_selector("0xdc24e7f1", contract_name="TestA") == "test_foo"
 
     # contract C {
     #     function foo() public pure returns (uint256) { ... }
@@ -245,4 +255,4 @@ def test_parse_multicontract_ast(read_json_file, mapper):
     assert contract_C is not None
     assert len(contract_C.nodes) == 1
     assert contract_C.nodes[0].name == "foo"
-    assert contract_C.nodes[0].address == "0xc2985578"
+    assert contract_C.nodes[0].selector == "0xc2985578"
