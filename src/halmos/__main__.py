@@ -1386,7 +1386,7 @@ def parse_symbols(args: HalmosConfig, contract_map: Dict, contract_name: str) ->
         contract_mapping_info = Mapper().get_or_create(contract_name)
         contract_mapping_info.bytecode = bytecode
 
-        Mapper().parse_ast(json_out["ast"], contract_name=contract_name)
+        Mapper().parse_ast(json_out["ast"])
 
     except Exception:
         if args.debug:

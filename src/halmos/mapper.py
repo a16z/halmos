@@ -1,6 +1,13 @@
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type
 
+SELECTOR_FIELDS = {
+    "VariableDeclaration": "functionSelector",
+    "FunctionDefinition": "functionSelector",
+    "EventDefinition": "eventSelector",
+    "ErrorDefinition": "errorSelector",
+}
+
 
 @dataclass
 class AstNode:
@@ -16,6 +23,26 @@ class ContractMappingInfo:
     contract_name: str
     bytecode: str
     nodes: List[AstNode]
+
+
+@dataclass
+class Explanation:
+    enabled: bool = False
+    content: str = ""
+
+    def add(self, text: str):
+        if self.enabled:
+            self.content += text
+
+    def print(self):
+        if self.enabled:
+            print(self.content)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.print()
 
 
 class SingletonMeta(type):
@@ -77,46 +104,66 @@ class Mapper(metaclass=SingletonMeta):
         return None
 
     def append_node(self, contract_name: str, node: AstNode):
-        contract_mapping_info = self._contracts[contract_name]
+        contract_mapping_info = self.get_or_create(contract_name)
         contract_mapping_info.nodes.append(node)
 
-    def parse_ast(self, node: Dict, contract_name: str):
-        node_type = node["nodeType"]
-        if node_type in self._PARSING_IGNORED_NODE_TYPES:
-            return
+    def parse_ast(self, node: Dict, explain=False):
+        # top-level public API meant to be called externally, passing the full AST
+        self._parse_ast(node, contract_name=None, explain=explain, _depth=0)
 
-        if node_type == "ContractDefinition":
-            if self.get_or_create(contract_name).nodes:
+    ### internal methods
+
+    def _parse_ast(
+        self, node: Dict, contract_name: str | None = None, explain=False, _depth=0
+    ):
+        node_type = node["nodeType"]
+        node_name = node.get("name", None)
+        node_name_str = f": {node_name}" if node_name else ""
+
+        with Explanation(enabled=explain) as expl:
+            expl.add(f"{'  ' * _depth}{node_type}{node_name_str}")
+
+            if node_type in self._PARSING_IGNORED_NODE_TYPES:
+                expl.add(" (ignored node type)")
                 return
 
-        elif node_type != "SourceUnit":
-            id, name, address, visibility = self._get_node_info(node, node_type)
-            ast_node = AstNode(node_type, id, name, address, visibility)
-            self.append_node(contract_name, ast_node)
+            if node_type == "ContractDefinition":
+                if contract_name is not None:
+                    raise ValueError(f"parsing {contract_name} but found {node}")
 
+                contract_name = node["name"]
+                if self.get_or_create(contract_name).nodes:
+                    expl.add(" (skipped, already parsed)")
+                    return
+
+            id, name, selector, visibility = self._get_node_info(node)
+            if selector != "0x":
+                ast_node = AstNode(node_type, id, name, selector, visibility)
+                self.append_node(contract_name, ast_node)
+                expl.add(f" (added node with {selector=}")
+
+        # go one level deeper
         for child_node in node.get("nodes", []):
-            self.parse_ast(child_node, contract_name)
+            self._parse_ast(child_node, contract_name, explain, _depth + 1)
 
-        if "body" in node:
-            self.parse_ast(node["body"], contract_name)
+        if body := node.get("body", None):
+            self._parse_ast(body, contract_name, explain, _depth + 1)
 
-    def _get_node_info(self, node: Dict, node_type: str) -> Dict:
+    def _get_node_info(self, node: Dict) -> Dict:
         return (
             node.get("id", ""),
             node.get("name", ""),
-            "0x" + self._get_node_address(node, node_type),
+            "0x" + self._get_node_selector(node),
             node.get("visibility", ""),
         )
 
-    def _get_node_address(self, node: Dict, node_type: str) -> str:
-        address_fields = {
-            "VariableDeclaration": "functionSelector",
-            "FunctionDefinition": "functionSelector",
-            "EventDefinition": "eventSelector",
-            "ErrorDefinition": "errorSelector",
-        }
+    def _get_node_selector(self, node: Dict) -> str:
+        node_type = node["nodeType"]
+        if not (selector_field := SELECTOR_FIELDS.get(node_type, None)):
+            return ""
 
-        return node.get(address_fields.get(node_type, ""), "")
+        # free functions don't have a function selector
+        return node.get(selector_field, "")
 
     def find_nodes_by_address(self, address: str, contract_name: str = None):
         # if the given signature is declared in the given contract, return its name.
@@ -168,3 +215,28 @@ class DeployAddressMapper(metaclass=SingletonMeta):
 
     def get_deployed_contract(self, address: str) -> Optional[str]:
         return self._deployed_contracts.get(address, address)
+
+
+def main():
+    import sys
+    import json
+    from .utils import cyan
+
+    def read_json_file(file_path: str) -> Dict:
+        with open(file_path) as f:
+            return json.load(f)
+
+    mapper = Mapper()
+    json_out = read_json_file(sys.argv[1])
+    mapper.parse_ast(json_out["ast"], explain=True)
+
+    print(cyan("\n### Results ###\n"))
+    for contract_name in mapper._contracts.keys():
+        print(f"Contract: {contract_name}")
+        ast_nodes = mapper.get_by_name(contract_name).nodes
+        for node in ast_nodes:
+            print(f"  {node}")
+
+
+if __name__ == "__main__":
+    main()
