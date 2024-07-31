@@ -11,12 +11,21 @@ SELECTOR_FIELDS = {
 
 @dataclass
 class AstNode:
-    # TODO: trim some fields
     node_type: str
-    id: int
     name: str
     selector: str
-    visibility: str
+
+    @staticmethod
+    def from_dict(node: Dict) -> Optional["AstNode"]:
+        node_type = node["nodeType"]
+        selector_field = SELECTOR_FIELDS.get(node_type, None)
+        if selector_field is None:
+            return None
+
+        selector = "0x" + node.get(selector_field, "")
+        return AstNode(
+            node_type=node_type, name=node.get("name", ""), selector=selector
+        )
 
 
 @dataclass
@@ -137,11 +146,12 @@ class Mapper(metaclass=SingletonMeta):
                     expl.add(" (skipped, already parsed)")
                     return
 
-            id, name, selector, visibility = self._get_node_info(node)
-            if selector != "0x":
-                ast_node = AstNode(node_type, id, name, selector, visibility)
+            ast_node = AstNode.from_dict(node)
+            if ast_node and ast_node.selector != "0x":
+                print(f"adding {ast_node}")
+
                 self.append_node(contract_name, ast_node)
-                expl.add(f" (added node with {selector=}")
+                expl.add(f" (added node with {ast_node.selector=}")
 
         # go one level deeper
         for child_node in node.get("nodes", []):
@@ -149,22 +159,6 @@ class Mapper(metaclass=SingletonMeta):
 
         if body := node.get("body", None):
             self._parse_ast(body, contract_name, explain, _depth + 1)
-
-    def _get_node_info(self, node: Dict) -> Dict:
-        return (
-            node.get("id", ""),
-            node.get("name", ""),
-            "0x" + self._get_node_selector(node),
-            node.get("visibility", ""),
-        )
-
-    def _get_node_selector(self, node: Dict) -> str:
-        node_type = node["nodeType"]
-        if not (selector_field := SELECTOR_FIELDS.get(node_type, None)):
-            return ""
-
-        # free functions don't have a function selector
-        return node.get(selector_field, "")
 
     def lookup_selector(self, selector: str, contract_name: str | None = None) -> str:
         if selector == "0x":

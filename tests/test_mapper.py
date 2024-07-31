@@ -26,17 +26,13 @@ def ast_nodes() -> List[AstNode]:
     return [
         AstNode(
             node_type="type1",
-            id=1,
             name="Node1",
             selector="0x1234",
-            visibility="public",
         ),
         AstNode(
             node_type="type2",
-            id=2,
             name="Node2",
             selector="0x5678",
-            visibility="private",
         ),
     ]
 
@@ -99,20 +95,16 @@ def test_get_by_bytecode_nonexistent(mapper):
 
 def test_append_node(mapper, ast_nodes):
     mapper.add("ContractA", "bytecodeA", ast_nodes)
-    new_node = AstNode(
-        node_type="type3", id=3, name="Node3", selector="0x789", visibility="public"
-    )
+    new_node = AstNode(node_type="type3", name="Node3", selector="0x789")
     mapper.append_node("ContractA", new_node)
     contract_info = mapper.get_by_name("ContractA")
     assert contract_info is not None
     assert len(contract_info.nodes) == 3
-    assert contract_info.nodes[-1].id == 3
+    assert contract_info.nodes[-1].name == "Node3"
 
 
 def test_append_node_to_never_seen_before_contract(mapper):
-    new_node = AstNode(
-        node_type="type3", id=3, name="Node3", selector="0x789", visibility="public"
-    )
+    new_node = AstNode(node_type="type3", name="Node3", selector="0x789")
 
     mapper.append_node("NeverSeenBefore", new_node)
     assert mapper.get_by_name("NeverSeenBefore").nodes == [new_node]
