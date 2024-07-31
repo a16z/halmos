@@ -85,12 +85,13 @@ def test_append_node(mapper, ast_nodes):
     assert contract_info.nodes[-1].id == 3
 
 
-def test_append_node_to_nonexistent_contract(mapper):
+def test_append_node_to_never_seen_before_contract(mapper):
     new_node = AstNode(
         node_type="type3", id=3, name="Node3", address="0x789", visibility="public"
     )
-    with pytest.raises(KeyError, match=r"NonexistentContract"):
-        mapper.append_node("NonexistentContract", new_node)
+
+    mapper.append_node("NeverSeenBefore", new_node)
+    assert mapper.get_by_name("NeverSeenBefore").nodes == [new_node]
 
 
 def test_parse_simple_ast(mapper):
@@ -109,7 +110,8 @@ def test_parse_simple_ast(mapper):
             }
         ],
     }
-    mapper.parse_ast(example_ast, "ExampleContract")
+
+    mapper.parse_ast(example_ast)
     contract_info = mapper.get_by_name("ExampleContract")
 
     assert contract_info is not None
@@ -163,14 +165,15 @@ def test_parse_complex_ast(mapper):
             },
         ],
     }
-    mapper.parse_ast(complex_ast, "ComplexContract")
+    mapper.parse_ast(complex_ast)
     contract_info = mapper.get_by_name("ComplexContract")
     assert contract_info is not None
     assert contract_info.contract_name == "ComplexContract"
-    assert len(contract_info.nodes) == 4
+
+    assert len(contract_info.nodes) == 3
 
     node_names = [node.name for node in contract_info.nodes]
-    assert "var1" in node_names
+    assert "var1" not in node_names  # var1 is not added, it has no selector
     assert "func1" in node_names
     assert "event1" in node_names
     assert "error1" in node_names
