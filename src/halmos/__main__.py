@@ -276,7 +276,7 @@ def rendered_trace(context: CallContext) -> str:
         return output.getvalue()
 
 
-def rendered_calldata(calldata: ByteVec, contract_name: str = None) -> str:
+def rendered_calldata(calldata: ByteVec, contract_name: str | None = None) -> str:
     return hexify(calldata.unwrap(), contract_name) if calldata else "0x"
 
 

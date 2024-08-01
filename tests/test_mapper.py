@@ -110,6 +110,49 @@ def test_append_node_to_never_seen_before_contract(mapper):
     assert mapper.get_by_name("NeverSeenBefore").nodes == [new_node]
 
 
+def test_lookup_selector(mapper, ast_nodes):
+    # when we look up an unknown selector, we should get the selector back
+    assert mapper.lookup_selector("0x1234") == "0x1234"
+
+    # when we add a new node to a contract scope
+    node1 = ast_nodes[0]
+    selector = node1.selector
+    mapper.append_node("ContractA", node1)
+
+    # then we can look up the selector by specifying the contract name
+    assert mapper.lookup_selector(selector, contract_name="ContractA") == node1.name
+
+    # and we can look up the selector without specifying the contract scope
+    assert mapper.lookup_selector(selector) == node1.name
+
+    # when we add another node with the same selector
+    node2 = AstNode(
+        node_type=node1.node_type, name="ConflictingNode", selector=selector
+    )
+
+    mapper.append_node("ContractB", node2)
+
+    # then we can look up the selector by specifying the contract scope
+    assert mapper.lookup_selector(selector, contract_name="ContractA") == node1.name
+    assert mapper.lookup_selector(selector, contract_name="ContractB") == node2.name
+
+    # if we look up without specifying the scope, we could get either name
+    assert mapper.lookup_selector(selector) in [node1.name, node2.name]
+
+
+def test_lookup_selector_unscoped(mapper, ast_nodes):
+    # when we add a new node with no contract scope (e.g. global errors or events)
+    node1 = ast_nodes[0]
+    selector = node1.selector
+    mapper.append_node(None, node1)
+
+    # then we can look up the selector even if we specify a contract scope
+    assert mapper.lookup_selector(selector, contract_name="ContractA") == node1.name
+
+    # and we can look up the selector without specifying the contract scope
+    assert mapper.lookup_selector(selector) == node1.name
+
+
 def test_parse_simple_ast(mapper):
     example_ast = {
         "nodeType": "ContractDefinition",
