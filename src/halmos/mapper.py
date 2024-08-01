@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Type
 
 SELECTOR_FIELDS = {
@@ -31,8 +31,19 @@ class AstNode:
 @dataclass
 class ContractMappingInfo:
     contract_name: str
-    bytecode: str
-    nodes: List[AstNode]
+    bytecode: str | None = None
+
+    # indexed by selector
+    nodes: Dict[str, AstNode] = field(default_factory=dict)
+
+    def with_nodes(self, nodes: List[AstNode]) -> "ContractMappingInfo":
+        for node in nodes:
+            self.add_node(node)
+        return self
+
+    def add_node(self, node: AstNode) -> None:
+        # don't overwrite if a node with the same selector already exists
+        self.nodes.setdefault(node.selector, node)
 
 
 @dataclass
@@ -81,16 +92,16 @@ class Mapper(metaclass=SingletonMeta):
     def __init__(self):
         self._contracts: Dict[str, ContractMappingInfo] = {}
 
-    def add(self, contract_name: str, bytecode: str, nodes: List[AstNode]):
+    def add_mapping(self, mapping: ContractMappingInfo) -> None:
+        contract_name = mapping.contract_name
         if contract_name in self._contracts:
             raise ValueError(f"Contract {contract_name} already exists")
 
-        value = ContractMappingInfo(contract_name, bytecode, nodes)
-        self._contracts[contract_name] = value
+        self._contracts[contract_name] = mapping
 
     def get_or_create(self, contract_name: str) -> ContractMappingInfo:
         if contract_name not in self._contracts:
-            self.add(contract_name, "", [])
+            self.add_mapping(ContractMappingInfo(contract_name))
 
         return self._contracts[contract_name]
 
@@ -113,9 +124,9 @@ class Mapper(metaclass=SingletonMeta):
 
         return None
 
-    def append_node(self, contract_name: str, node: AstNode):
+    def add_node(self, contract_name: str | None, node: AstNode):
         contract_mapping_info = self.get_or_create(contract_name)
-        contract_mapping_info.nodes.append(node)
+        contract_mapping_info.add_node(node)
 
     def parse_ast(self, node: Dict, explain=False):
         # top-level public API meant to be called externally, passing the full AST
@@ -150,7 +161,7 @@ class Mapper(metaclass=SingletonMeta):
             if ast_node and ast_node.selector != "0x":
                 print(f"adding {ast_node}")
 
-                self.append_node(contract_name, ast_node)
+                self.add_node(contract_name, ast_node)
                 expl.add(f" (added node with {ast_node.selector=}")
 
         # go one level deeper
@@ -168,16 +179,14 @@ class Mapper(metaclass=SingletonMeta):
         if contract_name:
             contract_mapping_info = self.get_by_name(contract_name)
             if contract_mapping_info:
-                for node in contract_mapping_info.nodes:
-                    if node.selector == selector:
-                        return node.name
+                if node := contract_mapping_info.nodes.get(selector, None):
+                    return node.name
 
         # otherwise, search for the signature in other contracts and return the first match.
         # note: ambiguity may occur if multiple compilation units exist.
-        for contract_info in self._contracts.values():
-            for node in contract_info.nodes:
-                if node.selector == selector:
-                    return node.name
+        for contract_mapping_info in self._contracts.values():
+            if node := contract_mapping_info.nodes.get(selector, None):
+                return node.name
 
         return selector
 
