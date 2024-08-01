@@ -630,6 +630,7 @@ class Exec:  # an execution path
     jumpis: Dict[str, Dict[bool, int]]  # for loop detection
     symbolic: bool  # symbolic or concrete storage
     prank: Prank
+    origin: Address
     addresses_to_delete: Set[Address]
 
     # path
@@ -662,6 +663,7 @@ class Exec:  # an execution path
         self.jumpis = kwargs["jumpis"]
         self.symbolic = kwargs["symbolic"]
         self.prank = kwargs["prank"]
+        self.origin = kwargs["origin"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
         #
         self.path = kwargs["path"]
@@ -723,6 +725,13 @@ class Exec:  # an execution path
 
     def current_instruction(self) -> Instruction:
         return self.pgm.decode_instruction(self.pc)
+
+    def resolve_prank(self, to: Address) -> Tuple[Address, Address]:
+        # this potentially "consumes" the active prank
+        prank_result = self.prank.lookup(to)
+        caller = self.this if prank_result.sender is None else prank_result.sender
+        origin = f_origin() if prank_result.origin is None else prank_result.origin
+        return caller, origin
 
     def set_code(self, who: Address, code: UnionType[ByteVec, Contract]) -> None:
         """
@@ -1558,16 +1567,14 @@ class SEVM:
         if not ret_size >= 0:
             raise ValueError(ret_size)
 
-        prank_result = ex.prank.lookup(to)
-        caller = ex.this if prank_result.sender is None else prank_result.sender
-        origin = f_origin() if prank_result.origin is None else prank_result.origin
+        pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
                 # TODO: revert if context is static
-                self.transfer_value(ex, caller, to, fund, condition)
+                self.transfer_value(ex, pranked_caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
             # backup current state
@@ -1580,7 +1587,7 @@ class SEVM:
 
             message = Message(
                 target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
-                caller=caller if op != EVM.DELEGATECALL else ex.caller(),
+                caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
                 value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
                 data=arg,
                 is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
@@ -1612,6 +1619,7 @@ class SEVM:
                 new_ex.jumpis = deepcopy(ex.jumpis)
                 new_ex.symbolic = ex.symbolic
                 new_ex.prank = deepcopy(ex.prank)
+                new_ex.origin = ex.origin
 
                 # set return data (in memory)
                 effective_ret_size = min(ret_size, new_ex.returndatasize())
@@ -1654,6 +1662,7 @@ class SEVM:
                 jumpis={},
                 symbolic=ex.symbolic,
                 prank=Prank(),
+                origin=pranked_origin,
                 #
                 path=ex.path,
                 alias=ex.alias,
@@ -1777,7 +1786,7 @@ class SEVM:
                 CallContext(
                     message=Message(
                         target=to,
-                        caller=caller,
+                        caller=pranked_caller,
                         value=fund,
                         data=ex.st.memory.slice(arg_loc, arg_loc + arg_size),
                         call_scheme=op,
@@ -1849,8 +1858,8 @@ class SEVM:
         if op == EVM.CREATE2:
             salt = ex.st.pop()
 
-        # lookup prank
-        caller = ex.prank.lookup(ex.this, con_addr(0))
+        # check if there is an active prank
+        pranked_caller, pranked_origin = ex.resolve_prank(address(ex.this))
 
         # contract creation code
         create_hexcode = ex.st.memory.slice(loc, loc + size)
@@ -1869,14 +1878,16 @@ class SEVM:
                 create_hexcode = bytes_to_bv_value(create_hexcode)
 
             code_hash = ex.sha3_data(create_hexcode)
-            hash_data = simplify(Concat(con(0xFF, 8), uint160(caller), salt, code_hash))
+            hash_data = simplify(
+                Concat(con(0xFF, 8), uint160(pranked_caller), salt, code_hash)
+            )
             new_addr = uint160(ex.sha3_data(hash_data))
         else:
             raise HalmosException(f"Unknown CREATE opcode: {op}")
 
         message = Message(
             target=new_addr,
-            caller=caller,
+            caller=pranked_caller,
             value=value,
             data=create_hexcode,
             is_static=False,
@@ -1910,7 +1921,7 @@ class SEVM:
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # transfer value
-        self.transfer_value(ex, caller, new_addr, value)
+        self.transfer_value(ex, pranked_caller, new_addr, value)
 
         def callback(new_ex, stack, step_id):
             subcall = new_ex.context
@@ -1974,6 +1985,7 @@ class SEVM:
             jumpis={},
             symbolic=False,
             prank=Prank(),
+            origin=pranked_origin,
             #
             path=ex.path,
             alias=ex.alias,
@@ -2094,6 +2106,7 @@ class SEVM:
             jumpis=deepcopy(ex.jumpis),
             symbolic=ex.symbolic,
             prank=deepcopy(ex.prank),
+            origin=ex.origin,
             #
             path=new_path,
             alias=ex.alias.copy(),
@@ -2293,7 +2306,7 @@ class SEVM:
                     ex.st.push(uint256(ex.caller()))
 
                 elif opcode == EVM.ORIGIN:
-                    ex.st.push(uint256(f_origin()))
+                    ex.st.push(uint256(ex.origin))
 
                 elif opcode == EVM.ADDRESS:
                     ex.st.push(uint256(ex.this))
@@ -2628,6 +2641,7 @@ class SEVM:
             jumpis={},
             symbolic=symbolic,
             prank=Prank(),
+            origin=f_origin(),
             #
             path=path,
             alias={},

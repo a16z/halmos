@@ -139,6 +139,10 @@ def int256(x: BitVecRef) -> BitVecRef:
     return simplify(SignExt(256 - bitsize, x))
 
 
+def address(x: Any) -> Address:
+    return uint(x, 160)
+
+
 def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, BitVecSorts[size_bits])
 

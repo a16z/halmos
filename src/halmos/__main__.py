@@ -681,6 +681,7 @@ def run(
             jumpis={},
             symbolic=args.symbolic_storage,
             prank=Prank(),  # prank is reset after setUp()
+            origin=setup_ex.origin,
             #
             path=path,
             alias=setup_ex.alias.copy(),

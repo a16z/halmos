@@ -103,8 +103,18 @@ def test_lookup_no_active_prank(prank, other):
 
 
 def test_prank_lookup(prank, sender, other):
-    # when calling lookup() after prank()
+    # setup an active prank
     prank.prank(sender)
+
+    # when calling lookup(to=<cheat-address>)
+    for cheat_code in [hevm_cheat_code, halmos_cheat_code]:
+        result = prank.lookup(cheat_code.address)
+
+        # then the active prank is ignored
+        assert result == NO_PRANK
+        assert prank  # still active
+
+    # finally, when calling lookup(to=other)
     result = prank.lookup(other)
 
     # then the active prank is returned
@@ -116,8 +126,18 @@ def test_prank_lookup(prank, sender, other):
 
 
 def test_startPrank_lookup(prank, sender, origin, other):
-    # when calling lookup() after startPrank()
+    # setup an active prank
     prank.startPrank(sender, origin)
+
+    # when calling lookup(to=<cheat-address>)
+    for cheat_code in [hevm_cheat_code, halmos_cheat_code]:
+        result = prank.lookup(cheat_code.address)
+
+        # then the active prank is ignored
+        assert result == NO_PRANK
+        assert prank  # still active
+
+    # finally, when calling lookup(to=other)
     result = prank.lookup(other)
 
     # then the active prank is returned
