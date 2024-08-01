@@ -75,68 +75,93 @@ def stringified_bytes_to_bytes(hexstring: str) -> ByteVec:
     return ByteVec(ret_bytes)
 
 
-@dataclass
+@dataclass(frozen=True)
 class PrankResult:
-    sender: Address | None
-    origin: Address | None
-
-
-class Prank:
-    sender: Address | None  # prank msg.sender address
-    origin: Address | None  # prank tx.origin address
-    keep: bool  # start / stop prank
-
-    def __init__(self) -> None:
-        self.sender = None
-        self.origin = None
-        self.keep = False
+    sender: Address | None = None
+    origin: Address | None = None
 
     def __bool__(self) -> bool:
+        """
+        True iff either sender or origin is set.
+        """
         return self.sender is not None or self.origin is not None
+
+    def __str__(self) -> str:
+        return f"{hexify(self.sender)}, {hexify(self.origin)}"
+
+
+NO_PRANK = PrankResult()
+
+
+@dataclass
+class Prank:
+    """
+    A mutable object to store current prank context, one per execution context.
+
+    Because it's mutable, it must be copied across contexts.
+
+    Can test for the existence of an active prank with `if prank: ...`
+
+    A prank is active if either sender or origin is set.
+    Technically supports pranking origin but not sender, which is not
+    possible with the current cheatcodes:
+    - prank(address) sets sender
+    - prank(address, address) sets both sender and origin
+    """
+
+    active: PrankResult = NO_PRANK  # active prank context
+    keep: bool = False  # start / stop prank
+
+    def __bool__(self) -> bool:
+        """
+        True iff either sender or origin is set.
+        """
+        return bool(self.active)
 
     def __str__(self) -> str:
         if not self:
             return "no active prank"
 
         fn_name = "startPrank" if self.keep else "prank"
-        if self.origin is not None:
-            return f"{fn_name}({hexify(self.sender)}, {hexify(self.origin)})"
-        else:
-            return f"{fn_name}({hexify(self.sender)})"
+        return f"{fn_name}({str(self.active)})"
 
     def lookup(self, to: Address) -> PrankResult:
+        """
+        If `to` is an eligible prank destination, return the active prank context.
+
+        If `keep` is False, this resets the prank context.
+        """
+
         assert_address(to)
-        result = PrankResult()
         if (
             self
             and not eq(to, hevm_cheat_code.address)
             and not eq(to, halmos_cheat_code.address)
         ):
-            result.caller = self.sender
-            result.origin = self.origin
+            result = self.active
             if not self.keep:
                 self.stopPrank()
-        return result
+            return result
 
-    def prank(self, sender: Address) -> bool:
-        if self.sender is not None:
+        return NO_PRANK
+
+    def prank(self, sender: Address, origin: Address | None = None) -> bool:
+        assert_address(sender)
+        if self.active:
             return False
-        self.sender = sender
+
+        self.active = PrankResult(sender=sender, origin=origin)
         self.keep = False
         return True
 
-    def startPrank(self, addr: Address) -> bool:
-        assert_address(addr)
-        if self.sender is not None:
-            return False
-        self.sender = addr
-        self.keep = True
-        return True
+    def startPrank(self, sender: Address, origin: Address | None = None) -> bool:
+        result = self.prank(sender, origin)
+        self.keep = result if result else self.keep
+        return result
 
     def stopPrank(self) -> bool:
-        # stopPrank is allowed to call even when no active prank exists
-        self.sender = None
-        self.origin = None
+        # stopPrank calls are allowed even when no active prank exists
+        self.active = NO_PRANK
         self.keep = False
         return True
 
