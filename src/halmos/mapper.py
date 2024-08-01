@@ -159,8 +159,6 @@ class Mapper(metaclass=SingletonMeta):
 
             ast_node = AstNode.from_dict(node)
             if ast_node and ast_node.selector != "0x":
-                print(f"adding {ast_node}")
-
                 self.add_node(contract_name, ast_node)
                 expl.add(f" (added node with {ast_node.selector=}")
 
@@ -236,8 +234,8 @@ def main():
     for contract_name in mapper._contracts.keys():
         print(f"Contract: {contract_name}")
         ast_nodes = mapper.get_by_name(contract_name).nodes
-        for node in ast_nodes:
-            print(f"  {node}")
+        for selector, node in ast_nodes.items():
+            print(f"  {selector}: {node.name}")
 
 
 if __name__ == "__main__":
