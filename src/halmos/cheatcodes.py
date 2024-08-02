@@ -318,13 +318,13 @@ class hevm_cheat_code:
     prank_sig: int = 0xCA669FA7
 
     # bytes4(keccak256("prank(address,address)"))
-    prank_addr_addr_sig: int = 0x42424242
+    prank_addr_addr_sig: int = 0x47E50CCE
 
     # bytes4(keccak256("startPrank(address)"))
     start_prank_sig: int = 0x06447D56
 
     # bytes4(keccak256("startPrank(address,address)"))
-    start_prank_addr_addr_sig: int = 0x42424242
+    start_prank_addr_addr_sig: int = 0x45B56078
 
     # bytes4(keccak256("stopPrank()"))
     stop_prank_sig: int = 0x90C5013B

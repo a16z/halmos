@@ -1337,7 +1337,7 @@
         ],
         "test/Prank.t.sol:PrankTest": [
             {
-                "name": "check_prank(address)",
+                "name": "check_prank(address,address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1347,6 +1347,15 @@
             },
             {
                 "name": "check_prank_Constructor(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_prank_ConstructorCreate2(address,bytes32)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1409,7 +1418,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_startPrank(address)",
+                "name": "check_startPrank(address,address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,

@@ -7,13 +7,16 @@ contract Dummy { }
 
 contract Target {
     address public caller;
+    address public origin;
 
-    function setCaller(address addr) public {
-        caller = addr;
+    function setCaller(address _caller, address _origin) public {
+        caller = _caller;
+        origin = _origin;
     }
 
     function recordCaller() public {
         caller = msg.sender;
+        origin = tx.origin;
     }
 }
 
@@ -60,31 +63,85 @@ contract PrankTest is Test {
         vm.prank(user);
     }
 
-    function check_prank(address user) public {
+    function check_prank(address user, address origin) public {
         vm.prank(user);
+
+        // check that the prank is active
         target.recordCaller();
         assert(target.caller() == user);
+        assert(target.origin() == tx.origin); // not pranked
 
+        // check that the prank is no longer active
         target.recordCaller();
         assert(target.caller() == address(this));
+        assert(target.origin() == tx.origin);
+
+        ////////////////////////////
+        // check alternative form //
+        ////////////////////////////
+
+        vm.prank(user, origin);
+
+        // check that the prank is active
+        target.recordCaller();
+        assert(target.caller() == user);
+        assert(target.origin() == origin);
+
+        // check that the prank is no longer active
+        target.recordCaller();
+        assert(target.caller() == address(this));
+        assert(target.origin() == tx.origin);
+
     }
 
-    function check_startPrank(address user) public {
+    function check_startPrank(address user, address origin) public {
         vm.startPrank(user);
 
         target.recordCaller();
         assert(target.caller() == user);
+        assert(target.origin() == tx.origin); // not pranked
 
-        target.setCaller(address(this));
+        target.setCaller(address(this), address(this));
         assert(target.caller() == address(this));
+        assert(target.origin() == address(this));
 
+        // prank is still active until stopPrank() is called
         target.recordCaller();
         assert(target.caller() == user);
+        assert(target.origin() == tx.origin); // not pranked
 
         vm.stopPrank();
 
+        // prank is no longer active
         target.recordCaller();
         assert(target.caller() == address(this));
+        assert(target.origin() == tx.origin);
+
+        ////////////////////////////
+        // check alternative form //
+        ////////////////////////////
+
+        vm.startPrank(user, origin);
+
+        target.recordCaller();
+        assert(target.caller() == user);
+        assert(target.origin() == origin);
+
+        target.setCaller(address(this), address(this));
+        assert(target.caller() == address(this));
+        assert(target.origin() == address(this));
+
+        // prank is still active until stopPrank() is called
+        target.recordCaller();
+        assert(target.caller() == user);
+        assert(target.origin() == origin);
+
+        vm.stopPrank();
+
+        // prank is no longer active
+        target.recordCaller();
+        assert(target.caller() == address(this));
+        assert(target.origin() == tx.origin);
     }
 
     function check_prank_Internal(address user) public {
@@ -94,13 +151,13 @@ contract PrankTest is Test {
     }
 
     function check_prank_External(address user) public {
-        ext.prank(user); // prank isn't propagated beyond the vm boundry
+        ext.prank(user); // prank isn't propagated beyond the vm boundary
         target.recordCaller();
         assert(target.caller() == address(this));
     }
 
     function check_prank_ExternalSelf(address user) public {
-        this.prank(user); // prank isn't propagated beyond the vm boundry
+        this.prank(user); // prank isn't propagated beyond the vm boundary
         target.recordCaller();
         assert(target.caller() == address(this));
     }
@@ -146,10 +203,9 @@ contract PrankTest is Test {
         assert(recorder.caller() == user);
     }
 
-    // TODO: uncomment when we add CREATE2 support
-    // function check_prank_ConstructorCreate2(address user, bytes32 salt) public {
-    //     vm.prank(user);
-    //     ConstructorRecorder recorder = new ConstructorRecorder{salt:salt}();
-    //     assert(recorder.caller() == user);
-    // }
+    function check_prank_ConstructorCreate2(address user, bytes32 salt) public {
+        vm.prank(user);
+        ConstructorRecorder recorder = new ConstructorRecorder{salt:salt}();
+        assert(recorder.caller() == user);
+    }
 }
