@@ -9,9 +9,9 @@ contract Target {
     address public caller;
     address public origin;
 
-    function setCaller(address _caller, address _origin) public {
-        caller = _caller;
-        origin = _origin;
+    function reset() public {
+        caller = address(0);
+        origin = address(0);
     }
 
     function recordCaller() public {
@@ -101,9 +101,9 @@ contract PrankTest is Test {
         assert(target.caller() == user);
         assert(target.origin() == tx.origin); // not pranked
 
-        target.setCaller(address(this), address(this));
-        assert(target.caller() == address(this));
-        assert(target.origin() == address(this));
+        target.reset();
+        assert(target.caller() == address(0));
+        assert(target.origin() == address(0));
 
         // prank is still active until stopPrank() is called
         target.recordCaller();
@@ -127,9 +127,9 @@ contract PrankTest is Test {
         assert(target.caller() == user);
         assert(target.origin() == origin);
 
-        target.setCaller(address(this), address(this));
-        assert(target.caller() == address(this));
-        assert(target.origin() == address(this));
+        target.reset();
+        assert(target.caller() == address(0));
+        assert(target.origin() == address(0));
 
         // prank is still active until stopPrank() is called
         target.recordCaller();
