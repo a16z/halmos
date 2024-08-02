@@ -276,7 +276,7 @@ def rendered_trace(context: CallContext) -> str:
         return output.getvalue()
 
 
-def rendered_calldata(calldata: ByteVec, contract_name: str = None) -> str:
+def rendered_calldata(calldata: ByteVec, contract_name: str | None = None) -> str:
     return hexify(calldata.unwrap(), contract_name) if calldata else "0x"
 
 
@@ -301,11 +301,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
             if context.output.error is None:
                 target = hex(int(str(message.target)))
                 bytecode = context.output.data.unwrap().hex()
-                contract_name = (
-                    Mapper()
-                    .get_contract_mapping_info_by_bytecode(bytecode)
-                    .contract_name
-                )
+                contract_name = Mapper().get_by_bytecode(bytecode).contract_name
 
                 DeployAddressMapper().add_deployed_contract(target, contract_name)
                 addr_str = contract_name
@@ -1370,29 +1366,8 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                     )
 
                 contract_map[contract_name] = (json_out, contract_type, natspec)
+                parse_symbols(args, contract_map, contract_name)
 
-                try:
-                    bytecode = contract_map[contract_name][0]["bytecode"]["object"]
-                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
-                        contract_name
-                    )
-
-                    if contract_mapping_info is None:
-                        Mapper().add_contract_mapping_info(
-                            contract_name=contract_name,
-                            bytecode=bytecode,
-                            nodes=[],
-                        )
-                    else:
-                        contract_mapping_info.bytecode = bytecode
-
-                    contract_mapping_info = Mapper().get_contract_mapping_info_by_name(
-                        contract_name
-                    )
-                    Mapper().parse_ast(contract_map[contract_name][0]["ast"])
-
-                except Exception:
-                    pass
             except Exception as err:
                 warn_code(
                     PARSING_ERROR,
@@ -1403,6 +1378,24 @@ def parse_build_out(args: HalmosConfig) -> Dict:
                 continue
 
     return result
+
+
+def parse_symbols(args: HalmosConfig, contract_map: Dict, contract_name: str) -> None:
+    try:
+        json_out = contract_map[contract_name][0]
+        bytecode = json_out["bytecode"]["object"]
+        contract_mapping_info = Mapper().get_or_create(contract_name)
+        contract_mapping_info.bytecode = bytecode
+
+        Mapper().parse_ast(json_out["ast"])
+
+    except Exception:
+        if args.debug:
+            debug(f"error parsing symbols for contract {contract_name}")
+            debug(traceback.format_exc())
+        else:
+            # we parse symbols as best effort, don't propagate exceptions
+            pass
 
 
 def parse_devdoc(funsig: str, contract_json: Dict) -> str:

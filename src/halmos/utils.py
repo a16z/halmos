@@ -347,13 +347,13 @@ def hexify(x, contract_name: str = None):
     elif isinstance(x, int):
         return f"0x{x:02x}"
     elif isinstance(x, bytes):
-        return Mapper().find_nodes_by_address("0x" + x.hex(), contract_name)
+        return Mapper().lookup_selector("0x" + x.hex(), contract_name)
     elif hasattr(x, "unwrap"):
         return hexify(x.unwrap(), contract_name)
     elif is_bv_value(x):
         # maintain the byte size of x
         num_bytes = byte_length(x, strict=False)
-        return Mapper().find_nodes_by_address(
+        return Mapper().lookup_selector(
             f"0x{x.as_long():0{num_bytes * 2}x}", contract_name
         )
     elif is_app(x):
