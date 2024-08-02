@@ -1097,6 +1097,7 @@ def solve(
         with open(dump_filename, "w") as f:
             if args.verbose >= 1:
                 print(f"Writing SMT query to {dump_filename}")
+            f.write("(set-option :produce-models true)\n")
             if args.cache_solver:
                 f.write("(set-option :produce-unsat-cores true)\n")
             f.write("(set-logic QF_AUFBV)\n")
