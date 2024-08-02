@@ -1058,13 +1058,14 @@ def copy_model(model: Model) -> Dict:
 def parse_unsat_core(output) -> Optional[List]:
     # parsing example:
     #   unsat
-    #   (error "the context is unsatisfiable")
+    #   (error "the context is unsatisfiable")  # <-- this line is optional
     #   (<41702> <37030> <36248> <47880>)
     # result:
     #   [41702, 37030, 36248, 47880]
-    match = re.search(r"unsat\s*\(\s*error\s+[^)]*\)\s*\(\s*((<[0-9]+>\s*)*)\)", output)
+    pattern = r"unsat\s*(\(\s*error\s+[^)]*\)\s*)?\(\s*((<[0-9]+>\s*)*)\)"
+    match = re.search(pattern, output)
     if match:
-        result = [re.sub(r"<([0-9]+)>", r"\1", name) for name in match.group(1).split()]
+        result = [re.sub(r"<([0-9]+)>", r"\1", name) for name in match.group(2).split()]
         return result
     else:
         warn(f"error in parsing unsat core: {output}")
