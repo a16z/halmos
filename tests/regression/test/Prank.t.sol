@@ -17,6 +17,10 @@ contract Target {
     function reset() public {
         caller = address(0);
         origin = address(0);
+
+        if (address(inner) != address(0)) {
+            inner.reset();
+        }
     }
 
     function recordCaller() public {
@@ -76,11 +80,11 @@ contract PrankTest is Test {
     }
 
     function checkNotPranked(Target _target, address realCaller) internal {
-        assert(_target.caller() == realCaller);
-        assert(_target.origin() == tx.origin);
+        assertEq(_target.caller(), realCaller);
+        assertEq(_target.origin(), tx.origin);
     }
 
-    function check_prank(address user) public {
+    function check_prank_single(address user) public {
         vm.prank(user);
 
         // the outer call is pranked
@@ -96,7 +100,7 @@ contract PrankTest is Test {
         checkNotPranked(target, address(this));
     }
 
-    function check_prank(address user, address origin) public {
+    function check_prank_double(address user, address origin) public {
         vm.prank(user, origin);
 
         // the outer call is pranked
@@ -112,54 +116,65 @@ contract PrankTest is Test {
         checkNotPranked(target, address(this));
     }
 
-    function check_startPrank(address user, address origin) public {
+    function check_startPrank_single(address user) public {
         vm.startPrank(user);
 
+        // the outer call is pranked
         target.recordCaller();
         assert(target.caller() == user);
         assert(target.origin() == tx.origin); // not pranked
 
+        // the inner call is not pranked
+        checkNotPranked(inner, address(target));
+
         target.reset();
         assert(target.caller() == address(0));
         assert(target.origin() == address(0));
+        assert(inner.caller() == address(0));
+        assert(inner.origin() == address(0));
 
         // prank is still active until stopPrank() is called
         target.recordCaller();
         assert(target.caller() == user);
         assert(target.origin() == tx.origin); // not pranked
+        checkNotPranked(inner, address(target));
 
         vm.stopPrank();
 
         // prank is no longer active
         target.recordCaller();
-        assert(target.caller() == address(this));
-        assert(target.origin() == tx.origin);
+        checkNotPranked(target, address(this));
+        checkNotPranked(inner, address(target));
+    }
 
-        ////////////////////////////
-        // check alternative form //
-        ////////////////////////////
-
+    function check_startPrank_double(address user, address origin) public {
         vm.startPrank(user, origin);
 
         target.recordCaller();
         assert(target.caller() == user);
         assert(target.origin() == origin);
+        assert(inner.caller() == address(target)); // not pranked
+        assert(inner.origin() == origin); // pranked
 
         target.reset();
         assert(target.caller() == address(0));
         assert(target.origin() == address(0));
+        assert(inner.caller() == address(0));
+        assert(inner.origin() == address(0));
 
         // prank is still active until stopPrank() is called
         target.recordCaller();
         assert(target.caller() == user);
         assert(target.origin() == origin);
+        assert(inner.caller() == address(target)); // not pranked
+        assert(inner.origin() == origin); // pranked
 
         vm.stopPrank();
 
         // prank is no longer active
         target.recordCaller();
-        assert(target.caller() == address(this));
-        assert(target.origin() == tx.origin);
+        checkNotPranked(target, address(this));
+        checkNotPranked(inner, address(target));
     }
 
     function check_prank_Internal(address user) public {
