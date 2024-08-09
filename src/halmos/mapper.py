@@ -199,12 +199,9 @@ class DeployAddressMapper(metaclass=SingletonMeta):
         self._deployed_contracts: Dict[str, str] = {}
 
         # Set up some default mappings
-        self.add_deployed_contract(
-            "0x7109709ecfa91a80626ff3989d68f67f5b1dd12d", "HEVM_ADDRESS"
-        )
-        self.add_deployed_contract(
-            "0xf3993a62377bcd56ae39d773740a5390411e8bc9", "SVM_ADDRESS"
-        )
+        self.add_deployed_contract("0x7109709ecfa91a80626ff3989d68f67f5b1dd12d", "hevm")
+        self.add_deployed_contract("0xf3993a62377bcd56ae39d773740a5390411e8bc9", "svm")
+        self.add_deployed_contract("0x636f6e736f6c652e6c6f67", "console")
 
     def add_deployed_contract(
         self,
