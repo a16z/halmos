@@ -188,10 +188,7 @@ def mk_addr(name: str) -> Address:
 
 
 def mk_caller(args: HalmosConfig) -> Address:
-    if args.symbolic_msg_sender:
-        return mk_addr("msg_sender")
-    else:
-        return magic_address
+    return mk_addr("msg_sender") if args.symbolic_msg_sender else magic_address
 
 
 def mk_this() -> Address:
@@ -336,27 +333,24 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
 
 def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
     solver = mk_solver(args)
-    contract = Contract.from_hexcode(hexcode)
-    balance = mk_balance()
-    block = mk_block()
     this = mk_this()
-
     message = Message(
         target=this,
         caller=mk_caller(args),
+        origin=mk_addr("tx_origin"),
         value=mk_callvalue(),
         data=ByteVec(),
         call_scheme=EVM.CALL,
     )
 
+    contract = Contract.from_hexcode(hexcode)
     sevm = SEVM(args)
     ex = sevm.mk_exec(
         code={this: contract},
         storage={this: {}},
-        balance=balance,
-        block=block,
+        balance=mk_balance(),
+        block=mk_block(),
         context=CallContext(message=message),
-        this=this,
         pgm=contract,
         symbolic=args.symbolic_storage,
         path=Path(solver),
@@ -366,7 +360,6 @@ def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
 
     for idx, ex in enumerate(exs):
         result_exs.append(ex)
-
         opcode = ex.current_opcode()
         error = ex.context.output.error
         returndata = ex.context.output.data
@@ -403,6 +396,7 @@ def deploy_test(
     message = Message(
         target=this,
         caller=mk_caller(args),
+        origin=mk_addr("tx_origin"),
         value=0,
         data=ByteVec(),
         call_scheme=EVM.CREATE,
@@ -414,7 +408,6 @@ def deploy_test(
         balance=mk_balance(),
         block=mk_block(),
         context=CallContext(message=message),
-        this=this,
         pgm=None,  # to be added
         symbolic=False,
         path=Path(mk_solver(args)),
@@ -463,7 +456,6 @@ def deploy_test(
     ex.st = State()
     ex.context.output = CallOutput()
     ex.jumpis = {}
-    ex.prank = Prank()
 
     return ex
 
@@ -492,10 +484,12 @@ def setup(
         dyn_param_size = []  # TODO: propagate to run
         mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
 
+        parent_message = setup_ex.message()
         setup_ex.context = CallContext(
             message=Message(
-                target=setup_ex.message().target,
-                caller=setup_ex.message().caller,
+                target=parent_message.target,
+                caller=parent_message.caller,
+                origin=parent_message.origin,
                 value=0,
                 data=calldata,
                 call_scheme=EVM.CALL,
@@ -503,7 +497,6 @@ def setup(
         )
 
         setup_exs_all = sevm.run(setup_ex)
-
         setup_exs_no_error = []
 
         for idx, setup_ex in enumerate(setup_exs_all):
@@ -640,8 +633,9 @@ def run(
     mk_calldata(abi, fun_info, cd, dyn_param_size, args)
 
     message = Message(
-        target=setup_ex.this,
+        target=setup_ex.this(),
         caller=setup_ex.caller(),
+        origin=setup_ex.origin(),
         value=0,
         data=cd,
         call_scheme=EVM.CALL,
@@ -669,15 +663,12 @@ def run(
             #
             context=CallContext(message=message),
             callback=None,
-            this=setup_ex.this,
             #
-            pgm=setup_ex.code[setup_ex.this],
+            pgm=setup_ex.code[setup_ex.this()],
             pc=0,
             st=State(),
             jumpis={},
             symbolic=args.symbolic_storage,
-            prank=Prank(),  # prank is reset after setUp()
-            origin=setup_ex.origin,
             #
             path=path,
             alias=setup_ex.alias.copy(),

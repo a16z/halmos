@@ -96,15 +96,14 @@ NO_PRANK = PrankResult()
 @dataclass
 class Prank:
     """
-    A mutable object to store current prank context, one per execution context.
+    A mutable object to store the current prank context.
 
     Because it's mutable, it must be copied across contexts.
 
     Can test for the existence of an active prank with `if prank: ...`
 
     A prank is active if either sender or origin is set.
-    Technically supports pranking origin but not sender, which is not
-    possible with the current cheatcodes:
+
     - prank(address) sets sender
     - prank(address, address) sets both sender and origin
     """
@@ -423,7 +422,7 @@ class hevm_cheat_code:
         # vm.prank(address)
         elif funsig == hevm_cheat_code.prank_sig:
             sender = uint160(arg.get_word(4))
-            result = ex.prank.prank(sender)
+            result = ex.context.prank.prank(sender)
             if not result:
                 raise HalmosException("You have an active prank already.")
             return ret
@@ -432,7 +431,7 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.prank_addr_addr_sig:
             sender = uint160(arg.get_word(4))
             origin = uint160(arg.get_word(36))
-            result = ex.prank.prank(sender, origin)
+            result = ex.context.prank.prank(sender, origin)
             if not result:
                 raise HalmosException("You have an active prank already.")
             return ret
@@ -440,7 +439,7 @@ class hevm_cheat_code:
         # vm.startPrank(address)
         elif funsig == hevm_cheat_code.start_prank_sig:
             address = uint160(arg.get_word(4))
-            result = ex.prank.startPrank(address)
+            result = ex.context.prank.startPrank(address)
             if not result:
                 raise HalmosException("You have an active prank already.")
             return ret
@@ -449,14 +448,14 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.start_prank_addr_addr_sig:
             sender = uint160(arg.get_word(4))
             origin = uint160(arg.get_word(36))
-            result = ex.prank.startPrank(sender, origin)
+            result = ex.context.prank.startPrank(sender, origin)
             if not result:
                 raise HalmosException("You have an active prank already.")
             return ret
 
         # vm.stopPrank()
         elif funsig == hevm_cheat_code.stop_prank_sig:
-            ex.prank.stopPrank()
+            ex.context.prank.stopPrank()
             return ret
 
         # vm.deal(address,uint256)

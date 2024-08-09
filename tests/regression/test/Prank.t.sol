@@ -108,8 +108,9 @@ contract PrankTest is Test {
         assert(target.caller() == user);
         assert(target.origin() == origin);
 
-        // but the inner call is not pranked
-        checkNotPranked(inner, address(target));
+        // the inner call also sees the pranked origin
+        assert(inner.caller() == address(target));
+        assert(target.origin() == origin);
 
         // check that the prank is no longer active
         target.recordCaller();
