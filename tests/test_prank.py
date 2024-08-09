@@ -10,6 +10,8 @@ from halmos.cheatcodes import (
     halmos_cheat_code,
 )
 
+from halmos.sevm import Message, CallContext
+
 
 @pytest.fixture
 def prank():
@@ -146,3 +148,77 @@ def test_startPrank_lookup(prank, sender, origin, other):
 
     # and the prank is still active
     assert prank
+
+
+def test_prank_in_context(sender, origin):
+    """
+    This is part test and part documentation.
+
+    It implements the intended handling of messages, contexts and pranks by sevm,
+    and it shows the expected flow of values from prank creation to consumption.
+    """
+
+    pranked_sender = BitVec("pranked_sender", 160)
+    pranked_origin = BitVec("pranked_origin", 160)
+    CALL = 0xF1
+
+    # start with a basic context
+    context = CallContext(
+        message=Message(
+            target=BitVec("original_target", 160),
+            caller=sender,
+            origin=origin,
+            value=0,
+            data=b"",
+            call_scheme=CALL,
+        )
+    )
+
+    assert not context.prank
+
+    # a call to vm.prank() would mutate the context's active prank
+    context.prank.prank(pranked_sender, pranked_origin)
+
+    # the context now has an active prank
+    assert context.prank
+
+    # when creating a sub-context (e.g. for a new call), the prank should be consumed
+    call1_target = BitVec("call1_target", 160)
+    call1_prank_result = context.prank.lookup(call1_target)
+    sub_context1 = CallContext(
+        message=Message(
+            target=call1_target,
+            caller=call1_prank_result.sender,
+            origin=call1_prank_result.origin,
+            value=0,
+            data=b"",
+            call_scheme=CALL,
+        )
+    )
+
+    assert not context.prank
+    assert sub_context1.message.caller == pranked_sender
+    assert sub_context1.message.origin == pranked_origin
+
+    # the sub-context should have no active prank
+    assert not sub_context1.prank
+
+    # subcalls do inherit the origin from the parent context
+    call2_target = BitVec("call2_target", 160)
+    assert not context.prank.lookup(call2_target)
+    sub_context2 = CallContext(
+        message=Message(
+            target=call2_target,
+            caller=sub_context1.message.target,
+            origin=sub_context1.message.origin,
+            value=0,
+            data=b"",
+            call_scheme=CALL,
+        ),
+    )
+
+    assert not sub_context2.prank
+    assert sub_context2.message.caller == sub_context1.message.target  # real
+    assert (
+        sub_context2.message.origin == sub_context1.message.origin
+    )  # pranked (indirectly)
