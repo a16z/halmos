@@ -35,9 +35,17 @@ contract Target {
 
 contract ConstructorRecorder {
     address public caller;
+    address public origin;
 
     constructor() {
         caller = msg.sender;
+        origin = tx.origin;
+    }
+}
+
+contract PrankyConstructor is TestBase {
+    constructor(address user, address origin) {
+        vm.startPrank(user, origin);
     }
 }
 
@@ -231,15 +239,46 @@ contract PrankTest is Test {
         assert(target.caller() == address(this));
     }
 
-    function check_prank_Constructor(address user) public {
-        vm.prank(user);
+    function check_prank_Constructor(address user, address origin) public {
+        address senderBefore = msg.sender;
+        address originBefore = tx.origin;
+
+        vm.prank(user, origin);
         ConstructorRecorder recorder = new ConstructorRecorder();
         assert(recorder.caller() == user);
+        assert(recorder.origin() == origin);
+
+        // origin and sender are restored
+        assertEq(msg.sender, senderBefore);
+        assertEq(tx.origin, originBefore);
     }
 
-    function check_prank_ConstructorCreate2(address user, bytes32 salt) public {
-        vm.prank(user);
+    function check_prank_ConstructorCreate2(address user, address origin, bytes32 salt) public {
+        address senderBefore = msg.sender;
+        address originBefore = tx.origin;
+
+        vm.prank(user, origin);
         ConstructorRecorder recorder = new ConstructorRecorder{salt:salt}();
         assert(recorder.caller() == user);
+        assert(recorder.origin() == origin);
+
+        // origin and sender are restored
+        assertEq(msg.sender, senderBefore);
+        assertEq(tx.origin, originBefore);
+    }
+
+    function check_prank_startPrank_in_constructor(address user, address origin) public {
+        address senderBefore = msg.sender;
+        address originBefore = tx.origin;
+
+        PrankyConstructor pranky = new PrankyConstructor(user, origin);
+
+        // results are not affected by the startPrank in the constructor
+        assertEq(msg.sender, senderBefore);
+        assertEq(tx.origin, originBefore);
+
+        target.recordCaller();
+        assert(target.caller() == address(this));
+        assert(target.origin() == originBefore);
     }
 }
