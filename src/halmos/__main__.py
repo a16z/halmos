@@ -277,7 +277,18 @@ def rendered_trace(context: CallContext) -> str:
 
 
 def rendered_calldata(calldata: ByteVec, contract_name: str | None = None) -> str:
-    return hexify(calldata.unwrap(), contract_name) if calldata else "0x"
+    if not calldata:
+        return "0x"
+
+    if len(calldata) < 4:
+        return hexify(calldata)
+
+    if len(calldata) == 4:
+        return f"{hexify(calldata.unwrap(), contract_name)}()"
+
+    selector = calldata[:4].unwrap()
+    args = calldata[4:].unwrap()
+    return f"{hexify(selector, contract_name)}({hexify(args)})"
 
 
 def render_trace(context: CallContext, file=sys.stdout) -> None:
