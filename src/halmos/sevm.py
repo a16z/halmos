@@ -22,7 +22,7 @@ from typing import (
 )
 from z3 import *
 
-from .bytevec import Chunk, ByteVec
+from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 from .config import Config as HalmosConfig
 from .console import console
@@ -78,17 +78,21 @@ create2_magic_address: int = 0xBBBB0000
 new_address_offset: int = 1
 
 
+def insn_len(opcode: int) -> int:
+    if EVM.PUSH1 <= opcode <= EVM.PUSH32:
+        return opcode - EVM.PUSH0 + 1
+
+    return 1
+
+
 class Instruction:
     opcode: int
     pc: int = -1
-    next_pc: int = -1
     operand: Optional[ByteVec] = None
 
-    def __init__(self, opcode, pc=-1, next_pc=-1, operand=None) -> None:
+    def __init__(self, opcode, pc=-1, operand=None) -> None:
         self.opcode = opcode
-
         self.pc = pc
-        self.next_pc = next_pc
         self.operand = operand
 
     def __str__(self) -> str:
@@ -99,7 +103,7 @@ class Instruction:
         return f"Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})"
 
     def __len__(self) -> int:
-        return self.next_pc - self.pc
+        return insn_len(self.opcode)
 
 
 def id_str(x: Any) -> str:
@@ -369,22 +373,71 @@ class Block:
 class Contract:
     """Abstraction over contract bytecode. Can include concrete and symbolic elements."""
 
+    _code: ByteVec
+
+    # if the bytecode starts with a concrete prefix, we store it separately for fast access
+    # (this is a common case, especially for test contracts that deploy other contracts)
+    _fastcode: Optional[bytes] = None
+
+    _insn: Dict[int, Instruction]
+
+    _next_pc: Dict[int, int]
+
+    _jumpdests: Optional[set]
+
     def __init__(self, code: Optional[ByteVec] = None) -> None:
-        # if
         if not isinstance(code, ByteVec):
             code = ByteVec(code)
 
         self._code = code
 
+        # extract the first chunk of code
+        if code.chunks:
+            first_chunk = code.chunks[0]
+            if isinstance(first_chunk, ConcreteChunk):
+                self._fastcode = first_chunk.unwrap()
+                # print(f"{len(self._fastcode)} bytes of fastcode: {hexify(self._fastcode)}")
+
         # maps pc to decoded instruction (including operand and next_pc)
         self._insn = dict()
+        self._next_pc = dict()
+        self._jumpdests = None
 
-    def __init_jumpdests(self):
-        assert not hasattr(self, "_jumpdests")
-        self._jumpdests = set((pc for (pc, op) in iter(self) if op == EVM.JUMPDEST))
+    def __get_jumpdests(self):
+        # quick scan, does not eagerly decode instructions
+        jumpdests = set()
+        pc = 0
 
-    def __iter__(self):
-        return CodeIterator(self)
+        # optimistically process fast path first
+        if self._fastcode:
+            N = len(self._fastcode)
+            while pc < N:
+                opcode = self._fastcode[pc]
+                # print(f"{pc=}, {opcode=}, {mnemonic(opcode)}")
+
+                if opcode == EVM.JUMPDEST:
+                    jumpdests.add(pc)
+
+                next_pc = pc + insn_len(opcode)
+                self._next_pc[pc] = next_pc
+                pc = next_pc
+
+        N = len(self._code)
+        while pc < N:
+            try:
+                opcode = int_of(self._code.get_byte(pc))
+                # print(f"{pc=}, {opcode=}, {mnemonic(opcode)}")
+
+                if opcode == EVM.JUMPDEST:
+                    jumpdests.add(pc)
+
+                next_pc = pc + insn_len(opcode)
+                self._next_pc[pc] = next_pc
+                pc = next_pc
+            except NotConcreteError:
+                break
+
+        return jumpdests
 
     def from_hexcode(hexcode: str):
         """Create a contract from a hexcode string, e.g. "aabbccdd" """
@@ -405,37 +458,58 @@ class Contract:
         except ValueError as e:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
-    def _decode_instruction(self, pc: int) -> Instruction:
-        opcode = int_of(self._code[pc], f"symbolic opcode at pc={pc}")
+    def _decode_instruction(self, pc: int) -> Tuple[Instruction, int]:
+        opcode = int_of(self[pc], f"symbolic opcode at pc={pc}")
+        length = insn_len(opcode)
+        next_pc = pc + length
 
-        if EVM.PUSH1 <= opcode <= EVM.PUSH32:
-            operand_offset = pc + 1
-            operand_size = opcode - EVM.PUSH0
-            next_pc = operand_offset + operand_size
-
+        if length > 1:
             # TODO: consider slicing lazily
-            operand = self.slice(operand_offset, next_pc).unwrap()
-            return Instruction(opcode, pc=pc, operand=operand, next_pc=next_pc)
+            operand = self.unwrapped_slice(pc + 1, next_pc)
+            return (Instruction(opcode, pc=pc, operand=operand), next_pc)
 
-        return Instruction(opcode, pc=pc, next_pc=pc + 1)
+        return (Instruction(opcode, pc=pc), next_pc)
 
     def decode_instruction(self, pc: int) -> Instruction:
+        """decode instruction at pc and cache the result"""
+
         insn = self._insn.get(pc, None)
         if insn is None:
-            insn = self._decode_instruction(pc)
+            insn, next_pc = self._decode_instruction(pc)
             self._insn[pc] = insn
+            self._next_pc[pc] = next_pc
 
         return insn
 
     def next_pc(self, pc):
-        return self.decode_instruction(pc).next_pc
+        if (result := self._next_pc.get(pc)) is not None:
+            return result
+
+        self.decode_instruction(pc)
+        return self._next_pc[pc]
 
     def slice(self, start, stop) -> ByteVec:
+        # fast path for offsets in the concrete prefix
+        if self._fastcode and stop < len(self._fastcode):
+            return ByteVec(self._fastcode[start:stop])
+
         return self._code.slice(start, stop)
+
+    def unwrapped_slice(self, start, stop) -> UnwrappedBytes:
+        # fast path for offsets in the concrete prefix
+        if self._fastcode and stop < len(self._fastcode):
+            return self._fastcode[start:stop]
+
+        return self._code.slice(start, stop).unwrap()
 
     def __getitem__(self, key: int) -> Byte:
         """Returns the byte at the given offset."""
         offset = int_of(key, "symbolic index into contract bytecode {offset!r}")
+
+        # fast path for offsets in the concrete prefix
+        if self._fastcode and offset < len(self._fastcode):
+            return self._fastcode[offset]
+
         return self._code.get_byte(offset)
 
     def __len__(self) -> int:
@@ -444,32 +518,10 @@ class Contract:
 
     def valid_jump_destinations(self) -> set:
         """Returns the set of valid jump destinations."""
-        if not hasattr(self, "_jumpdests"):
-            self.__init_jumpdests()
+        if self._jumpdests is None:
+            self._jumpdests = self.__get_jumpdests()
 
         return self._jumpdests
-
-
-class CodeIterator:
-    def __init__(self, contract: Contract):
-        self.contract = contract
-        self.pc = 0
-
-    def __iter__(self):
-        return self
-
-    def __next__(self) -> Tuple[int, int]:
-        """Returns a tuple of (pc, opcode)"""
-        if self.pc >= len(self.contract):
-            raise StopIteration
-
-        try:
-            pc = self.pc
-            insn = self.contract.decode_instruction(pc)
-            self.pc = insn.next_pc
-            return (pc, insn.opcode)
-        except NotConcreteError:
-            raise StopIteration
 
 
 @dataclass(frozen=True)
@@ -784,7 +836,7 @@ class Exec:  # an execution path
             )
         )
 
-    def next_pc(self) -> None:
+    def advance_pc(self) -> None:
         self.pc = self.pgm.next_pc(self.pc)
 
     def check(self, cond: Any) -> Any:
@@ -1639,7 +1691,7 @@ class SEVM:
                     new_ex.balance = orig_balance
 
                 # add to worklist even if it reverted during the external call
-                new_ex.next_pc()
+                new_ex.advance_pc()
                 stack.push(new_ex, step_id)
 
             sub_ex = Exec(
@@ -1797,7 +1849,7 @@ class SEVM:
             # TODO: check if still needed
             ex.calls.append((exit_code_var, exit_code, ex.context.output.data))
 
-            ex.next_pc()
+            ex.advance_pc()
             stack.push(ex, step_id)
 
         # precompiles or cheatcodes
@@ -1893,7 +1945,7 @@ class SEVM:
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
             ex.st.push(0)
-            ex.next_pc()
+            ex.advance_pc()
 
             # add a virtual subcontext to the trace for debugging purposes
             subcall = CallContext(message=message, depth=ex.context.depth + 1)
@@ -1919,7 +1971,7 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, pranked_caller, new_addr, value)
 
-        def callback(new_ex, stack, step_id):
+        def callback(new_ex: Exec, stack, step_id):
             subcall = new_ex.context
 
             # continue execution in the context of the parent
@@ -1957,7 +2009,7 @@ class SEVM:
                 new_ex.balance = orig_balance
 
             # add to worklist
-            new_ex.next_pc()
+            new_ex.advance_pc()
             stack.push(new_ex, step_id)
 
         sub_ex = Exec(
@@ -2040,7 +2092,7 @@ class SEVM:
         if follow_false:
             new_ex_false = ex
             new_ex_false.path.append(cond_false, branching=True)
-            new_ex_false.next_pc()
+            new_ex_false.advance_pc()
 
         if new_ex_true:
             if potential_true and potential_false:
@@ -2566,7 +2618,7 @@ class SEVM:
                     # this halts the path, but we should only halt the current context
                     raise HalmosException(f"Unsupported opcode {hex(opcode)}")
 
-                ex.next_pc()
+                ex.advance_pc()
                 stack.push(ex, step_id)
 
             except InfeasiblePath as err:
