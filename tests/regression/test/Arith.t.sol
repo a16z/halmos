@@ -3,6 +3,12 @@ pragma solidity >=0.8.0 <0.9.0;
 
 contract ArithTest {
 
+    function unchecked_div(uint x, uint y) public pure returns (uint ret) {
+        assembly {
+            ret := div(x, y)
+        }
+    }
+
     function unchecked_mod(uint x, uint y) public pure returns (uint ret) {
         assembly {
             ret := mod(x, y)
@@ -33,5 +39,24 @@ contract ArithTest {
             assert(((x ** 2) ** 2) ** 2 == (x**2) * (x**2) * (x**2) * (x**2));
         //  assert(x ** 8 == (x ** 4) ** 2);
         }
+    }
+
+    function check_Div_fail(uint x, uint y) public pure {
+        require(x > y);
+
+        uint q = unchecked_div(x, y);
+
+        // note: since x > y, q can be zero only when y == 0, due to the division-by-zero semantics in the EVM
+
+        assert(q != 0); // counterexample: y == 0
+    }
+
+    function check_Div_pass(uint x, uint y) public pure {
+        require(x > y);
+        require(y > 0);
+
+        uint q = unchecked_div(x, y);
+
+        assert(q != 0); // pass
     }
 }
