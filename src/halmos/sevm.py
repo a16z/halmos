@@ -69,6 +69,10 @@ f_mod = {
     264: Function("f_evm_bvurem_264", BitVecSort264, BitVecSort264, BitVecSort264),
     512: Function("f_evm_bvurem_512", BitVecSort512, BitVecSort512, BitVecSort512),
 }
+f_mul = {
+    256: Function("f_evm_bvmul", BitVecSort256, BitVecSort256, BitVecSort256),
+    512: Function("f_evm_bvmul_512", BitVecSort512, BitVecSort512, BitVecSort512),
+}
 f_sdiv = Function("f_evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
 f_smod = Function("f_evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
 f_exp = Function("f_evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
@@ -1337,6 +1341,10 @@ class SEVM:
         # ex.path.append(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
         return term
 
+    def mk_mul(self, ex: Exec, x: Any, y: Any) -> Any:
+        term = f_mul[x.size()](x, y)
+        return term
+
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
         w1 = b2i(w1)
         w2 = b2i(w2)
@@ -1348,7 +1356,35 @@ class SEVM:
             return w1 - w2
 
         if op == EVM.MUL:
-            return w1 * w2
+            if is_bv_value(w1) and is_bv_value(w2):
+                return w1 * w2
+
+            if is_bv_value(w1):
+                i1: int = w1.as_long()
+                if i1 == 0:
+                    return w1
+
+                if i1 == 1:
+                    return w2
+
+                if is_power_of_two(i1):
+                    return w2 << int(math.log(i1, 2))
+
+            if is_bv_value(w2):
+                i2: int = w2.as_long()
+                if i2 == 0:
+                    return w2
+
+                if i2 == 1:
+                    return w1
+
+                if is_power_of_two(i2):
+                    return w1 << int(math.log(i2, 2))
+
+            if is_bv_value(w1) or is_bv_value(w2):
+                return w1 * w2
+
+            return self.mk_mul(ex, w1, w2)
 
         if op == EVM.DIV:
             div_for_overflow_check = self.div_xy_y(w1, w2)
@@ -1440,7 +1476,7 @@ class SEVM:
                 if i2 <= self.options.smt_exp_by_const:
                     exp = w1
                     for _ in range(i2 - 1):
-                        exp = exp * w1
+                        exp = self.arith(ex, EVM.MUL, exp, w1)
                     return exp
 
             return f_exp(w1, w2)

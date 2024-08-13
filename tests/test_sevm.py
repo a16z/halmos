@@ -9,6 +9,7 @@ from halmos.utils import EVM
 from halmos.sevm import (
     con,
     Contract,
+    f_mul,
     f_div,
     f_sdiv,
     f_mod,
@@ -146,7 +147,7 @@ def byte_of(i, x):
     [
         (o(EVM.PUSH0), [], con(0)),
         (o(EVM.ADD), [x, y], x + y),
-        (o(EVM.MUL), [x, y], x * y),
+        (o(EVM.MUL), [x, y], f_mul[x.size()](x, y)),
         (o(EVM.SUB), [x, y], x - y),
         (o(EVM.DIV), [x, y], f_div(x, y)),
         (o(EVM.DIV), [con(5), con(3)], con(1)),
@@ -199,13 +200,13 @@ def byte_of(i, x):
         (
             o(EVM.MULMOD),
             [x, y, con(2**3)],
-            ZeroExt(253, Extract(2, 0, ZeroExt(256, x) * ZeroExt(256, y))),
+            ZeroExt(253, Extract(2, 0, f_mul[512](ZeroExt(256, x), ZeroExt(256, y)))),
         ),
         (
             o(EVM.MULMOD),
             [x, y, z],
             Extract(
-                255, 0, f_mod[512](ZeroExt(256, x) * ZeroExt(256, y), ZeroExt(256, z))
+                255, 0, f_mod[512](f_mul[512](ZeroExt(256, x), ZeroExt(256, y)), ZeroExt(256, z))
             ),
         ),
         (o(EVM.MULMOD), [con(10), con(10), con(8)], con(4)),
@@ -221,7 +222,7 @@ def byte_of(i, x):
         (o(EVM.EXP), [x, y], f_exp(x, y)),
         (o(EVM.EXP), [x, con(0)], con(1)),
         (o(EVM.EXP), [x, con(1)], x),
-        (o(EVM.EXP), [x, con(2)], x * x),
+        (o(EVM.EXP), [x, con(2)], f_mul[x.size()](x, x)),
         (o(EVM.SIGNEXTEND), [con(0), y], SignExt(248, Extract(7, 0, y))),
         (o(EVM.SIGNEXTEND), [con(1), y], SignExt(240, Extract(15, 0, y))),
         (o(EVM.SIGNEXTEND), [con(30), y], SignExt(8, Extract(247, 0, y))),
