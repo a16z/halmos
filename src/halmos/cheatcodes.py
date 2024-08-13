@@ -75,58 +75,92 @@ def stringified_bytes_to_bytes(hexstring: str) -> ByteVec:
     return ByteVec(ret_bytes)
 
 
-class Prank:
-    addr: Any  # prank address
-    keep: bool  # start / stop prank
+@dataclass(frozen=True)
+class PrankResult:
+    sender: Address | None = None
+    origin: Address | None = None
 
-    def __init__(self, addr: Any = None, keep: bool = False) -> None:
-        if addr is not None:
-            assert_address(addr)
-        self.addr = addr
-        self.keep = keep
+    def __bool__(self) -> bool:
+        """
+        True iff either sender or origin is set.
+        """
+        return self.sender is not None or self.origin is not None
 
     def __str__(self) -> str:
-        if self.addr:
-            if self.keep:
-                return f"startPrank({str(self.addr)})"
-            else:
-                return f"prank({str(self.addr)})"
-        else:
-            return "None"
+        return f"{hexify(self.sender)}, {hexify(self.origin)}"
 
-    def lookup(self, this: Any, to: Any) -> Any:
-        assert_address(this)
+
+NO_PRANK = PrankResult()
+
+
+@dataclass
+class Prank:
+    """
+    A mutable object to store the current prank context.
+
+    Because it's mutable, it must be copied across contexts.
+
+    Can test for the existence of an active prank with `if prank: ...`
+
+    A prank is active if either sender or origin is set.
+
+    - prank(address) sets sender
+    - prank(address, address) sets both sender and origin
+    """
+
+    active: PrankResult = NO_PRANK  # active prank context
+    keep: bool = False  # start / stop prank
+
+    def __bool__(self) -> bool:
+        """
+        True iff either sender or origin is set.
+        """
+        return bool(self.active)
+
+    def __str__(self) -> str:
+        if not self:
+            return "no active prank"
+
+        fn_name = "startPrank" if self.keep else "prank"
+        return f"{fn_name}({str(self.active)})"
+
+    def lookup(self, to: Address) -> PrankResult:
+        """
+        If `to` is an eligible prank destination, return the active prank context.
+
+        If `keep` is False, this resets the prank context.
+        """
+
         assert_address(to)
-        caller = this
         if (
-            self.addr is not None
+            self
             and not eq(to, hevm_cheat_code.address)
             and not eq(to, halmos_cheat_code.address)
         ):
-            caller = self.addr
+            result = self.active
             if not self.keep:
-                self.addr = None
-        return caller
+                self.stopPrank()
+            return result
 
-    def prank(self, addr: Any) -> bool:
-        assert_address(addr)
-        if self.addr is not None:
+        return NO_PRANK
+
+    def prank(
+        self, sender: Address, origin: Address | None = None, _keep: bool = False
+    ) -> bool:
+        assert_address(sender)
+        if self.active:
             return False
-        self.addr = addr
-        self.keep = False
+
+        self.active = PrankResult(sender=sender, origin=origin)
+        self.keep = _keep
         return True
 
-    def startPrank(self, addr: Any) -> bool:
-        assert_address(addr)
-        if self.addr is not None:
-            return False
-        self.addr = addr
-        self.keep = True
-        return True
+    def startPrank(self, sender: Address, origin: Address | None = None) -> bool:
+        return self.prank(sender, origin, _keep=True)
 
     def stopPrank(self) -> bool:
-        # stopPrank is allowed to call even when no active prank exists
-        self.addr = None
+        # stopPrank calls are allowed even when no active prank exists
+        self.active = NO_PRANK
         self.keep = False
         return True
 
@@ -282,8 +316,14 @@ class hevm_cheat_code:
     # bytes4(keccak256("prank(address)"))
     prank_sig: int = 0xCA669FA7
 
+    # bytes4(keccak256("prank(address,address)"))
+    prank_addr_addr_sig: int = 0x47E50CCE
+
     # bytes4(keccak256("startPrank(address)"))
     start_prank_sig: int = 0x06447D56
+
+    # bytes4(keccak256("startPrank(address,address)"))
+    start_prank_addr_addr_sig: int = 0x45B56078
 
     # bytes4(keccak256("stopPrank()"))
     stop_prank_sig: int = 0x90C5013B
@@ -381,8 +421,17 @@ class hevm_cheat_code:
 
         # vm.prank(address)
         elif funsig == hevm_cheat_code.prank_sig:
-            address = uint160(arg.get_word(4))
-            result = ex.prank.prank(address)
+            sender = uint160(arg.get_word(4))
+            result = ex.context.prank.prank(sender)
+            if not result:
+                raise HalmosException("You have an active prank already.")
+            return ret
+
+        # vm.prank(address sender, address origin)
+        elif funsig == hevm_cheat_code.prank_addr_addr_sig:
+            sender = uint160(arg.get_word(4))
+            origin = uint160(arg.get_word(36))
+            result = ex.context.prank.prank(sender, origin)
             if not result:
                 raise HalmosException("You have an active prank already.")
             return ret
@@ -390,14 +439,23 @@ class hevm_cheat_code:
         # vm.startPrank(address)
         elif funsig == hevm_cheat_code.start_prank_sig:
             address = uint160(arg.get_word(4))
-            result = ex.prank.startPrank(address)
+            result = ex.context.prank.startPrank(address)
+            if not result:
+                raise HalmosException("You have an active prank already.")
+            return ret
+
+        # vm.startPrank(address sender, address origin)
+        elif funsig == hevm_cheat_code.start_prank_addr_addr_sig:
+            sender = uint160(arg.get_word(4))
+            origin = uint160(arg.get_word(36))
+            result = ex.context.prank.startPrank(sender, origin)
             if not result:
                 raise HalmosException("You have an active prank already.")
             return ret
 
         # vm.stopPrank()
         elif funsig == hevm_cheat_code.stop_prank_sig:
-            ex.prank.stopPrank()
+            ex.context.prank.stopPrank()
             return ret
 
         # vm.deal(address,uint256)

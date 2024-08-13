@@ -1,1 +1,1 @@
-multicaller/=../../tests/lib/multicaller/src/
+multicaller/=src/multicaller/
