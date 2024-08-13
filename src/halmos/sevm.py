@@ -1356,10 +1356,13 @@ class SEVM:
             return w1 - w2
 
         if op == EVM.MUL:
-            if is_bv_value(w1) and is_bv_value(w2):
+            is_bv_value_w1 = is_bv_value(w1)
+            is_bv_value_w2 = is_bv_value(w2)
+
+            if is_bv_value_w1 and is_bv_value_w2:
                 return w1 * w2
 
-            if is_bv_value(w1):
+            if is_bv_value_w1:
                 i1: int = w1.as_long()
                 if i1 == 0:
                     return w1
@@ -1370,7 +1373,7 @@ class SEVM:
                 if is_power_of_two(i1):
                     return w2 << (i1.bit_length() - 1)
 
-            if is_bv_value(w2):
+            if is_bv_value_w2:
                 i2: int = w2.as_long()
                 if i2 == 0:
                     return w2
@@ -1381,7 +1384,7 @@ class SEVM:
                 if is_power_of_two(i2):
                     return w1 << (i2.bit_length() - 1)
 
-            if is_bv_value(w1) or is_bv_value(w2):
+            if is_bv_value_w1 or is_bv_value_w2:
                 return w1 * w2
 
             return self.mk_mul(ex, w1, w2)
