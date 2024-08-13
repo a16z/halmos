@@ -1368,7 +1368,7 @@ class SEVM:
                     return w2
 
                 if is_power_of_two(i1):
-                    return w2 << int(math.log(i1, 2))
+                    return w2 << (i1.bit_length() - 1)
 
             if is_bv_value(w2):
                 i2: int = w2.as_long()
@@ -1379,7 +1379,7 @@ class SEVM:
                     return w1
 
                 if is_power_of_two(i2):
-                    return w1 << int(math.log(i2, 2))
+                    return w1 << (i2.bit_length() - 1)
 
             if is_bv_value(w1) or is_bv_value(w2):
                 return w1 * w2
@@ -1407,7 +1407,7 @@ class SEVM:
                     return w1
 
                 if is_power_of_two(i2):
-                    return LShR(w1, int(math.log(i2, 2)))
+                    return LShR(w1, i2.bit_length() - 1)
 
             return self.mk_div(ex, w1, w2)
 
@@ -1424,7 +1424,7 @@ class SEVM:
                     return con(0, w2.size())
 
                 if is_power_of_two(i2):
-                    bitsize = int(math.log(i2, 2))
+                    bitsize = i2.bit_length() - 1
                     return ZeroExt(w2.size() - bitsize, Extract(bitsize - 1, 0, w1))
 
             return self.mk_mod(ex, w1, w2)
