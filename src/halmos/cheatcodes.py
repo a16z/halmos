@@ -144,19 +144,19 @@ class Prank:
 
         return NO_PRANK
 
-    def prank(self, sender: Address, origin: Address | None = None) -> bool:
+    def prank(
+        self, sender: Address, origin: Address | None = None, _keep: bool = False
+    ) -> bool:
         assert_address(sender)
         if self.active:
             return False
 
         self.active = PrankResult(sender=sender, origin=origin)
-        self.keep = False
+        self.keep = _keep
         return True
 
     def startPrank(self, sender: Address, origin: Address | None = None) -> bool:
-        result = self.prank(sender, origin)
-        self.keep = result if result else self.keep
-        return result
+        return self.prank(sender, origin, _keep=True)
 
     def stopPrank(self) -> bool:
         # stopPrank calls are allowed even when no active prank exists
