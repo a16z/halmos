@@ -206,7 +206,11 @@ def byte_of(i, x):
             o(EVM.MULMOD),
             [x, y, z],
             Extract(
-                255, 0, f_mod[512](f_mul[512](ZeroExt(256, x), ZeroExt(256, y)), ZeroExt(256, z))
+                255,
+                0,
+                f_mod[512](
+                    f_mul[512](ZeroExt(256, x), ZeroExt(256, y)), ZeroExt(256, z)
+                ),
             ),
         ),
         (o(EVM.MULMOD), [con(10), con(10), con(8)], con(4)),
