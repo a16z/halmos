@@ -14,13 +14,20 @@ Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
 
 ## Installation
 
-```
+```sh
 pip install halmos
 ```
 
 Or, if you want to try out the nightly build version:
-```
+
+```sh
 pip install git+https://github.com/a16z/halmos
+```
+
+Alternatively, you can download the Docker image that contains halmos and its dependencies:
+
+```sh
+docker pull .:/workspace ghcr.io/a16z/halmos:0.1.14
 ```
 
 ## Usage
@@ -31,8 +38,18 @@ halmos
 ```
 
 For more details:
+
 ```
 halmos --help
+```
+
+Alternatively, you can run the latest halmos Docker image available at [ghcr.io/a16z/halmos](ghcr.io/a16z/halmos):
+
+```sh
+cd /path/to/src
+
+# mount '.' under /workspace in the container
+docker run -v .:/workspace ghcr.io/a16z/halmos:0.1.14
 ```
 
 ## Examples
