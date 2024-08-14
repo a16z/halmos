@@ -23,6 +23,24 @@
         ],
         "test/Arith.t.sol:ArithTest": [
             {
+                "name": "check_Div_fail(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_Div_pass(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_Exp(uint256)",
                 "exitcode": 0,
                 "num_models": 0,

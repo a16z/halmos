@@ -61,19 +61,19 @@ f_gas = Function("f_gas", BitVecSort256, BitVecSort256)
 f_gasprice = Function("f_gasprice", BitVecSort256)
 
 # uninterpreted arithmetic
-f_div = Function("f_evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
+f_div = Function("f_evm_bvudiv_256", BitVecSort256, BitVecSort256, BitVecSort256)
 f_mod = {
-    256: Function("f_evm_bvurem", BitVecSort256, BitVecSort256, BitVecSort256),
+    256: Function("f_evm_bvurem_256", BitVecSort256, BitVecSort256, BitVecSort256),
     264: Function("f_evm_bvurem_264", BitVecSort264, BitVecSort264, BitVecSort264),
     512: Function("f_evm_bvurem_512", BitVecSort512, BitVecSort512, BitVecSort512),
 }
 f_mul = {
-    256: Function("f_evm_bvmul", BitVecSort256, BitVecSort256, BitVecSort256),
+    256: Function("f_evm_bvmul_256", BitVecSort256, BitVecSort256, BitVecSort256),
     512: Function("f_evm_bvmul_512", BitVecSort512, BitVecSort512, BitVecSort512),
 }
-f_sdiv = Function("f_evm_bvsdiv", BitVecSort256, BitVecSort256, BitVecSort256)
-f_smod = Function("f_evm_bvsrem", BitVecSort256, BitVecSort256, BitVecSort256)
-f_exp = Function("f_evm_exp", BitVecSort256, BitVecSort256, BitVecSort256)
+f_sdiv = Function("f_evm_bvsdiv_256", BitVecSort256, BitVecSort256, BitVecSort256)
+f_smod = Function("f_evm_bvsrem_256", BitVecSort256, BitVecSort256, BitVecSort256)
+f_exp = Function("f_evm_exp_256", BitVecSort256, BitVecSort256, BitVecSort256)
 
 magic_address: int = 0xAAAA0000
 

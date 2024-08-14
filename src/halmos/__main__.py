@@ -1205,17 +1205,23 @@ def is_unknown(result: CheckSatResult, model: Model) -> bool:
 
 def refine(query: SMTQuery) -> SMTQuery:
     smtlib = query.smtlib
+
     # replace uninterpreted abstraction with actual symbols for assertion solving
-    # TODO: replace `(f_evm_bvudiv x y)` with `(ite (= y (_ bv0 256)) (_ bv0 256) (bvudiv x y))`
-    #       as bvudiv is undefined when y = 0; also similarly for f_evm_bvurem
-    smtlib = re.sub(r"(\(\s*)f_evm_(bv[a-z]+)(_[0-9]+)?\b", r"\1\2", smtlib)
-    # remove the uninterpreted function symbols
-    # TODO: this will be no longer needed once is_model_valid is properly implemented
     smtlib = re.sub(
-        r"\(\s*declare-fun\s+f_evm_(bv[a-z]+)(_[0-9]+)?\b",
-        r"(declare-fun dummy_\1\2",
+        r"\(declare-fun f_evm_(bvmul)_([0-9]+) \(\(_ BitVec \2\) \(_ BitVec \2\)\) \(_ BitVec \2\)\)",
+        r"(define-fun f_evm_\1_\2 ((x (_ BitVec \2)) (y (_ BitVec \2))) (_ BitVec \2) (\1 x y))",
         smtlib,
     )
+
+    # replace `(f_evm_bvudiv_N x y)` with `(ite (= y (_ bv0 N)) (_ bv0 N) (bvudiv x y))`
+    # similarly for bvurem, bvsdiv, and bvsrem
+    # NOTE: (bvudiv x (_ bv0 N)) is *defined* to (bvneg (_ bv1 N)); while (div x 0) is undefined
+    smtlib = re.sub(
+        r"\(declare-fun f_evm_(bvudiv|bvurem|bvsdiv|bvsrem)_([0-9]+) \(\(_ BitVec \2\) \(_ BitVec \2\)\) \(_ BitVec \2\)\)",
+        r"(define-fun f_evm_\1_\2 ((x (_ BitVec \2)) (y (_ BitVec \2))) (_ BitVec \2) (ite (= y (_ bv0 \2)) (_ bv0 \2) (\1 x y)))",
+        smtlib,
+    )
+
     return SMTQuery(smtlib, query.assertions)
 
 
