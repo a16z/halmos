@@ -45,10 +45,7 @@ MAX_MEMORY_SIZE = 2**20
 
 
 # symbolic states
-# calldataload(index)
-f_calldataload = Function("f_calldataload", BitVecSort256, BitVecSort256)
-# calldatasize()
-f_calldatasize = Function("f_calldatasize", BitVecSort256)
+
 # extcodesize(target address)
 f_extcodesize = Function("f_extcodesize", BitVecSort160, BitVecSort256)
 # extcodehash(target address)
