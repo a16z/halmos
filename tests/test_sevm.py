@@ -15,7 +15,6 @@ from halmos.sevm import (
     f_mod,
     f_smod,
     f_exp,
-    f_origin,
     CallContext,
     Message,
     SEVM,
@@ -31,11 +30,10 @@ from halmos.__main__ import mk_block
 from test_fixtures import args, sevm, solver
 
 caller = BitVec("msg_sender", 160)
-
+origin = BitVec("tx_origin", 160)
 this = BitVec("this_address", 160)
 
 balance = Array("balance_0", BitVecSort(160), BitVecSort(256))
-
 callvalue = BitVec("msg_value", 256)
 
 
@@ -50,6 +48,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
     message = Message(
         target=this,
         caller=caller,
+        origin=origin,
         value=callvalue,
         data=ByteVec(),
         call_scheme=EVM.CALL,
@@ -61,7 +60,6 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         balance=balance,
         block=mk_block(),
         context=CallContext(message),
-        this=this,
         pgm=bytecode,
         symbolic=True,
         path=Path(solver),
@@ -277,7 +275,7 @@ def byte_of(i, x):
         # TODO: SHA3
         (o(EVM.ADDRESS), [], uint256(this)),
         (o(EVM.BALANCE), [x], Select(balance, uint160(x))),
-        (o(EVM.ORIGIN), [], uint256(f_origin())),
+        (o(EVM.ORIGIN), [], uint256(origin)),
         (o(EVM.CALLER), [], uint256(caller)),
         (o(EVM.CALLVALUE), [], callvalue),
         # TODO: CALLDATA*, CODE*, EXTCODE*, RETURNDATA*, CREATE*

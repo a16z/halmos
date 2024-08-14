@@ -59,8 +59,6 @@ f_blockhash = Function("f_blockhash", BitVecSort256, BitVecSort256)
 f_gas = Function("f_gas", BitVecSort256, BitVecSort256)
 # gasprice()
 f_gasprice = Function("f_gasprice", BitVecSort256)
-# origin()
-f_origin = Function("f_origin", BitVecSort160)
 
 # uninterpreted arithmetic
 f_div = Function("f_evm_bvudiv", BitVecSort256, BitVecSort256, BitVecSort256)
@@ -196,6 +194,7 @@ class EventLog:
 class Message:
     target: Address
     caller: Address
+    origin: Address
     value: Word
     data: ByteVec
 
@@ -236,6 +235,7 @@ class CallContext:
     output: CallOutput = field(default_factory=CallOutput)
     depth: int = 1
     trace: List[TraceElement] = field(default_factory=list)
+    prank: Prank = field(default_factory=Prank)
 
     def subcalls(self) -> Iterator["CallContext"]:
         return iter(t for t in self.trace if isinstance(t, CallContext))
@@ -627,13 +627,11 @@ class Exec:  # an execution path
     callback: Optional[Callable]  # to be called when returning back to parent context
 
     # vm state
-    this: Address  # current account address
     pgm: Contract
     pc: int
     st: State  # stack and memory
     jumpis: Dict[str, Dict[bool, int]]  # for loop detection
     symbolic: bool  # symbolic or concrete storage
-    prank: Prank
     addresses_to_delete: Set[Address]
 
     # path
@@ -659,13 +657,11 @@ class Exec:  # an execution path
         self.context = kwargs["context"]
         self.callback = kwargs["callback"]
         #
-        self.this = kwargs["this"]
         self.pgm = kwargs["pgm"]
         self.pc = kwargs["pc"]
         self.st = kwargs["st"]
         self.jumpis = kwargs["jumpis"]
         self.symbolic = kwargs["symbolic"]
-        self.prank = kwargs["prank"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
         #
         self.path = kwargs["path"]
@@ -679,13 +675,13 @@ class Exec:  # an execution path
         self.known_keys = kwargs["known_keys"] if "known_keys" in kwargs else {}
         self.known_sigs = kwargs["known_sigs"] if "known_sigs" in kwargs else {}
 
-        assert_address(self.context.message.target)
-        assert_address(self.context.message.caller)
-        assert_address(self.this)
+        assert_address(self.origin())
+        assert_address(self.caller())
+        assert_address(self.this())
 
     def context_str(self) -> str:
         opcode = self.current_opcode()
-        return f"addr={hexify(self.this)} pc={self.pc} insn={mnemonic(opcode)}"
+        return f"addr={hexify(self.this())} pc={self.pc} insn={mnemonic(opcode)}"
 
     def halt(
         self,
@@ -716,8 +712,14 @@ class Exec:  # an execution path
     def caller(self):
         return self.message().caller
 
+    def origin(self):
+        return self.message().origin
+
     def callvalue(self):
         return self.message().value
+
+    def this(self):
+        return self.message().target
 
     def message(self):
         return self.context.message
@@ -727,6 +729,13 @@ class Exec:  # an execution path
 
     def current_instruction(self) -> Instruction:
         return self.pgm.decode_instruction(self.pc)
+
+    def resolve_prank(self, to: Address) -> Tuple[Address, Address]:
+        # this potentially "consumes" the active prank
+        prank_result = self.context.prank.lookup(to)
+        caller = self.this() if prank_result.sender is None else prank_result.sender
+        origin = self.origin() if prank_result.origin is None else prank_result.origin
+        return caller, origin
 
     def set_code(self, who: Address, code: UnionType[ByteVec, Contract]) -> None:
         """
@@ -743,7 +752,7 @@ class Exec:  # an execution path
         return hexify(
             "".join(
                 [
-                    f"PC: {self.this} {self.pc} {mnemonic(self.current_opcode())}\n",
+                    f"PC: {self.this()} {self.pc} {mnemonic(self.current_opcode())}\n",
                     self.st.dump(print_mem=print_mem),
                     f"Balance: {self.balance}\n",
                     f"Storage:\n",
@@ -1597,14 +1606,14 @@ class SEVM:
         if not ret_size >= 0:
             raise ValueError(ret_size)
 
-        caller = ex.prank.lookup(ex.this, to)
+        pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
                 # TODO: revert if context is static
-                self.transfer_value(ex, caller, to, fund, condition)
+                self.transfer_value(ex, pranked_caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
             # backup current state
@@ -1616,8 +1625,9 @@ class SEVM:
             send_callvalue()
 
             message = Message(
-                target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this,
-                caller=caller if op != EVM.DELEGATECALL else ex.caller(),
+                target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this(),
+                caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
+                origin=pranked_origin,
                 value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
                 data=arg,
                 is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
@@ -1632,8 +1642,6 @@ class SEVM:
                 # restore context
                 new_ex.context = deepcopy(ex.context)
                 new_ex.context.trace.append(subcall)
-                new_ex.this = ex.this
-
                 new_ex.callback = ex.callback
 
                 if subcall.is_stuck():
@@ -1648,7 +1656,6 @@ class SEVM:
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
                 new_ex.symbolic = ex.symbolic
-                new_ex.prank = deepcopy(ex.prank)
 
                 # set return data (in memory)
                 effective_ret_size = min(ret_size, new_ex.returndatasize())
@@ -1683,14 +1690,12 @@ class SEVM:
                 #
                 context=CallContext(message=message, depth=ex.context.depth + 1),
                 callback=callback,
-                this=message.target,
                 #
                 pgm=ex.code[to],
                 pc=0,
                 st=State(),
                 jumpis={},
                 symbolic=ex.symbolic,
-                prank=Prank(),
                 #
                 path=ex.path,
                 alias=ex.alias,
@@ -1814,7 +1819,8 @@ class SEVM:
                 CallContext(
                     message=Message(
                         target=to,
-                        caller=caller,
+                        caller=pranked_caller,
+                        origin=pranked_origin,
                         value=fund,
                         data=ex.st.memory.slice(arg_loc, arg_loc + arg_size),
                         call_scheme=op,
@@ -1886,8 +1892,8 @@ class SEVM:
         if op == EVM.CREATE2:
             salt = ex.st.pop()
 
-        # lookup prank
-        caller = ex.prank.lookup(ex.this, con_addr(0))
+        # check if there is an active prank
+        pranked_caller, pranked_origin = ex.resolve_prank(con_addr(0))
 
         # contract creation code
         create_hexcode = ex.st.memory.slice(loc, loc + size)
@@ -1906,14 +1912,17 @@ class SEVM:
                 create_hexcode = bytes_to_bv_value(create_hexcode)
 
             code_hash = ex.sha3_data(create_hexcode)
-            hash_data = simplify(Concat(con(0xFF, 8), uint160(caller), salt, code_hash))
+            hash_data = simplify(
+                Concat(con(0xFF, 8), uint160(pranked_caller), salt, code_hash)
+            )
             new_addr = uint160(ex.sha3_data(hash_data))
         else:
             raise HalmosException(f"Unknown CREATE opcode: {op}")
 
         message = Message(
             target=new_addr,
-            caller=caller,
+            caller=pranked_caller,
+            origin=pranked_origin,
             value=value,
             data=create_hexcode,
             is_static=False,
@@ -1947,7 +1956,7 @@ class SEVM:
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # transfer value
-        self.transfer_value(ex, caller, new_addr, value)
+        self.transfer_value(ex, pranked_caller, new_addr, value)
 
         def callback(new_ex, stack, step_id):
             subcall = new_ex.context
@@ -1956,10 +1965,7 @@ class SEVM:
             # pessimistic copy because the subcall results may diverge
             new_ex.context = deepcopy(ex.context)
             new_ex.context.trace.append(subcall)
-
             new_ex.callback = ex.callback
-
-            new_ex.this = ex.this
 
             # restore vm state
             new_ex.pgm = ex.pgm
@@ -1967,7 +1973,6 @@ class SEVM:
             new_ex.st = deepcopy(ex.st)
             new_ex.jumpis = deepcopy(ex.jumpis)
             new_ex.symbolic = ex.symbolic
-            new_ex.prank = deepcopy(ex.prank)
 
             if subcall.is_stuck():
                 # internal errors abort the current path,
@@ -2003,14 +2008,12 @@ class SEVM:
             #
             context=CallContext(message=message, depth=ex.context.depth + 1),
             callback=callback,
-            this=new_addr,
             #
             pgm=create_code,
             pc=0,
             st=State(),
             jumpis={},
             symbolic=False,
-            prank=Prank(),
             #
             path=ex.path,
             alias=ex.alias,
@@ -2123,14 +2126,12 @@ class SEVM:
             #
             context=deepcopy(ex.context),
             callback=ex.callback,
-            this=ex.this,
             #
             pgm=ex.pgm,
             pc=target,
             st=deepcopy(ex.st),
             jumpis=deepcopy(ex.jumpis),
             symbolic=ex.symbolic,
-            prank=deepcopy(ex.prank),
             #
             path=new_path,
             alias=ex.alias.copy(),
@@ -2330,10 +2331,10 @@ class SEVM:
                     ex.st.push(uint256(ex.caller()))
 
                 elif opcode == EVM.ORIGIN:
-                    ex.st.push(uint256(f_origin()))
+                    ex.st.push(uint256(ex.origin()))
 
                 elif opcode == EVM.ADDRESS:
-                    ex.st.push(uint256(ex.this))
+                    ex.st.push(uint256(ex.this()))
 
                 # TODO: define f_extcodesize for known addresses in advance
                 elif opcode == EVM.EXTCODESIZE:
@@ -2434,7 +2435,7 @@ class SEVM:
                     ex.st.push(ex.balance_of(uint160(ex.st.pop())))
 
                 elif opcode == EVM.SELFBALANCE:
-                    ex.st.push(ex.balance_of(ex.this))
+                    ex.st.push(ex.balance_of(ex.this()))
 
                 elif opcode in [
                     EVM.CALL,
@@ -2477,12 +2478,12 @@ class SEVM:
 
                 elif opcode == EVM.SLOAD:
                     slot: Word = ex.st.pop()
-                    ex.st.push(self.sload(ex, ex.this, slot))
+                    ex.st.push(self.sload(ex, ex.this(), slot))
 
                 elif opcode == EVM.SSTORE:
                     slot: Word = ex.st.pop()
                     value: Word = ex.st.pop()
-                    self.sstore(ex, ex.this, slot, value)
+                    self.sstore(ex, ex.this(), slot, value)
 
                 elif opcode == EVM.RETURNDATASIZE:
                     ex.st.push(ex.returndatasize())
@@ -2576,7 +2577,7 @@ class SEVM:
                     size: int = int_of(ex.st.pop(), "symbolic LOG data size")
                     topics = list(ex.st.pop() for _ in range(num_topics))
                     data = ex.st.memory.slice(loc, loc + size)
-                    ex.emit_log(EventLog(ex.this, topics, data))
+                    ex.emit_log(EventLog(ex.this(), topics, data))
 
                 elif opcode == EVM.PUSH0:
                     ex.st.push(con(0))
@@ -2642,8 +2643,6 @@ class SEVM:
         #
         context: CallContext,
         #
-        this,
-        #
         pgm,
         symbolic,
         path,
@@ -2658,13 +2657,11 @@ class SEVM:
             context=context,
             callback=None,  # top-level; no callback
             #
-            this=this,
             pgm=pgm,
             pc=0,
             st=State(),
             jumpis={},
             symbolic=symbolic,
-            prank=Prank(),
             #
             path=path,
             alias={},
