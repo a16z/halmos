@@ -28,14 +28,12 @@ contract OpenZeppelinERC721Test is ERC721Test {
         tokenIds[4] = 5;
 
         // account0: {token0, token1}, account1: {token2}, account2: {token3}
-        vm.prank(deployer);
+        vm.startPrank(deployer);
         token_.transferFrom(deployer, accounts[0], tokenIds[0]);
-        vm.prank(deployer);
         token_.transferFrom(deployer, accounts[0], tokenIds[1]);
-        vm.prank(deployer);
         token_.transferFrom(deployer, accounts[1], tokenIds[2]);
-        vm.prank(deployer);
         token_.transferFrom(deployer, accounts[2], tokenIds[3]);
+        vm.stopPrank();
 
         vm.prank(accounts[0]);
         token_.approve(accounts[2], tokenIds[0]);

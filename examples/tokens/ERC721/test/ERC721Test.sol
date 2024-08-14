@@ -54,19 +54,23 @@ abstract contract ERC721Test is SymTest, Test {
     }
 
     function check_transferFrom(address caller, address from, address to, address other, uint256 tokenId, uint256 otherTokenId) public virtual {
+        // not realistic in practice
+        // and in particular msg.sender == address(0) disables auth for OpenZeppelin ERC721
+        vm.assume(caller != address(0));
+
         // consider other address
-        require(other != from);
-        require(other != to);
+        vm.assume(other != from);
+        vm.assume(other != to);
 
         // consider other token ids
-        require(otherTokenId != tokenId);
+        vm.assume(otherTokenId != tokenId);
 
         // record their current balance
         uint256 oldBalanceFrom   = IERC721(token).balanceOf(from);
         uint256 oldBalanceTo     = IERC721(token).balanceOf(to);
         uint256 oldBalanceOther  = IERC721(token).balanceOf(other);
 
-        // record their current owner 
+        // record their current owner
         address oldOwner = IERC721(token).ownerOf(tokenId);
         address oldOtherTokenOwner = IERC721(token).ownerOf(otherTokenId);
 
@@ -81,26 +85,26 @@ abstract contract ERC721Test is SymTest, Test {
         }
 
         // ensure requirements of transfer
-        assert(from == oldOwner);
-        assert(approved);
+        assertEq(from, oldOwner);
+        assertTrue(approved);
 
         // ensure the owner is updated correctly
-        assert(IERC721(token).ownerOf(tokenId) == to);
-        assert(IERC721(token).getApproved(tokenId) == address(0)); // ensure the approval is reset
+        assertEq(IERC721(token).ownerOf(tokenId), to);
+        assertEq(IERC721(token).getApproved(tokenId), address(0)); // ensure the approval is reset
 
         // ensure the other token's owner is unchanged
-        assert(IERC721(token).ownerOf(otherTokenId) == oldOtherTokenOwner);
+        assertEq(IERC721(token).ownerOf(otherTokenId), oldOtherTokenOwner);
 
         // balance update
         if (from != to) {
-            assert(IERC721(token).balanceOf(from) < oldBalanceFrom);
-            assert(IERC721(token).balanceOf(from) == oldBalanceFrom - 1);
-            assert(IERC721(token).balanceOf(to) > oldBalanceTo);
-            assert(IERC721(token).balanceOf(to) == oldBalanceTo + 1);
+            assertLt(IERC721(token).balanceOf(from), oldBalanceFrom);
+            assertEq(IERC721(token).balanceOf(from), oldBalanceFrom - 1);
+            assertGt(IERC721(token).balanceOf(to), oldBalanceTo);
+            assertEq(IERC721(token).balanceOf(to), oldBalanceTo + 1);
         } else {
-            assert(IERC721(token).balanceOf(from) == oldBalanceFrom);
-            assert(IERC721(token).balanceOf(to) == oldBalanceTo);
+            assertEq(IERC721(token).balanceOf(from), oldBalanceFrom);
+            assertEq(IERC721(token).balanceOf(to), oldBalanceTo);
         }
-        assert(IERC721(token).balanceOf(other) == oldBalanceOther);
+        assertEq(IERC721(token).balanceOf(other), oldBalanceOther);
     }
 }
