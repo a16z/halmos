@@ -29,6 +29,7 @@ jobs:
         python-version: ["3.11", "3.12"]
         parallel: ["", "--test-parallel"]
         storage-layout: ["solidity", "generic"]
+        cache-solver: ["", "--cache-solver"]
 
     steps:
       - name: Checkout repository
@@ -53,4 +54,4 @@ jobs:
         run: python -m pip install -e .
 
       - name: Run pytest
-        run: pytest -n 1 -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="--debug -st ${{ matrix.parallel }} --storage-layout ${{ matrix.storage-layout }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
+        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="--debug -st ${{ matrix.parallel }} --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
