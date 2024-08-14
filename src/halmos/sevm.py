@@ -76,10 +76,7 @@ new_address_offset: int = 1
 
 
 def insn_len(opcode: int) -> int:
-    if EVM.PUSH1 <= opcode <= EVM.PUSH32:
-        return opcode - EVM.PUSH0 + 1
-
-    return 1
+    return 1 + (opcode - EVM.PUSH0) * (EVM.PUSH1 <= opcode <= EVM.PUSH32)
 
 
 class Instruction:
@@ -406,33 +403,23 @@ class Contract:
         pc = 0
 
         # optimistically process fast path first
-        if self._fastcode:
-            N = len(self._fastcode)
+        for bytecode in (self._fastcode, self._code):
+            if not bytecode:
+                continue
+
+            N = len(bytecode)
             while pc < N:
-                opcode = self._fastcode[pc]
-                # print(f"{pc=}, {opcode=}, {mnemonic(opcode)}")
+                try:
+                    opcode = int_of(bytecode[pc])
 
-                if opcode == EVM.JUMPDEST:
-                    jumpdests.add(pc)
+                    if opcode == EVM.JUMPDEST:
+                        jumpdests.add(pc)
 
-                next_pc = pc + insn_len(opcode)
-                self._next_pc[pc] = next_pc
-                pc = next_pc
-
-        N = len(self._code)
-        while pc < N:
-            try:
-                opcode = int_of(self._code.get_byte(pc))
-                # print(f"{pc=}, {opcode=}, {mnemonic(opcode)}")
-
-                if opcode == EVM.JUMPDEST:
-                    jumpdests.add(pc)
-
-                next_pc = pc + insn_len(opcode)
-                self._next_pc[pc] = next_pc
-                pc = next_pc
-            except NotConcreteError:
-                break
+                    next_pc = pc + insn_len(opcode)
+                    self._next_pc[pc] = next_pc
+                    pc = next_pc
+                except NotConcreteError:
+                    break
 
         return jumpdests
 
