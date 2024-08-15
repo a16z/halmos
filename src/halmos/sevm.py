@@ -401,6 +401,11 @@ class Contract:
         self._next_pc = dict()
         self._jumpdests = None
 
+    def __deepcopy__(self, memo):
+        # the class is essentially immutable (the only mutable fields are caches)
+        # so we can return the object itself instead of creating a new copy
+        return self
+
     def __get_jumpdests(self):
         # quick scan, does not eagerly decode instructions
         jumpdests = set()
