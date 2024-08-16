@@ -382,6 +382,7 @@ class Contract:
             code = ByteVec(code)
 
         self._code = code
+        self._fastcode = None
 
         # if the bytecode starts with a concrete prefix, we store it separately for fast access
         # (this is a common case, especially for test contracts that deploy other contracts)
@@ -460,8 +461,7 @@ class Contract:
     def decode_instruction(self, pc: int) -> Instruction:
         """decode instruction at pc and cache the result"""
 
-        insn = self._insn.get(pc, None)
-        if insn is None:
+        if (insn := self._insn.get(pc)) is None:
             insn, next_pc = self._decode_instruction(pc)
             self._insn[pc] = insn
             self._next_pc[pc] = next_pc
