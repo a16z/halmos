@@ -327,7 +327,7 @@ class State:
         return self.stack.pop()
 
     def dup(self, n: int) -> None:
-        self.push(self.stack[-n])
+        self.stack.append(self.stack[-n])
 
     def swap(self, n: int) -> None:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
