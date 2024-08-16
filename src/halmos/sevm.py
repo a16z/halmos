@@ -541,7 +541,7 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-                if self.conditions[cond] and str(cond) != "True"
+                if self.conditions[cond] and not is_true(cond)
             ]
         )
 
