@@ -37,6 +37,7 @@ Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
 EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470)
+ZERO = con(0)
 MAX_CALL_DEPTH = 1024
 
 # TODO: make this configurable
@@ -852,7 +853,7 @@ class Exec:  # an execution path
         # empty array
         elif not self.symbolic and re.search(r"^storage_.+_00$", str(array)):
             # note: simplifying empty array access might have a negative impact on solver performance
-            return con(0)
+            return ZERO
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
@@ -928,7 +929,7 @@ class Exec:  # an execution path
                 # inputs have different sizes: assume the outputs are different
                 self.path.append(sha3_expr != prev_sha3_expr)
 
-        self.path.append(sha3_expr != con(0))
+        self.path.append(sha3_expr != ZERO)
         self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
@@ -1025,9 +1026,9 @@ class SolidityStorage(Storage):
                         label, BitVecSort256
                     )
                 else:
-                    ex.storage[addr][slot][num_keys][size_keys] = con(0)
+                    ex.storage[addr][slot][num_keys][size_keys] = ZERO
             else:
-                # do not use z3 const array `K(BitVecSort(size_keys), con(0))` when not ex.symbolic
+                # do not use z3 const array `K(BitVecSort(size_keys), ZERO)` when not ex.symbolic
                 # instead use normal smt array, and generate emptyness axiom; see load()
                 ex.storage[addr][slot][num_keys][size_keys] = cls.empty(
                     addr, slot, keys
@@ -1048,7 +1049,7 @@ class SolidityStorage(Storage):
             if not ex.symbolic:
                 # generate emptyness axiom for each array index, instead of using quantified formula; see init()
                 ex.path.append(
-                    Select(cls.empty(addr, slot, keys), concat(keys)) == con(0)
+                    Select(cls.empty(addr, slot, keys), concat(keys)) == ZERO
                 )
             return ex.select(
                 ex.storage[addr][slot][num_keys][size_keys], concat(keys), ex.storages
@@ -1086,11 +1087,11 @@ class SolidityStorage(Storage):
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
-            return cls.decode(base) + (offset, con(0))
+            return cls.decode(base) + (offset, ZERO)
         # a[i] : hash(a) + i
         elif loc.decl().name() == "f_sha3_256":
             base = loc.arg(0)
-            return cls.decode(base) + (con(0),)
+            return cls.decode(base) + (ZERO,)
         # m[k] : hash(k.m)  where |k| != 256-bit
         elif loc.decl().name().startswith("f_sha3_"):
             sha3_input = normalize(loc.arg(0))
@@ -1098,7 +1099,7 @@ class SolidityStorage(Storage):
                 offset = simplify(sha3_input.arg(0))
                 base = simplify(sha3_input.arg(1))
                 if offset.size() != 256 and base.size() == 256:
-                    return cls.decode(base) + (offset, con(0))
+                    return cls.decode(base) + (offset, ZERO)
         elif loc.decl().name() == "bvadd":
             #   # when len(args) == 2
             #   arg0 = cls.decode(loc.arg(0))
@@ -1163,7 +1164,7 @@ class GenericStorage(Storage):
         cls.init(ex, addr, loc)
         if not ex.symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-            ex.path.append(Select(cls.empty(addr, loc), loc) == con(0))
+            ex.path.append(Select(cls.empty(addr, loc), loc) == ZERO)
         return ex.select(ex.storage[addr][loc.size()], loc, ex.storages)
 
     @classmethod
@@ -1255,9 +1256,9 @@ def bitwise(op, x: Word, y: Word) -> Word:
         else:
             raise ValueError(op, x, y)
     elif is_bool(x) and is_bv(y):
-        return bitwise(op, If(x, con(1), con(0)), y)
+        return bitwise(op, If(x, con(1), ZERO), y)
     elif is_bv(x) and is_bool(y):
-        return bitwise(op, x, If(y, con(1), con(0)))
+        return bitwise(op, x, If(y, con(1), ZERO))
     else:
         raise ValueError(op, x, y)
 
@@ -1266,9 +1267,9 @@ def b2i(w: Word) -> Word:
     if is_true(w):
         return con(1)
     if is_false(w):
-        return con(0)
+        return ZERO
     if is_bool(w):
-        return If(w, con(1), con(0))
+        return If(w, con(1), ZERO)
     else:
         return w
 
@@ -1381,7 +1382,7 @@ class SEVM:
     def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_mod[x.size()](x, y)
         ex.path.append(ULE(term, y))  # (x % y) <= y
-        # ex.path.append(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
+        # ex.path.append(Or(y == ZERO, ULT(term, y))) # (x % y) < y if y != 0
         return term
 
     def mk_mul(self, ex: Exec, x: Any, y: Any) -> Any:
@@ -1566,7 +1567,7 @@ class SEVM:
             raise WriteInStaticContext(ex.context_str())
 
         if is_bool(val):
-            val = If(val, con(1), con(0))
+            val = If(val, con(1), ZERO)
 
         self.storage_model.store(ex, addr, loc, val)
 
@@ -1612,7 +1613,7 @@ class SEVM:
 
         # conditional transfer
         if condition is not None:
-            value = If(condition, value, con(0))
+            value = If(condition, value, ZERO)
 
         ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value))
         ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
@@ -1626,7 +1627,7 @@ class SEVM:
     ) -> None:
         gas = ex.st.pop()
         to = uint160(ex.st.pop())
-        fund = con(0) if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
+        fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
         arg_loc: int = ex.st.mloc()
         arg_size: int = int_of(ex.st.pop(), "symbolic CALL input data size")
@@ -1703,7 +1704,7 @@ class SEVM:
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
-                new_ex.st.push(con(1) if subcall_success else con(0))
+                new_ex.st.push(con(1) if subcall_success else ZERO)
 
                 if not subcall_success:
                     # revert network states
@@ -1836,7 +1837,7 @@ class SEVM:
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
             # transfer msg.value
-            send_callvalue(exit_code_var != con(0))
+            send_callvalue(exit_code_var != ZERO)
 
             # store return value
             if ret_size > 0:
@@ -2317,13 +2318,13 @@ class SEVM:
                         if is_bool(w1):
                             if not is_bv(w2):
                                 raise ValueError(w2)
-                            ex.st.push(If(w1, con(1), con(0)) == w2)
+                            ex.st.push(If(w1, con(1), ZERO) == w2)
                         else:
                             if not is_bv(w1):
                                 raise ValueError(w1)
                             if not is_bool(w2):
                                 raise ValueError(w2)
-                            ex.st.push(w1 == If(w2, con(1), con(0)))
+                            ex.st.push(w1 == If(w2, con(1), ZERO))
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
 
