@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import math
 import re
 
 from copy import deepcopy
