@@ -372,15 +372,9 @@ class Contract:
     """Abstraction over contract bytecode. Can include concrete and symbolic elements."""
 
     _code: ByteVec
-
-    # if the bytecode starts with a concrete prefix, we store it separately for fast access
-    # (this is a common case, especially for test contracts that deploy other contracts)
-    _fastcode: Optional[bytes] = None
-
+    _fastcode: Optional[bytes]
     _insn: Dict[int, Instruction]
-
     _next_pc: Dict[int, int]
-
     _jumpdests: Optional[set]
 
     def __init__(self, code: Optional[ByteVec] = None) -> None:
@@ -389,12 +383,12 @@ class Contract:
 
         self._code = code
 
-        # extract the first chunk of code
+        # if the bytecode starts with a concrete prefix, we store it separately for fast access
+        # (this is a common case, especially for test contracts that deploy other contracts)
         if code.chunks:
             first_chunk = code.chunks[0]
             if isinstance(first_chunk, ConcreteChunk):
                 self._fastcode = first_chunk.unwrap()
-                # print(f"{len(self._fastcode)} bytes of fastcode: {hexify(self._fastcode)}")
 
         # maps pc to decoded instruction (including operand and next_pc)
         self._insn = dict()

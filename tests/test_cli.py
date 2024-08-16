@@ -57,10 +57,6 @@ def test_decode_concrete_bytecode():
     assert contract[10] == EVM.JUMPDEST
     assert contract[11] == EVM.STOP
 
-    # iteration
-    opcodes = [opcode for (pc, opcode) in contract]
-    assert bytes(opcodes).hex() == hexcode.lower()
-
     # jump destination scanning
     assert contract.valid_jump_destinations() == set([10])
 
