@@ -317,11 +317,11 @@ class State:
             # self.stack.append(v)
 
             # for now, wrap ints in a BitVec
-            v = con(v)
-
-        if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
-            raise ValueError(v)
-        self.stack.append(simplify(v))
+            self.stack.append(con(v))
+        else:
+            if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
+                raise ValueError(v)
+            self.stack.append(simplify(v))
 
     def pop(self) -> Word:
         return self.stack.pop()
@@ -2614,7 +2614,7 @@ class SEVM:
                     ex.emit_log(EventLog(ex.this(), topics, data))
 
                 elif opcode == EVM.PUSH0:
-                    ex.st.push(con(0))
+                    ex.st.push(0)
 
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     if is_concrete(insn.operand):
