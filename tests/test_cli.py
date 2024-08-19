@@ -105,7 +105,9 @@ def test_decode_mixed_bytecode():
 
 
 def test_run_bytecode(args):
-    args = args.with_overrides(source="test_run_bytecode", symbolic_jump=True)
+    args = args.with_overrides(
+        source="test_run_bytecode", symbolic_jump=True, print_steps=True
+    )
 
     hexcode = "34381856FDFDFDFDFDFD5B00"
     exs = run_bytecode(hexcode, args)

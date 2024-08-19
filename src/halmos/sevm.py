@@ -375,10 +375,10 @@ class Contract:
     """Abstraction over contract bytecode. Can include concrete and symbolic elements."""
 
     _code: ByteVec
-    _fastcode: Optional[bytes]
+    _fastcode: bytes | None
     _insn: Dict[int, Instruction]
     _next_pc: Dict[int, int]
-    _jumpdests: Optional[set]
+    _jumpdests: tuple[set] | None
 
     def __init__(self, code: Optional[ByteVec] = None) -> None:
         if not isinstance(code, ByteVec):
@@ -407,6 +407,7 @@ class Contract:
     def __get_jumpdests(self):
         # quick scan, does not eagerly decode instructions
         jumpdests = set()
+        jumpdests_str = set()
         pc = 0
 
         # optimistically process fast path first
@@ -424,7 +425,7 @@ class Contract:
 
                         # a little odd, but let's add the string representation of the pc as well
                         # because it makes jumpi_id cheaper to compute
-                        jumpdests.add(str(pc))
+                        jumpdests_str.add(str(pc))
 
                     next_pc = pc + insn_len(opcode)
                     self._next_pc[pc] = next_pc
@@ -432,7 +433,7 @@ class Contract:
                 except NotConcreteError:
                     break
 
-        return jumpdests
+        return (jumpdests, jumpdests_str)
 
     def from_hexcode(hexcode: str):
         """Create a contract from a hexcode string, e.g. "aabbccdd" """
@@ -515,7 +516,14 @@ class Contract:
         if self._jumpdests is None:
             self._jumpdests = self.__get_jumpdests()
 
-        return self._jumpdests
+        return self._jumpdests[0]
+
+    def valid_jump_destinations_str(self) -> set:
+        """Returns the set of valid jump destinations as strings."""
+        if self._jumpdests is None:
+            self._jumpdests = self.__get_jumpdests()
+
+        return self._jumpdests[1]
 
 
 @dataclass(frozen=True)
@@ -796,7 +804,7 @@ class Exec:  # an execution path
                 [
                     f"PC: {self.this()} {self.pc} {mnemonic(self.current_opcode())}\n",
                     self.st.dump(print_mem=print_mem),
-                    f"Balance: {self.balance}\n",
+                    f"\nBalance: {self.balance}\n",
                     f"Storage:\n",
                     "".join(
                         map(
@@ -971,7 +979,7 @@ class Exec:  # an execution path
         return len(returndata) if returndata is not None else 0
 
     def jumpi_id(self) -> JumpID:
-        valid_jumpdests = self.pgm.valid_jump_destinations()
+        valid_jumpdests = self.pgm.valid_jump_destinations_str()
 
         # we call `as_string()` on each stack element to avoid the overhead of
         # calling is_bv_val() followed by as_long() on each element
