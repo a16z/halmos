@@ -43,6 +43,9 @@ MAX_CALL_DEPTH = 1024
 # TODO: make this configurable
 MAX_MEMORY_SIZE = 2**20
 
+# (pc, (jumpdest, ...))
+# the jumpdests are stored as strings to avoid the cost of converting bv values
+type JumpID = Tuple[int, Tuple[str]]
 
 # symbolic states
 
@@ -419,6 +422,10 @@ class Contract:
                     if opcode == EVM.JUMPDEST:
                         jumpdests.add(pc)
 
+                        # a little odd, but let's add the string representation of the pc as well
+                        # because it makes jumpi_id cheaper to compute
+                        jumpdests.add(str(pc))
+
                     next_pc = pc + insn_len(opcode)
                     self._next_pc[pc] = next_pc
                     pc = next_pc
@@ -665,7 +672,7 @@ class Exec:  # an execution path
     pgm: Contract
     pc: int
     st: State  # stack and memory
-    jumpis: Dict[str, Dict[bool, int]]  # for loop detection
+    jumpis: Dict[JumpID, Dict[bool, int]]  # for loop detection
     symbolic: bool  # symbolic or concrete storage
     addresses_to_delete: Set[Address]
 
@@ -963,17 +970,19 @@ class Exec:  # an execution path
         returndata = self.returndata()
         return len(returndata) if returndata is not None else 0
 
-    def jumpi_id(self) -> str:
-        # TODO: avoid scanning the entire stack for jumpdests every time
+    def jumpi_id(self) -> JumpID:
         valid_jumpdests = self.pgm.valid_jump_destinations()
 
-        jumpdests_str = (
-            str(unboxed)
+        # we call `as_string()` on each stack element to avoid the overhead of
+        # calling is_bv_val() followed by as_long() on each element
+        jumpdest_tokens = tuple(
+            token
             for x in self.st.stack
-            if (unboxed := unbox_int(x)) in valid_jumpdests
+            if (hasattr(x, "as_string") and (token := x.as_string())) in valid_jumpdests
         )
 
-        return f"{self.pc}:{','.join(jumpdests_str)}"
+        # no need to create a new string here, we can compare tuples efficiently
+        return (self.pc, jumpdest_tokens)
 
     # deploy libraries and resolve library placeholders in hexcode
     def resolve_libs(self, creation_hexcode, deployed_hexcode, lib_references) -> str:
