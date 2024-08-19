@@ -297,9 +297,6 @@ def unbox_int(x: Any) -> Any:
     if is_bv_value(x):
         return x.as_long()
 
-    if is_bv(x):
-        x = simplify(x)
-
     return x
 
 
