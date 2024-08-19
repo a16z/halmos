@@ -2618,20 +2618,19 @@ class SEVM:
                     ex.st.push(0)
 
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
-                    if is_concrete(insn.operand):
-                        val = int_of(insn.operand)
+                    val = unbox_int(insn.operand)
+                    if isinstance(val, int):
                         if opcode == EVM.PUSH32 and val in sha3_inv:
                             # restore precomputed hashes
                             ex.st.push(ex.sha3_data(con(sha3_inv[val])))
                         else:
-                            ex.st.push(con(val))
+                            ex.st.push(val)
                     else:
-                        if opcode == EVM.PUSH32:
-                            ex.st.push(insn.operand)
-                        else:
-                            ex.st.push(ZeroExt((EVM.PUSH32 - opcode) * 8, insn.operand))
+                        ex.st.push(uint256(val) if opcode < EVM.PUSH32 else val)
+
                 elif EVM.DUP1 <= opcode <= EVM.DUP16:
                     ex.st.dup(opcode - EVM.DUP1 + 1)
+
                 elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
                     ex.st.swap(opcode - EVM.SWAP1 + 1)
 
