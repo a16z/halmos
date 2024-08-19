@@ -511,14 +511,14 @@ class Contract:
         """Returns the length of the bytecode in bytes."""
         return len(self._code)
 
-    def valid_jump_destinations(self) -> set:
+    def valid_jump_destinations(self) -> set[int]:
         """Returns the set of valid jump destinations."""
         if self._jumpdests is None:
             self._jumpdests = self.__get_jumpdests()
 
         return self._jumpdests[0]
 
-    def valid_jump_destinations_str(self) -> set:
+    def valid_jump_destinations_str(self) -> set[str]:
         """Returns the set of valid jump destinations as strings."""
         if self._jumpdests is None:
             self._jumpdests = self.__get_jumpdests()
