@@ -192,7 +192,10 @@ def mk_caller(args: HalmosConfig) -> Address:
 
 
 def mk_this() -> Address:
-    return magic_address + 1
+    # NOTE: Do NOT remove the `con_addr()` wrapper.
+    #       The return type should be BitVecSort(160) as it is used as a key for ex.code.
+    #       The keys of ex.code are compared using structural equality with other BitVecRef addresses.
+    return con_addr(magic_address + 1)
 
 
 def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, assertion=False):

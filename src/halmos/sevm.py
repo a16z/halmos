@@ -1525,7 +1525,12 @@ class SEVM:
         if target in ex.code:
             return target
 
+        if self.options.debug:
+            debug(f"Address {hexify(target)} not in: [{", ".join([hexify(addr) for addr in ex.code])}]")
+
         if is_bv_value(target):
+            if self.options.debug:
+                debug(f"Empty address: {hexify(target)}")
             return None
 
         if target in ex.alias:
@@ -1536,13 +1541,13 @@ class SEVM:
             alias_cond = target == addr
             if ex.check(alias_cond) != unsat:
                 if self.options.debug:
-                    debug(f"Address alias: {hexify(addr)} for {hexify(target)}")
+                    debug(f"Potential address alias: {hexify(addr)} for {hexify(target)}")
                 potential_aliases.append((addr, alias_cond))
 
         emptyness_cond = And([ target != addr for addr in ex.code ])
         if ex.check(emptyness_cond) != unsat:
             if self.options.debug:
-                debug(f"Address empty: {hexify(target)}")
+                debug(f"Potential empty address: {hexify(target)}")
             potential_aliases.append((None, emptyness_cond))
 
         if len(potential_aliases) == 0:
