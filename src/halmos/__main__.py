@@ -847,14 +847,6 @@ def run(
         if args.debug:
             print("\n".join(logs.bounded_loops))
 
-    if logs.unknown_calls:
-        warn_code(
-            UNINTERPRETED_UNKNOWN_CALLS,
-            f"{funsig}: unknown calls have been assumed to be static: {', '.join(logs.unknown_calls)}",
-        )
-        if args.debug:
-            logs.print_unknown_calls()
-
     # print post-states
     if args.print_states:
         for idx, ex in enumerate(result_exs):

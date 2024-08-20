@@ -1251,30 +1251,12 @@ def is_power_of_two(x: int) -> bool:
 
 class HalmosLogs:
     bounded_loops: List[str]
-    unknown_calls: Dict[str, Dict[str, Set[str]]]  # funsig -> to -> set(arg)
 
     def __init__(self) -> None:
         self.bounded_loops = []
-        self.unknown_calls = defaultdict(lambda: defaultdict(set))
 
     def extend(self, logs: "HalmosLogs") -> None:
         self.bounded_loops.extend(logs.bounded_loops)
-        for funsig in logs.unknown_calls:
-            for to in logs.unknown_calls[funsig]:
-                self.unknown_calls[funsig][to].update(logs.unknown_calls[funsig][to])
-
-    def add_uninterpreted_unknown_call(self, funsig, to, arg):
-        funsig, to, arg = hexify(funsig), hexify(to), hexify(arg)
-        self.unknown_calls[funsig][to].add(arg)
-
-    def print_unknown_calls(self):
-        for funsig in self.unknown_calls:
-            print(f"{funsig}:")
-            for to in self.unknown_calls[funsig]:
-                print(f"- {to}:")
-                print(
-                    "\n".join([f"  - {arg}" for arg in self.unknown_calls[funsig][to]])
-                )
 
 
 @dataclass
@@ -1842,9 +1824,6 @@ class SEVM:
                 # in evm, calls to non-existing contracts always succeed with empty returndata
                 exit_code = con(1)
                 ret = ByteVec()
-
-                # TODO: use proper warning
-                self.logs.add_uninterpreted_unknown_call(extract_funsig(arg), to, arg)
 
             # push exit code
             exit_code_var = BitVec(f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256)
