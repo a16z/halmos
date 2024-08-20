@@ -6,32 +6,17 @@ import "forge-std/Test.sol";
 import {IERC721TokenReceiver} from "forge-std/interfaces/IERC721.sol";
 
 contract UnknownCallTest is Test {
-    /// @custom:halmos --uninterpreted-unknown-calls=
-    function check_unknown_not_allowed(address addr) public {
-        // empty --uninterpreted-unknown-calls
-        IERC721TokenReceiver(addr).onERC721Received(address(0), address(0), 0, ""); // expected to fail
-    }
-
-    function check_unknown_common_callbacks(address addr) public {
-        // onERC721Received is included in the default --uninterpreted-unknown-calls
-        IERC721TokenReceiver(addr).onERC721Received(address(0), address(0), 0, "");
-    }
-
-    function check_unknown_retsize_default(address addr) public {
-        (bool success, bytes memory retdata) = addr.call(abi.encodeWithSelector(IERC721TokenReceiver.onERC721Received.selector, address(0), address(0), 0, ""));
-        assert(retdata.length == 32); // default --return-size-of-unknown-calls=32
-    }
-
-    /// @custom:halmos --return-size-of-unknown-calls=64
-    function check_unknown_retsize_64(address addr) public {
-        (bool success, bytes memory retdata) = addr.call(abi.encodeWithSelector(IERC721TokenReceiver.onERC721Received.selector, address(0), address(0), 0, ""));
-        assert(retdata.length == 64);
-    }
-
-    /// @custom:halmos --return-size-of-unknown-calls=0
     function check_unknown_retsize_0(address addr) public {
         (bool success, bytes memory retdata) = addr.call(abi.encodeWithSelector(IERC721TokenReceiver.onERC721Received.selector, address(0), address(0), 0, ""));
-        assert(retdata.length == 0);
+        if (success) {
+            // if addr is not this, then addr is nonexisting thus the call to addr will immediately succeed with empty returndata
+            assertNotEq(addr, address(this));
+            assertEq(retdata.length, 0);
+        } else {
+            // if addr is equal to this, then the call to onERC721Received will fail since it is not implemented in this contract
+            assertEq(addr, address(this));
+            assertEq(retdata.length, 0); // the default fallback reverts with empty returndata
+        }
     }
 
     function check_unknown_call(address addr, uint amount, uint initial) public {
@@ -41,7 +26,7 @@ contract UnknownCallTest is Test {
 
         (bool success, bytes memory retdata) = payable(addr).call{ value: amount }("");
 
-        assert(retdata.length == 32); // default --return-size-of-unknown-calls=32
+        assert(retdata.length == 0); // the returndata of a nonexisting contract call is always empty, even if it fails due to insufficient balance
 
         if (success) {
             assert(initial >= amount);
