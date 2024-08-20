@@ -869,18 +869,9 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_extcodehash_unknown_addr_eq_0()",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            },
-            {
-                "name": "check_extcodehash_unknown_addr_noteq_0()",
-                "exitcode": 1,
-                "num_models": 1,
+                "name": "check_extcodehash_unknown_addr_empty()",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,

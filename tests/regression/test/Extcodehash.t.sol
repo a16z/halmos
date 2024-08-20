@@ -96,26 +96,14 @@ contract ExtcodehashTest is Test, SymTest {
         assertEq(codehash, keccak256(""), "Expected codehash of the empty string");
     }
 
-    /// yields a path where it is eq to 0, and a path where it is not
-    /// so we expect a counterexample for this and also its negation
-    function check_extcodehash_unknown_addr_eq_0() external {
+    /// unknown addresses are assumed to be non-existing, thus have no code
+    function check_extcodehash_unknown_addr_empty() external {
         bytes32 codehash;
         assembly {
             codehash := extcodehash(0x1337)
         }
 
-        assertEq(codehash, 0);
-    }
-
-    /// yields a path where it is eq to 0, and a path where it is not
-    /// so we expect a counterexample for this and also its negation
-    function check_extcodehash_unknown_addr_noteq_0()   external {
-        bytes32 codehash;
-        assembly {
-            codehash := extcodehash(0x1337)
-        }
-
-        assertNotEq(codehash, 0);
+        assertEq(codehash, keccak256(""), "Expected codehash of the empty string");
     }
 
     function check_extcodehash_after_etch() external {
