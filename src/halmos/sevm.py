@@ -908,6 +908,10 @@ class Exec:  # an execution path
         self.cnts["symbol"] += 1
         return self.cnts["symbol"]
 
+    def new_call_id(self) -> int:
+        self.cnts["call"] += 1
+        return self.cnts["call"]
+
     def returndata(self) -> Optional[ByteVec]:
         """
         Return data from the last executed sub-context or the empty bytes sequence
@@ -1843,10 +1847,12 @@ class SEVM:
                 self.logs.add_uninterpreted_unknown_call(extract_funsig(arg), to, arg)
 
             # push exit code
-            ex.st.push(exit_code)
+            exit_code_var = BitVec(f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256)
+            ex.path.append(exit_code_var == exit_code)
+            ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
             # transfer msg.value
-            send_callvalue(exit_code != con(0))
+            send_callvalue(exit_code_var != con(0))
 
             # store return value
             effective_ret_size = min(ret_size, len(ret))
