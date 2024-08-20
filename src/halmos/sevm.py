@@ -1748,12 +1748,79 @@ class SEVM:
                 r = extract_bytes(arg, 64, 32)
                 s = extract_bytes(arg, 96, 32)
 
+                # TODO: empty returndata in error
                 ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
+
+            # sha256
+            elif eq(to, con_addr(2)):
+                exit_code = con(1)
+                f_sha256 = Function(
+                    f"f_sha256_{arg_size}", BitVecSorts[arg_size], BitVecSort256
+                )
+                ret = ByteVec(f_sha256(arg))
+
+            # ripemd160
+            elif eq(to, con_addr(3)):
+                exit_code = con(1)
+                f_ripemd160 = Function(
+                    f"f_ripemd160_{arg_size}", BitVecSorts[arg_size], BitVecSort160
+                )
+                ret = ByteVec(uint256(f_ripemd160(arg)))
 
             # identity
             elif eq(to, con_addr(4)):
                 exit_code = con(1)
                 ret = arg
+
+            # modexp
+            elif eq(to, con_addr(5)):
+                exit_code = con(1)
+                modulus_size = int_of(extract_bytes(arg, 64, 32))
+                f_modexp = Function(
+                    f"f_modexp_{arg_size}_{modulus_size}", BitVecSorts[arg_size], BitVecSorts[modulus_size]
+                )
+                # TODO: empty returndata in error
+                ret = ByteVec(f_modexp(arg))
+
+            # ecadd
+            elif eq(to, con_addr(6)):
+                exit_code = con(1)
+                f_ecadd = Function(
+                    f"f_ecadd", BitVecSorts[1024], BitVecSorts[512]
+                )
+                ret = ByteVec(f_ecadd(arg))
+
+            # ecmul
+            elif eq(to, con_addr(7)):
+                exit_code = con(1)
+                f_ecmul = Function(
+                    f"f_ecmul", BitVecSorts[768], BitVecSorts[512]
+                )
+                ret = ByteVec(f_ecmul(arg))
+
+            # ecpairing
+            elif eq(to, con_addr(8)):
+                exit_code = con(1)
+                f_ecpairing = Function(
+                    f"f_ecpairing", BitVecSorts[1536], BitVecSorts[1]
+                )
+                ret = ByteVec(uint256(f_ecpairing(arg)))
+
+            # blake2f
+            elif eq(to, con_addr(9)):
+                exit_code = con(1)
+                f_blake2f = Function(
+                    f"f_blake2f", BitVecSorts[1704], BitVecSorts[512]
+                )
+                ret = ByteVec(f_blake2f(arg))
+
+            # point_evaluation
+            elif eq(to, con_addr(10)):
+                exit_code = con(1)
+                f_point_evaluation = Function(
+                    f"f_point_evaluation", BitVecSorts[1544], BitVecSorts[512]
+                )
+                ret = ByteVec(f_point_evaluation(arg))
 
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
@@ -1822,8 +1889,7 @@ class SEVM:
         # precompiles or cheatcodes
         if (
             # precompile
-            eq(to, con_addr(1))
-            or eq(to, con_addr(4))
+            (is_bv_value(to) and to.as_long() in range(1,11))
             # cheatcode calls
             or eq(to, halmos_cheat_code.address)
             or eq(to, hevm_cheat_code.address)
