@@ -50,6 +50,9 @@ contract UnknownCallTest is Test {
             assert(addr.balance == amount);
             assert(address(this).balance == initial - amount);
         } else {
+            // NOTE: currently this branch is not reachable, because the balance is implicitly assumed to be enough
+            // TODO: fix halmos to consider the case where the balance is not enough
+            assert(false);
             assert(addr.balance == 0);
             assert(address(this).balance == initial);
         }

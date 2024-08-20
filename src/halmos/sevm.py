@@ -1823,6 +1823,7 @@ class SEVM:
             # non-existing contracts
             else:
                 # in evm, calls to non-existing contracts always succeed with empty returndata
+                # TODO: exitcode should be 0 when balance is not enough for callvalue
                 exit_code = con(1)
                 ret = ByteVec()
 
