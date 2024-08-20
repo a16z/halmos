@@ -45,7 +45,7 @@ MAX_MEMORY_SIZE = 2**20
 
 # (pc, (jumpdest, ...))
 # the jumpdests are stored as strings to avoid the cost of converting bv values
-type JumpID = Tuple[int, Tuple[str]]
+JumpID = Tuple[int, Tuple[str]]
 
 # symbolic states
 
