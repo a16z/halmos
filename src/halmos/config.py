@@ -153,23 +153,6 @@ class Config:
         metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
     )
 
-    # default set of selectors:
-    # - IERC721.onERC721Received
-    # - IERC1271.isValidSignature
-    # - IERC1155.onERC1155Received
-    # - IERC1155.onERC1155BatchReceived
-    uninterpreted_unknown_calls: str = arg(
-        help="use uninterpreted abstractions for unknown external calls with the given function signatures",
-        global_default="0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81",
-        metavar="SELECTOR1,SELECTOR2,...",
-    )
-
-    return_size_of_unknown_calls: int = arg(
-        help="set the byte size of return data from uninterpreted unknown external calls",
-        global_default=32,
-        metavar="BYTE_SIZE",
-    )
-
     storage_layout: str = arg(
         help="Select one of the available storage layout models. The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.",
         global_default="solidity",
@@ -387,6 +370,25 @@ class Config:
     solver_parallel: bool = arg(
         help="(Deprecated; no-op; use --solver-threads instead) run assertion solvers in parallel",
         global_default=False,
+        group=deprecated,
+    )
+
+    # default set of selectors:
+    # - IERC721.onERC721Received
+    # - IERC1271.isValidSignature
+    # - IERC1155.onERC1155Received
+    # - IERC1155.onERC1155BatchReceived
+    uninterpreted_unknown_calls: str = arg(
+        help="(Deprecated; no-op) use uninterpreted abstractions for unknown external calls with the given function signatures",
+        global_default="0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81",
+        metavar="SELECTOR1,SELECTOR2,...",
+        group=deprecated,
+    )
+
+    return_size_of_unknown_calls: int = arg(
+        help="(Deprecated; no-op) set the byte size of return data from uninterpreted unknown external calls",
+        global_default=32,
+        metavar="BYTE_SIZE",
         group=deprecated,
     )
 
