@@ -1290,10 +1290,6 @@ class SEVM:
         self.logs = HalmosLogs()
         self.steps: Steps = {}
 
-        # init unknown calls
-        hex_string = options.uninterpreted_unknown_calls.strip()
-        self.unknown_calls: List[int] = [int(x, 16) for x in hex_string.split(",") if x]
-
         # init storage model
         is_generic = self.options.storage_layout == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
