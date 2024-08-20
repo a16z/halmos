@@ -688,7 +688,6 @@ def run(
             sha3s=setup_ex.sha3s.copy(),
             storages=setup_ex.storages.copy(),
             balances=setup_ex.balances.copy(),
-            calls=setup_ex.calls.copy(),
         )
     )
 

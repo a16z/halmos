@@ -646,7 +646,6 @@ class Exec:  # an execution path
     sha3s: Dict[Word, int]  # sha3 hashes generated
     storages: Dict[Any, Any]  # storage updates
     balances: Dict[Any, Any]  # balance updates
-    calls: List[Any]  # external calls
     known_keys: Dict[Any, Any]  # maps address to private key
     known_sigs: Dict[Any, Any]  # maps (private_key, digest) to (v, r, s)
 
@@ -674,7 +673,6 @@ class Exec:  # an execution path
         self.sha3s = kwargs["sha3s"]
         self.storages = kwargs["storages"]
         self.balances = kwargs["balances"]
-        self.calls = kwargs["calls"]
         self.known_keys = kwargs["known_keys"] if "known_keys" in kwargs else {}
         self.known_sigs = kwargs["known_sigs"] if "known_sigs" in kwargs else {}
 
@@ -785,8 +783,6 @@ class Exec:  # an execution path
                     ),
                     f"SHA3 hashes:\n",
                     "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
-                    f"External calls:\n",
-                    "".join(map(lambda x: f"- {x}\n", self.calls)),
                 ]
             )
         )
@@ -1725,7 +1721,6 @@ class SEVM:
                 sha3s=ex.sha3s,
                 storages=ex.storages,
                 balances=ex.balances,
-                calls=ex.calls,
                 known_keys=ex.known_keys,
                 known_sigs=ex.known_sigs,
             )
@@ -2049,7 +2044,6 @@ class SEVM:
             sha3s=ex.sha3s,
             storages=ex.storages,
             balances=ex.balances,
-            calls=ex.calls,
             known_keys=ex.known_keys,
             known_sigs=ex.known_sigs,
         )
@@ -2167,7 +2161,6 @@ class SEVM:
             sha3s=ex.sha3s.copy(),
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
-            calls=ex.calls.copy(),
             known_keys=ex.known_keys,  # pass by reference, not need to copy
             known_sigs=ex.known_sigs,  # pass by reference, not need to copy
         )
@@ -2704,5 +2697,4 @@ class SEVM:
             sha3s={},
             storages={},
             balances={},
-            calls=[],
         )
