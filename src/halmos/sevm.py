@@ -1299,7 +1299,7 @@ def is_power_of_two(x: int) -> bool:
 
 
 class HalmosLogs:
-    bounded_loops: List[str]
+    bounded_loops: List[JumpID]
     unknown_calls: Dict[str, Dict[str, Set[str]]]  # funsig -> to -> set(arg)
 
     def __init__(self) -> None:

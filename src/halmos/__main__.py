@@ -846,7 +846,8 @@ def run(
             f"{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
         )
         if args.debug:
-            print("\n".join(logs.bounded_loops))
+            for pc, jumpdests in logs.bounded_loops:
+                print(f"{pc}:{','.join(jumpdests)}")
 
     if logs.unknown_calls:
         warn_code(
