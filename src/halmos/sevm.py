@@ -82,6 +82,11 @@ create2_magic_address: int = 0xBBBB0000
 new_address_offset: int = 1
 
 
+def jumpid_str(jumpid: JumpID) -> str:
+    pc, jumpdests = jumpid
+    return f"{pc}:{','.join(jumpdests)}"
+
+
 def insn_len(opcode: int) -> int:
     return 1 + (opcode - EVM.PUSH0) * (EVM.PUSH1 <= opcode <= EVM.PUSH32)
 

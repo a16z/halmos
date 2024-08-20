@@ -572,7 +572,7 @@ def setup(
                 f"{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
             )
             if args.debug:
-                print("\n".join(sevm.logs.bounded_loops))
+                print("\n".join(jumpid_str(x) for x in sevm.logs.bounded_loops))
 
     if args.reset_bytecode:
         for assign in [x.split("=") for x in args.reset_bytecode.split(",")]:
@@ -846,8 +846,7 @@ def run(
             f"{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
         )
         if args.debug:
-            for pc, jumpdests in logs.bounded_loops:
-                print(f"{pc}:{','.join(jumpdests)}")
+            print("\n".join(jumpid_str(x) for x in logs.bounded_loops))
 
     if logs.unknown_calls:
         warn_code(
