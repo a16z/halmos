@@ -37,7 +37,7 @@ Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
 EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470)
-ZERO = con(0)
+ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
 
 # TODO: make this configurable
@@ -1278,20 +1278,20 @@ def bitwise(op, x: Word, y: Word) -> Word:
         else:
             raise ValueError(op, x, y)
     elif is_bool(x) and is_bv(y):
-        return bitwise(op, If(x, con(1), ZERO), y)
+        return bitwise(op, If(x, ONE, ZERO), y)
     elif is_bv(x) and is_bool(y):
-        return bitwise(op, x, If(y, con(1), ZERO))
+        return bitwise(op, x, If(y, ONE, ZERO))
     else:
         raise ValueError(op, x, y)
 
 
 def b2i(w: Word) -> Word:
     if is_true(w):
-        return con(1)
+        return ONE
     if is_false(w):
         return ZERO
     if is_bool(w):
-        return If(w, con(1), ZERO)
+        return If(w, ONE, ZERO)
     else:
         return w
 
@@ -1537,7 +1537,7 @@ class SEVM:
             if is_bv_value(w2):
                 i2: int = int(str(w2))
                 if i2 == 0:
-                    return con(1)
+                    return ONE
 
                 if i2 == 1:
                     return w1
@@ -1589,7 +1589,7 @@ class SEVM:
             raise WriteInStaticContext(ex.context_str())
 
         if is_bool(val):
-            val = If(val, con(1), ZERO)
+            val = If(val, ONE, ZERO)
 
         self.storage_model.store(ex, addr, loc, val)
 
@@ -1726,7 +1726,7 @@ class SEVM:
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
-                new_ex.st.push(con(1) if subcall_success else ZERO)
+                new_ex.st.push(1 if subcall_success else 0)
 
                 if not subcall_success:
                     # revert network states
@@ -1824,7 +1824,7 @@ class SEVM:
                 # - r, s in [1, secp256k1n)
 
                 # call never fails, errors result in empty returndata
-                exit_code = con(1)
+                exit_code = ONE
 
                 digest = extract_bytes(arg, 0, 32)
                 v = uint8(extract_bytes(arg, 32, 32))
@@ -1835,22 +1835,22 @@ class SEVM:
 
             # identity
             elif eq(to, con_addr(4)):
-                exit_code = con(1)
+                exit_code = ONE
                 ret = arg
 
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
-                exit_code = con(1)
+                exit_code = ONE
                 ret = halmos_cheat_code.handle(ex, arg)
 
             # vm cheat code
             elif eq(to, hevm_cheat_code.address):
-                exit_code = con(1)
+                exit_code = ONE
                 ret = hevm_cheat_code.handle(self, ex, arg, stack, step_id)
 
             # console
             elif eq(to, console.address):
-                exit_code = con(1)
+                exit_code = ONE
                 console.handle(ex, arg)
                 ret = ByteVec()
 
@@ -2340,13 +2340,13 @@ class SEVM:
                         if is_bool(w1):
                             if not is_bv(w2):
                                 raise ValueError(w2)
-                            ex.st.push(If(w1, con(1), ZERO) == w2)
+                            ex.st.push(If(w1, ONE, ZERO) == w2)
                         else:
                             if not is_bv(w1):
                                 raise ValueError(w1)
                             if not is_bool(w2):
                                 raise ValueError(w2)
-                            ex.st.push(w1 == If(w2, con(1), ZERO))
+                            ex.st.push(w1 == If(w2, ONE, ZERO))
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
 
