@@ -477,7 +477,9 @@ class hevm_cheat_code:
             store_account = uint160(arg.get_word(4))
             store_slot = uint256(arg.get_word(36))
             store_value = uint256(arg.get_word(68))
-            store_account_addr = sevm.resolve_address_alias(ex, store_account, stack, step_id)
+            store_account_addr = sevm.resolve_address_alias(
+                ex, store_account, stack, step_id
+            )
             if store_account_addr is None:
                 raise HalmosException(f"uninitialized account: {hexify(store_account)}")
 
@@ -488,7 +490,9 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.load_sig:
             load_account = uint160(arg.get_word(4))
             load_slot = uint256(arg.get_word(36))
-            load_account_addr = sevm.resolve_address_alias(ex, load_account, stack, step_id)
+            load_account_addr = sevm.resolve_address_alias(
+                ex, load_account, stack, step_id
+            )
             if load_account_addr is None:
                 raise HalmosException(f"uninitialized account: {load_account}")
 

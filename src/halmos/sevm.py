@@ -1517,12 +1517,16 @@ class SEVM:
 
         self.storage_model.store(ex, addr, loc, val)
 
-    def resolve_address_alias(self, ex: Exec, target: Address, stack, step_id) -> Address:
+    def resolve_address_alias(
+        self, ex: Exec, target: Address, stack, step_id
+    ) -> Address:
         if target in ex.code:
             return target
 
         if self.options.debug:
-            debug(f"Address {hexify(target)} not in: [{", ".join([hexify(addr) for addr in ex.code])}]")
+            debug(
+                f"Address {hexify(target)} not in: [{', '.join([hexify(addr) for addr in ex.code])}]"
+            )
 
         if is_bv_value(target):
             if self.options.debug:
@@ -1537,10 +1541,12 @@ class SEVM:
             alias_cond = target == addr
             if ex.check(alias_cond) != unsat:
                 if self.options.debug:
-                    debug(f"Potential address alias: {hexify(addr)} for {hexify(target)}")
+                    debug(
+                        f"Potential address alias: {hexify(addr)} for {hexify(target)}"
+                    )
                 potential_aliases.append((addr, alias_cond))
 
-        emptyness_cond = And([ target != addr for addr in ex.code ])
+        emptyness_cond = And([target != addr for addr in ex.code])
         if ex.check(emptyness_cond) != unsat:
             if self.options.debug:
                 debug(f"Potential empty address: {hexify(target)}")
@@ -1587,12 +1593,7 @@ class SEVM:
         ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
 
     def call(
-        self,
-        ex: Exec,
-        op: int,
-        stack: List[Tuple[Exec, int]],
-        step_id: int,
-        to_addr
+        self, ex: Exec, op: int, stack: List[Tuple[Exec, int]], step_id: int, to_addr
     ) -> None:
         gas = ex.st.pop()
         to = uint160(ex.st.pop())
@@ -1759,7 +1760,9 @@ class SEVM:
                 exit_code = con(1)
                 modulus_size = int_of(extract_bytes(arg, 64, 32))
                 f_modexp = Function(
-                    f"f_modexp_{arg_size}_{modulus_size}", BitVecSorts[arg_size], BitVecSorts[modulus_size]
+                    f"f_modexp_{arg_size}_{modulus_size}",
+                    BitVecSorts[arg_size],
+                    BitVecSorts[modulus_size],
                 )
                 # TODO: empty returndata in error
                 ret = ByteVec(f_modexp(arg))
@@ -1767,17 +1770,13 @@ class SEVM:
             # ecadd
             elif eq(to, con_addr(6)):
                 exit_code = con(1)
-                f_ecadd = Function(
-                    f"f_ecadd", BitVecSorts[1024], BitVecSorts[512]
-                )
+                f_ecadd = Function(f"f_ecadd", BitVecSorts[1024], BitVecSorts[512])
                 ret = ByteVec(f_ecadd(arg))
 
             # ecmul
             elif eq(to, con_addr(7)):
                 exit_code = con(1)
-                f_ecmul = Function(
-                    f"f_ecmul", BitVecSorts[768], BitVecSorts[512]
-                )
+                f_ecmul = Function(f"f_ecmul", BitVecSorts[768], BitVecSorts[512])
                 ret = ByteVec(f_ecmul(arg))
 
             # ecpairing
@@ -1791,9 +1790,7 @@ class SEVM:
             # blake2f
             elif eq(to, con_addr(9)):
                 exit_code = con(1)
-                f_blake2f = Function(
-                    f"f_blake2f", BitVecSorts[1704], BitVecSorts[512]
-                )
+                f_blake2f = Function(f"f_blake2f", BitVecSorts[1704], BitVecSorts[512])
                 ret = ByteVec(f_blake2f(arg))
 
             # point_evaluation
@@ -1828,7 +1825,9 @@ class SEVM:
                 ret = ByteVec()
 
             # push exit code
-            exit_code_var = BitVec(f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256)
+            exit_code_var = BitVec(
+                f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256
+            )
             ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
@@ -1871,7 +1870,7 @@ class SEVM:
         # precompiles or cheatcodes
         if (
             # precompile
-            (is_bv_value(to) and to.as_long() in range(1,11))
+            (is_bv_value(to) and to.as_long() in range(1, 11))
             # cheatcode calls
             or eq(to, halmos_cheat_code.address)
             or eq(to, hevm_cheat_code.address)
@@ -2346,7 +2345,9 @@ class SEVM:
                 # TODO: define f_extcodesize for known addresses in advance
                 elif opcode == EVM.EXTCODESIZE:
                     account = uint160(ex.st.peek())
-                    account_addr = self.resolve_address_alias(ex, account, stack, step_id)
+                    account_addr = self.resolve_address_alias(
+                        ex, account, stack, step_id
+                    )
                     ex.st.pop()
 
                     if account_addr is not None:
@@ -2356,7 +2357,7 @@ class SEVM:
                         or eq(account, halmos_cheat_code.address)
                         or eq(account, console.address)
                     ):
-                        codesize = 777 # dummy arbitrary value
+                        codesize = 777  # dummy arbitrary value
                     else:
                         codesize = 0
 
@@ -2364,7 +2365,9 @@ class SEVM:
 
                 elif opcode == EVM.EXTCODECOPY:
                     account: Address = uint160(ex.st.peek())
-                    account_addr = self.resolve_address_alias(ex, account, stack, step_id)
+                    account_addr = self.resolve_address_alias(
+                        ex, account, stack, step_id
+                    )
                     ex.st.pop()
 
                     loc: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
@@ -2390,7 +2393,9 @@ class SEVM:
 
                 elif opcode == EVM.EXTCODEHASH:
                     account_addr = uint160(ex.st.peek())
-                    alias_addr = self.resolve_address_alias(ex, account_addr, stack, step_id)
+                    alias_addr = self.resolve_address_alias(
+                        ex, account_addr, stack, step_id
+                    )
                     ex.st.pop()
 
                     addr = alias_addr if alias_addr is not None else account_addr
