@@ -1094,7 +1094,7 @@ def solve(
             )
 
         with open(dump_filename, "w") as f:
-            if args.verbose >= 1:
+            if args.debug:
                 print(f"Writing SMT query to {dump_filename}")
             if args.cache_solver:
                 f.write("(set-option :produce-unsat-cores true)\n")
@@ -1108,7 +1108,7 @@ def solve(
                 f.write("(get-unsat-core)\n")
 
     if args.solver_command:
-        if args.verbose >= 1:
+        if args.debug:
             print(f"  Checking with external solver process")
             print(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
 
@@ -1128,7 +1128,7 @@ def solve(
             with open(f"{dump_filename}.out", "w") as f:
                 f.write(res_str)
 
-            if args.verbose >= 1:
+            if args.debug:
                 print(f"    {res_str_head}")
 
             if res_str_head == "unsat":
