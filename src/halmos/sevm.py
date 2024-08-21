@@ -220,10 +220,10 @@ class CallOutput:
     Data record produced during the execution of a call.
     """
 
-    data: Optional[ByteVec] = None
+    data: ByteVec | None = None
     accounts_to_delete: Set[Address] = field(default_factory=set)
-    error: Optional[UnionType[EvmException, HalmosException]] = None
-    return_scheme: Optional[int] = None
+    error: EvmException | HalmosException | None = None
+    return_scheme: int | None = None
 
     # TODO:
     #   - touched_accounts
@@ -756,6 +756,15 @@ class Exec:  # an execution path
 
     def is_halted(self) -> bool:
         return self.context.output.data is not None
+
+    def reverted_with(self, expected: ByteVec) -> bool:
+        if not isinstance(self.context.output.error, Revert):
+            return False
+
+        returndata = self.context.output.data[: byte_length(expected)]
+
+        # bytevec equality check, will take care of length check, bv vs symbolic, etc.
+        return returndata == expected
 
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)

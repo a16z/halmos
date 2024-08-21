@@ -52,7 +52,11 @@ if sys.stdout.encoding != "utf-8":
 
 # Panic(1)
 # bytes4(keccak256("Panic(uint256)")) + bytes32(1)
-ASSERT_FAIL = 0x4E487B710000000000000000000000000000000000000000000000000000000000000001
+ASSERT_FAIL = ByteVec(
+    bytes.fromhex(
+        "4E487B710000000000000000000000000000000000000000000000000000000000000001"
+    )
+)
 
 VERBOSITY_TRACE_COUNTEREXAMPLE = 2
 VERBOSITY_TRACE_SETUP = 3
@@ -372,13 +376,13 @@ def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
     for idx, ex in enumerate(exs):
         result_exs.append(ex)
         opcode = ex.current_opcode()
-        error = ex.context.output.error
+        error_output = ex.context.output.error
         returndata = ex.context.output.data
 
-        if error:
+        if error_output:
             warn_code(
                 INTERNAL_ERROR,
-                f"{mnemonic(opcode)} failed, error={error}, returndata={returndata}",
+                f"{mnemonic(opcode)} failed, error={error_output}, returndata={returndata}",
             )
         else:
             print(f"Final opcode: {mnemonic(opcode)})")
@@ -453,10 +457,12 @@ def deploy_test(
         print("Constructor trace:")
         render_trace(ex.context)
 
-    error = ex.context.output.error
+    error_output = ex.context.output.error
     returndata = ex.context.output.data
-    if error:
-        raise ValueError(f"constructor failed, error={error} returndata={returndata}")
+    if error_output:
+        raise ValueError(
+            f"constructor failed, error={error_output} returndata={returndata}"
+        )
 
     deployed_bytecode = Contract(returndata)
     ex.code[this] = deployed_bytecode
@@ -515,13 +521,11 @@ def setup(
                 print(f"{setup_sig} trace #{idx+1}:")
                 render_trace(setup_ex.context)
 
-            opcode = setup_ex.current_opcode()
-            error = setup_ex.context.output.error
-
-            if error is None:
+            if not setup_ex.context.output.error:
                 setup_exs_no_error.append((setup_ex, setup_ex.path.to_smt2(args)))
 
             else:
+                opcode = setup_ex.current_opcode()
                 if opcode not in [EVM.REVERT, EVM.INVALID]:
                     warn_code(
                         INTERNAL_ERROR,
@@ -753,15 +757,11 @@ def run(
             print("\nTrace:")
             render_trace(ex.context)
 
-        error = ex.context.output.error
-
-        if (
-            isinstance(error, Revert)
-            and unbox_int(ex.context.output.data) == ASSERT_FAIL
-        ) or is_global_fail_set(ex.context):
+        error_output = ex.context.output.error
+        if ex.reverted_with(ASSERT_FAIL) or is_global_fail_set(ex.context):
             if args.verbose >= 1:
                 print(f"Found potential path (id: {idx+1})")
-                print(f"{ex.context.output.error}")
+                print(f"{error_output}")
 
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 traces[idx] = rendered_trace(ex.context)
@@ -780,7 +780,7 @@ def run(
             if args.print_blocked_states:
                 traces[idx] = f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
 
-        elif not error:
+        elif not error_output:
             normal += 1
 
         # 0 width is unlimited
