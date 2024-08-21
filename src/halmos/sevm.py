@@ -208,7 +208,7 @@ class Message:
     call_scheme: int
 
     is_static: bool = False
-    gas: Optional[Word] = None
+    gas: Word | None = None
 
     def is_create(self) -> bool:
         return self.call_scheme in (EVM.CREATE, EVM.CREATE2)
@@ -779,7 +779,7 @@ class Exec:  # an execution path
     def message(self):
         return self.context.message
 
-    def current_opcode(self) -> UnionType[int, BitVecRef]:
+    def current_opcode(self) -> Byte:
         return unbox_int(self.pgm[self.pc])
 
     def current_instruction(self) -> Instruction:
@@ -2441,9 +2441,7 @@ class SEVM:
                     account_addr = uint160(ex.st.pop())
                     alias_addr = self.resolve_address_alias(ex, account_addr)
                     addr = alias_addr if alias_addr is not None else account_addr
-
-                    account_code: Optional[Contract] = ex.code.get(addr, None)
-
+                    account_code: Contract | None = ex.code.get(addr)
                     codehash = (
                         f_extcodehash(addr)
                         if account_code is None

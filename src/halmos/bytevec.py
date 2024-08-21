@@ -22,18 +22,13 @@ from .utils import (
     try_bv_value_to_bytes,
     unbox_int,
     warn,
+    Byte,
+    Word,
 )
 
-# concrete or symbolic byte
-Byte = UnionType[int, BitVecRef]
 UnwrappedBytes = UnionType[bytes, Byte]
 WrappedBytes = UnionType["Chunk", "ByteVec"]
-
-# any concrete or symbolic sequence of bytes
 Bytes = UnionType[UnwrappedBytes, WrappedBytes]
-
-# concrete or symbolic 32-byte word
-Word = UnionType[int, BitVecRef]
 
 
 def try_concat(lhs: Any, rhs: Any) -> Optional[Any]:
