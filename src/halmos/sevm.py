@@ -949,9 +949,8 @@ class Exec:  # an execution path
             for lib in lib_references:
                 address = self.new_address()
 
-                self.code[address] = Contract.from_hexcode(
-                    lib_references[lib]["hexcode"]
-                )
+                lib_bytecode = Contract.from_hexcode(lib_references[lib]["hexcode"])
+                self.set_code(address, lib_bytecode)
 
                 placeholder = lib_references[lib]["placeholder"]
                 hex_address = stripped(hex(address.as_long())).zfill(40)
@@ -1961,7 +1960,7 @@ class SEVM:
         orig_balance = ex.balance
 
         # setup new account
-        ex.code[new_addr] = Contract(b"")  # existing code must be empty
+        ex.set_code(new_addr, Contract(b""))  # existing code must be empty
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # transfer value
@@ -1990,7 +1989,7 @@ class SEVM:
 
             elif subcall.output.error is None:
                 # new contract code, will revert if data is None
-                new_ex.code[new_addr] = Contract(subcall.output.data)
+                new_ex.set_code(new_addr, Contract(subcall.output.data))
 
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))

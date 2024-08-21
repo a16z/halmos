@@ -439,7 +439,7 @@ def deploy_test(
     # use the given deployed bytecode if --no-test-constructor is enabled
     if args.no_test_constructor:
         deployed_bytecode = Contract.from_hexcode(deployed_hexcode)
-        ex.code[this] = deployed_bytecode
+        ex.set_code(this, deployed_bytecode)
         ex.pgm = deployed_bytecode
         return ex
 
@@ -462,7 +462,7 @@ def deploy_test(
         raise ValueError(f"constructor failed, error={error} returndata={returndata}")
 
     deployed_bytecode = Contract(returndata)
-    ex.code[this] = deployed_bytecode
+    ex.set_code(this, deployed_bytecode)
     ex.pgm = deployed_bytecode
 
     # reset vm state
@@ -581,7 +581,7 @@ def setup(
         for assign in [x.split("=") for x in args.reset_bytecode.split(",")]:
             addr = con_addr(int(assign[0].strip(), 0))
             new_hexcode = assign[1].strip()
-            setup_ex.code[addr] = Contract.from_hexcode(new_hexcode)
+            setup_ex.set_code(addr, Contract.from_hexcode(new_hexcode))
 
     if args.statistics:
         print(setup_timer.report())
