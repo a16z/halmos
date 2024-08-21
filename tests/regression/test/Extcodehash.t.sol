@@ -118,4 +118,16 @@ contract ExtcodehashTest is Test, SymTest {
 
         assertEq(codehash, keccak256(code));
     }
+
+    function check_extcodesize_precompiles(address precompiled) external {
+        vm.assume(0 <= uint160(precompiled));
+        vm.assume(uint160(precompiled) <= 0xa);
+
+        uint256 size;
+        assembly {
+            size := extcodesize(precompiled)
+        }
+
+        assertEq(size, 0);
+    }
 }
