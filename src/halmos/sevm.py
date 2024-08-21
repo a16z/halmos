@@ -1597,8 +1597,12 @@ class SEVM:
         ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
 
     def call(
-        self, ex: Exec, op: int, stack: List[Tuple[Exec, int]], step_id: int, to_addr
+        self, ex: Exec, op: int, to_alias: Address, stack: List[Tuple[Exec, int]], step_id: int
     ) -> None:
+        # `to`: the original (symbolic) target address
+        # `to_alias`: a (concrete) alias of the target considered in this path.
+        #            it could be None, indicating a non-existent address.
+
         gas = ex.st.pop()
         to = uint160(ex.st.pop())
         fund = con(0) if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
@@ -1622,6 +1626,7 @@ class SEVM:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
                 # TODO: revert if context is static
+                # NOTE: we cannot use `to_alias` here because it could be None
                 self.transfer_value(ex, pranked_caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
@@ -1880,12 +1885,12 @@ class SEVM:
             or eq(to, hevm_cheat_code.address)
             or eq(to, console.address)
             # non-existing contract call
-            or to_addr is None
+            or to_alias is None
         ):
             call_unknown()
             return
 
-        call_known(to_addr)
+        call_known(to_alias)
 
     def create(
         self,
@@ -2463,9 +2468,9 @@ class SEVM:
                     EVM.STATICCALL,
                 ]:
                     to = uint160(ex.st.peek(2))
-                    to_addr = self.resolve_address_alias(ex, to, stack, step_id)
+                    to_alias = self.resolve_address_alias(ex, to, stack, step_id)
 
-                    self.call(ex, opcode, stack, step_id, to_addr)
+                    self.call(ex, opcode, to_alias, stack, step_id)
                     continue
 
                 elif opcode == EVM.SHA3:
