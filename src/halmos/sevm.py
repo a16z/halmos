@@ -1552,7 +1552,7 @@ class SEVM:
                 debug(f"Potential empty address: {hexify(target)}")
             potential_aliases.append((None, emptyness_cond))
 
-        if len(potential_aliases) == 0:
+        if not potential_aliases:
             raise InfeasiblePath("resolve_address_alias: no potential aliases")
 
         if len(potential_aliases) > 1:
