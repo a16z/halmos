@@ -742,6 +742,7 @@ class Exec:  # an execution path
         """
         Sets the code at a given address.
         """
+        assert_bv(who)
         assert_address(who)
         self.code[who] = code if isinstance(code, Contract) else Contract(code)
 
@@ -1519,6 +1520,9 @@ class SEVM:
     def resolve_address_alias(
         self, ex: Exec, target: Address, stack, step_id
     ) -> Address:
+        assert_bv(target)
+        assert_address(target)
+
         if target in ex.code:
             return target
 

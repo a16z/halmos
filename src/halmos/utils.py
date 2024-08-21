@@ -447,6 +447,11 @@ def stringify(symbol_name: str, val: Any):
         return hexify(val)
 
 
+def assert_bv(x) -> None:
+    if not is_bv(x):
+        raise ValueError(x)
+
+
 def assert_address(x: Word) -> None:
     if is_concrete(x):
         if not 0 <= int_of(x) < 2**160:
