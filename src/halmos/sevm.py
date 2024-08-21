@@ -2412,7 +2412,7 @@ class SEVM:
                     account_code: Optional[Contract] = ex.code.get(addr, None)
 
                     codehash = (
-                        EMPTY_KECCAK
+                        con(0)
                         if account_code is None
                         else ex.sha3_data(account_code._code.unwrap())
                     )

@@ -89,11 +89,14 @@ contract ExtcodehashTest is Test, SymTest {
         assertEq(emptyCodeAddr.code.length, 0, "Empty contract should have no code");
 
         bytes32 codehash;
+        bytes32 nextCodehash;
         assembly {
             codehash := extcodehash(emptyCodeAddr)
+            nextCodehash := extcodehash(add(emptyCodeAddr, 1))
         }
 
         assertEq(codehash, keccak256(""), "Expected codehash of the empty string");
+        assertEq(nextCodehash, 0, "Expected 0");
     }
 
     /// unknown addresses are assumed to be non-existing, thus have no code
