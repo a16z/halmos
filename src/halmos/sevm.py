@@ -1556,12 +1556,12 @@ class SEVM:
             raise InfeasiblePath("resolve_address_alias: no potential aliases")
 
         head, *tail = potential_aliases
-    
+
         for addr, cond in tail:
             new_ex = self.create_branch(ex, cond, ex.pc)
             new_ex.alias[target] = addr
             stack.push(new_ex, step_id)
-    
+
         addr, cond = head
         ex.path.append(cond)
         ex.alias[target] = addr
