@@ -860,7 +860,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_extcodehash_empty()",
+                "name": "check_extcodehash_empty_contract()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -878,7 +878,70 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_extcodehash_unknown_addr_empty()",
+                "name": "check_extcodehash_nonexisting_account()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_extcodehash_symbolic_address(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_extcodehash_symbolic_address_empty(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_extcodehash_symbolic_address_not_empty(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_extcodesize_precompiles(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_extcodesize_symbolic_address(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_extcodesize_symbolic_address_empty(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_extcodesize_symbolic_address_not_empty(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
