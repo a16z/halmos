@@ -228,7 +228,7 @@ contract ExtcodehashTest is Test, SymTest {
     }
 
     function check_extcodesize_precompiles(address precompiled) external {
-        vm.assume(0 <= uint160(precompiled));
+        vm.assume(1 <= uint160(precompiled));
         vm.assume(uint160(precompiled) <= 0xa);
 
         uint256 size;
@@ -237,5 +237,33 @@ contract ExtcodehashTest is Test, SymTest {
         }
 
         assertEq(size, 0);
+    }
+
+    function check_extcodehash_precompiles(address precompiled) external {
+        vm.assume(1 <= uint160(precompiled));
+        vm.assume(uint160(precompiled) <= 0xa);
+
+        uint256 codehash;
+        assembly {
+            codehash := extcodehash(precompiled)
+        }
+
+        assertEq(codehash, 0);
+    }
+
+    function check_extcodesize_cheatcode() external {
+        assertEq(VM_ADDRESS, address(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D));
+        assertEq(console.CONSOLE_ADDRESS, address(0x000000000000000000636F6e736F6c652e6c6f67));
+        assertEq(SymTest.SVM_ADDRESS, address(0xF3993A62377BCd56AE39D773740A5390411E8BC9));
+
+        assertEq(VM_ADDRESS.code.length, 1);
+        assertEq(console.CONSOLE_ADDRESS.code.length, 0);
+        assertEq(SymTest.SVM_ADDRESS.code.length, 0);
+    }
+
+    function check_extcodehash_cheatcode() external {
+        assertEq(VM_ADDRESS.codehash, 0xb0450508e5a2349057c3b4c9c84524d62be4bb17e565dbe2df34725a26872291);
+        assertEq(console.CONSOLE_ADDRESS.codehash, 0);
+        assertEq(SymTest.SVM_ADDRESS.codehash, 0);
     }
 }

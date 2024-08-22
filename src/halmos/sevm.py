@@ -2422,22 +2422,22 @@ class SEVM:
                 elif opcode == EVM.ADDRESS:
                     ex.st.push(uint256(ex.this()))
 
-                # TODO: define f_extcodesize for known addresses in advance
                 elif opcode == EVM.EXTCODESIZE:
                     account = uint160(ex.st.peek())
-                    account_addr = self.resolve_address_alias(
+                    account_alias = self.resolve_address_alias(
                         ex, account, stack, step_id
                     )
                     ex.st.pop()
 
-                    if account_addr is not None:
-                        codesize = len(ex.code[account_addr])
+                    if account_alias is not None:
+                        codesize = len(ex.code[account_alias])
                     elif (
                         eq(account, hevm_cheat_code.address)
                         or eq(account, halmos_cheat_code.address)
                         or eq(account, console.address)
                     ):
-                        codesize = 1  # dummy arbitrary value, consistent with foundry
+                        # dummy arbitrary value, consistent with foundry
+                        codesize = 1 if eq(account, hevm_cheat_code.address) else 0
                     else:
                         codesize = 0
 
@@ -2445,7 +2445,7 @@ class SEVM:
 
                 elif opcode == EVM.EXTCODECOPY:
                     account: Address = uint160(ex.st.peek())
-                    account_addr = self.resolve_address_alias(
+                    account_alias = self.resolve_address_alias(
                         ex, account, stack, step_id
                     )
                     ex.st.pop()
@@ -2459,32 +2459,36 @@ class SEVM:
                         if end_loc > MAX_MEMORY_SIZE:
                             raise HalmosException("EXTCODECOPY > MAX_MEMORY_SIZE")
 
-                        if account_addr is None:
+                        if account_alias is None:
                             warn(
                                 f"EXTCODECOPY: unknown address {hexify(account)} "
                                 "is assumed to have empty bytecode"
                             )
 
-                        account_code: Contract = ex.code.get(account_addr) or ByteVec()
+                        account_code: Contract = ex.code.get(account_alias) or ByteVec()
                         codeslice: ByteVec = account_code._code.slice(
                             offset, offset + size
                         )
                         ex.st.memory.set_slice(loc, end_loc, codeslice)
 
                 elif opcode == EVM.EXTCODEHASH:
-                    account_addr = uint160(ex.st.peek())
-                    alias_addr = self.resolve_address_alias(
-                        ex, account_addr, stack, step_id
+                    account = uint160(ex.st.peek())
+                    account_alias = self.resolve_address_alias(
+                        ex, account, stack, step_id
                     )
                     ex.st.pop()
 
-                    addr = alias_addr if alias_addr is not None else account_addr
-                    account_code: Contract | None = ex.code.get(addr)
-                    codehash = (
-                        ZERO  # vs EMPTY_KECCAK, see EIP-1052
-                        if account_code is None
-                        else ex.sha3_data(account_code._code.unwrap())
-                    )
+                    if account_alias is not None:
+                        codehash = ex.sha3_data(ex.code[account_alias]._code.unwrap())
+                    elif (
+                        eq(account, hevm_cheat_code.address)
+                        or eq(account, halmos_cheat_code.address)
+                        or eq(account, console.address)
+                    ):
+                        # dummy arbitrary value, consistent with foundry
+                        codehash = con(0xb0450508e5a2349057c3b4c9c84524d62be4bb17e565dbe2df34725a26872291) if eq(account, hevm_cheat_code.address) else ZERO
+                    else:
+                        codehash = ZERO  # vs EMPTY_KECCAK, see EIP-1052
 
                     ex.st.push(codehash)
 

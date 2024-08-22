@@ -869,6 +869,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_extcodehash_cheatcode()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_extcodehash_empty_contract()",
                 "exitcode": 0,
                 "num_models": 0,
@@ -896,6 +905,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_extcodehash_precompiles(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_extcodehash_symbolic_address(address)",
                 "exitcode": 0,
                 "num_models": 0,
@@ -915,6 +933,15 @@
             },
             {
                 "name": "check_extcodehash_symbolic_address_not_empty(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_extcodesize_cheatcode()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
