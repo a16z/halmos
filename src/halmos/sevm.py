@@ -2486,9 +2486,13 @@ class SEVM:
                         or eq(account, console.address)
                     ):
                         # dummy arbitrary value, consistent with foundry
-                        codehash = con(0xb0450508e5a2349057c3b4c9c84524d62be4bb17e565dbe2df34725a26872291) if eq(account, hevm_cheat_code.address) else ZERO
+                        codehash = (
+                            0xB0450508E5A2349057C3B4C9C84524D62BE4BB17E565DBE2DF34725A26872291
+                            if eq(account, hevm_cheat_code.address)
+                            else 0
+                        )
                     else:
-                        codehash = ZERO  # vs EMPTY_KECCAK, see EIP-1052
+                        codehash = 0  # vs EMPTY_KECCAK, see EIP-1052
 
                     ex.st.push(codehash)
 
