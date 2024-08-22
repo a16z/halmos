@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import math
 import re
 
 from copy import deepcopy
@@ -22,7 +21,7 @@ from typing import (
 )
 from z3 import *
 
-from .bytevec import Chunk, ByteVec
+from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
 from .cheatcodes import halmos_cheat_code, hevm_cheat_code, Prank
 from .config import Config as HalmosConfig
 from .console import console
@@ -38,17 +37,18 @@ Steps = Dict[int, Dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
 EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470)
+ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
 
 # TODO: make this configurable
 MAX_MEMORY_SIZE = 2**20
 
+# (pc, (jumpdest, ...))
+# the jumpdests are stored as strings to avoid the cost of converting bv values
+JumpID = Tuple[int, Tuple[str]]
 
 # symbolic states
-# calldataload(index)
-f_calldataload = Function("f_calldataload", BitVecSort256, BitVecSort256)
-# calldatasize()
-f_calldatasize = Function("f_calldatasize", BitVecSort256)
+
 # extcodesize(target address)
 f_extcodesize = Function("f_extcodesize", BitVecSort160, BitVecSort256)
 # extcodehash(target address)
@@ -82,17 +82,23 @@ create2_magic_address: int = 0xBBBB0000
 new_address_offset: int = 1
 
 
+def jumpid_str(jumpid: JumpID) -> str:
+    pc, jumpdests = jumpid
+    return f"{pc}:{','.join(jumpdests)}"
+
+
+def insn_len(opcode: int) -> int:
+    return 1 + (opcode - EVM.PUSH0) * (EVM.PUSH1 <= opcode <= EVM.PUSH32)
+
+
 class Instruction:
     opcode: int
     pc: int = -1
-    next_pc: int = -1
     operand: Optional[ByteVec] = None
 
-    def __init__(self, opcode, pc=-1, next_pc=-1, operand=None) -> None:
+    def __init__(self, opcode, pc=-1, operand=None) -> None:
         self.opcode = opcode
-
         self.pc = pc
-        self.next_pc = next_pc
         self.operand = operand
 
     def __str__(self) -> str:
@@ -103,7 +109,7 @@ class Instruction:
         return f"Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})"
 
     def __len__(self) -> int:
-        return self.next_pc - self.pc
+        return insn_len(self.opcode)
 
 
 def id_str(x: Any) -> str:
@@ -202,7 +208,7 @@ class Message:
     call_scheme: int
 
     is_static: bool = False
-    gas: Optional[Word] = None
+    gas: Word | None = None
 
     def is_create(self) -> bool:
         return self.call_scheme in (EVM.CREATE, EVM.CREATE2)
@@ -214,10 +220,10 @@ class CallOutput:
     Data record produced during the execution of a call.
     """
 
-    data: Optional[ByteVec] = None
+    data: ByteVec | None = None
     accounts_to_delete: Set[Address] = field(default_factory=set)
-    error: Optional[UnionType[EvmException, HalmosException]] = None
-    return_scheme: Optional[int] = None
+    error: EvmException | HalmosException | None = None
+    return_scheme: int | None = None
 
     # TODO:
     #   - touched_accounts
@@ -320,17 +326,17 @@ class State:
             # self.stack.append(v)
 
             # for now, wrap ints in a BitVec
-            v = con(v)
-
-        if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
-            raise ValueError(v)
-        self.stack.append(simplify(v))
+            self.stack.append(con(v))
+        else:
+            if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
+                raise ValueError(v)
+            self.stack.append(simplify(v))
 
     def pop(self) -> Word:
         return self.stack.pop()
 
     def dup(self, n: int) -> None:
-        self.push(self.stack[-n])
+        self.stack.append(self.stack[-n])
 
     def swap(self, n: int) -> None:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
@@ -373,22 +379,66 @@ class Block:
 class Contract:
     """Abstraction over contract bytecode. Can include concrete and symbolic elements."""
 
+    _code: ByteVec
+    _fastcode: bytes | None
+    _insn: Dict[int, Instruction]
+    _next_pc: Dict[int, int]
+    _jumpdests: tuple[set] | None
+
     def __init__(self, code: Optional[ByteVec] = None) -> None:
-        # if
         if not isinstance(code, ByteVec):
             code = ByteVec(code)
 
         self._code = code
+        self._fastcode = None
+
+        # if the bytecode starts with a concrete prefix, we store it separately for fast access
+        # (this is a common case, especially for test contracts that deploy other contracts)
+        if code.chunks:
+            first_chunk = code.chunks[0]
+            if isinstance(first_chunk, ConcreteChunk):
+                self._fastcode = first_chunk.unwrap()
 
         # maps pc to decoded instruction (including operand and next_pc)
         self._insn = dict()
+        self._next_pc = dict()
+        self._jumpdests = None
 
-    def __init_jumpdests(self):
-        assert not hasattr(self, "_jumpdests")
-        self._jumpdests = set((pc for (pc, op) in iter(self) if op == EVM.JUMPDEST))
+    def __deepcopy__(self, memo):
+        # the class is essentially immutable (the only mutable fields are caches)
+        # so we can return the object itself instead of creating a new copy
+        return self
 
-    def __iter__(self):
-        return CodeIterator(self)
+    def __get_jumpdests(self):
+        # quick scan, does not eagerly decode instructions
+        jumpdests = set()
+        jumpdests_str = set()
+        pc = 0
+
+        # optimistically process fast path first
+        for bytecode in (self._fastcode, self._code):
+            if not bytecode:
+                continue
+
+            N = len(bytecode)
+            while pc < N:
+                try:
+                    opcode = int_of(bytecode[pc])
+
+                    if opcode == EVM.JUMPDEST:
+                        jumpdests.add(pc)
+
+                        # a little odd, but let's add the string representation of the pc as well
+                        # because it makes jumpi_id cheaper to compute
+                        jumpdests_str.add(str(pc))
+
+                    next_pc = pc + insn_len(opcode)
+                    self._next_pc[pc] = next_pc
+                    pc = next_pc
+                except NotConcreteError:
+                    break
+
+        return (jumpdests, jumpdests_str)
 
     def from_hexcode(hexcode: str):
         """Create a contract from a hexcode string, e.g. "aabbccdd" """
@@ -409,71 +459,76 @@ class Contract:
         except ValueError as e:
             raise ValueError(f"{e} (hexcode={hexcode})")
 
-    def _decode_instruction(self, pc: int) -> Instruction:
-        opcode = int_of(self._code[pc], f"symbolic opcode at pc={pc}")
+    def _decode_instruction(self, pc: int) -> Tuple[Instruction, int]:
+        opcode = int_of(self[pc], f"symbolic opcode at pc={pc}")
+        length = insn_len(opcode)
+        next_pc = pc + length
 
-        if EVM.PUSH1 <= opcode <= EVM.PUSH32:
-            operand_offset = pc + 1
-            operand_size = opcode - EVM.PUSH0
-            next_pc = operand_offset + operand_size
-
+        if length > 1:
             # TODO: consider slicing lazily
-            operand = self.slice(operand_offset, next_pc).unwrap()
-            return Instruction(opcode, pc=pc, operand=operand, next_pc=next_pc)
+            operand = self.unwrapped_slice(pc + 1, next_pc)
+            return (Instruction(opcode, pc=pc, operand=operand), next_pc)
 
-        return Instruction(opcode, pc=pc, next_pc=pc + 1)
+        return (Instruction(opcode, pc=pc), next_pc)
 
     def decode_instruction(self, pc: int) -> Instruction:
-        insn = self._insn.get(pc, None)
-        if insn is None:
-            insn = self._decode_instruction(pc)
+        """decode instruction at pc and cache the result"""
+
+        if (insn := self._insn.get(pc)) is None:
+            insn, next_pc = self._decode_instruction(pc)
             self._insn[pc] = insn
+            self._next_pc[pc] = next_pc
 
         return insn
 
     def next_pc(self, pc):
-        return self.decode_instruction(pc).next_pc
+        if (result := self._next_pc.get(pc)) is not None:
+            return result
+
+        self.decode_instruction(pc)
+        return self._next_pc[pc]
 
     def slice(self, start, stop) -> ByteVec:
+        # fast path for offsets in the concrete prefix
+        if self._fastcode and stop < len(self._fastcode):
+            return ByteVec(self._fastcode[start:stop])
+
         return self._code.slice(start, stop)
+
+    def unwrapped_slice(self, start, stop) -> UnwrappedBytes:
+        # fast path for offsets in the concrete prefix
+        if self._fastcode and stop < len(self._fastcode):
+            return self._fastcode[start:stop]
+
+        return self._code.slice(start, stop).unwrap()
 
     def __getitem__(self, key: int) -> Byte:
         """Returns the byte at the given offset."""
         offset = int_of(key, "symbolic index into contract bytecode {offset!r}")
+
+        # fast path for offsets in the concrete prefix
+        if self._fastcode and offset < len(self._fastcode):
+            return self._fastcode[offset]
+
         return self._code.get_byte(offset)
 
     def __len__(self) -> int:
         """Returns the length of the bytecode in bytes."""
         return len(self._code)
 
-    def valid_jump_destinations(self) -> set:
+    def valid_jump_destinations(self) -> set[int]:
         """Returns the set of valid jump destinations."""
-        if not hasattr(self, "_jumpdests"):
-            self.__init_jumpdests()
+        if self._jumpdests is None:
+            self._jumpdests = self.__get_jumpdests()
 
-        return self._jumpdests
+        return self._jumpdests[0]
 
+    def valid_jump_destinations_str(self) -> set[str]:
+        """Returns the set of valid jump destinations as strings."""
+        if self._jumpdests is None:
+            self._jumpdests = self.__get_jumpdests()
 
-class CodeIterator:
-    def __init__(self, contract: Contract):
-        self.contract = contract
-        self.pc = 0
-
-    def __iter__(self):
-        return self
-
-    def __next__(self) -> Tuple[int, int]:
-        """Returns a tuple of (pc, opcode)"""
-        if self.pc >= len(self.contract):
-            raise StopIteration
-
-        try:
-            pc = self.pc
-            insn = self.contract.decode_instruction(pc)
-            self.pc = insn.next_pc
-            return (pc, insn.opcode)
-        except NotConcreteError:
-            raise StopIteration
+        return self._jumpdests[1]
 
 
 @dataclass(frozen=True)
@@ -506,7 +561,7 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-                if self.conditions[cond] and str(cond) != "True"
+                if self.conditions[cond] and not is_true(cond)
             ]
         )
 
@@ -630,7 +685,7 @@ class Exec:  # an execution path
     pgm: Contract
     pc: int
     st: State  # stack and memory
-    jumpis: Dict[str, Dict[bool, int]]  # for loop detection
+    jumpis: Dict[JumpID, Dict[bool, int]]  # for loop detection
     symbolic: bool  # symbolic or concrete storage
     addresses_to_delete: Set[Address]
 
@@ -702,6 +757,15 @@ class Exec:  # an execution path
     def is_halted(self) -> bool:
         return self.context.output.data is not None
 
+    def reverted_with(self, expected: ByteVec) -> bool:
+        if not isinstance(self.context.output.error, Revert):
+            return False
+
+        returndata = self.context.output.data[: byte_length(expected)]
+
+        # bytevec equality check, will take care of length check, bv vs symbolic, etc.
+        return returndata == expected
+
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
 
@@ -724,7 +788,7 @@ class Exec:  # an execution path
     def message(self):
         return self.context.message
 
-    def current_opcode(self) -> UnionType[int, BitVecRef]:
+    def current_opcode(self) -> Byte:
         return unbox_int(self.pgm[self.pc])
 
     def current_instruction(self) -> Instruction:
@@ -754,7 +818,7 @@ class Exec:  # an execution path
                 [
                     f"PC: {self.this()} {self.pc} {mnemonic(self.current_opcode())}\n",
                     self.st.dump(print_mem=print_mem),
-                    f"Balance: {self.balance}\n",
+                    f"\nBalance: {self.balance}\n",
                     f"Storage:\n",
                     "".join(
                         map(
@@ -788,7 +852,7 @@ class Exec:  # an execution path
             )
         )
 
-    def next_pc(self) -> None:
+    def advance_pc(self) -> None:
         self.pc = self.pgm.next_pc(self.pc)
 
     def check(self, cond: Any) -> Any:
@@ -818,7 +882,7 @@ class Exec:  # an execution path
         # empty array
         elif not self.symbolic and re.search(r"^storage_.+_00$", str(array)):
             # note: simplifying empty array access might have a negative impact on solver performance
-            return con(0)
+            return ZERO
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
@@ -894,7 +958,7 @@ class Exec:  # an execution path
                 # inputs have different sizes: assume the outputs are different
                 self.path.append(sha3_expr != prev_sha3_expr)
 
-        self.path.append(sha3_expr != con(0))
+        self.path.append(sha3_expr != ZERO)
         self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
@@ -928,17 +992,19 @@ class Exec:  # an execution path
         returndata = self.returndata()
         return len(returndata) if returndata is not None else 0
 
-    def jumpi_id(self) -> str:
-        # TODO: avoid scanning the entire stack for jumpdests every time
-        valid_jumpdests = self.pgm.valid_jump_destinations()
+    def jumpi_id(self) -> JumpID:
+        valid_jumpdests = self.pgm.valid_jump_destinations_str()
 
-        jumpdests_str = (
-            str(unboxed)
+        # we call `as_string()` on each stack element to avoid the overhead of
+        # calling is_bv_val() followed by as_long() on each element
+        jumpdest_tokens = tuple(
+            token
             for x in self.st.stack
-            if (unboxed := unbox_int(x)) in valid_jumpdests
+            if (hasattr(x, "as_string") and (token := x.as_string())) in valid_jumpdests
         )
 
-        return f"{self.pc}:{','.join(jumpdests_str)}"
+        # no need to create a new string here, we can compare tuples efficiently
+        return (self.pc, jumpdest_tokens)
 
     # deploy libraries and resolve library placeholders in hexcode
     def resolve_libs(self, creation_hexcode, deployed_hexcode, lib_references) -> str:
@@ -991,9 +1057,9 @@ class SolidityStorage(Storage):
                         label, BitVecSort256
                     )
                 else:
-                    ex.storage[addr][slot][num_keys][size_keys] = con(0)
+                    ex.storage[addr][slot][num_keys][size_keys] = ZERO
             else:
-                # do not use z3 const array `K(BitVecSort(size_keys), con(0))` when not ex.symbolic
+                # do not use z3 const array `K(BitVecSort(size_keys), ZERO)` when not ex.symbolic
                 # instead use normal smt array, and generate emptyness axiom; see load()
                 ex.storage[addr][slot][num_keys][size_keys] = cls.empty(
                     addr, slot, keys
@@ -1014,7 +1080,7 @@ class SolidityStorage(Storage):
             if not ex.symbolic:
                 # generate emptyness axiom for each array index, instead of using quantified formula; see init()
                 ex.path.append(
-                    Select(cls.empty(addr, slot, keys), concat(keys)) == con(0)
+                    Select(cls.empty(addr, slot, keys), concat(keys)) == ZERO
                 )
             return ex.select(
                 ex.storage[addr][slot][num_keys][size_keys], concat(keys), ex.storages
@@ -1052,11 +1118,11 @@ class SolidityStorage(Storage):
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
-            return cls.decode(base) + (offset, con(0))
+            return cls.decode(base) + (offset, ZERO)
         # a[i] : hash(a) + i
         elif loc.decl().name() == "f_sha3_256":
             base = loc.arg(0)
-            return cls.decode(base) + (con(0),)
+            return cls.decode(base) + (ZERO,)
         # m[k] : hash(k.m)  where |k| != 256-bit
         elif loc.decl().name().startswith("f_sha3_"):
             sha3_input = normalize(loc.arg(0))
@@ -1064,7 +1130,7 @@ class SolidityStorage(Storage):
                 offset = simplify(sha3_input.arg(0))
                 base = simplify(sha3_input.arg(1))
                 if offset.size() != 256 and base.size() == 256:
-                    return cls.decode(base) + (offset, con(0))
+                    return cls.decode(base) + (offset, ZERO)
         elif loc.decl().name() == "bvadd":
             #   # when len(args) == 2
             #   arg0 = cls.decode(loc.arg(0))
@@ -1129,7 +1195,7 @@ class GenericStorage(Storage):
         cls.init(ex, addr, loc)
         if not ex.symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-            ex.path.append(Select(cls.empty(addr, loc), loc) == con(0))
+            ex.path.append(Select(cls.empty(addr, loc), loc) == ZERO)
         return ex.select(ex.storage[addr][loc.size()], loc, ex.storages)
 
     @classmethod
@@ -1221,20 +1287,20 @@ def bitwise(op, x: Word, y: Word) -> Word:
         else:
             raise ValueError(op, x, y)
     elif is_bool(x) and is_bv(y):
-        return bitwise(op, If(x, con(1), con(0)), y)
+        return bitwise(op, If(x, ONE, ZERO), y)
     elif is_bv(x) and is_bool(y):
-        return bitwise(op, x, If(y, con(1), con(0)))
+        return bitwise(op, x, If(y, ONE, ZERO))
     else:
         raise ValueError(op, x, y)
 
 
 def b2i(w: Word) -> Word:
     if is_true(w):
-        return con(1)
+        return ONE
     if is_false(w):
-        return con(0)
+        return ZERO
     if is_bool(w):
-        return If(w, con(1), con(0))
+        return If(w, ONE, ZERO)
     else:
         return w
 
@@ -1247,7 +1313,7 @@ def is_power_of_two(x: int) -> bool:
 
 
 class HalmosLogs:
-    bounded_loops: List[str]
+    bounded_loops: List[JumpID]
     unknown_calls: Dict[str, Dict[str, Set[str]]]  # funsig -> to -> set(arg)
 
     def __init__(self) -> None:
@@ -1347,7 +1413,7 @@ class SEVM:
     def mk_mod(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_mod[x.size()](x, y)
         ex.path.append(ULE(term, y))  # (x % y) <= y
-        # ex.path.append(Or(y == con(0), ULT(term, y))) # (x % y) < y if y != 0
+        # ex.path.append(Or(y == ZERO, ULT(term, y))) # (x % y) < y if y != 0
         return term
 
     def mk_mul(self, ex: Exec, x: Any, y: Any) -> Any:
@@ -1480,7 +1546,7 @@ class SEVM:
             if is_bv_value(w2):
                 i2: int = int(str(w2))
                 if i2 == 0:
-                    return con(1)
+                    return ONE
 
                 if i2 == 1:
                     return w1
@@ -1532,7 +1598,7 @@ class SEVM:
             raise WriteInStaticContext(ex.context_str())
 
         if is_bool(val):
-            val = If(val, con(1), con(0))
+            val = If(val, ONE, ZERO)
 
         self.storage_model.store(ex, addr, loc, val)
 
@@ -1578,7 +1644,7 @@ class SEVM:
 
         # conditional transfer
         if condition is not None:
-            value = If(condition, value, con(0))
+            value = If(condition, value, ZERO)
 
         ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value))
         ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
@@ -1592,7 +1658,7 @@ class SEVM:
     ) -> None:
         gas = ex.st.pop()
         to = uint160(ex.st.pop())
-        fund = con(0) if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
+        fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
         arg_loc: int = ex.st.mloc()
         arg_size: int = int_of(ex.st.pop(), "symbolic CALL input data size")
@@ -1669,7 +1735,7 @@ class SEVM:
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
-                new_ex.st.push(con(1) if subcall_success else con(0))
+                new_ex.st.push(1 if subcall_success else 0)
 
                 if not subcall_success:
                     # revert network states
@@ -1678,7 +1744,7 @@ class SEVM:
                     new_ex.balance = orig_balance
 
                 # add to worklist even if it reverted during the external call
-                new_ex.next_pc()
+                new_ex.advance_pc()
                 stack.push(new_ex, step_id)
 
             sub_ex = Exec(
@@ -1767,7 +1833,7 @@ class SEVM:
                 # - r, s in [1, secp256k1n)
 
                 # call never fails, errors result in empty returndata
-                exit_code = con(1)
+                exit_code = ONE
 
                 digest = extract_bytes(arg, 0, 32)
                 v = uint8(extract_bytes(arg, 32, 32))
@@ -1778,22 +1844,22 @@ class SEVM:
 
             # identity
             elif eq(to, con_addr(4)):
-                exit_code = con(1)
+                exit_code = ONE
                 ret = arg
 
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
-                exit_code = con(1)
+                exit_code = ONE
                 ret = halmos_cheat_code.handle(ex, arg)
 
             # vm cheat code
             elif eq(to, hevm_cheat_code.address):
-                exit_code = con(1)
+                exit_code = ONE
                 ret = hevm_cheat_code.handle(self, ex, arg, stack, step_id)
 
             # console
             elif eq(to, console.address):
-                exit_code = con(1)
+                exit_code = ONE
                 console.handle(ex, arg)
                 ret = ByteVec()
 
@@ -1802,7 +1868,7 @@ class SEVM:
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
             # transfer msg.value
-            send_callvalue(exit_code_var != con(0))
+            send_callvalue(exit_code_var != ZERO)
 
             # store return value
             if ret_size > 0:
@@ -1836,7 +1902,7 @@ class SEVM:
             # TODO: check if still needed
             ex.calls.append((exit_code_var, exit_code, ex.context.output.data))
 
-            ex.next_pc()
+            ex.advance_pc()
             stack.push(ex, step_id)
 
         # precompiles or cheatcodes
@@ -1932,7 +1998,7 @@ class SEVM:
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
             ex.st.push(0)
-            ex.next_pc()
+            ex.advance_pc()
 
             # add a virtual subcontext to the trace for debugging purposes
             subcall = CallContext(message=message, depth=ex.context.depth + 1)
@@ -1958,7 +2024,7 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, pranked_caller, new_addr, value)
 
-        def callback(new_ex, stack, step_id):
+        def callback(new_ex: Exec, stack, step_id):
             subcall = new_ex.context
 
             # continue execution in the context of the parent
@@ -1996,7 +2062,7 @@ class SEVM:
                 new_ex.balance = orig_balance
 
             # add to worklist
-            new_ex.next_pc()
+            new_ex.advance_pc()
             stack.push(new_ex, step_id)
 
         sub_ex = Exec(
@@ -2079,7 +2145,7 @@ class SEVM:
         if follow_false:
             new_ex_false = ex
             new_ex_false.path.append(cond_false, branching=True)
-            new_ex_false.next_pc()
+            new_ex_false.advance_pc()
 
         if new_ex_true:
             if potential_true and potential_false:
@@ -2283,13 +2349,13 @@ class SEVM:
                         if is_bool(w1):
                             if not is_bv(w2):
                                 raise ValueError(w2)
-                            ex.st.push(If(w1, con(1), con(0)) == w2)
+                            ex.st.push(If(w1, ONE, ZERO) == w2)
                         else:
                             if not is_bv(w1):
                                 raise ValueError(w1)
                             if not is_bool(w2):
                                 raise ValueError(w2)
-                            ex.st.push(w1 == If(w2, con(1), con(0)))
+                            ex.st.push(w1 == If(w2, ONE, ZERO))
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
 
@@ -2384,9 +2450,7 @@ class SEVM:
                     account_addr = uint160(ex.st.pop())
                     alias_addr = self.resolve_address_alias(ex, account_addr)
                     addr = alias_addr if alias_addr is not None else account_addr
-
-                    account_code: Optional[Contract] = ex.code.get(addr, None)
-
+                    account_code: Contract | None = ex.code.get(addr)
                     codehash = (
                         f_extcodehash(addr)
                         if account_code is None
@@ -2580,23 +2644,22 @@ class SEVM:
                     ex.emit_log(EventLog(ex.this(), topics, data))
 
                 elif opcode == EVM.PUSH0:
-                    ex.st.push(con(0))
+                    ex.st.push(0)
 
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
-                    if is_concrete(insn.operand):
-                        val = int_of(insn.operand)
+                    val = unbox_int(insn.operand)
+                    if isinstance(val, int):
                         if opcode == EVM.PUSH32 and val in sha3_inv:
                             # restore precomputed hashes
                             ex.st.push(ex.sha3_data(con(sha3_inv[val])))
                         else:
-                            ex.st.push(con(val))
+                            ex.st.push(val)
                     else:
-                        if opcode == EVM.PUSH32:
-                            ex.st.push(insn.operand)
-                        else:
-                            ex.st.push(ZeroExt((EVM.PUSH32 - opcode) * 8, insn.operand))
+                        ex.st.push(uint256(val) if opcode < EVM.PUSH32 else val)
+
                 elif EVM.DUP1 <= opcode <= EVM.DUP16:
                     ex.st.dup(opcode - EVM.DUP1 + 1)
+
                 elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
                     ex.st.swap(opcode - EVM.SWAP1 + 1)
 
@@ -2605,7 +2668,7 @@ class SEVM:
                     # this halts the path, but we should only halt the current context
                     raise HalmosException(f"Unsupported opcode {hex(opcode)}")
 
-                ex.next_pc()
+                ex.advance_pc()
                 stack.push(ex, step_id)
 
             except InfeasiblePath as err:

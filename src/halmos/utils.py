@@ -3,24 +3,23 @@
 import re
 from functools import partial
 from timeit import default_timer as timer
-from typing import Any, Dict, Optional, Tuple
-from typing import Union as UnionType
+from typing import Any, Dict, Tuple
 
 from z3 import *
 
 from halmos.mapper import Mapper
-
-from .exceptions import HalmosException, NotConcreteError
+from halmos.exceptions import HalmosException, NotConcreteError
 
 # order of the secp256k1 curve
 secp256k1n = (
     115792089237316195423570985008687907852837564279074904382605163141518161494337
 )
 
-Word = Any  # z3 expression (including constants)
-Byte = Any  # z3 expression (including constants)
-Bytes = Any  # z3 expression (including constants)
-Address = BitVecRef  # 160-bitvector
+Byte = int | BitVecRef  # uint8
+Bytes4 = int | BitVecRef  # uint32
+Address = int | BitVecRef  # uint160
+Word = int | BitVecRef  # uint256
+Bytes = bytes | BitVecRef  # arbitrary-length sequence of bytes
 
 
 # dynamic BitVecSort sizes
@@ -112,7 +111,7 @@ def uint(x: Any, n: int) -> Word:
     return simplify(ZeroExt(n - bitsize, x))
 
 
-def uint8(x: UnionType[Word, Byte]) -> Byte:
+def uint8(x: Any) -> Byte:
     return uint(x, 8)
 
 
@@ -262,7 +261,7 @@ def extract_bytes(data: Bytes, offset: int, size_bytes: int) -> Bytes:
     return val
 
 
-def extract_funsig(calldata: Bytes) -> Any:
+def extract_funsig(calldata: Bytes) -> Bytes4:
     """Extracts the function signature (first 4 bytes) from calldata"""
     if hasattr(calldata, "__getitem__"):
         return unbox_int(calldata[:4])
@@ -273,7 +272,7 @@ def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
     return x.as_long().to_bytes(byte_length(x, strict=True), "big")
 
 
-def try_bv_value_to_bytes(x: Any) -> Optional[bytes]:
+def try_bv_value_to_bytes(x: Any) -> Any:
     return bv_value_to_bytes(x) if is_bv_value(x) else x
 
 
@@ -283,7 +282,7 @@ def bytes_to_bv_value(x: bytes) -> BitVecNumRef:
 
 def unbox_int(x: Any) -> Any:
     """
-    Attempts to convert int-like objects to int
+    Converts int-like objects to int, returns x otherwise
     """
     if isinstance(x, int):
         return x
@@ -296,9 +295,6 @@ def unbox_int(x: Any) -> Any:
 
     if is_bv_value(x):
         return x.as_long()
-
-    if is_bv(x):
-        x = simplify(x)
 
     return x
 
@@ -333,7 +329,7 @@ def stripped(hexstring: str) -> str:
     return hexstring[2:] if hexstring.startswith("0x") else hexstring
 
 
-def decode_hex(hexstring: str) -> Optional[bytes]:
+def decode_hex(hexstring: str) -> bytes | None:
     try:
         # not checking if length is even because fromhex accepts spaces
         return bytes.fromhex(stripped(hexstring))
@@ -387,7 +383,7 @@ def render_string(s: BitVecRef) -> str:
     return f'"{str_val}"'
 
 
-def render_bytes(b: UnionType[BitVecRef, bytes]) -> str:
+def render_bytes(b: Bytes) -> str:
     if is_bv(b):
         return hexify(b) + f" ({byte_length(b, strict=False)} bytes)"
     else:

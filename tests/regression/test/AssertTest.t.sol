@@ -27,4 +27,16 @@ contract AssertTest is Test {
     function check_fail_propagated() public {
         address(c).call(abi.encodeWithSelector(C.bar.selector, bytes(""))); // fail
     }
+
+    function check_symbolic_revert(uint256 x) public {
+        // reverts with Concat(0x4e487b71, p_x_uint256())
+        // halmos only considers reverts with explicit revert codes so we expect a PASS here
+        // this is really to make sure we handle symbolic reverts gracefully
+        if (x > 0) {
+            bytes memory data = abi.encodeWithSignature("Panic(uint256)", x);
+            assembly {
+                revert(add(data, 0x20), mload(data))
+            }
+        }
+    }
 }
