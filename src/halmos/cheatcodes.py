@@ -374,7 +374,7 @@ class hevm_cheat_code:
     get_block_nunber_sig: int = 0x42CBB15C
 
     @staticmethod
-    def handle(sevm, ex, arg: ByteVec, stack, step_id) -> Optional[ByteVec]:
+    def handle(sevm, ex, arg: ByteVec, stack, step_id) -> ByteVec | None:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 

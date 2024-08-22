@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from z3 import *
 
-from .utils import *
+from halmos.exceptions import HalmosException
+from halmos.utils import *
 
 
 @dataclass(frozen=True)
@@ -13,7 +14,7 @@ class VmAssertion:
     """
 
     cond: BitVecRef
-    msg: Optional
+    msg: str | None
 
 
 def mk_cond(bop, v1, v2):

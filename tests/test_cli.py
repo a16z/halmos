@@ -4,9 +4,7 @@ import json
 from z3 import *
 
 from halmos.utils import EVM, hexify
-
 from halmos.sevm import con, Contract, Instruction
-
 from halmos.__main__ import str_abi, run_bytecode, FunctionInfo
 
 from test_fixtures import args
@@ -57,10 +55,6 @@ def test_decode_concrete_bytecode():
     assert contract[10] == EVM.JUMPDEST
     assert contract[11] == EVM.STOP
 
-    # iteration
-    opcodes = [opcode for (pc, opcode) in contract]
-    assert bytes(opcodes).hex() == hexcode.lower()
-
     # jump destination scanning
     assert contract.valid_jump_destinations() == set([10])
 
@@ -83,8 +77,16 @@ def test_decode_mixed_bytecode():
     assert contract[27] == EVM.RETURN
     assert contract[28] == EVM.STOP  # past the end
 
-    # iteration
-    pcs, opcodes = zip(*iter(contract))
+    contract.valid_jump_destinations() == set()
+
+    # force decoding
+    pc = 0
+    while pc < len(contract):
+        contract.decode_instruction(pc)
+        pc = contract.next_pc(pc)
+
+    pcs, insns = zip(*((pc, insn) for (pc, insn) in contract._insn.items()))
+    opcodes = tuple(insn.opcode for insn in insns)
 
     assert opcodes == (
         EVM.PUSH20,
@@ -95,7 +97,7 @@ def test_decode_mixed_bytecode():
         EVM.RETURN,
     )
 
-    disassembly = " ".join([str(contract.decode_instruction(pc)) for pc in pcs])
+    disassembly = " ".join([str(insn) for insn in insns])
     assert disassembly == "PUSH20 x() PUSH0 MSTORE PUSH1 0x14 PUSH1 0x0c RETURN"
 
     # jump destination scanning
@@ -103,7 +105,9 @@ def test_decode_mixed_bytecode():
 
 
 def test_run_bytecode(args):
-    args = args.with_overrides(source="test_run_bytecode", symbolic_jump=True)
+    args = args.with_overrides(
+        source="test_run_bytecode", symbolic_jump=True, print_steps=True
+    )
 
     hexcode = "34381856FDFDFDFDFDFD5B00"
     exs = run_bytecode(hexcode, args)
@@ -134,11 +138,9 @@ def test_instruction():
 def test_decode_hex():
     code = Contract.from_hexcode("600100")
     assert str(code.decode_instruction(0)) == f"PUSH1 {hexify(1)}"
-    assert [opcode for (pc, opcode) in code] == [0x60, 0x00]
 
     code = Contract.from_hexcode("01")
     assert str(code.decode_instruction(0)) == "ADD"
-    assert [opcode for (pc, opcode) in code] == [1]
 
     with pytest.raises(ValueError, match="1"):
         Contract.from_hexcode("1")
@@ -155,8 +157,6 @@ def test_decode():
     assert str(code[31]) == "Extract(7, 0, x)"
 
     code = Contract(Concat(BitVecVal(EVM.PUSH3, 8), BitVec("x", 16)))
-    ops = list(code)
-    assert len(ops) == 1
     assert (
         str(code.decode_instruction(0)) == "PUSH3 Concat(x(), 0x00)"
     )  # 'PUSH3 ERROR x (1 bytes missed)'
