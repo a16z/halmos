@@ -1663,7 +1663,12 @@ class SEVM:
         ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
 
     def call(
-        self, ex: Exec, op: int, to_alias: Address, stack: List[Tuple[Exec, int]], step_id: int
+        self,
+        ex: Exec,
+        op: int,
+        to_alias: Address,
+        stack: List[Tuple[Exec, int]],
+        step_id: int,
     ) -> None:
         # `to`: the original (symbolic) target address
         # `to_alias`: a (concrete) alias of the target considered in this path.
