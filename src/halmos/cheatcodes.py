@@ -477,22 +477,22 @@ class hevm_cheat_code:
             store_account = uint160(arg.get_word(4))
             store_slot = uint256(arg.get_word(36))
             store_value = uint256(arg.get_word(68))
-            store_account_addr = sevm.resolve_address_alias(ex, store_account)
-            if store_account_addr is None:
-                raise HalmosException(f"uninitialized account: {hexify(store_account)}")
+            store_account_alias = sevm.resolve_address_alias(
+                ex, store_account, stack, step_id, branching=False
+            )
 
-            sevm.sstore(ex, store_account_addr, store_slot, store_value)
+            sevm.sstore(ex, store_account_alias, store_slot, store_value)
             return ret
 
         # vm.load(address,bytes32)
         elif funsig == hevm_cheat_code.load_sig:
             load_account = uint160(arg.get_word(4))
             load_slot = uint256(arg.get_word(36))
-            load_account_addr = sevm.resolve_address_alias(ex, load_account)
-            if load_account_addr is None:
-                raise HalmosException(f"uninitialized account: {load_account}")
+            load_account_alias = sevm.resolve_address_alias(
+                ex, load_account, stack, step_id, branching=False
+            )
 
-            return ByteVec(sevm.sload(ex, load_account_addr, load_slot))
+            return ByteVec(sevm.sload(ex, load_account_alias, load_slot))
 
         # vm.fee(uint256)
         elif funsig == hevm_cheat_code.fee_sig:

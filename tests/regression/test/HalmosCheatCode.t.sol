@@ -109,7 +109,11 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_FailUnknownCheatcode() public {
-        Dummy(address(svm)).foo(); // expected to fail with unknown cheatcode
+        // expected to fail with unknown cheatcode
+        address(svm).call(abi.encodeWithSelector(Dummy.foo.selector));
+
+        // NOTE: the following reverts due to the failure of the nonzero check for extcodesize(svm)
+        // Dummy(address(svm)).foo();
     }
 }
 

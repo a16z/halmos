@@ -183,6 +183,9 @@ def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
 
+    # reset any remaining solver states from the default context
+    solver.reset()
+
     # set timeout
     solver.set(timeout=timeout)
 
@@ -438,6 +441,11 @@ def stringify(symbol_name: str, val: Any):
         # log error and move on
         warn(f"Failed to stringify {val} of type {type_name}: {repr(e)}")
         return hexify(val)
+
+
+def assert_bv(x) -> None:
+    if not is_bv(x):
+        raise ValueError(x)
 
 
 def assert_address(x: Word) -> None:

@@ -46,17 +46,15 @@ contract BuffersTest is Test {
         assertNotEq(value, 0);
     }
 
-    // TODO: uncomment when we support extcodecopy
-    // function check_extcodecopy_boundary() public {
-    //     address target = address(this);
-    //     uint256 index = target.code.length - 16;
-    //     uint256 value;
-    //     assembly {
-    //         extcodecopy(target, 0, index, 32)
-    //         value := mload(0)
-    //     }
+    function check_extcodecopy_boundary() public {
+        address target = address(this);
+        uint256 index = target.code.length - 16;
+        uint256 value;
+        assembly {
+            extcodecopy(target, 0, index, 32)
+            value := mload(0)
+        }
 
-    //     console2.log("value:", value);
-    //     assertNotEq(value, 0);
-    // }
+        assertNotEq(value, 0);
+    }
 }

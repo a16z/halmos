@@ -26,7 +26,6 @@ COUNTEREXAMPLE_UNKNOWN = ErrorCode("counterexample-unknown")
 UNSUPPORTED_OPCODE = ErrorCode("unsupported-opcode")
 REVERT_ALL = ErrorCode("revert-all")
 LOOP_BOUND = ErrorCode("loop-bound")
-UNINTERPRETED_UNKNOWN_CALLS = ErrorCode("uninterpreted-unknown-calls")
 
 
 def warn_code(error_code: ErrorCode, msg: str):

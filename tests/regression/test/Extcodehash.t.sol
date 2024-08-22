@@ -84,7 +84,7 @@ contract ExtcodehashTest is Test, SymTest {
         assertEq(thisCodeHash, keccak256(thisCode));
     }
 
-    function check_extcodehash_empty() external {
+    function check_extcodehash_empty_contract() external {
         address emptyCodeAddr = address(new Empty());
         assertEq(emptyCodeAddr.code.length, 0, "Empty contract should have no code");
 
@@ -96,26 +96,17 @@ contract ExtcodehashTest is Test, SymTest {
         assertEq(codehash, keccak256(""), "Expected codehash of the empty string");
     }
 
-    /// yields a path where it is eq to 0, and a path where it is not
-    /// so we expect a counterexample for this and also its negation
-    function check_extcodehash_unknown_addr_eq_0() external {
+    function check_extcodehash_nonexisting_account() external {
+        address nonExistingAcct = address(0x1337);
+        assertEq(nonExistingAcct.code.length, 0, "Non-existing account should have no code");
+
         bytes32 codehash;
         assembly {
-            codehash := extcodehash(0x1337)
+            codehash := extcodehash(nonExistingAcct)
         }
 
-        assertEq(codehash, 0);
-    }
-
-    /// yields a path where it is eq to 0, and a path where it is not
-    /// so we expect a counterexample for this and also its negation
-    function check_extcodehash_unknown_addr_noteq_0()   external {
-        bytes32 codehash;
-        assembly {
-            codehash := extcodehash(0x1337)
-        }
-
-        assertNotEq(codehash, 0);
+        // NOTE: extcodehash of non-existing account is 0, rather than keccak256(""), in the current evm implementation
+        assertEq(codehash, 0, "Expected 0");
     }
 
     function check_extcodehash_after_etch() external {
@@ -129,5 +120,150 @@ contract ExtcodehashTest is Test, SymTest {
         }
 
         assertEq(codehash, keccak256(code));
+    }
+
+    function check_extcodehash_symbolic_address_empty(address a) external {
+        address a2 = address(new Empty());
+
+        vm.assume(a != address(this));
+        vm.assume(a != a1);
+        vm.assume(a != a2);
+
+        bytes32 codehash;
+        assembly {
+            codehash := extcodehash(a)
+        }
+
+        assertEq(codehash, 0);
+    }
+
+    function check_extcodehash_symbolic_address_not_empty(address a) external {
+        address a2 = address(new Empty());
+
+        vm.assume(a == address(this) || a == a1 || a == a2);
+
+        bytes32 codehash;
+        assembly {
+            codehash := extcodehash(a)
+        }
+
+        assertNotEq(codehash, 0);
+    }
+
+    /* TODO: improve symbolic keccak256 reasoning
+    function check_extcodehash_symbolic_address_not_empty_2(address a) external {
+        address a2 = address(new Empty());
+
+        vm.assume(a == address(this) || a == a1);
+
+        bytes32 codehash;
+        assembly {
+            codehash := extcodehash(a)
+        }
+
+        assertNotEq(codehash, keccak256(""));
+    }
+    */
+
+    // backward-style test that combines the previous two tests
+    function check_extcodehash_symbolic_address(address a) external {
+        address a2 = address(new Empty());
+
+        bytes32 codehash;
+        assembly {
+            codehash := extcodehash(a)
+        }
+
+        if (codehash == 0) {
+            assert(a != address(this));
+            assert(a != a1);
+            assert(a != a2);
+        } else {
+            assert(a == address(this) || a == a1 || a == a2);
+        }
+    }
+
+    function check_extcodesize_symbolic_address_empty(address a) external {
+        address a2 = address(new Empty());
+
+        vm.assume(a != address(this));
+        vm.assume(a != a1);
+
+        uint codesize_;
+        assembly {
+            codesize_ := extcodesize(a)
+        }
+
+        assertEq(codesize_, 0);
+    }
+
+    function check_extcodesize_symbolic_address_not_empty(address a) external {
+        address a2 = address(new Empty());
+
+        vm.assume(a == address(this) || a == a1);
+
+        uint codesize_;
+        assembly {
+            codesize_ := extcodesize(a)
+        }
+
+        assertNotEq(codesize_, 0);
+    }
+
+    // backward-style test that combines the previous two tests
+    function check_extcodesize_symbolic_address(address a) external {
+        address a2 = address(new Empty());
+
+        uint codesize_;
+        assembly {
+            codesize_ := extcodesize(a)
+        }
+
+        if (codesize_ == 0) {
+            assert(a != address(this));
+            assert(a != a1);
+        } else {
+            assert(a == address(this) || a == a1);
+        }
+    }
+
+    function check_extcodesize_precompiles(address precompiled) external {
+        vm.assume(1 <= uint160(precompiled));
+        vm.assume(uint160(precompiled) <= 0xa);
+
+        uint256 size;
+        assembly {
+            size := extcodesize(precompiled)
+        }
+
+        assertEq(size, 0);
+    }
+
+    function check_extcodehash_precompiles(address precompiled) external {
+        vm.assume(1 <= uint160(precompiled));
+        vm.assume(uint160(precompiled) <= 0xa);
+
+        uint256 codehash;
+        assembly {
+            codehash := extcodehash(precompiled)
+        }
+
+        assertEq(codehash, 0);
+    }
+
+    function check_extcodesize_cheatcode() external {
+        assertEq(VM_ADDRESS, address(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D));
+        assertEq(console.CONSOLE_ADDRESS, address(0x000000000000000000636F6e736F6c652e6c6f67));
+        assertEq(SymTest.SVM_ADDRESS, address(0xF3993A62377BCd56AE39D773740A5390411E8BC9));
+
+        assertEq(VM_ADDRESS.code.length, 1);
+        assertEq(console.CONSOLE_ADDRESS.code.length, 0);
+        assertEq(SymTest.SVM_ADDRESS.code.length, 0);
+    }
+
+    function check_extcodehash_cheatcode() external {
+        assertEq(VM_ADDRESS.codehash, 0xb0450508e5a2349057c3b4c9c84524d62be4bb17e565dbe2df34725a26872291);
+        assertEq(console.CONSOLE_ADDRESS.codehash, 0);
+        assertEq(SymTest.SVM_ADDRESS.codehash, 0);
     }
 }

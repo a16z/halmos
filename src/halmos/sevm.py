@@ -335,6 +335,9 @@ class State:
     def pop(self) -> Word:
         return self.stack.pop()
 
+    def peek(self, n: int = 1) -> Word:
+        return self.stack[-n]
+
     def dup(self, n: int) -> None:
         self.stack.append(self.stack[-n])
 
@@ -698,7 +701,6 @@ class Exec:  # an execution path
     sha3s: Dict[Word, int]  # sha3 hashes generated
     storages: Dict[Any, Any]  # storage updates
     balances: Dict[Any, Any]  # balance updates
-    calls: List[Any]  # external calls
     known_keys: Dict[Any, Any]  # maps address to private key
     known_sigs: Dict[Any, Any]  # maps (private_key, digest) to (v, r, s)
 
@@ -726,7 +728,6 @@ class Exec:  # an execution path
         self.sha3s = kwargs["sha3s"]
         self.storages = kwargs["storages"]
         self.balances = kwargs["balances"]
-        self.calls = kwargs["calls"]
         self.known_keys = kwargs["known_keys"] if "known_keys" in kwargs else {}
         self.known_sigs = kwargs["known_sigs"] if "known_sigs" in kwargs else {}
 
@@ -805,6 +806,7 @@ class Exec:  # an execution path
         """
         Sets the code at a given address.
         """
+        assert_bv(who)
         assert_address(who)
         self.code[who] = code if isinstance(code, Contract) else Contract(code)
 
@@ -846,8 +848,6 @@ class Exec:  # an execution path
                     ),
                     f"SHA3 hashes:\n",
                     "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
-                    f"External calls:\n",
-                    "".join(map(lambda x: f"- {x}\n", self.calls)),
                 ]
             )
         )
@@ -973,6 +973,10 @@ class Exec:  # an execution path
         self.cnts["symbol"] += 1
         return self.cnts["symbol"]
 
+    def new_call_id(self) -> int:
+        self.cnts["call"] += 1
+        return self.cnts["call"]
+
     def returndata(self) -> Optional[ByteVec]:
         """
         Return data from the last executed sub-context or the empty bytes sequence
@@ -1012,9 +1016,8 @@ class Exec:  # an execution path
             for lib in lib_references:
                 address = self.new_address()
 
-                self.code[address] = Contract.from_hexcode(
-                    lib_references[lib]["hexcode"]
-                )
+                lib_bytecode = Contract.from_hexcode(lib_references[lib]["hexcode"])
+                self.set_code(address, lib_bytecode)
 
                 placeholder = lib_references[lib]["placeholder"]
                 hex_address = stripped(hex(address.as_long())).zfill(40)
@@ -1314,30 +1317,12 @@ def is_power_of_two(x: int) -> bool:
 
 class HalmosLogs:
     bounded_loops: List[JumpID]
-    unknown_calls: Dict[str, Dict[str, Set[str]]]  # funsig -> to -> set(arg)
 
     def __init__(self) -> None:
         self.bounded_loops = []
-        self.unknown_calls = defaultdict(lambda: defaultdict(set))
 
     def extend(self, logs: "HalmosLogs") -> None:
         self.bounded_loops.extend(logs.bounded_loops)
-        for funsig in logs.unknown_calls:
-            for to in logs.unknown_calls[funsig]:
-                self.unknown_calls[funsig][to].update(logs.unknown_calls[funsig][to])
-
-    def add_uninterpreted_unknown_call(self, funsig, to, arg):
-        funsig, to, arg = hexify(funsig), hexify(to), hexify(arg)
-        self.unknown_calls[funsig][to].add(arg)
-
-    def print_unknown_calls(self):
-        for funsig in self.unknown_calls:
-            print(f"{funsig}:")
-            for to in self.unknown_calls[funsig]:
-                print(f"- {to}:")
-                print(
-                    "\n".join([f"  - {arg}" for arg in self.unknown_calls[funsig][to]])
-                )
 
 
 @dataclass
@@ -1370,10 +1355,6 @@ class SEVM:
         self.options = options
         self.logs = HalmosLogs()
         self.steps: Steps = {}
-
-        # init unknown calls
-        hex_string = options.uninterpreted_unknown_calls.strip()
-        self.unknown_calls: List[int] = [int(x, 16) for x in hex_string.split(",") if x]
 
         # init storage model
         is_generic = self.options.storage_layout == "generic"
@@ -1602,26 +1583,61 @@ class SEVM:
 
         self.storage_model.store(ex, addr, loc, val)
 
-    def resolve_address_alias(self, ex: Exec, target: Address) -> Address:
+    def resolve_address_alias(
+        self, ex: Exec, target: Address, stack, step_id, branching=True
+    ) -> Address:
+        assert_bv(target)
+        assert_address(target)
+
         if target in ex.code:
             return target
 
-        # set new timeout temporarily for this task
-        ex.path.solver.set(timeout=max(1000, self.options.solver_timeout_branching))
+        if self.options.debug:
+            debug(
+                f"Address {hexify(target)} not in: [{', '.join([hexify(addr) for addr in ex.code])}]"
+            )
 
-        if target not in ex.alias:
-            for addr in ex.code:
-                if ex.check(target != addr) == unsat:  # target == addr
-                    if self.options.debug:
-                        debug(f"Address alias: {hexify(addr)} for {hexify(target)}")
-                    ex.alias[target] = addr
-                    ex.path.append(target == addr)
-                    break
+        if is_bv_value(target):
+            if self.options.debug:
+                debug(f"Empty address: {hexify(target)}")
+            return None
 
-        # reset timeout
-        ex.path.solver.set(timeout=self.options.solver_timeout_branching)
+        if target in ex.alias:
+            return ex.alias[target]  # may return None
 
-        return ex.alias.get(target)
+        potential_aliases = []
+        for addr in ex.code:
+            alias_cond = target == addr
+            if ex.check(alias_cond) != unsat:
+                if self.options.debug:
+                    debug(
+                        f"Potential address alias: {hexify(addr)} for {hexify(target)}"
+                    )
+                potential_aliases.append((addr, alias_cond))
+
+        emptyness_cond = And([target != addr for addr in ex.code])
+        if ex.check(emptyness_cond) != unsat:
+            if self.options.debug:
+                debug(f"Potential empty address: {hexify(target)}")
+            potential_aliases.append((None, emptyness_cond))
+
+        if not potential_aliases:
+            raise InfeasiblePath("resolve_address_alias: no potential aliases")
+
+        head, *tail = potential_aliases
+
+        if not branching and tail:
+            raise HalmosException(f"multiple aliases exist: {hexify(target)}")
+
+        for addr, cond in tail:
+            new_ex = self.create_branch(ex, cond, ex.pc)
+            new_ex.alias[target] = addr
+            stack.push(new_ex, step_id)
+
+        addr, cond = head
+        ex.path.append(cond)
+        ex.alias[target] = addr
+        return addr
 
     def transfer_value(
         self,
@@ -1653,9 +1669,14 @@ class SEVM:
         self,
         ex: Exec,
         op: int,
+        to_alias: Address,
         stack: List[Tuple[Exec, int]],
         step_id: int,
     ) -> None:
+        # `to`: the original (symbolic) target address
+        # `to_alias`: a (concrete) alias of the target considered in this path.
+        #            it could be None, indicating a non-existent address.
+
         gas = ex.st.pop()
         to = uint160(ex.st.pop())
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
@@ -1679,6 +1700,7 @@ class SEVM:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
                 # TODO: revert if context is static
+                # NOTE: we cannot use `to_alias` here because it could be None
                 self.transfer_value(ex, pranked_caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
@@ -1770,7 +1792,6 @@ class SEVM:
                 sha3s=ex.sha3s,
                 storages=ex.storages,
                 balances=ex.balances,
-                calls=ex.calls,
                 known_keys=ex.known_keys,
                 known_sigs=ex.known_sigs,
             )
@@ -1778,53 +1799,6 @@ class SEVM:
             stack.push(sub_ex, step_id)
 
         def call_unknown() -> None:
-            call_id = len(ex.calls)
-
-            if arg_size > 0:
-                f_call = Function(
-                    "f_call_" + str(arg_size * 8),
-                    BitVecSort256,  # cnt
-                    BitVecSort256,  # gas
-                    BitVecSort160,  # to
-                    BitVecSort256,  # value
-                    BitVecSorts[arg_size * 8],  # args
-                    BitVecSort256,
-                )
-
-                unwrapped = arg.unwrap()
-                arg_bv = unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
-
-                exit_code = f_call(con(call_id), gas, to, fund, arg_bv)
-            else:
-                f_call = Function(
-                    "f_call_" + str(arg_size * 8),
-                    BitVecSort256,  # cnt
-                    BitVecSort256,  # gas
-                    BitVecSort160,  # to
-                    BitVecSort256,  # value
-                    BitVecSort256,
-                )
-                exit_code = f_call(con(call_id), gas, to, fund)
-            exit_code_var = BitVec(f"call_exit_code_{call_id:>02}", BitVecSort256)
-
-            if ret_size > 0:
-                # actual return data will be capped or zero-padded by ret_size
-                # FIX: this doesn't capture the case of returndatasize != ret_size
-                actual_ret_size = ret_size
-            else:
-                actual_ret_size = self.options.return_size_of_unknown_calls
-
-            ret = ByteVec()
-            if actual_ret_size > 0:
-                f_ret = Function(
-                    "f_ret_" + str(actual_ret_size * 8),
-                    BitVecSort256,
-                    BitVecSorts[actual_ret_size * 8],
-                )
-                ret.append(f_ret(exit_code_var))
-
-            # TODO: cover other precompiled
-
             # ecrecover
             if eq(to, con_addr(1)):
                 # TODO: explicitly return empty data in case of an error
@@ -1840,12 +1814,75 @@ class SEVM:
                 r = extract_bytes(arg, 64, 32)
                 s = extract_bytes(arg, 96, 32)
 
+                # TODO: empty returndata in error
                 ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
+
+            # sha256
+            elif eq(to, con_addr(2)):
+                exit_code = con(1)
+                f_sha256 = Function(
+                    f"f_sha256_{arg_size}", BitVecSorts[arg_size], BitVecSort256
+                )
+                ret = ByteVec(f_sha256(arg))
+
+            # ripemd160
+            elif eq(to, con_addr(3)):
+                exit_code = con(1)
+                f_ripemd160 = Function(
+                    f"f_ripemd160_{arg_size}", BitVecSorts[arg_size], BitVecSort160
+                )
+                ret = ByteVec(uint256(f_ripemd160(arg)))
 
             # identity
             elif eq(to, con_addr(4)):
                 exit_code = ONE
                 ret = arg
+
+            # modexp
+            elif eq(to, con_addr(5)):
+                exit_code = con(1)
+                modulus_size = int_of(extract_bytes(arg, 64, 32))
+                f_modexp = Function(
+                    f"f_modexp_{arg_size}_{modulus_size}",
+                    BitVecSorts[arg_size],
+                    BitVecSorts[modulus_size],
+                )
+                # TODO: empty returndata in error
+                ret = ByteVec(f_modexp(arg))
+
+            # ecadd
+            elif eq(to, con_addr(6)):
+                exit_code = con(1)
+                f_ecadd = Function(f"f_ecadd", BitVecSorts[1024], BitVecSorts[512])
+                ret = ByteVec(f_ecadd(arg))
+
+            # ecmul
+            elif eq(to, con_addr(7)):
+                exit_code = con(1)
+                f_ecmul = Function(f"f_ecmul", BitVecSorts[768], BitVecSorts[512])
+                ret = ByteVec(f_ecmul(arg))
+
+            # ecpairing
+            elif eq(to, con_addr(8)):
+                exit_code = con(1)
+                f_ecpairing = Function(
+                    f"f_ecpairing", BitVecSorts[1536], BitVecSorts[1]
+                )
+                ret = ByteVec(uint256(f_ecpairing(arg)))
+
+            # blake2f
+            elif eq(to, con_addr(9)):
+                exit_code = con(1)
+                f_blake2f = Function(f"f_blake2f", BitVecSorts[1704], BitVecSorts[512])
+                ret = ByteVec(f_blake2f(arg))
+
+            # point_evaluation
+            elif eq(to, con_addr(10)):
+                exit_code = con(1)
+                f_point_evaluation = Function(
+                    f"f_point_evaluation", BitVecSorts[1544], BitVecSorts[512]
+                )
+                ret = ByteVec(f_point_evaluation(arg))
 
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
@@ -1863,7 +1900,17 @@ class SEVM:
                 console.handle(ex, arg)
                 ret = ByteVec()
 
+            # non-existing contracts
+            else:
+                # in evm, calls to non-existing contracts always succeed with empty returndata
+                # TODO: exitcode should be 0 when balance is not enough for callvalue
+                exit_code = con(1)
+                ret = ByteVec()
+
             # push exit code
+            exit_code_var = BitVec(
+                f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256
+            )
             ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
@@ -1871,8 +1918,9 @@ class SEVM:
             send_callvalue(exit_code_var != ZERO)
 
             # store return value
-            if ret_size > 0:
-                end_loc = ret_loc + ret_size
+            effective_ret_size = min(ret_size, len(ret))
+            if effective_ret_size > 0:
+                end_loc = ret_loc + effective_ret_size
                 if end_loc > MAX_MEMORY_SIZE:
                     raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
 
@@ -1899,47 +1947,24 @@ class SEVM:
                 )
             )
 
-            # TODO: check if still needed
-            ex.calls.append((exit_code_var, exit_code, ex.context.output.data))
-
             ex.advance_pc()
             stack.push(ex, step_id)
 
         # precompiles or cheatcodes
         if (
             # precompile
-            eq(to, con_addr(1))
-            or eq(to, con_addr(4))
+            (is_bv_value(to) and to.as_long() in range(1, 11))
             # cheatcode calls
             or eq(to, halmos_cheat_code.address)
             or eq(to, hevm_cheat_code.address)
             or eq(to, console.address)
+            # non-existing contract call
+            or to_alias is None
         ):
             call_unknown()
             return
 
-        # known call target
-        to_addr = self.resolve_address_alias(ex, to)
-        if to_addr is not None:
-            call_known(to_addr)
-            return
-
-        # simple ether transfer to unknown call target
-        if arg_size == 0:
-            call_unknown()
-            return
-
-        # uninterpreted unknown calls
-        funsig = extract_funsig(arg)
-        if funsig in self.unknown_calls:
-            self.logs.add_uninterpreted_unknown_call(funsig, to, arg)
-            call_unknown()
-            return
-
-        raise HalmosException(
-            f"Unknown contract call: to = {hexify(to)}; "
-            f"calldata = {hexify(arg)}; callvalue = {hexify(fund)}"
-        )
+        call_known(to_alias)
 
     def create(
         self,
@@ -2018,7 +2043,7 @@ class SEVM:
         orig_balance = ex.balance
 
         # setup new account
-        ex.code[new_addr] = Contract(b"")  # existing code must be empty
+        ex.set_code(new_addr, Contract(b""))  # existing code must be empty
         ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
 
         # transfer value
@@ -2047,7 +2072,7 @@ class SEVM:
 
             elif subcall.output.error is None:
                 # new contract code, will revert if data is None
-                new_ex.code[new_addr] = Contract(subcall.output.data)
+                new_ex.set_code(new_addr, Contract(subcall.output.data))
 
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))
@@ -2088,7 +2113,6 @@ class SEVM:
             sha3s=ex.sha3s,
             storages=ex.storages,
             balances=ex.balances,
-            calls=ex.calls,
             known_keys=ex.known_keys,
             known_sigs=ex.known_sigs,
         )
@@ -2206,7 +2230,6 @@ class SEVM:
             sha3s=ex.sha3s.copy(),
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
-            calls=ex.calls.copy(),
             known_keys=ex.known_keys,  # pass by reference, not need to copy
             known_sigs=ex.known_sigs,  # pass by reference, not need to copy
         )
@@ -2402,24 +2425,34 @@ class SEVM:
                 elif opcode == EVM.ADDRESS:
                     ex.st.push(uint256(ex.this()))
 
-                # TODO: define f_extcodesize for known addresses in advance
                 elif opcode == EVM.EXTCODESIZE:
-                    account = uint160(ex.st.pop())
-                    account_addr = self.resolve_address_alias(ex, account)
-                    if account_addr is not None:
-                        codesize = len(ex.code[account_addr])
+                    account = uint160(ex.st.peek())
+                    account_alias = self.resolve_address_alias(
+                        ex, account, stack, step_id
+                    )
+                    ex.st.pop()
+
+                    if account_alias is not None:
+                        codesize = len(ex.code[account_alias])
+                    elif (
+                        eq(account, hevm_cheat_code.address)
+                        or eq(account, halmos_cheat_code.address)
+                        or eq(account, console.address)
+                    ):
+                        # dummy arbitrary value, consistent with foundry
+                        codesize = 1 if eq(account, hevm_cheat_code.address) else 0
                     else:
-                        codesize = f_extcodesize(account)
-                        if (
-                            eq(account, hevm_cheat_code.address)
-                            or eq(account, halmos_cheat_code.address)
-                            or eq(account, console.address)
-                        ):
-                            ex.path.append(codesize > 0)
+                        codesize = 0
+
                     ex.st.push(codesize)
 
                 elif opcode == EVM.EXTCODECOPY:
-                    account: Address = uint160(ex.st.pop())
+                    account: Address = uint160(ex.st.peek())
+                    account_alias = self.resolve_address_alias(
+                        ex, account, stack, step_id
+                    )
+                    ex.st.pop()
+
                     loc: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
                     offset: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
                     size: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
@@ -2429,33 +2462,40 @@ class SEVM:
                         if end_loc > MAX_MEMORY_SIZE:
                             raise HalmosException("EXTCODECOPY > MAX_MEMORY_SIZE")
 
-                        # TODO: handle the case where account may alias multiple addresses
-                        account_addr = self.resolve_address_alias(ex, account)
-                        if account_addr is None:
-                            # this could be unsound if the solver in resolve_address_alias
-                            # returns unknown, meaning that there is in fact a must-alias
-                            # address, but we didn't find it in time
+                        if account_alias is None:
                             warn(
                                 f"EXTCODECOPY: unknown address {hexify(account)} "
                                 "is assumed to have empty bytecode"
                             )
 
-                        account_code: Contract = ex.code.get(account_addr) or ByteVec()
+                        account_code: Contract = ex.code.get(account_alias) or ByteVec()
                         codeslice: ByteVec = account_code._code.slice(
                             offset, offset + size
                         )
                         ex.st.memory.set_slice(loc, end_loc, codeslice)
 
                 elif opcode == EVM.EXTCODEHASH:
-                    account_addr = uint160(ex.st.pop())
-                    alias_addr = self.resolve_address_alias(ex, account_addr)
-                    addr = alias_addr if alias_addr is not None else account_addr
-                    account_code: Contract | None = ex.code.get(addr)
-                    codehash = (
-                        f_extcodehash(addr)
-                        if account_code is None
-                        else ex.sha3_data(account_code._code.unwrap())
+                    account = uint160(ex.st.peek())
+                    account_alias = self.resolve_address_alias(
+                        ex, account, stack, step_id
                     )
+                    ex.st.pop()
+
+                    if account_alias is not None:
+                        codehash = ex.sha3_data(ex.code[account_alias]._code.unwrap())
+                    elif (
+                        eq(account, hevm_cheat_code.address)
+                        or eq(account, halmos_cheat_code.address)
+                        or eq(account, console.address)
+                    ):
+                        # dummy arbitrary value, consistent with foundry
+                        codehash = (
+                            0xB0450508E5A2349057C3B4C9C84524D62BE4BB17E565DBE2DF34725A26872291
+                            if eq(account, hevm_cheat_code.address)
+                            else 0
+                        )
+                    else:
+                        codehash = 0  # vs EMPTY_KECCAK, see EIP-1052
 
                     ex.st.push(codehash)
 
@@ -2507,7 +2547,10 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
-                    self.call(ex, opcode, stack, step_id)
+                    to = uint160(ex.st.peek(2))
+                    to_alias = self.resolve_address_alias(ex, to, stack, step_id)
+
+                    self.call(ex, opcode, to_alias, stack, step_id)
                     continue
 
                 elif opcode == EVM.SHA3:
@@ -2734,5 +2777,4 @@ class SEVM:
             sha3s={},
             storages={},
             balances={},
-            calls=[],
         )
