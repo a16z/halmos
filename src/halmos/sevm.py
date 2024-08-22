@@ -2481,7 +2481,7 @@ class SEVM:
                     addr = alias_addr if alias_addr is not None else account_addr
                     account_code: Contract | None = ex.code.get(addr)
                     codehash = (
-                        con(0)
+                        ZERO  # vs EMPTY_KECCAK, see EIP-1052
                         if account_code is None
                         else ex.sha3_data(account_code._code.unwrap())
                     )
