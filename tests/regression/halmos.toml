@@ -41,9 +41,6 @@ storage-layout = "solidity"
 # set default storage values to symbolic
 symbolic-storage = false
 
-# set msg.sender symbolic
-symbolic-msg-sender = false
-
 # do not run the constructor of test contracts
 no-test-constructor = false
 

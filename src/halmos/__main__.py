@@ -184,7 +184,7 @@ def mk_addr(name: str) -> Address:
 
 
 def mk_caller(args: HalmosConfig) -> Address:
-    return mk_addr("msg_sender") if args.symbolic_msg_sender else magic_address
+    return magic_address
 
 
 def mk_this() -> Address:
