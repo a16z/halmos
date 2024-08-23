@@ -126,6 +126,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_gaslimit()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_roll(uint256)",
                 "exitcode": 0,
                 "num_models": 0,

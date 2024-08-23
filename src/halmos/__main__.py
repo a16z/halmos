@@ -166,16 +166,16 @@ def mk_calldata(
 
 
 def mk_block() -> Block:
+    # foundry default values
     block = Block(
-        basefee=ZeroExt(160, BitVec("block_basefee", 96)),  # practical limit 96 bit
-        chainid=ZeroExt(192, BitVec("block_chainid", 64)),  # chainid 64 bit
-        coinbase=mk_addr("block_coinbase"),  # address 160 bit
-        difficulty=BitVec("block_difficulty", 256),
-        gaslimit=ZeroExt(160, BitVec("block_gaslimit", 96)),  # practical limit 96 bit
-        number=ZeroExt(192, BitVec("block_number", 64)),  # practical limit 64 bit
-        timestamp=ZeroExt(192, BitVec("block_timestamp", 64)),  # practical limit 64 bit
+        basefee=ZERO,
+        chainid=con(31337),
+        coinbase=address(0),
+        difficulty=ZERO,
+        gaslimit=con(2**63 - 1),
+        number=ONE,
+        timestamp=ONE,
     )
-    block.chainid = con(1)  # for ethereum
     return block
 
 
