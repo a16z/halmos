@@ -165,10 +165,6 @@ def mk_calldata(
     calldata.create(fun_abi, cd)
 
 
-def mk_callvalue() -> Word:
-    return BitVec("msg_value", 256)
-
-
 def mk_balance() -> Word:
     return Array("balance_0", BitVecSort(160), BitVecSort(256))
 
