@@ -543,7 +543,7 @@ class hevm_cheat_code:
 
             return ret
 
-        # ffi(string[]) returns (bytes)
+        # vm.ffi(string[]) returns (bytes)
         elif funsig == hevm_cheat_code.ffi_sig:
             if not sevm.options.ffi:
                 error_msg = "ffi cheatcode is disabled. Run again with `--ffi` if you want to enable it"
@@ -577,6 +577,7 @@ class hevm_cheat_code:
 
             return stringified_bytes_to_bytes(out_str)
 
+        # vm.addr(uint256 privateKey) returns (address keyAddr)
         elif funsig == hevm_cheat_code.addr_sig:
             private_key = uint256(extract_bytes(arg, 4, 32))
 
@@ -592,6 +593,7 @@ class hevm_cheat_code:
             ret.append(uint256(addr))
             return ret
 
+        # vm.sign(uint256 privateKey, bytes32 digest) returns (uint8 v, bytes32 r, bytes32 s)
         elif funsig == hevm_cheat_code.sign_sig:
             key = extract_bytes(arg, 4, 32)
             digest = extract_bytes(arg, 4 + 32, 32)
@@ -641,6 +643,7 @@ class hevm_cheat_code:
             ret.append(s)
             return ret
 
+        # vm.label(address account, string calldata newLabel)
         elif funsig == hevm_cheat_code.label_sig:
             addr = extract_bytes(arg, 4, 32)
             label = extract_string_argument(arg, 1)
@@ -648,7 +651,7 @@ class hevm_cheat_code:
             # TODO: no-op for now
             return ret
 
-        # getBlockNumber() return (uint256)
+        # vm.getBlockNumber() return (uint256)
         elif funsig == hevm_cheat_code.get_block_nunber_sig:
             ret.append(uint256(ex.block.number))
             return ret
