@@ -49,10 +49,6 @@ JumpID = Tuple[int, Tuple[str]]
 
 # symbolic states
 
-# extcodesize(target address)
-f_extcodesize = Function("f_extcodesize", BitVecSort160, BitVecSort256)
-# extcodehash(target address)
-f_extcodehash = Function("f_extcodehash", BitVecSort160, BitVecSort256)
 # blockhash(block number)
 f_blockhash = Function("f_blockhash", BitVecSort256, BitVecSort256)
 # gas(cnt)
