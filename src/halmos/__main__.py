@@ -165,10 +165,6 @@ def mk_calldata(
     calldata.create(fun_abi, cd)
 
 
-def mk_balance() -> Word:
-    return Array("balance_0", BitVecSort(160), BitVecSort(256))
-
-
 def mk_block() -> Block:
     block = Block(
         basefee=ZeroExt(160, BitVec("block_basefee", 96)),  # practical limit 96 bit
@@ -365,7 +361,7 @@ def deploy_test(
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
         storage={this: {}},
-        balance=mk_balance(),
+        balance=EMPTY_BALANCE,
         block=mk_block(),
         context=CallContext(message=message),
         pgm=None,  # to be added

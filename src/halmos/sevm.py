@@ -40,6 +40,8 @@ EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D8
 ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
 
+EMPTY_BALANCE = Array("balance_00", BitVecSort(160), BitVecSort(256))
+
 # TODO: make this configurable
 MAX_MEMORY_SIZE = 2**20
 
@@ -876,13 +878,16 @@ class Exec:  # an execution path
                 if self.check(key != key0) == unsat:  # key == key0
                     return val0
         # empty array
-        elif not self.symbolic and re.search(r"^storage_.+_00$", str(array)):
+        elif not self.symbolic and re.search(r"^(storage_.+|balance)_00$", str(array)):
             # note: simplifying empty array access might have a negative impact on solver performance
             return ZERO
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
         assert_address(addr)
+        if not self.symbolic:
+            # generate emptyness axiom for each array index, instead of using quantified formula
+            self.path.append(Select(EMPTY_BALANCE, uint160(addr)) == ZERO)
         value = self.select(self.balance, uint160(addr), self.balances)
         # practical assumption on the max balance per account
         self.path.append(ULT(value, con(2**96)))
