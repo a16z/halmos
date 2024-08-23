@@ -527,12 +527,6 @@ def setup(
             if args.debug:
                 print("\n".join(jumpid_str(x) for x in sevm.logs.bounded_loops))
 
-    if args.reset_bytecode:
-        for assign in [x.split("=") for x in args.reset_bytecode.split(",")]:
-            addr = con_addr(int(assign[0].strip(), 0))
-            new_hexcode = assign[1].strip()
-            setup_ex.set_code(addr, Contract.from_hexcode(new_hexcode))
-
     if args.statistics:
         print(setup_timer.report())
 

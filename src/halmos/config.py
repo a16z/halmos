@@ -341,13 +341,6 @@ class Config:
 
     ### Experimental options
 
-    reset_bytecode: str = arg(
-        help="reset the bytecode of given addresses after setUp()",
-        global_default=None,
-        metavar="ADDR1=CODE1,ADDR2=CODE2,...",
-        group=experimental,
-    )
-
     test_parallel: bool = arg(
         help="run tests in parallel", global_default=False, group=experimental
     )
