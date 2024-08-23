@@ -341,13 +341,6 @@ class Config:
 
     ### Experimental options
 
-    bytecode: str = arg(
-        help="execute the given bytecode",
-        global_default=None,
-        metavar="HEX_STRING",
-        group=experimental,
-    )
-
     reset_bytecode: str = arg(
         help="reset the bytecode of given addresses after setUp()",
         global_default=None,

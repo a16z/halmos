@@ -5,7 +5,7 @@ from z3 import *
 
 from halmos.utils import EVM, hexify
 from halmos.sevm import con, Contract, Instruction
-from halmos.__main__ import str_abi, run_bytecode, FunctionInfo
+from halmos.__main__ import str_abi, FunctionInfo
 
 from test_fixtures import args
 
@@ -102,17 +102,6 @@ def test_decode_mixed_bytecode():
 
     # jump destination scanning
     assert contract.valid_jump_destinations() == set()
-
-
-def test_run_bytecode(args):
-    args = args.with_overrides(
-        source="test_run_bytecode", symbolic_jump=True, print_steps=True
-    )
-
-    hexcode = "34381856FDFDFDFDFDFD5B00"
-    exs = run_bytecode(hexcode, args)
-    assert len(exs) == 1
-    assert exs[0].current_opcode() == EVM.STOP
 
 
 def test_instruction():
