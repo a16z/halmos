@@ -46,6 +46,18 @@ contract FoundryTest is Test {
     }
     */
 
+    function check_caller() public {
+        assertEq(msg.sender, address(0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38));
+    }
+
+    function check_origin() public {
+        assertEq(tx.origin, address(0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38));
+    }
+
+    function check_this() public {
+        assertEq(address(this), address(0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496));
+    }
+
     function check_assume(uint x) public {
         vm.assume(x < 10);
         assertLt(x, 100);

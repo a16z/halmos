@@ -45,6 +45,10 @@ EMPTY_BALANCE = Array("balance_00", BitVecSort(160), BitVecSort(256))
 # TODO: make this configurable
 MAX_MEMORY_SIZE = 2**20
 
+FOUNDRY_CALLER = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38
+FOUNDRY_ORIGIN = FOUNDRY_CALLER
+FOUNDRY_TEST = 0x7FA9385bE102ac3EAc297483Dd6233D62b3e1496
+
 # (pc, (jumpdest, ...))
 # the jumpdests are stored as strings to avoid the cost of converting bv values
 JumpID = Tuple[int, Tuple[str]]

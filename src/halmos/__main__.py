@@ -183,15 +183,11 @@ def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
 
-def mk_caller(args: HalmosConfig) -> Address:
-    return magic_address
-
-
 def mk_this() -> Address:
     # NOTE: Do NOT remove the `con_addr()` wrapper.
     #       The return type should be BitVecSort(160) as it is used as a key for ex.code.
     #       The keys of ex.code are compared using structural equality with other BitVecRef addresses.
-    return con_addr(magic_address + 1)
+    return con_addr(FOUNDRY_TEST)
 
 
 def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, assertion=False):
@@ -351,8 +347,8 @@ def deploy_test(
     this = mk_this()
     message = Message(
         target=this,
-        caller=mk_caller(args),
-        origin=mk_addr("tx_origin"),
+        caller=FOUNDRY_CALLER,
+        origin=FOUNDRY_ORIGIN,
         value=0,
         data=ByteVec(),
         call_scheme=EVM.CREATE,
@@ -1536,8 +1532,8 @@ def _main(_args=None) -> MainResult:
         contract_path = f"{contract_json['ast']['absolutePath']}:{contract_name}"
         print(f"\nRunning {num_found} tests for {contract_path}")
 
-        # Set 0xaaaa0001 in DeployAddressMapper
-        DeployAddressMapper().add_deployed_contract("0xaaaa0001", contract_name)
+        # Set the test contract address in DeployAddressMapper
+        DeployAddressMapper().add_deployed_contract(hexify(mk_this()), contract_name)
 
         # support for `/// @custom:halmos` annotations
         contract_args = with_natspec(args, contract_name, natspec)
