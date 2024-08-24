@@ -349,60 +349,6 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
         print(file=file)
 
 
-def run_bytecode(hexcode: str, args: HalmosConfig) -> List[Exec]:
-    solver = mk_solver(args)
-    this = mk_this()
-    message = Message(
-        target=this,
-        caller=mk_caller(args),
-        origin=mk_addr("tx_origin"),
-        value=mk_callvalue(),
-        data=ByteVec(),
-        call_scheme=EVM.CALL,
-    )
-
-    contract = Contract.from_hexcode(hexcode)
-    sevm = SEVM(args)
-    ex = sevm.mk_exec(
-        code={this: contract},
-        storage={this: {}},
-        balance=mk_balance(),
-        block=mk_block(),
-        context=CallContext(message=message),
-        pgm=contract,
-        symbolic=args.symbolic_storage,
-        path=Path(solver),
-    )
-    exs = sevm.run(ex)
-    result_exs = []
-
-    for idx, ex in enumerate(exs):
-        result_exs.append(ex)
-        opcode = ex.current_opcode()
-        error_output = ex.context.output.error
-        returndata = ex.context.output.data
-
-        if error_output:
-            warn_code(
-                INTERNAL_ERROR,
-                f"{mnemonic(opcode)} failed, error={error_output}, returndata={returndata}",
-            )
-        else:
-            print(f"Final opcode: {mnemonic(opcode)})")
-            print(f"Return data: {returndata}")
-            dump_dirname = f"/tmp/halmos-{uuid.uuid4().hex}"
-            model_with_context = gen_model_from_sexpr(
-                GenModelArgs(args, idx, ex.path.to_smt2(args), {}, dump_dirname)
-            )
-            print(f"Input example: {model_with_context.model}")
-
-        if args.print_states:
-            print(f"# {idx+1}")
-            print(ex)
-
-    return result_exs
-
-
 def deploy_test(
     creation_hexcode: str,
     deployed_hexcode: str,
@@ -580,12 +526,6 @@ def setup(
             )
             if args.debug:
                 print("\n".join(jumpid_str(x) for x in sevm.logs.bounded_loops))
-
-    if args.reset_bytecode:
-        for assign in [x.split("=") for x in args.reset_bytecode.split(",")]:
-            addr = con_addr(int(assign[0].strip(), 0))
-            new_hexcode = assign[1].strip()
-            setup_ex.set_code(addr, Contract.from_hexcode(new_hexcode))
 
     if args.statistics:
         print(setup_timer.report())
@@ -1509,11 +1449,6 @@ def _main(_args=None) -> MainResult:
 
     if args.version:
         print(f"halmos {metadata.version('halmos')}")
-        return MainResult(0)
-
-    # quick bytecode execution mode
-    if args.bytecode is not None:
-        run_bytecode(args.bytecode, args)
         return MainResult(0)
 
     #

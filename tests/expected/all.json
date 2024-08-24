@@ -1600,17 +1600,6 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/Reset.t.sol:ResetTest": [
-            {
-                "name": "check_foo()",
-                "exitcode": 0,
-                "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
         "test/Revert.t.sol:CTest": [
             {
                 "name": "check_Revert1(uint256)",
