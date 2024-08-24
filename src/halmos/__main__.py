@@ -506,13 +506,10 @@ def setup(
             raise HalmosException(f"No successful path found in {setup_sig}")
 
         if len(setup_exs) > 1:
-            info(
-                f"Warning: multiple paths were found in {setup_sig}; "
-                "an arbitrary path has been selected for the following tests."
-            )
-
             if args.debug:
                 print("\n".join(map(str, setup_exs)))
+
+            raise HalmosException(f"Multiple paths were found in {setup_sig}")
 
         setup_ex = setup_exs[0]
 
