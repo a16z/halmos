@@ -258,7 +258,7 @@ contract ExtcodehashTest is Test, SymTest {
 
         assertEq(VM_ADDRESS.code.length, 1);
         assertEq(console.CONSOLE_ADDRESS.code.length, 0);
-        assertEq(SymTest.SVM_ADDRESS.code.length, 0);
+        assertEq(SymTest.SVM_ADDRESS.code.length, 1); // different from foundry
     }
 
     function check_extcodehash_cheatcode() external {

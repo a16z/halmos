@@ -165,6 +165,17 @@ class Prank:
         return True
 
 
+def symbolic_storage(ex, arg):
+    account = uint160(arg.get_word(4))
+
+    account_alias = account
+#   account_alias = sevm.resolve_address_alias(
+#       ex, account, stack, step_id, branching=False
+#   )
+
+    ex.storage[account_alias].symbolic = True
+
+
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
     label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
     return BitVec(label, BitVecSorts[bits])
@@ -275,6 +286,7 @@ class halmos_cheat_code:
         0xBF72FA66: create_bytes32,  # createBytes32(string)
         0x3B0FA01B: create_address,  # createAddress(string)
         0x6E0BB659: create_bool,  # createBool(string)
+        0X2DE059AE: symbolic_storage,  # symbolicStorage(address)
     }
 
     @staticmethod

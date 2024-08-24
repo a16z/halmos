@@ -2445,7 +2445,7 @@ class SEVM:
                         or eq(account, console.address)
                     ):
                         # dummy arbitrary value, consistent with foundry
-                        codesize = 1 if eq(account, hevm_cheat_code.address) else 0
+                        codesize = 1 if eq(account, hevm_cheat_code.address) or eq(account, halmos_cheat_code.address) else 0
                     else:
                         codesize = 0
 

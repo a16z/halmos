@@ -3,9 +3,13 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "forge-std/Test.sol";
 import "../src/Storage.sol";
+import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
-/// @custom:halmos --symbolic-storage
-contract StorageTest is Storage {
+contract StorageTest is Storage, SymTest {
+    function setUp() public {
+        svm.symbolicStorage(address(this));
+    }
+
     function check_setMap1(uint k, uint v) public {
         setMap1(k, v);
         assert(map1[k] == v);
