@@ -356,12 +356,11 @@ def deploy_test(
 
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
-        storage={this: {}},
+        storage={this: StorageData()},
         balance=EMPTY_BALANCE,
         block=mk_block(),
         context=CallContext(message=message),
         pgm=None,  # to be added
-        symbolic=False,
         path=Path(mk_solver(args)),
     )
 
@@ -604,7 +603,6 @@ def run(
             pc=0,
             st=State(),
             jumpis={},
-            symbolic=args.symbolic_storage,
             #
             path=path,
             alias=setup_ex.alias.copy(),

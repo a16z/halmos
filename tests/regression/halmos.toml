@@ -32,9 +32,6 @@ depth = 0
 # The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.
 storage-layout = "solidity"
 
-# set default storage values to symbolic
-symbolic-storage = false
-
 # allow the usage of FFI to call external functions
 ffi = false
 
