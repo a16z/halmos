@@ -889,10 +889,10 @@ class Exec:  # an execution path
 
     def balance_of(self, addr: Word) -> Word:
         assert_address(addr)
-        if not self.symbolic:
-            # generate emptyness axiom for each array index, instead of using quantified formula
-            self.path.append(Select(EMPTY_BALANCE, uint160(addr)) == ZERO)
-        value = self.select(self.balance, uint160(addr), self.balances)
+        addr = uint160(addr)
+        value = self.select(self.balance, addr, self.balances)
+        # generate emptyness axiom for each array index, instead of using quantified formula
+        self.path.append(Select(EMPTY_BALANCE, addr) == ZERO)
         # practical assumption on the max balance per account
         self.path.append(ULT(value, con(2**96)))
         return value
@@ -900,6 +900,7 @@ class Exec:  # an execution path
     def balance_update(self, addr: Word, value: Word) -> None:
         assert_address(addr)
         assert_uint256(value)
+        addr = uint160(addr)
         new_balance_var = Array(
             f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
