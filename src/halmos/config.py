@@ -164,11 +164,6 @@ class Config:
         global_default=False,
     )
 
-    no_test_constructor: bool = arg(
-        help="do not run the constructor of test contracts",
-        global_default=False,
-    )
-
     ffi: bool = arg(
         help="allow the usage of FFI to call external functions",
         global_default=False,

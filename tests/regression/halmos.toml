@@ -35,9 +35,6 @@ storage-layout = "solidity"
 # set default storage values to symbolic
 symbolic-storage = false
 
-# do not run the constructor of test contracts
-no-test-constructor = false
-
 # allow the usage of FFI to call external functions
 ffi = false
 

@@ -374,13 +374,6 @@ def deploy_test(
     creation_bytecode = Contract.from_hexcode(creation_hexcode)
     ex.pgm = creation_bytecode
 
-    # use the given deployed bytecode if --no-test-constructor is enabled
-    if args.no_test_constructor:
-        deployed_bytecode = Contract.from_hexcode(deployed_hexcode)
-        ex.set_code(this, deployed_bytecode)
-        ex.pgm = deployed_bytecode
-        return ex
-
     # create test contract
     exs = list(sevm.run(ex))
 
