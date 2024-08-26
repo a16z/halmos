@@ -207,9 +207,10 @@ def symbolic_storage(ex, arg):
     account = uint160(arg.get_word(4))
 
     account_alias = account
-    #   account_alias = sevm.resolve_address_alias(
-    #       ex, account, stack, step_id, branching=False
-    #   )
+    # TODO:
+    # account_alias = sevm.resolve_address_alias(
+    #     ex, account, stack, step_id, branching=False
+    # )
 
     ex.storage[account_alias].symbolic = True
 
