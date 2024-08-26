@@ -2531,18 +2531,16 @@ class SEVM:
 
                     if account_alias is not None:
                         codesize = len(ex.code[account_alias])
-                    elif (
-                        eq(account, hevm_cheat_code.address)
-                        or eq(account, halmos_cheat_code.address)
-                    ):
-                        # dummy arbitrary value, consistent with foundry
-                        # NOTE: the codesize of halmos cheatcode should be non-zero to pass the extcodesize check for external calls with non-empty return types. this behavior differs from foundry.
-                        codesize = 1
-                    elif eq(account, console.address):
-                        # dummy arbitrary value, consistent with foundry
-                        codesize = 0
                     else:
-                        codesize = 0
+                        codesize = (
+                            1  # dummy arbitrary value, consistent with foundry
+                            if eq(account, hevm_cheat_code.address)
+                            # NOTE: the codesize of halmos cheatcode should be non-zero to pass the extcodesize check for external calls with non-empty return types. this behavior differs from foundry.
+                            or eq(account, halmos_cheat_code.address)
+                            # the codesize of console is considered zero in foundry
+                            # or eq(account, console.address)
+                            else 0
+                        )
 
                     ex.st.push(codesize)
 
