@@ -19,16 +19,13 @@ from importlib import metadata
 
 from z3 import (
     Z3_OP_CONCAT,
-    Array,
     BitVec,
     BitVecNumRef,
     BitVecRef,
-    BitVecSort,
     Bool,
     CheckSatResult,
     Context,
     ModelRef,
-    ZeroExt,
     is_app,
     is_bv,
     sat,
@@ -44,8 +41,14 @@ from .config import arg_parser, default_config, resolve_config_files, toml_parse
 from .exceptions import HalmosException
 from .mapper import DeployAddressMapper, Mapper
 from .sevm import (
+    EMPTY_BALANCE,
     EVM,
+    FOUNDRY_CALLER,
+    FOUNDRY_ORIGIN,
+    FOUNDRY_TEST,
+    ONE,
     SEVM,
+    ZERO,
     Address,
     Block,
     CallContext,
@@ -58,14 +61,13 @@ from .sevm import (
     Path,
     SMTQuery,
     State,
-    Word,
     con_addr,
     jumpid_str,
-    magic_address,
     mnemonic,
 )
 from .utils import (
     NamedTimer,
+    address,
     byte_length,
     color_error,
     con,
@@ -221,25 +223,17 @@ def mk_calldata(
     calldata.create(fun_abi, cd)
 
 
-def mk_callvalue() -> Word:
-    return BitVec("msg_value", 256)
-
-
-def mk_balance() -> Word:
-    return Array("balance_0", BitVecSort(160), BitVecSort(256))
-
-
 def mk_block() -> Block:
+    # foundry default values
     block = Block(
-        basefee=ZeroExt(160, BitVec("block_basefee", 96)),  # practical limit 96 bit
-        chainid=ZeroExt(192, BitVec("block_chainid", 64)),  # chainid 64 bit
-        coinbase=mk_addr("block_coinbase"),  # address 160 bit
-        difficulty=BitVec("block_difficulty", 256),
-        gaslimit=ZeroExt(160, BitVec("block_gaslimit", 96)),  # practical limit 96 bit
-        number=ZeroExt(192, BitVec("block_number", 64)),  # practical limit 64 bit
-        timestamp=ZeroExt(192, BitVec("block_timestamp", 64)),  # practical limit 64 bit
+        basefee=ZERO,
+        chainid=con(31337),
+        coinbase=address(0),
+        difficulty=ZERO,
+        gaslimit=con(2**63 - 1),
+        number=ONE,
+        timestamp=ONE,
     )
-    block.chainid = con(1)  # for ethereum
     return block
 
 
@@ -247,15 +241,11 @@ def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
 
-def mk_caller(args: HalmosConfig) -> Address:
-    return mk_addr("msg_sender") if args.symbolic_msg_sender else magic_address
-
-
 def mk_this() -> Address:
     # NOTE: Do NOT remove the `con_addr()` wrapper.
     #       The return type should be BitVecSort(160) as it is used as a key for ex.code.
     #       The keys of ex.code are compared using structural equality with other BitVecRef addresses.
-    return con_addr(magic_address + 1)
+    return con_addr(FOUNDRY_TEST)
 
 
 def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, assertion=False):
@@ -416,8 +406,8 @@ def deploy_test(
     this = mk_this()
     message = Message(
         target=this,
-        caller=mk_caller(args),
-        origin=mk_addr("tx_origin"),
+        caller=FOUNDRY_CALLER,
+        origin=FOUNDRY_ORIGIN,
         value=0,
         data=ByteVec(),
         call_scheme=EVM.CREATE,
@@ -426,7 +416,7 @@ def deploy_test(
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
         storage={this: {}},
-        balance=mk_balance(),
+        balance=EMPTY_BALANCE,
         block=mk_block(),
         context=CallContext(message=message),
         pgm=None,  # to be added
@@ -442,13 +432,6 @@ def deploy_test(
     # test contract creation bytecode
     creation_bytecode = Contract.from_hexcode(creation_hexcode)
     ex.pgm = creation_bytecode
-
-    # use the given deployed bytecode if --no-test-constructor is enabled
-    if args.no_test_constructor:
-        deployed_bytecode = Contract.from_hexcode(deployed_hexcode)
-        ex.set_code(this, deployed_bytecode)
-        ex.pgm = deployed_bytecode
-        return ex
 
     # create test contract
     exs = list(sevm.run(ex))
@@ -1597,8 +1580,8 @@ def _main(_args=None) -> MainResult:
         contract_path = f"{contract_json['ast']['absolutePath']}:{contract_name}"
         print(f"\nRunning {num_found} tests for {contract_path}")
 
-        # Set 0xaaaa0001 in DeployAddressMapper
-        DeployAddressMapper().add_deployed_contract("0xaaaa0001", contract_name)
+        # Set the test contract address in DeployAddressMapper
+        DeployAddressMapper().add_deployed_contract(hexify(mk_this()), contract_name)
 
         # support for `/// @custom:halmos` annotations
         contract_args = with_natspec(args, contract_name, natspec)

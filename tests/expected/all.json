@@ -126,6 +126,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_gaslimit()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_roll(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
@@ -820,6 +829,15 @@
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
+            },
+            {
+                "name": "check_initial_balance(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/Extcodehash.t.sol:ExtcodehashTest": [
@@ -1019,6 +1037,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_caller()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_deployCode(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
@@ -1047,6 +1074,24 @@
             },
             {
                 "name": "check_etch_emptyBytecode()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_origin()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_this()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,

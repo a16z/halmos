@@ -122,8 +122,14 @@ EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D8
 ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
 
+EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
+
 # TODO: make this configurable
 MAX_MEMORY_SIZE = 2**20
+
+FOUNDRY_CALLER = 0x1804C8AB1F12E6BBF3894D4083F33E07309D1F38
+FOUNDRY_ORIGIN = FOUNDRY_CALLER
+FOUNDRY_TEST = 0x7FA9385BE102AC3EAC297483DD6233D62B3E1496
 
 # (pc, (jumpdest, ...))
 # the jumpdests are stored as strings to avoid the cost of converting bv values
@@ -131,10 +137,6 @@ JumpID = tuple[int, tuple[str]]
 
 # symbolic states
 
-# extcodesize(target address)
-f_extcodesize = Function("f_extcodesize", BitVecSort160, BitVecSort256)
-# extcodehash(target address)
-f_extcodehash = Function("f_extcodehash", BitVecSort160, BitVecSort256)
 # blockhash(block number)
 f_blockhash = Function("f_blockhash", BitVecSort256, BitVecSort256)
 # gas(cnt)
@@ -964,14 +966,17 @@ class Exec:  # an execution path
                 if self.check(key != key0) == unsat:  # key == key0
                     return val0
         # empty array
-        elif not self.symbolic and re.search(r"^storage_.+_00$", str(array)):
+        elif not self.symbolic and re.search(r"^(storage_.+|balance)_00$", str(array)):
             # note: simplifying empty array access might have a negative impact on solver performance
             return ZERO
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
         assert_address(addr)
-        value = self.select(self.balance, uint160(addr), self.balances)
+        addr = uint160(addr)
+        value = self.select(self.balance, addr, self.balances)
+        # generate emptyness axiom for each array index, instead of using quantified formula
+        self.path.append(Select(EMPTY_BALANCE, addr) == ZERO)
         # practical assumption on the max balance per account
         self.path.append(ULT(value, con(2**96)))
         return value
@@ -979,6 +984,7 @@ class Exec:  # an execution path
     def balance_update(self, addr: Word, value: Word) -> None:
         assert_address(addr)
         assert_uint256(value)
+        addr = uint160(addr)
         new_balance_var = Array(
             f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )

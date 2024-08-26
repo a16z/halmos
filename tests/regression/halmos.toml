@@ -28,24 +28,12 @@ depth = 0
 # set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)
 # array-lengths = NAME1=LENGTH1,NAME2=LENGTH2,...
 
-# use uninterpreted abstractions for unknown external calls with the given function signatures
-uninterpreted-unknown-calls = "0x150b7a02,0x1626ba7e,0xf23a6e61,0xbc197c81"
-
-# set the byte size of return data from uninterpreted unknown external calls
-return-size-of-unknown-calls = 32
-
 # Select one of the available storage layout models
 # The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.
 storage-layout = "solidity"
 
 # set default storage values to symbolic
 symbolic-storage = false
-
-# set msg.sender symbolic
-symbolic-msg-sender = false
-
-# do not run the constructor of test contracts
-no-test-constructor = false
 
 # allow the usage of FFI to call external functions
 ffi = false
@@ -124,9 +112,6 @@ solver-max-memory = 0
 
 # use the given command when invoking the solver
 # solver-command = COMMAND
-
-# run assertion solvers in parallel
-solver-parallel = false
 
 # set the number of threads for parallel solvers
 # solver-threads = N
