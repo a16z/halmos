@@ -1,5 +1,5 @@
+import dataclasses
 import json
-from dataclasses import asdict
 
 import pytest
 
@@ -46,7 +46,7 @@ from halmos.sevm import con
     ),
 )
 def test_main(cmd, expected_path, halmos_options):
-    actual = asdict(_main(cmd + halmos_options.split()))
+    actual = dataclasses.asdict(_main(cmd + halmos_options.split()))
     with open(expected_path, encoding="utf8") as f:
         expected = json.load(f)
     assert expected["exitcode"] == actual["exitcode"]
@@ -61,7 +61,7 @@ def test_main(cmd, expected_path, halmos_options):
     ids=("SetupFailTest",),
 )
 def test_main_fail(cmd, halmos_options):
-    actual = asdict(_main(cmd + halmos_options.split()))
+    actual = dataclasses.asdict(_main(cmd + halmos_options.split()))
     assert actual["exitcode"] != 0
 
 

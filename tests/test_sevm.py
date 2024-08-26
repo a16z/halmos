@@ -299,6 +299,7 @@ def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     # but in the internal state, the top of the stack is the last element of the list
     ex.st.stack.extend(reversed(params))
     exs: list[Exec] = list(sevm.run(ex))
+
     [output_ex] = exs
     assert output_ex.st.stack.pop() == simplify(output)
 

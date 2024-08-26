@@ -135,12 +135,6 @@ solver-parallel = false
 #                             Experimental options                             #
 ################################################################################
 
-# execute the given bytecode
-# bytecode = HEX_STRING
-
-# reset the bytecode of given addresses after setUp()
-# reset-bytecode = ADDR1=CODE1,ADDR2=CODE2,...
-
 # run tests in parallel
 test-parallel = false
 
