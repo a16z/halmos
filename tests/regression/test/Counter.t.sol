@@ -7,7 +7,7 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 /// @custom:halmos --loop 4
 contract CounterTest is Counter, SymTest {
     function setUp() public {
-        svm.symbolicStorage(address(this));
+        svm.initEmptyStorage(address(this));
     }
 
     function check_set(uint n) public {
