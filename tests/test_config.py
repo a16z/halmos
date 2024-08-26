@@ -159,9 +159,7 @@ def test_config_file_snake_case(config, toml_parser):
 
 def test_config_e2e(config, parser, toml_parser):
     # when we apply overrides to the default config
-    config_file_data = toml_parser.parse_str(
-        "[global]\nverbose = 42"
-    )
+    config_file_data = toml_parser.parse_str("[global]\nverbose = 42")
     config = config.with_overrides(source="halmos.toml", **config_file_data)
 
     args = parser.parse_args(["-vvv"])

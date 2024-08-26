@@ -760,7 +760,7 @@ class Path:
 @dataclass
 class StorageData:
     symbolic: bool = False
-    mapping: Dict = field(default_factory=dict)
+    mapping: dict = field(default_factory=dict)
 
 
 class Exec:  # an execution path
@@ -956,7 +956,9 @@ class Exec:  # an execution path
 
         return self.path.check(cond)
 
-    def select(self, array: Any, key: Word, arrays: dict, symbolic: bool = False) -> Word:
+    def select(
+        self, array: Any, key: Word, arrays: dict, symbolic: bool = False
+    ) -> Word:
         if array in arrays:
             store = arrays[array]
             if store.decl().name() == "store" and store.num_args() == 3:
@@ -1180,7 +1182,10 @@ class SolidityStorage(Storage):
                     Select(cls.empty(addr, slot, keys), concat(keys)) == ZERO
                 )
             return ex.select(
-                ex.storage[addr].mapping[slot][num_keys][size_keys], concat(keys), ex.storages, ex.storage[addr].symbolic
+                ex.storage[addr].mapping[slot][num_keys][size_keys],
+                concat(keys),
+                ex.storages,
+                ex.storage[addr].symbolic,
             )
 
     @classmethod
@@ -1293,7 +1298,12 @@ class GenericStorage(Storage):
         if not ex.storage[addr].symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
             ex.path.append(Select(cls.empty(addr, loc), loc) == ZERO)
-        return ex.select(ex.storage[addr].mapping[loc.size()], loc, ex.storages, ex.storage[addr].symbolic)
+        return ex.select(
+            ex.storage[addr].mapping[loc.size()],
+            loc,
+            ex.storages,
+            ex.storage[addr].symbolic,
+        )
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
@@ -2134,7 +2144,8 @@ class SEVM:
 
         # setup new account
         ex.set_code(new_addr, Contract(b""))  # existing code must be empty
-        ex.storage[new_addr] = StorageData()  # existing storage may not be empty and reset here
+        # existing storage may not be empty and reset here
+        ex.storage[new_addr] = StorageData()
 
         # transfer value
         self.transfer_value(ex, pranked_caller, new_addr, value)
@@ -2526,7 +2537,12 @@ class SEVM:
                         or eq(account, console.address)
                     ):
                         # dummy arbitrary value, consistent with foundry
-                        codesize = 1 if eq(account, hevm_cheat_code.address) or eq(account, halmos_cheat_code.address) else 0
+                        codesize = (
+                            1
+                            if eq(account, hevm_cheat_code.address)
+                            or eq(account, halmos_cheat_code.address)
+                            else 0
+                        )
                     else:
                         codesize = 0
 
