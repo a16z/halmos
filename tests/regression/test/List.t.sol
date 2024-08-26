@@ -7,7 +7,7 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 contract ListTest is SymTest, Test, List {
     function setUp() public {
-        svm.initEmptyStorage(address(this));
+        svm.enableSymbolicStorage(address(this));
     }
 
     function check_add(uint x) public {
@@ -42,7 +42,7 @@ contract ListTestTest is SymTest, Test {
     function setUp() public {
         list = new List();
         list.add(1);
-        svm.initEmptyStorage(address(list));
+        svm.enableSymbolicStorage(address(list));
     }
 
     function check_add(uint x) public {

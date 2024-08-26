@@ -321,7 +321,7 @@ class halmos_cheat_code:
         0xBF72FA66: create_bytes32,  # createBytes32(string)
         0x3B0FA01B: create_address,  # createAddress(string)
         0x6E0BB659: create_bool,  # createBool(string)
-        0xCC825563: symbolic_storage,  # initEmptyStorage(address)
+        0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
     }
 
     @staticmethod

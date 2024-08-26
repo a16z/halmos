@@ -7,7 +7,7 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 contract StorageTest is Storage, SymTest {
     function setUp() public {
-        svm.initEmptyStorage(address(this));
+        svm.enableSymbolicStorage(address(this));
     }
 
     function check_setMap1(uint k, uint v) public {
