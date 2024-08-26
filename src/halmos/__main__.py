@@ -1198,7 +1198,7 @@ def solve(
         solver.from_string(query.smtlib)
         if args.cache_solver:
             solver.set(unsat_core=True)
-            ids = [Bool(f"|{x}|", ctx) for x in query.assertions]
+            ids = [Bool(f"{x}", ctx) for x in query.assertions]
             result = solver.check(*ids)
         else:
             result = solver.check()
