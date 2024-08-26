@@ -342,20 +342,6 @@ class Config:
 
     ### Experimental options
 
-    bytecode: str = arg(
-        help="execute the given bytecode",
-        global_default=None,
-        metavar="HEX_STRING",
-        group=experimental,
-    )
-
-    reset_bytecode: str = arg(
-        help="reset the bytecode of given addresses after setUp()",
-        global_default=None,
-        metavar="ADDR1=CODE1,ADDR2=CODE2,...",
-        group=experimental,
-    )
-
     test_parallel: bool = arg(
         help="run tests in parallel", global_default=False, group=experimental
     )

@@ -191,7 +191,10 @@ contract ContextTest is Test {
     }
 
     function check_call0_normal(uint mode0) public payable {
-        require(mode0 < 9);
+        // vm.assume(mode0 < 9);
+        // NOTE: explicitly branch over mode0, as an infeasible path with mode0 >= 9 may not be eliminated due to an extremely inefficient solver environment (e.g, github workflow)
+        mode0 = split_mode_up_to_9(mode0);
+
         _check_call0(mode0);
     }
 
@@ -221,7 +224,10 @@ contract ContextTest is Test {
     }
 
     function check_call1_normal(uint mode1, uint mode0) public payable {
-        require(mode0 < 9);
+        // vm.assume(mode0 < 9);
+        // NOTE: explicitly branch over mode0, as an infeasible path with mode0 >= 9 may not be eliminated due to an extremely inefficient solver environment (e.g, github workflow)
+        mode0 = split_mode_up_to_9(mode0);
+
         _check_call1(mode1, mode0);
     }
 
@@ -271,6 +277,19 @@ contract ContextTest is Test {
         else if (mode ==  8) assert(!success && retdata.length ==  0);
         else if (mode ==  9) assert(!success && retdata.length ==  0);
         else if (mode == 10) assert(!success && retdata.length ==  0);
+    }
+
+    function split_mode_up_to_9(uint mode) internal returns (uint) {
+             if (mode == 0) return 0;
+        else if (mode == 1) return 1;
+        else if (mode == 2) return 2;
+        else if (mode == 3) return 3;
+        else if (mode == 4) return 4;
+        else if (mode == 5) return 5;
+        else if (mode == 6) return 6;
+        else if (mode == 7) return 7;
+        else if (mode == 8) return 8;
+        else                return 0;
     }
 
     function returndatasize() internal pure returns (uint size) {
