@@ -203,10 +203,10 @@ class Prank:
         return True
 
 
-def symbolic_storage(ex, arg, **kwargs):
+def symbolic_storage(ex, arg, sevm, stack, step_id):
     account = uint160(arg.get_word(4))
-    account_alias = kwargs["sevm"].resolve_address_alias(
-        ex, account, kwargs["stack"], kwargs["step_id"], branching=False
+    account_alias = sevm.resolve_address_alias(
+        ex, account, stack, step_id, branching=False
     )
     ex.storage[account_alias].symbolic = True
 
