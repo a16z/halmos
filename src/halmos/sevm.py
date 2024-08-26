@@ -1987,7 +1987,7 @@ class SEVM:
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
                 exit_code = ONE
-                ret = halmos_cheat_code.handle(ex, arg)
+                ret = halmos_cheat_code.handle(self, ex, arg, stack, step_id)
 
             # vm cheat code
             elif eq(to, hevm_cheat_code.address):
