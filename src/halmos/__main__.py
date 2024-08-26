@@ -19,16 +19,13 @@ from importlib import metadata
 
 from z3 import (
     Z3_OP_CONCAT,
-    Array,
     BitVec,
     BitVecNumRef,
     BitVecRef,
-    BitVecSort,
     Bool,
     CheckSatResult,
     Context,
     ModelRef,
-    ZeroExt,
     is_app,
     is_bv,
     sat,
@@ -44,8 +41,14 @@ from .config import arg_parser, default_config, resolve_config_files, toml_parse
 from .exceptions import HalmosException
 from .mapper import DeployAddressMapper, Mapper
 from .sevm import (
+    EMPTY_BALANCE,
     EVM,
+    FOUNDRY_CALLER,
+    FOUNDRY_ORIGIN,
+    FOUNDRY_TEST,
+    ONE,
     SEVM,
+    ZERO,
     Address,
     Block,
     CallContext,
@@ -58,14 +61,13 @@ from .sevm import (
     Path,
     SMTQuery,
     State,
-    Word,
     con_addr,
     jumpid_str,
-    magic_address,
     mnemonic,
 )
 from .utils import (
     NamedTimer,
+    address,
     byte_length,
     color_error,
     con,
