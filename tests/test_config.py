@@ -1,13 +1,17 @@
+import dataclasses
 import os
 import pickle
+
 import pytest
 
 from halmos.config import (
     Config,
-    default_config,
     arg_parser,
-    toml_parser as get_toml_parser,
+    default_config,
     resolve_config_files,
+)
+from halmos.config import (
+    toml_parser as get_toml_parser,
 )
 
 
@@ -35,7 +39,7 @@ def test_fresh_config_has_only_None_values():
 
 
 def test_default_config_immutable(config):
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         config.solver_threads = 42
 
 
@@ -47,7 +51,7 @@ def test_unknown_keys_config_constructor_raise():
 def test_unknown_keys_config_object_raise():
     config = Config(_parent=None, _source="bogus")
     with pytest.raises(AttributeError):
-        config.unknown_key
+        config.unknown_key  # noqa: B018 (not a useless expression)
 
 
 def test_count_arg(config, parser):
@@ -165,7 +169,7 @@ def test_config_e2e(config, parser, toml_parser):
 
     # then the config object should have the expected values
     assert config.verbose == 3
-    assert config.symbolic_storage == True
+    assert config.symbolic_storage is True
     assert config.loop == 2
 
     # and each value should have the expected source

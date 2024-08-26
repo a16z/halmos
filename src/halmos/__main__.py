@@ -76,7 +76,6 @@ from .utils import (
     green,
     hexify,
     indent_text,
-    info,
     red,
     stringify,
     unbox_int,

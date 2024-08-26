@@ -65,6 +65,7 @@ from .exceptions import (
     OutOfGasError,
     PathEndingException,
     Revert,
+    StackUnderflowError,
     WriteInStaticContext,
 )
 from .utils import (
@@ -414,6 +415,8 @@ class State:
             self.stack.append(simplify(v))
 
     def pop(self) -> Word:
+        if not self.stack:
+            raise StackUnderflowError()
         return self.stack.pop()
 
     def peek(self, n: int = 1) -> Word:

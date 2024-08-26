@@ -1,9 +1,8 @@
 import pytest
+from z3 import BitVec, BitVecVal, Concat, Extract, eq
 
-from z3 import BitVec, BitVecVal, Concat, Extract
-
-from halmos.bytevec import *
-from halmos.utils import concat
+from halmos.bytevec import ByteVec, Chunk, defrag
+from halmos.utils import concat, extract_bytes
 
 
 @pytest.fixture
