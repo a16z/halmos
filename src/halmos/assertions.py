@@ -1,10 +1,28 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import re
 from dataclasses import dataclass
-from z3 import *
+
+from z3 import (
+    UGE,
+    UGT,
+    ULE,
+    ULT,
+    BitVecRef,
+    BoolVal,
+    is_bv,
+)
 
 from halmos.exceptions import HalmosException
-from halmos.utils import *
+from halmos.utils import (
+    bytes_to_bv_value,
+    extract_bytes,
+    extract_bytes32_array_argument,
+    extract_bytes_argument,
+    extract_string_argument,
+    test,
+    uint256,
+)
 
 
 @dataclass(frozen=True)

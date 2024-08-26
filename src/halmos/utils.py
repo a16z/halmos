@@ -1,14 +1,36 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import math
 import re
 from functools import partial
 from timeit import default_timer as timer
-from typing import Any, Dict, Tuple
+from typing import Any
 
-from z3 import *
+from z3 import (
+    Z3_OP_CONCAT,
+    BitVecNumRef,
+    BitVecRef,
+    BitVecSort,
+    BitVecVal,
+    BoolVal,
+    Concat,
+    Extract,
+    Function,
+    If,
+    Not,
+    SignExt,
+    SolverFor,
+    ZeroExt,
+    is_app,
+    is_app_of,
+    is_bool,
+    is_bv,
+    is_bv_value,
+    simplify,
+)
 
-from halmos.mapper import Mapper
 from halmos.exceptions import HalmosException, NotConcreteError
+from halmos.mapper import Mapper
 
 # order of the secp256k1 curve
 secp256k1n = (
@@ -172,7 +194,7 @@ def is_zero(x: Word) -> Word:
 
 
 def is_concrete(x: Any) -> bool:
-    return isinstance(x, int) or isinstance(x, bytes) or is_bv_value(x)
+    return isinstance(x, int | bytes) or is_bv_value(x)
 
 
 def is_concat(x: BitVecRef) -> bool:
@@ -664,7 +686,7 @@ class EVM:
     SELFDESTRUCT = 0xFF
 
 
-str_opcode: Dict[int, str] = {
+str_opcode: dict[int, str] = {
     EVM.STOP: "STOP",
     EVM.ADD: "ADD",
     EVM.MUL: "MUL",
@@ -812,7 +834,7 @@ str_opcode: Dict[int, str] = {
 }
 
 
-def restore_precomputed_hashes(x: int) -> Tuple[int, int]:
+def restore_precomputed_hashes(x: int) -> tuple[int, int]:
     (preimage, offset) = sha3_inv_offset.get(x >> 16, (None, None))
     if preimage is None:
         return (None, None)
@@ -822,14 +844,14 @@ def restore_precomputed_hashes(x: int) -> Tuple[int, int]:
     return (preimage, delta)  # x == hash(preimage) + delta
 
 
-def mk_sha3_inv_offset(m: Dict[int, int]) -> Dict[int, Tuple[int, int]]:
+def mk_sha3_inv_offset(m: dict[int, int]) -> dict[int, tuple[int, int]]:
     m2 = {}
     for k, v in m.items():
         m2[k >> 16] = (v, k & 0xFFFF)
     return m2
 
 
-sha3_inv: Dict[int, int] = {  # sha3(x) -> x
+sha3_inv: dict[int, int] = {  # sha3(x) -> x
     0x290DECD9548B62A8D60345A988386FC84BA6BC95484008F6362F93160EF3E563: 0,
     0xB10E2D527612073B26EECDFD717E6A320CF44B4AFAC2B0732D9FCBE2B7FA0CF6: 1,
     0x405787FA12A823E0F2B7631CC41B3BA8828B3321CA811111FA75CD3AA3BB5ACE: 2,
@@ -1088,7 +1110,7 @@ sha3_inv: Dict[int, int] = {  # sha3(x) -> x
     0xE08EC2AF2CFC251225E1968FD6CA21E4044F129BFFA95BAC3503BE8BDB30A367: 255,
 }
 
-sha3_inv_offset: Dict[int, Tuple[int, int]] = mk_sha3_inv_offset(sha3_inv)
+sha3_inv_offset: dict[int, tuple[int, int]] = mk_sha3_inv_offset(sha3_inv)
 
 
 class NamedTimer:
@@ -1112,8 +1134,8 @@ class NamedTimer:
         self.end_time = self.end_time or timer()
 
     def create_subtimer(self, name, auto_start=True, stop_previous=True):
-        for timer in self.sub_timers:
-            if timer.name == name:
+        for subtimer in self.sub_timers:
+            if subtimer.name == name:
                 raise ValueError(f"Timer with name {name} already exists.")
 
         if stop_previous and self.sub_timers:
@@ -1124,9 +1146,9 @@ class NamedTimer:
         return sub_timer
 
     def __getitem__(self, name):
-        for timer in self.sub_timers:
-            if timer.name == name:
-                return timer
+        for subtimer in self.sub_timers:
+            if subtimer.name == name:
+                return subtimer
         raise ValueError(f"Timer with name {name} does not exist.")
 
     def elapsed(self) -> float:

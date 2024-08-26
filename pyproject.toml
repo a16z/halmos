@@ -41,3 +41,16 @@ target-version = ["py311", "py312"]
 # TODO: re-add test_traces.py when we have a better way to support it in CI
 addopts = "--ignore=tests/lib --ignore=tests/test_traces.py"
 # addopts = "--ignore=tests/lib"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "UP", # pyupgrade
+    "B",  # flake8-bugbear
+    "SIM",# flake8-simplify
+    "I",  # isort
+]
+ignore = [
+    "E501",  # line too long
+]
