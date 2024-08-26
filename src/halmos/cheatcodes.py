@@ -418,7 +418,7 @@ class hevm_cheat_code:
     label_sig: int = 0xC657C718
 
     # bytes4(keccak256("getBlockNumber()"))
-    get_block_nunber_sig: int = 0x42CBB15C
+    get_block_number_sig: int = 0x42CBB15C
 
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack, step_id) -> ByteVec | None:
@@ -700,7 +700,7 @@ class hevm_cheat_code:
             return ret
 
         # vm.getBlockNumber() return (uint256)
-        elif funsig == hevm_cheat_code.get_block_nunber_sig:
+        elif funsig == hevm_cheat_code.get_block_number_sig:
             ret.append(uint256(ex.block.number))
             return ret
 
