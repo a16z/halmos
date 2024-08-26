@@ -54,3 +54,6 @@ select = [
 ignore = [
     "E501",  # line too long
 ]
+exclude = [
+    "tests/lib/**"
+]

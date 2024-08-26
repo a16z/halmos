@@ -1,8 +1,8 @@
 import pytest
 
+from halmos.__main__ import mk_solver
 from halmos.config import default_config
 from halmos.sevm import SEVM
-from halmos.__main__ import mk_solver
 
 
 @pytest.fixture
