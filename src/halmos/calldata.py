@@ -1,16 +1,17 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
-
 from dataclasses import dataclass
-from typing import List, Dict
 from functools import reduce
 
-from z3 import *
+from z3 import (
+    BitVec,
+    BitVecRef,
+)
 
-from .sevm import con, concat
 from .bytevec import ByteVec
 from .config import Config as HalmosConfig
+from .sevm import con
 
 
 @dataclass(frozen=True)
@@ -36,10 +37,10 @@ class DynamicArrayType(Type):
 
 @dataclass(frozen=True)
 class TupleType(Type):
-    items: List[Type]
+    items: list[Type]
 
 
-def parse_type(var: str, typ: str, item: Dict) -> Type:
+def parse_type(var: str, typ: str, item: dict) -> Type:
     """Parse ABI type in JSON format"""
 
     # parse array type
@@ -70,25 +71,25 @@ def parse_type(var: str, typ: str, item: Dict) -> Type:
     return BaseType(var, typ)
 
 
-def parse_tuple_type(var: str, items: List[Dict]) -> Type:
+def parse_tuple_type(var: str, items: list[dict]) -> Type:
     parsed_items = [parse_type(item["name"], item["type"], item) for item in items]
     return TupleType(var, parsed_items)
 
 
 @dataclass(frozen=True)
 class EncodingResult:
-    data: List[BitVecRef]
+    data: list[BitVecRef]
     size: int
     static: bool
 
 
 class Calldata:
     args: HalmosConfig
-    arrlen: Dict[str, int]
-    dyn_param_size: List[str]  # to be updated
+    arrlen: dict[str, int]
+    dyn_param_size: list[str]  # to be updated
 
     def __init__(
-        self, args: HalmosConfig, arrlen: Dict[str, int], dyn_param_size: List[str]
+        self, args: HalmosConfig, arrlen: dict[str, int], dyn_param_size: list[str]
     ) -> None:
         self.args = args
         self.arrlen = arrlen
@@ -108,7 +109,7 @@ class Calldata:
 
         return array_len
 
-    def create(self, abi: Dict, output: ByteVec) -> None:
+    def create(self, abi: dict, output: ByteVec) -> None:
         """Create calldata of ABI type, and append to output"""
 
         # list of parameter types
@@ -173,7 +174,7 @@ class Calldata:
 
         raise ValueError(typ)
 
-    def encode_tuple(self, items: List[EncodingResult]) -> EncodingResult:
+    def encode_tuple(self, items: list[EncodingResult]) -> EncodingResult:
         # For X = (X(1), ..., X(k)):
         #
         # enc(X) = head(X(1)) ... head(X(k)) tail(X(1)) ... tail(X(k))
@@ -189,7 +190,9 @@ class Calldata:
         # See https://docs.soliditylang.org/en/latest/abi-spec.html#formal-specification-of-the-encoding
 
         # compute total head size
-        head_size = lambda x: x.size if x.static else 32
+        def head_size(x):
+            return x.size if x.static else 32
+
         total_head_size = reduce(lambda s, x: s + head_size(x), items, 0)
 
         # generate heads and tails

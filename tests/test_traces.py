@@ -1,16 +1,25 @@
 import json
-import pytest
 import subprocess
-
 from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from typing import Any
 
-from z3 import *
+import pytest
+from z3 import (
+    Array,
+    BitVec,
+    BitVecSort,
+    BitVecVal,
+    SolverFor,
+    is_bv,
+)
 
+import halmos.sevm
 from halmos.__main__ import mk_block, render_trace
 from halmos.bytevec import ByteVec
-from halmos.exceptions import *
+from halmos.exceptions import MessageDepthLimitError, Revert, WriteInStaticContext
 from halmos.sevm import (
+    SEVM,
+    ZERO,
     CallContext,
     Contract,
     EventLog,
@@ -18,15 +27,11 @@ from halmos.sevm import (
     Message,
     NotConcreteError,
     Path,
-    SEVM,
     byte_length,
     con,
     int_of,
 )
 from halmos.utils import EVM
-from test_fixtures import args, sevm
-
-import halmos.sevm
 
 # keccak256("FooEvent()")
 FOO_EVENT_SIG = 0x34E21A9428B1B47E73C4E509EABEEA7F2B74BECA07D82AAC87D4DD28B74C2A4A
@@ -120,7 +125,7 @@ def storage():
 @dataclass(frozen=True)
 class SingleResult:
     is_single: bool
-    value: Optional[Any]
+    value: Any | None
 
     # allows tuple-like unpacking
     def __iter__(self):
@@ -173,8 +178,10 @@ def empty(iterable) -> bool:
 
 
 def mk_create_ex(
-    hexcode, sevm, solver, caller=caller, value=0, this=this, storage={}
+    hexcode, sevm, solver, caller=caller, value=0, this=this, storage=None
 ) -> Exec:
+    if storage is None:
+        storage = {}
     bytecode = Contract.from_hexcode(hexcode)
     storage[this] = {}
 
@@ -204,11 +211,13 @@ def mk_ex(
     sevm,
     solver,
     caller=caller,
-    value=con(0),
+    value=ZERO,
     this=this,
-    storage={},
+    storage=None,
     data=default_calldata,
 ) -> Exec:
+    if storage is None:
+        storage = {}
     bytecode = Contract.from_hexcode(hexcode)
     storage[this] = {}
 
@@ -233,7 +242,7 @@ def mk_ex(
     )
 
 
-BuildOutput = Dict
+BuildOutput = dict
 
 
 def compile(source: str) -> BuildOutput:
@@ -249,7 +258,7 @@ def compile(source: str) -> BuildOutput:
     return json.loads(stdout)
 
 
-def find_contract(contract_name: str, build_output: BuildOutput) -> Dict:
+def find_contract(contract_name: str, build_output: BuildOutput) -> dict:
     for name in build_output["contracts"]:
         if name.endswith(f":{contract_name}"):
             return build_output["contracts"][name]
@@ -270,7 +279,7 @@ def test_deploy_basic(sevm, solver):
     # before execution
     assert exec.context.output.data is None
 
-    output_ex = next(sevm.run(exec))
+    _ = next(sevm.run(exec))
     render_trace(exec.context)
 
     # after execution
@@ -283,7 +292,7 @@ def test_deploy_nonpayable_reverts(sevm, solver):
     deploy_hexcode, _ = get_bytecode(DEFAULT_EMPTY_CONSTRUCTOR)
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver, value=con(1))
 
-    output_ex = next(sevm.run(exec))
+    _ = next(sevm.run(exec))
     render_trace(exec.context)
 
     assert isinstance(exec.context.output.error, Revert)
@@ -301,7 +310,7 @@ def test_deploy_payable(sevm, solver):
     )
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver, value=con(1))
 
-    output_ex = next(sevm.run(exec))
+    _ = next(sevm.run(exec))
     render_trace(exec.context)
 
     assert exec.context.output.error is None
@@ -323,7 +332,7 @@ def test_deploy_event_in_constructor(sevm, solver):
     )
     exec: Exec = mk_create_ex(deploy_hexcode, sevm, solver)
 
-    output_ex = next(sevm.run(exec))
+    _ = next(sevm.run(exec))
     render_trace(exec.context)
 
     assert exec.context.output.error is None
@@ -747,7 +756,7 @@ def test_halmos_exception_halts_path(sevm: SEVM, solver):
 
     # outer call does not return because of NotConcreteError
     assert outer_call.output.error is None
-    assert outer_call.output.return_scheme == None
+    assert outer_call.output.return_scheme is None
 
     (is_single_call, inner_call) = single(outer_call.subcalls())
     assert is_single_call
@@ -781,7 +790,7 @@ def test_deploy_symbolic_bytecode(sevm: SEVM, solver):
 
     # outer call does not return because of NotConcreteError
     assert outer_call.output.error is None
-    assert outer_call.output.return_scheme == None
+    assert outer_call.output.return_scheme is None
 
     (is_single_call, inner_call) = single(outer_call.subcalls())
     assert is_single_call

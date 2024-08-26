@@ -1,11 +1,12 @@
 import argparse
 import os
 import sys
-import toml
-
 from collections import OrderedDict
-from dataclasses import dataclass, field, fields, MISSING
-from typing import Any, Dict, List, Optional, Tuple, Union as UnionType
+from dataclasses import MISSING, dataclass, fields
+from dataclasses import field as dataclass_field
+from typing import Any
+
+import toml
 
 from .utils import warn
 
@@ -26,14 +27,14 @@ debugging, solver, build, experimental, deprecated = (
 def arg(
     help: str,
     global_default: Any,
-    metavar: Optional[str] = None,
-    group: Optional[str] = None,
-    choices: Optional[str] = None,
-    short: Optional[str] = None,
+    metavar: str | None = None,
+    group: str | None = None,
+    choices: str | None = None,
+    short: str | None = None,
     countable: bool = False,
-    global_default_str: Optional[str] = None,
+    global_default_str: str | None = None,
 ):
-    return field(
+    return dataclass_field(
         default=None,
         metadata={
             "help": help,
@@ -61,14 +62,14 @@ class Config:
 
     ### Internal fields (not used to generate arg parsers)
 
-    _parent: "Config" = field(
+    _parent: "Config" = dataclass_field(
         repr=False,
         metadata={
             internal: True,
         },
     )
 
-    _source: str = field(
+    _source: str = dataclass_field(
         metadata={
             internal: True,
         },
@@ -398,7 +399,7 @@ class Config:
             warn(f"error: unrecognized argument: {str(e).split()[-1]}")
             sys.exit(2)
 
-    def value_with_source(self, name: str) -> Tuple[Any, str]:
+    def value_with_source(self, name: str) -> tuple[Any, str]:
         # look up value in current object
         value = object.__getattribute__(self, name)
         if value is not None:
@@ -411,7 +412,7 @@ class Config:
 
         return (value, self._source)
 
-    def values_with_sources(self) -> Dict[str, Tuple[Any, str]]:
+    def values_with_sources(self) -> dict[str, tuple[Any, str]]:
         # field -> (value, source)
         values = {}
         for field in fields(self):
@@ -433,7 +434,7 @@ class Config:
 
             yield field.name, field_value
 
-    def values_by_layer(self) -> Dict[str, Tuple[str, Any]]:
+    def values_by_layer(self) -> dict[str, tuple[str, Any]]:
         # source -> {field, value}
         if self._parent is None:
             return OrderedDict([(self._source, dict(self.values()))])
@@ -451,7 +452,7 @@ class Config:
         return "\n".join(lines)
 
 
-def resolve_config_files(args: List[str], include_missing: bool = False) -> List[str]:
+def resolve_config_files(args: list[str], include_missing: bool = False) -> list[str]:
     config_parser = argparse.ArgumentParser()
     config_parser.add_argument(
         "--root",
@@ -483,17 +484,17 @@ class TomlParser:
     def __init__(self):
         pass
 
-    def parse_file(self, toml_file_path: str) -> Dict:
+    def parse_file(self, toml_file_path: str) -> dict:
         with open(toml_file_path) as f:
             return self.parse_str(f.read(), source=toml_file_path)
 
     # exposed for easier testing
-    def parse_str(self, file_contents: str, source: str = "halmos.toml") -> Dict:
+    def parse_str(self, file_contents: str, source: str = "halmos.toml") -> dict:
         parsed = toml.loads(file_contents)
         return self.parse_dict(parsed, source=source)
 
     # exposed for easier testing
-    def parse_dict(self, parsed: dict, source: str = "halmos.toml") -> Dict:
+    def parse_dict(self, parsed: dict, source: str = "halmos.toml") -> dict:
         if len(parsed) != 1:
             warn(
                 f"error: expected a single `[global]` section in the toml file, "
@@ -501,9 +502,9 @@ class TomlParser:
             )
             sys.exit(2)
 
-        data = parsed.get("global", None)
+        data = parsed.get("global")
         if data is None:
-            for key in parsed.keys():
+            for key in parsed:
                 warn(
                     f"error: expected a `[global]` section in the toml file, got '{key}'"
                 )
@@ -557,7 +558,7 @@ def _create_arg_parser() -> argparse.ArgumentParser:
 
         group = groups[group_name]
 
-        if field_info.type == bool:
+        if field_info.type is bool:
             group.add_argument(*names, help=arg_help, action="store_true", default=None)
         elif field_info.metadata.get("countable", False):
             group.add_argument(*names, help=arg_help, action="count")
@@ -609,9 +610,9 @@ _toml_parser = _create_toml_parser()
 def main():
     def _to_toml_str(value: Any, type) -> str:
         assert value is not None
-        if type == str:
+        if type is str:
             return f'"{value}"'
-        if type == bool:
+        if type is bool:
             return str(value).lower()
         return str(value)
 

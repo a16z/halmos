@@ -1,13 +1,15 @@
-import pytest
 import json
 
-from z3 import *
+import pytest
+from z3 import (
+    BitVec,
+    BitVecVal,
+    Concat,
+)
 
+from halmos.__main__ import str_abi
+from halmos.sevm import Contract, Instruction, con
 from halmos.utils import EVM, hexify
-from halmos.sevm import con, Contract, Instruction
-from halmos.__main__ import str_abi, FunctionInfo
-
-from test_fixtures import args
 
 
 @pytest.fixture
@@ -76,8 +78,7 @@ def test_decode_mixed_bytecode():
     assert contract[0] == EVM.PUSH20
     assert contract[27] == EVM.RETURN
     assert contract[28] == EVM.STOP  # past the end
-
-    contract.valid_jump_destinations() == set()
+    assert contract.valid_jump_destinations() == set()
 
     # force decoding
     pc = 0
@@ -85,7 +86,9 @@ def test_decode_mixed_bytecode():
         contract.decode_instruction(pc)
         pc = contract.next_pc(pc)
 
-    pcs, insns = zip(*((pc, insn) for (pc, insn) in contract._insn.items()))
+    pcs, insns = zip(
+        *((pc, insn) for (pc, insn) in contract._insn.items()), strict=False
+    )
     opcodes = tuple(insn.opcode for insn in insns)
 
     assert opcodes == (

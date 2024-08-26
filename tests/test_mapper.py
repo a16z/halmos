@@ -1,7 +1,6 @@
-from typing import List
-
 import json
 import os
+
 import pytest
 
 from halmos.mapper import AstNode, ContractMappingInfo, Mapper, SingletonMeta
@@ -15,14 +14,14 @@ def read_json_file(request):
         # Get the directory of the current test file
         test_dir = request.fspath.dirname
         file_path = os.path.join(test_dir, "data", filename)
-        with open(file_path, "r") as file:
+        with open(file_path) as file:
             return json.load(file)
 
     return _read_file
 
 
 @pytest.fixture
-def ast_nodes() -> List[AstNode]:
+def ast_nodes() -> list[AstNode]:
     return [
         AstNode(
             node_type="type1",

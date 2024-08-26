@@ -2,17 +2,55 @@
 
 import json
 import re
+from dataclasses import dataclass
+from subprocess import PIPE, Popen
 
-from subprocess import Popen, PIPE
-from typing import List, Dict, Set, Tuple, Any
+from z3 import (
+    ULT,
+    And,
+    BitVec,
+    BitVecRef,
+    Concat,
+    Function,
+    Implies,
+    Not,
+    Or,
+    eq,
+    is_bv_value,
+    is_false,
+    simplify,
+    unsat,
+)
 
-from z3 import *
-
+from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
-from .utils import *
-from .assertions import *
-
+from .utils import (
+    Address,
+    BitVecSort8,
+    BitVecSort160,
+    BitVecSort256,
+    BitVecSorts,
+    Word,
+    assert_address,
+    con,
+    con_addr,
+    decode_hex,
+    extract_bytes,
+    extract_funsig,
+    extract_string_argument,
+    f_ecrecover,
+    green,
+    hexify,
+    int256,
+    int_of,
+    is_non_zero,
+    red,
+    secp256k1n,
+    stripped,
+    uint160,
+    uint256,
+)
 
 # f_vmaddr(key) -> address
 f_vmaddr = Function("f_vmaddr", BitVecSort256, BitVecSort160)
@@ -658,9 +696,10 @@ class hevm_cheat_code:
         # vm.label(address account, string calldata newLabel)
         elif funsig == hevm_cheat_code.label_sig:
             addr = extract_bytes(arg, 4, 32)
-            label = extract_string_argument(arg, 1)
 
             # TODO: no-op for now
+            # label = extract_string_argument(arg, 1)
+
             return ret
 
         # vm.getBlockNumber() return (uint256)

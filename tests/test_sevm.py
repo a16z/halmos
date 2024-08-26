@@ -1,33 +1,43 @@
 import pytest
-
-from z3 import *
-
-from halmos.bytevec import ByteVec
-from halmos.exceptions import OutOfGasError
-from halmos.utils import EVM
-
-from halmos.sevm import (
-    con,
-    Contract,
-    f_mul,
-    f_div,
-    f_sdiv,
-    f_mod,
-    f_smod,
-    f_exp,
-    CallContext,
-    Message,
-    SEVM,
-    Exec,
-    int_of,
-    uint256,
-    uint160,
-    Path,
+from z3 import (
+    UGT,
+    ULT,
+    Array,
+    BitVec,
+    BitVecSort,
+    BitVecVal,
+    Concat,
+    Extract,
+    If,
+    LShR,
+    Select,
+    SignExt,
+    ZeroExt,
+    simplify,
 )
 
 from halmos.__main__ import mk_block
-
-from test_fixtures import args, sevm, solver
+from halmos.bytevec import ByteVec
+from halmos.exceptions import OutOfGasError, StackUnderflowError
+from halmos.sevm import (
+    SEVM,
+    CallContext,
+    Contract,
+    Exec,
+    Message,
+    Path,
+    con,
+    f_div,
+    f_exp,
+    f_mod,
+    f_mul,
+    f_sdiv,
+    f_smod,
+    int_of,
+    uint160,
+    uint256,
+)
+from halmos.utils import EVM
 
 caller = BitVec("msg_sender", 160)
 origin = BitVec("tx_origin", 160)
@@ -287,10 +297,10 @@ def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     # reversed because in the tests the stack is written with the top on the left
     # but in the internal state, the top of the stack is the last element of the list
     ex.st.stack.extend(reversed(params))
-    exs = list(sevm.run(ex))
-    assert len(exs) == 1
-    ex = exs[0]
-    assert ex.st.stack.pop() == simplify(output)
+    exs: list[Exec] = list(sevm.run(ex))
+
+    [output_ex] = exs
+    assert output_ex.st.stack.pop() == simplify(output)
 
 
 @pytest.mark.parametrize(
@@ -320,20 +330,20 @@ def test_opcode_stack(hexcode, stack_in, stack_out, sevm: SEVM, solver, storage)
     # reversed because in the tests the stack is written with the top on the left
     # but in the internal state, the top of the stack is the last element of the list
     ex.st.stack.extend(reversed(stack_in))
-    exs = list(sevm.run(ex))
-    assert len(exs) == 1
-    ex = exs[0]
-    assert ex.st.stack == list(reversed(stack_out))
+    exs: list[Exec] = list(sevm.run(ex))
+
+    [output_ex] = exs
+    assert output_ex.st.stack == list(reversed(stack_out))
 
 
 def test_stack_underflow_pop(sevm: SEVM, solver, storage):
     # check that we get an exception when popping from an empty stack
     ex = mk_ex(o(EVM.POP), sevm, solver, storage, caller, this)
 
-    # TODO: from the outside, we should get an execution with failed=True
-    # TODO: from the outside, we should get an specific exception like StackUnderflowError
-    with pytest.raises(Exception):
-        list(sevm.run(ex))
+    exs: list[Exec] = list(sevm.run(ex))
+
+    [output_ex] = exs
+    assert isinstance(output_ex.context.output.error, StackUnderflowError)
 
 
 def test_large_memory_offset(sevm: SEVM, solver, storage):
@@ -342,5 +352,7 @@ def test_large_memory_offset(sevm: SEVM, solver, storage):
         ex.st.stack.append(con(42))  # value, ignored by MLOAD
         ex.st.stack.append(con(2**64))  # offset too big to fit in memory
 
-    exs = list(sevm.run(ex))
-    assert len(exs) == 1 and isinstance(exs[0].context.output.error, OutOfGasError)
+    exs: list[Exec] = list(sevm.run(ex))
+
+    [output_ex] = exs
+    assert isinstance(output_ex.context.output.error, OutOfGasError)
