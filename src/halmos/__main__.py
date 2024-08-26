@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import io
 import json
 import os
 import re
@@ -11,33 +12,88 @@ import traceback
 import uuid
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from enum import Enum
 from importlib import metadata
+
+from z3 import (
+    Z3_OP_CONCAT,
+    Array,
+    BitVec,
+    BitVecNumRef,
+    BitVecRef,
+    BitVecSort,
+    Bool,
+    CheckSatResult,
+    Context,
+    ModelRef,
+    ZeroExt,
+    is_app,
+    is_bv,
+    sat,
+    set_option,
+    unknown,
+    unsat,
+)
 
 from .bytevec import ByteVec
 from .calldata import Calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
+from .exceptions import HalmosException
 from .mapper import DeployAddressMapper, Mapper
-from .sevm import *
+from .sevm import (
+    EVM,
+    SEVM,
+    Address,
+    Block,
+    CallContext,
+    CallOutput,
+    Contract,
+    EventLog,
+    Exec,
+    FailCheatcode,
+    Message,
+    Path,
+    SMTQuery,
+    State,
+    Word,
+    con_addr,
+    jumpid_str,
+    magic_address,
+    mnemonic,
+)
 from .utils import (
     NamedTimer,
+    byte_length,
+    color_error,
+    con,
     create_solver,
     cyan,
+    debug,
     error,
     green,
     hexify,
     indent_text,
-    info,
     red,
     stringify,
+    unbox_int,
+    warn,
     yellow,
 )
-from .warnings import *
+from .warnings import (
+    COUNTEREXAMPLE_INVALID,
+    COUNTEREXAMPLE_UNKNOWN,
+    INTERNAL_ERROR,
+    LOOP_BOUND,
+    PARSING_ERROR,
+    REVERT_ALL,
+    warn_code,
+)
 
-StrModel = Dict[str, str]
-AnyModel = UnionType[Model, StrModel]
+StrModel = dict[str, str]
+AnyModel = ModelRef | StrModel
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -64,7 +120,7 @@ VERBOSITY_TRACE_PATHS = 4
 VERBOSITY_TRACE_CONSTRUCTOR = 5
 
 
-def with_devdoc(args: HalmosConfig, fn_sig: str, contract_json: Dict) -> HalmosConfig:
+def with_devdoc(args: HalmosConfig, fn_sig: str, contract_json: dict) -> HalmosConfig:
     devdoc = parse_devdoc(fn_sig, contract_json)
     if not devdoc:
         return args
@@ -112,13 +168,13 @@ def load_config(_args) -> HalmosConfig:
 
 @dataclass(frozen=True)
 class FunctionInfo:
-    name: Optional[str] = None
-    sig: Optional[str] = None
-    selector: Optional[str] = None
+    name: str | None = None
+    sig: str | None = None
+    selector: str | None = None
 
 
-def str_abi(item: Dict) -> str:
-    def str_tuple(args: List) -> str:
+def str_abi(item: dict) -> str:
+    def str_tuple(args: list) -> str:
         ret = []
         for arg in args:
             typ = arg["type"]
@@ -134,7 +190,7 @@ def str_abi(item: Dict) -> str:
     return item["name"] + str_tuple(item["inputs"])
 
 
-def find_abi(abi: List, fun_info: FunctionInfo) -> Dict:
+def find_abi(abi: list, fun_info: FunctionInfo) -> dict:
     funname, funsig = fun_info.name, fun_info.sig
     for item in abi:
         if (
@@ -147,10 +203,10 @@ def find_abi(abi: List, fun_info: FunctionInfo) -> Dict:
 
 
 def mk_calldata(
-    abi: List,
+    abi: list,
     fun_info: FunctionInfo,
     cd: ByteVec,
-    dyn_param_size: List[str],
+    dyn_param_size: list[str],
     args: HalmosConfig,
 ) -> None:
     # find function abi
@@ -308,8 +364,9 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
 
                 DeployAddressMapper().add_deployed_contract(target, contract_name)
                 addr_str = contract_name
-        except:
-            pass
+        except Exception:
+            # TODO: print in debug mode
+            ...
 
         initcode_str = f"<{byte_length(message.data)} bytes of initcode>"
         print(
@@ -342,7 +399,7 @@ def deploy_test(
     deployed_hexcode: str,
     sevm: SEVM,
     args: HalmosConfig,
-    libs: Dict,
+    libs: dict,
 ) -> Exec:
     this = mk_this()
     message = Message(
@@ -410,10 +467,10 @@ def deploy_test(
 def setup(
     creation_hexcode: str,
     deployed_hexcode: str,
-    abi: List,
+    abi: list,
     setup_info: FunctionInfo,
     args: HalmosConfig,
-    libs: Dict,
+    libs: dict,
 ) -> Exec:
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
@@ -514,11 +571,11 @@ def setup(
 @dataclass(frozen=True)
 class ModelWithContext:
     # can be a filename containing the model or a dict with variable assignments
-    model: Optional[UnionType[StrModel, str]]
-    is_valid: Optional[bool]
+    model: StrModel | str | None
+    is_valid: bool | None
     index: int
     result: CheckSatResult
-    unsat_core: Optional[List]
+    unsat_core: list | None
 
 
 @dataclass(frozen=True)
@@ -526,9 +583,9 @@ class TestResult:
     name: str  # test function name
     exitcode: int
     num_models: int = None
-    models: List[ModelWithContext] = None
-    num_paths: Tuple[int, int, int] = None  # number of paths: [total, success, blocked]
-    time: Tuple[int, int, int] = None  # time: [total, paths, models]
+    models: list[ModelWithContext] = None
+    num_paths: tuple[int, int, int] = None  # number of paths: [total, success, blocked]
+    time: tuple[int, int, int] = None  # time: [total, paths, models]
     num_bounded_loops: int = None  # number of incomplete loops
 
 
@@ -548,7 +605,7 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 def run(
     setup_ex: Exec,
-    abi: List,
+    abi: list,
     fun_info: FunctionInfo,
     args: HalmosConfig,
 ) -> TestResult:
@@ -620,8 +677,7 @@ def run(
 
     # check assertion violations
     normal = 0
-    execs_to_model = []
-    models: List[ModelWithContext] = []
+    models: list[ModelWithContext] = []
     stuck = []
 
     thread_pool = ThreadPoolExecutor(max_workers=args.solver_threads)
@@ -754,7 +810,7 @@ def run(
         f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
     )
 
-    for idx, ex, err in stuck:
+    for idx, _, err in stuck:
         warn_code(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
             print(f"\nPath #{idx+1}")
@@ -798,15 +854,15 @@ def run(
 class SetupAndRunSingleArgs:
     creation_hexcode: str
     deployed_hexcode: str
-    abi: List
+    abi: list
     setup_info: FunctionInfo
     fun_info: FunctionInfo
     setup_args: HalmosConfig
     args: HalmosConfig
-    libs: Dict
+    libs: dict
 
 
-def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
+def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> list[TestResult]:
     args = fn_args.args
     try:
         setup_ex = setup(
@@ -841,7 +897,7 @@ def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> List[TestResult]:
     return [test_result]
 
 
-def extract_setup(methodIdentifiers: Dict[str, str]) -> FunctionInfo:
+def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
     setup_sigs = sorted(
         [
             (k, v)
@@ -861,21 +917,21 @@ def extract_setup(methodIdentifiers: Dict[str, str]) -> FunctionInfo:
 @dataclass(frozen=True)
 class RunArgs:
     # signatures of test functions to run
-    funsigs: List[str]
+    funsigs: list[str]
 
     # code of the current contract
     creation_hexcode: str
     deployed_hexcode: str
 
-    abi: List
-    methodIdentifiers: Dict[str, str]
+    abi: list
+    methodIdentifiers: dict[str, str]
 
     args: HalmosConfig
-    contract_json: Dict
-    libs: Dict
+    contract_json: dict
+    libs: dict
 
 
-def run_parallel(run_args: RunArgs) -> List[TestResult]:
+def run_parallel(run_args: RunArgs) -> list[TestResult]:
     args = run_args.args
     creation_hexcode, deployed_hexcode, abi, methodIdentifiers, libs = (
         run_args.creation_hexcode,
@@ -914,7 +970,7 @@ def run_parallel(run_args: RunArgs) -> List[TestResult]:
     return test_results
 
 
-def run_sequential(run_args: RunArgs) -> List[TestResult]:
+def run_sequential(run_args: RunArgs) -> list[TestResult]:
     args = run_args.args
     setup_info = extract_setup(run_args.methodIdentifiers)
 
@@ -962,15 +1018,15 @@ class GenModelArgs:
     args: HalmosConfig
     idx: int
     sexpr: SMTQuery
-    known_unsat_cores: List[List]
-    dump_dirname: Optional[str] = None
+    known_unsat_cores: list[list]
+    dump_dirname: str | None = None
 
 
-def copy_model(model: Model) -> Dict:
+def copy_model(model: ModelRef) -> dict:
     return {decl: model[decl] for decl in model}
 
 
-def parse_unsat_core(output) -> Optional[List]:
+def parse_unsat_core(output) -> list | None:
     # parsing example:
     #   unsat
     #   (error "the context is unsatisfiable")  # <-- this line is optional
@@ -988,8 +1044,8 @@ def parse_unsat_core(output) -> Optional[List]:
 
 
 def solve(
-    query: SMTQuery, args: HalmosConfig, dump_filename: Optional[str] = None
-) -> Tuple[CheckSatResult, Model, Optional[List]]:
+    query: SMTQuery, args: HalmosConfig, dump_filename: str | None = None
+) -> tuple[CheckSatResult, ModelRef, list | None]:
     if args.dump_smt_queries or args.solver_command:
         if not dump_filename:
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
@@ -1021,7 +1077,7 @@ def solve(
 
     if args.solver_command:
         if args.debug:
-            print(f"  Checking with external solver process")
+            print("  Checking with external solver process")
             print(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
 
         # solver_timeout_assertion == 0 means no timeout,
@@ -1085,10 +1141,10 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
     dump_dirname = fn_args.dump_dirname
     dump_filename = f"{dump_dirname}/{idx+1}.smt2"
-    if args.dump_smt_queries or args.solver_command:
-        if not os.path.isdir(dump_dirname):
-            os.makedirs(dump_dirname)
-            print(f"Generating SMT queries in {dump_dirname}")
+    should_dump = args.dump_smt_queries or args.solver_command
+    if should_dump and not os.path.isdir(dump_dirname):
+        os.makedirs(dump_dirname)
+        print(f"Generating SMT queries in {dump_dirname}")
 
     if args.verbose >= 1:
         print(f"Checking path condition (path id: {idx+1})")
@@ -1103,7 +1159,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
     if res == sat and not is_model_valid(model):
         if args.verbose >= 1:
-            print(f"  Checking again with refinement")
+            print("  Checking again with refinement")
 
         refined_filename = dump_filename.replace(".smt2", ".refined.smt2")
         res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
@@ -1111,7 +1167,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
     return package_result(model, idx, res, unsat_core, args)
 
 
-def is_unknown(result: CheckSatResult, model: Model) -> bool:
+def is_unknown(result: CheckSatResult, model: ModelRef) -> bool:
     return result == unknown or (result == sat and not is_model_valid(model))
 
 
@@ -1138,10 +1194,10 @@ def refine(query: SMTQuery) -> SMTQuery:
 
 
 def package_result(
-    model: Optional[UnionType[Model, str]],
+    model: ModelRef | str | None,
     idx: int,
     result: CheckSatResult,
-    unsat_core: Optional[List],
+    unsat_core: list | None,
     args: HalmosConfig,
 ) -> ModelWithContext:
     if result == unsat:
@@ -1177,7 +1233,7 @@ def is_model_valid(model: AnyModel) -> bool:
 
     # model is a filename, containing solver output
     if isinstance(model, str):
-        with open(model, "r") as f:
+        with open(model) as f:
             for line in f:
                 if "f_evm_" in line:
                     return False
@@ -1185,13 +1241,10 @@ def is_model_valid(model: AnyModel) -> bool:
 
     # z3 model object
     else:
-        for decl in model:
-            if str(decl).startswith("f_evm_"):
-                return False
-        return True
+        return all(not str(decl).startswith("f_evm_") for decl in model)
 
 
-def to_str_model(model: Model, print_full_model: bool) -> StrModel:
+def to_str_model(model: ModelRef, print_full_model: bool) -> StrModel:
     def select(var):
         name = str(var)
         return name.startswith("p_") or name.startswith("halmos_")
@@ -1200,7 +1253,7 @@ def to_str_model(model: Model, print_full_model: bool) -> StrModel:
     return {str(decl): stringify(str(decl), model[decl]) for decl in select_model}
 
 
-def render_model(model: UnionType[str, StrModel]) -> str:
+def render_model(model: StrModel | str) -> str:
     if isinstance(model, str):
         return model
 
@@ -1208,7 +1261,7 @@ def render_model(model: UnionType[str, StrModel]) -> str:
     return "".join(sorted(formatted)) if formatted else "∅"
 
 
-def mk_arrlen(args: HalmosConfig) -> Dict[str, int]:
+def mk_arrlen(args: HalmosConfig) -> dict[str, int]:
     arrlen = {}
     if args.array_lengths:
         for assign in [x.split("=") for x in args.array_lengths.split(",")]:
@@ -1219,8 +1272,8 @@ def mk_arrlen(args: HalmosConfig) -> Dict[str, int]:
 
 
 def get_contract_type(
-    ast_nodes: Dict, contract_name: str
-) -> Tuple[str | None, str | None]:
+    ast_nodes: list, contract_name: str
+) -> tuple[str | None, str | None]:
     for node in ast_nodes:
         if node["nodeType"] == "ContractDefinition" and node["name"] == contract_name:
             abstract = "abstract " if node.get("abstract") else ""
@@ -1231,7 +1284,7 @@ def get_contract_type(
     return None, None
 
 
-def parse_build_out(args: HalmosConfig) -> Dict:
+def parse_build_out(args: HalmosConfig) -> dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
     out_path = os.path.join(args.root, args.forge_build_out)
@@ -1301,7 +1354,7 @@ def parse_build_out(args: HalmosConfig) -> Dict:
     return result
 
 
-def parse_symbols(args: HalmosConfig, contract_map: Dict, contract_name: str) -> None:
+def parse_symbols(args: HalmosConfig, contract_map: dict, contract_name: str) -> None:
     try:
         json_out = contract_map[contract_name][0]
         bytecode = json_out["bytecode"]["object"]
@@ -1319,16 +1372,16 @@ def parse_symbols(args: HalmosConfig, contract_map: Dict, contract_name: str) ->
             pass
 
 
-def parse_devdoc(funsig: str, contract_json: Dict) -> str:
+def parse_devdoc(funsig: str, contract_json: dict) -> str | None:
     try:
         return contract_json["metadata"]["output"]["devdoc"]["methods"][funsig][
             "custom:halmos"
         ]
-    except KeyError as err:
+    except KeyError:
         return None
 
 
-def parse_natspec(natspec: Dict) -> str:
+def parse_natspec(natspec: dict) -> str:
     # This parsing scheme is designed to handle:
     #
     # - multiline tags:
@@ -1356,7 +1409,7 @@ def parse_natspec(natspec: Dict) -> str:
     return result.strip()
 
 
-def import_libs(build_out_map: Dict, hexcode: str, linkReferences: Dict) -> Dict:
+def import_libs(build_out_map: dict, hexcode: str, linkReferences: dict) -> dict:
     libs = {}
 
     for filepath in linkReferences:
@@ -1378,7 +1431,7 @@ def import_libs(build_out_map: Dict, hexcode: str, linkReferences: Dict) -> Dict
     return libs
 
 
-def build_output_iterator(build_out: Dict):
+def build_output_iterator(build_out: dict):
     for compiler_version in sorted(build_out):
         build_out_map = build_out[compiler_version]
         for filename in sorted(build_out_map):
@@ -1404,7 +1457,7 @@ def test_regex(args):
 class MainResult:
     exitcode: int
     # contract path -> list of test results
-    test_results: Dict[str, List[TestResult]] = None
+    test_results: dict[str, list[TestResult]] = None
 
 
 def _main(_args=None) -> MainResult:
@@ -1567,7 +1620,7 @@ def _main(_args=None) -> MainResult:
 
     if total_found == 0:
         error(
-            f"Error: No tests with"
+            "Error: No tests with"
             + f" --match-contract '{contract_regex(args)}'"
             + f" --match-test '{test_regex(args)}'"
         )

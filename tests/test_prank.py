@@ -1,16 +1,14 @@
 import pytest
-
 from z3 import BitVec
 
 from halmos.cheatcodes import (
+    NO_PRANK,
     Prank,
     PrankResult,
-    NO_PRANK,
-    hevm_cheat_code,
     halmos_cheat_code,
+    hevm_cheat_code,
 )
-
-from halmos.sevm import Message, CallContext
+from halmos.sevm import CallContext, Message
 
 
 @pytest.fixture

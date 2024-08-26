@@ -1,37 +1,30 @@
 # SPDX-License-Identifier: AGPL-3.0
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import (
-    Any,
-    List,
-    Optional,
-    Union as UnionType,
-)
+from typing import Any, ForwardRef
 
 from sortedcontainers import SortedDict
-from z3 import BitVecRef, is_bv, is_bv_value, If, is_bool, simplify
+from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify
 
 from .utils import (
-    byte_length,
+    Byte,
+    Word,
     bv_value_to_bytes,
+    byte_length,
     con,
     concat,
-    eq,
     extract_bytes,
-    is_bv_value,
     try_bv_value_to_bytes,
     unbox_int,
     warn,
-    Byte,
-    Word,
 )
 
-UnwrappedBytes = UnionType[bytes, Byte]
-WrappedBytes = UnionType["Chunk", "ByteVec"]
-Bytes = UnionType[UnwrappedBytes, WrappedBytes]
+UnwrappedBytes = bytes | Byte
+WrappedBytes = ForwardRef("Chunk") | ForwardRef("ByteVec")
+Bytes = UnwrappedBytes | WrappedBytes
 
 
-def try_concat(lhs: Any, rhs: Any) -> Optional[Any]:
+def try_concat(lhs: Any, rhs: Any) -> Any | None:
     """Attempt to concatenate two values together if they have the same type"""
     if isinstance(lhs, bytes) and isinstance(rhs, bytes):
         return lhs + rhs
@@ -39,7 +32,7 @@ def try_concat(lhs: Any, rhs: Any) -> Optional[Any]:
     return None
 
 
-def defrag(data: List) -> List:
+def defrag(data: list) -> list:
     """Merge adjacent bytes into a single element"""
 
     if len(data) <= 1:
@@ -126,7 +119,7 @@ class Chunk(ABC):
     def __iter__(self):
         raise TypeError("Chunk object is not iterable")
 
-    def __getitem__(self, key) -> UnionType[Byte, "Chunk"]:
+    def __getitem__(self, key) -> Byte | ForwardRef("Chunk"):
         if isinstance(key, slice):
             start = key.start or 0
             stop = key.stop if key.stop is not None else self.length
@@ -298,9 +291,9 @@ class ChunkInfo:
     """Metadata about a chunk at a given offset in a ByteVec."""
 
     index: int  # -1 if not found
-    chunk: Optional[Chunk] = None
-    start: Optional[int] = None
-    end: Optional[int] = None  # end offset, i.e. start + len(chunk)
+    chunk: Chunk | None = None
+    start: int | None = None
+    end: int | None = None  # end offset, i.e. start + len(chunk)
 
     def found(self) -> bool:
         return self.index >= 0
@@ -325,9 +318,9 @@ class ByteVec:
 
     def __init__(
         self,
-        data: Optional[Chunk] = None,
-        _chunks: Optional[SortedDict] = None,
-        _length: Optional[int] = None,
+        data: Chunk | None = None,
+        _chunks: SortedDict | None = None,
+        _length: int | None = None,
     ):
         self.chunks = _chunks if _chunks is not None else SortedDict()
         self.length = _length or 0
@@ -335,7 +328,7 @@ class ByteVec:
         # for convenience, allow passing a single chunk directly
         if data is not None:
             assert not self.chunks
-            if isinstance(data, list) or isinstance(data, tuple):
+            if isinstance(data, list | tuple):
                 for chunk in data:
                     self.append(chunk)
             else:
@@ -698,7 +691,7 @@ class ByteVec:
         data = self.slice(offset, offset + 32).unwrap()
         return unbox_int(data)
 
-    def __getitem__(self, key) -> UnionType[Byte, "ByteVec"]:
+    def __getitem__(self, key) -> Byte | ForwardRef("ByteVec"):
         if isinstance(key, slice):
             start = key.start or 0
             stop = key.stop if key.stop is not None else self.length
