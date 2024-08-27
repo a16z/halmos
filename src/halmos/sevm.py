@@ -1131,7 +1131,7 @@ class Storage:
 class SolidityStorage(Storage):
     @classmethod
     def mk_storagedata(cls) -> StorageData:
-        return StorageData(mapping = defaultdict(lambda: defaultdict(dict)))
+        return StorageData(mapping=defaultdict(lambda: defaultdict(dict)))
 
     @classmethod
     def empty(cls, addr: BitVecRef, slot: int, keys: tuple) -> ArrayRef:
@@ -1144,7 +1144,9 @@ class SolidityStorage(Storage):
         )
 
     @classmethod
-    def init(cls, ex: Exec, addr: Any, slot: int, keys: tuple, num_keys: int, size_keys: int) -> None:
+    def init(
+        cls, ex: Exec, addr: Any, slot: int, keys: tuple, num_keys: int, size_keys: int
+    ) -> None:
         """
         Initialize ex.storage[addr].mapping[slot][num_keys][size_keys], if not yet initialized
         """
@@ -1164,7 +1166,10 @@ class SolidityStorage(Storage):
 
         # size_keys == 0
         mapping[size_keys] = (
-            BitVec(f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00", BitVecSort256)
+            BitVec(
+                f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
+                BitVecSort256,
+            )
             if storage_data.symbolic
             else ZERO
         )

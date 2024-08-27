@@ -61,7 +61,6 @@ from .sevm import (
     Path,
     SMTQuery,
     State,
-    StorageData,
     con_addr,
     jumpid_str,
     mnemonic,
