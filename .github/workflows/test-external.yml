@@ -26,6 +26,12 @@ jobs:
         #   cmd: "--function testProve --loop 4
         #   branch: ""
         #   profile: ""
+          # temporary forked repo with updated tests
+          - repo: "daejunpark/morpho-data-structures"
+            dir: "morpho-data-structures"
+            cmd: "--function testProve --loop 4
+            branch: "ci/halmos"
+            profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
             cmd: "--contract LibUint1024Test --function testProve --loop 256"
