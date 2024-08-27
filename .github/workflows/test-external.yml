@@ -23,13 +23,13 @@ jobs:
         # TODO: enable after migrating morpho-data-structures tests to use new cheatcode instead of --symbolic-storage
         # - repo: "morpho-org/morpho-data-structures"
         #   dir: "morpho-data-structures"
-        #   cmd: "--function testProve --loop 4
+        #   cmd: "--function testProve --loop 4"
         #   branch: ""
         #   profile: ""
-          # temporary forked repo with updated tests
+        # temporary forked repo with updated tests
           - repo: "daejunpark/morpho-data-structures"
             dir: "morpho-data-structures"
-            cmd: "--function testProve --loop 4
+            cmd: "--function testProve --loop 4"
             branch: "ci/halmos"
             profile: ""
           - repo: "a16z/cicada"
