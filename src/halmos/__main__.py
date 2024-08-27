@@ -416,7 +416,7 @@ def deploy_test(
 
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
-        storage={this: StorageData()},
+        storage={this: sevm.mk_storagedata()},
         balance=EMPTY_BALANCE,
         block=mk_block(),
         context=CallContext(message=message),

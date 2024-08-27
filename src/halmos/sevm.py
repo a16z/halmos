@@ -1130,6 +1130,10 @@ class Storage:
 
 class SolidityStorage(Storage):
     @classmethod
+    def mk_storagedata(cls) -> StorageData:
+        return StorageData(mapping = defaultdict(lambda: defaultdict(dict)))
+
+    @classmethod
     def empty(cls, addr: BitVecRef, slot: int, keys: tuple) -> ArrayRef:
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
@@ -1140,77 +1144,89 @@ class SolidityStorage(Storage):
         )
 
     @classmethod
-    def init(cls, ex: Exec, addr: Any, slot: int, keys: tuple) -> None:
+    def init(cls, ex: Exec, addr: Any, slot: int, keys: tuple, num_keys: int, size_keys: int) -> None:
+        """
+        Initialize ex.storage[addr].mapping[slot][num_keys][size_keys], if not yet initialized
+        """
         assert_address(addr)
-        num_keys = len(keys)
-        size_keys = cls.bitsize(keys)
-        if slot not in ex.storage[addr].mapping:
-            ex.storage[addr].mapping[slot] = {}
-        if num_keys not in ex.storage[addr].mapping[slot]:
-            ex.storage[addr].mapping[slot][num_keys] = {}
-        if size_keys not in ex.storage[addr].mapping[slot][num_keys]:
-            if size_keys == 0:
-                if ex.storage[addr].symbolic:
-                    label = f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00"
-                    ex.storage[addr].mapping[slot][num_keys][size_keys] = BitVec(
-                        label, BitVecSort256
-                    )
-                else:
-                    ex.storage[addr].mapping[slot][num_keys][size_keys] = ZERO
-            else:
-                # do not use z3 const array `K(BitVecSort(size_keys), ZERO)` when not ex.symbolic
-                # instead use normal smt array, and generate emptyness axiom; see load()
-                ex.storage[addr].mapping[slot][num_keys][size_keys] = cls.empty(
-                    addr, slot, keys
-                )
+
+        storage_data = ex.storage[addr]
+        mapping = storage_data.mapping[slot][num_keys]
+
+        if size_keys in mapping:
+            return
+
+        if size_keys > 0:
+            # do not use z3 const array `K(BitVecSort(size_keys), ZERO)` when not ex.symbolic
+            # instead use normal smt array, and generate emptyness axiom; see load()
+            mapping[size_keys] = cls.empty(addr, slot, keys)
+            return
+
+        # size_keys == 0
+        mapping[size_keys] = (
+            BitVec(f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00", BitVecSort256)
+            if storage_data.symbolic
+            else ZERO
+        )
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
-        offsets = cls.decode(loc)
-        if not len(offsets) > 0:
-            raise ValueError(offsets)
-        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
-        cls.init(ex, addr, slot, keys)
-        num_keys = len(keys)
-        size_keys = cls.bitsize(keys)
+        (slot, keys, num_keys, size_keys) = cls.get_key_structure(loc)
+
+        cls.init(ex, addr, slot, keys, num_keys, size_keys)
+
+        storage_data = ex.storage[addr]
+        mapping = storage_data.mapping[slot][num_keys]
+
         if num_keys == 0:
-            return ex.storage[addr].mapping[slot][num_keys][size_keys]
-        else:
-            if not ex.storage[addr].symbolic:
-                # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-                ex.path.append(
-                    Select(cls.empty(addr, slot, keys), concat(keys)) == ZERO
-                )
-            return ex.select(
-                ex.storage[addr].mapping[slot][num_keys][size_keys],
-                concat(keys),
-                ex.storages,
-                ex.storage[addr].symbolic,
-            )
+            return mapping[size_keys]
+
+        symbolic = storage_data.symbolic
+        concat_keys = concat(keys)
+
+        if not symbolic:
+            # generate emptyness axiom for each array index, instead of using quantified formula; see init()
+            default_value = Select(cls.empty(addr, slot, keys), concat_keys)
+            ex.path.append(default_value == ZERO)
+
+        return ex.select(mapping[size_keys], concat_keys, ex.storages, symbolic)
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        (slot, keys, num_keys, size_keys) = cls.get_key_structure(loc)
+
+        cls.init(ex, addr, slot, keys, num_keys, size_keys)
+
+        storage_data = ex.storage[addr]
+        mapping = storage_data.mapping[slot][num_keys]
+
+        if num_keys == 0:
+            mapping[size_keys] = val
+            return
+
+        new_storage_var = Array(
+            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{1+len(ex.storages):>02}",
+            BitVecSorts[size_keys],
+            BitVecSort256,
+        )
+        new_storage = Store(mapping[size_keys], concat(keys), val)
+        ex.path.append(new_storage_var == new_storage)
+
+        mapping[size_keys] = new_storage_var
+        ex.storages[new_storage_var] = new_storage
+
+    @classmethod
+    def get_key_structure(cls, loc) -> tuple:
         offsets = cls.decode(loc)
         if not len(offsets) > 0:
             raise ValueError(offsets)
+
         slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
-        cls.init(ex, addr, slot, keys)
+
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
-        if num_keys == 0:
-            ex.storage[addr].mapping[slot][num_keys][size_keys] = val
-        else:
-            new_storage_var = Array(
-                f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{1+len(ex.storages):>02}",
-                BitVecSorts[size_keys],
-                BitVecSort256,
-            )
-            new_storage = Store(
-                ex.storage[addr].mapping[slot][num_keys][size_keys], concat(keys), val
-            )
-            ex.path.append(new_storage_var == new_storage)
-            ex.storage[addr].mapping[slot][num_keys][size_keys] = new_storage_var
-            ex.storages[new_storage_var] = new_storage
+
+        return (slot, keys, num_keys, size_keys)
 
     @classmethod
     def decode(cls, loc: Any) -> Any:
@@ -1278,6 +1294,10 @@ class SolidityStorage(Storage):
 
 class GenericStorage(Storage):
     @classmethod
+    def mk_storagedata(cls) -> StorageData:
+        return StorageData()
+
+    @classmethod
     def empty(cls, addr: BitVecRef, loc: BitVecRef) -> ArrayRef:
         return Array(
             f"storage_{id_str(addr)}_{loc.size()}_00",
@@ -1286,37 +1306,53 @@ class GenericStorage(Storage):
         )
 
     @classmethod
-    def init(cls, ex: Exec, addr: Any, loc: BitVecRef) -> None:
+    def init(cls, ex: Exec, addr: Any, loc: BitVecRef, size_keys: int) -> None:
+        """
+        Initialize ex.storage[addr].mapping[size_keys], if not yet initialized
+        """
         assert_address(addr)
-        if loc.size() not in ex.storage[addr].mapping:
-            ex.storage[addr].mapping[loc.size()] = cls.empty(addr, loc)
+
+        mapping = ex.storage[addr].mapping
+
+        if size_keys not in mapping:
+            mapping[size_keys] = cls.empty(addr, loc)
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
         loc = cls.decode(loc)
-        cls.init(ex, addr, loc)
-        if not ex.storage[addr].symbolic:
+        size_keys = loc.size()
+
+        cls.init(ex, addr, loc, size_keys)
+
+        storage_data = ex.storage[addr]
+        mapping = storage_data.mapping
+        symbolic = storage_data.symbolic
+
+        if not symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
-            ex.path.append(Select(cls.empty(addr, loc), loc) == ZERO)
-        return ex.select(
-            ex.storage[addr].mapping[loc.size()],
-            loc,
-            ex.storages,
-            ex.storage[addr].symbolic,
-        )
+            default_value = Select(cls.empty(addr, loc), loc)
+            ex.path.append(default_value == ZERO)
+
+        return ex.select(mapping[size_keys], loc, ex.storages, symbolic)
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
         loc = cls.decode(loc)
-        cls.init(ex, addr, loc)
+        size_keys = loc.size()
+
+        cls.init(ex, addr, loc, size_keys)
+
+        mapping = ex.storage[addr].mapping
+
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{loc.size()}_{1+len(ex.storages):>02}",
-            BitVecSorts[loc.size()],
+            f"storage_{id_str(addr)}_{size_keys}_{1+len(ex.storages):>02}",
+            BitVecSorts[size_keys],
             BitVecSort256,
         )
-        new_storage = Store(ex.storage[addr].mapping[loc.size()], loc, val)
+        new_storage = Store(mapping[size_keys], loc, val)
         ex.path.append(new_storage_var == new_storage)
-        ex.storage[addr].mapping[loc.size()] = new_storage_var
+
+        mapping[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
@@ -1674,6 +1710,9 @@ class SEVM:
             return Extract(255, 0, r2)
         else:
             raise ValueError(op)
+
+    def mk_storagedata(self) -> StorageData:
+        return self.storage_model.mk_storagedata()
 
     def sload(self, ex: Exec, addr: Any, loc: Word) -> Word:
         return self.storage_model.load(ex, addr, loc)
@@ -2145,7 +2184,7 @@ class SEVM:
         # setup new account
         ex.set_code(new_addr, Contract(b""))  # existing code must be empty
         # existing storage may not be empty and reset here
-        ex.storage[new_addr] = StorageData()
+        ex.storage[new_addr] = self.mk_storagedata()
 
         # transfer value
         self.transfer_value(ex, pranked_caller, new_addr, value)
