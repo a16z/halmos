@@ -1149,6 +1149,8 @@ class SolidityStorage(Storage):
     ) -> None:
         """
         Initialize ex.storage[addr].mapping[slot][num_keys][size_keys], if not yet initialized
+        - case size_keys == 0: scalar type: initialized with zero or symbolic value
+        - case size_keys != 0: mapping type: initialized with empty array or symbolic array
         """
         assert_address(addr)
 
@@ -1314,6 +1316,9 @@ class GenericStorage(Storage):
     def init(cls, ex: Exec, addr: Any, loc: BitVecRef, size_keys: int) -> None:
         """
         Initialize ex.storage[addr].mapping[size_keys], if not yet initialized
+
+        NOTE: unlike SolidityStorage, size_keys > 0 in GenericStorage.
+              thus it is of mapping type, and initialized with empty array or symbolic array.
         """
         assert_address(addr)
 
