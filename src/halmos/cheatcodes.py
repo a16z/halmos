@@ -545,7 +545,10 @@ class hevm_cheat_code:
 
         # vm.load(address,bytes32)
         elif funsig == hevm_cheat_code.load_sig:
+            # vm.load(HEVM_ADDRESS, "failed") is handled separately
             if arg == hevm_cheat_code.failed_payload:
+                # since fail(), which triggers vm.store(HEVM_ADDRESS, "failed", 1), halts immediately, (see vm.store() above)
+                # the "failed" slot is never assigned, thus vm.load(HEVM_ADDRESS, "failed") always return zero at this point
                 return ByteVec(con(0))
 
             load_account = uint160(arg.get_word(4))

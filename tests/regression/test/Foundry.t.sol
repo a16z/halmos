@@ -37,6 +37,11 @@ contract EarlyFailTest is Test {
         // - counterexample caused by assert(x > 0): x == 0
         assert(x > 0);
     }
+
+    function check_failed_cheatcode() public {
+        // since fail() halts immediately, failed() always return true here
+        assertFalse(failed());
+    }
 }
 
 contract FoundryTest is Test {
