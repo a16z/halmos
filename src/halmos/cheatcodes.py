@@ -354,6 +354,18 @@ class hevm_cheat_code:
         )
     )
 
+    # abi.encodePacked(
+    #     bytes4(keccak256("load(address,bytes32)")),
+    #     abi.encode(HEVM_ADDRESS, bytes32("failed"))
+    # )
+    failed_payload = ByteVec(
+        bytes.fromhex(
+            "667f9d70"
+            + "0000000000000000000000007109709ecfa91a80626ff3989d68f67f5b1dd12d"
+            + "6661696c65640000000000000000000000000000000000000000000000000000"
+        )
+    )
+
     # bytes4(keccak256("assume(bool)"))
     assume_sig: int = 0x4C63E562
 
@@ -533,6 +545,9 @@ class hevm_cheat_code:
 
         # vm.load(address,bytes32)
         elif funsig == hevm_cheat_code.load_sig:
+            if arg == hevm_cheat_code.failed_payload:
+                return ByteVec(con(0))
+
             load_account = uint160(arg.get_word(4))
             load_slot = uint256(arg.get_word(36))
             load_account_alias = sevm.resolve_address_alias(
