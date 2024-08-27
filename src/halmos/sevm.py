@@ -757,10 +757,16 @@ class Path:
         self.extend(path.conditions.keys())
 
 
+@dataclass
+class StorageData:
+    symbolic: bool = False
+    mapping: dict = field(default_factory=dict)
+
+
 class Exec:  # an execution path
     # network
     code: dict[Address, Contract]
-    storage: dict[Address, dict[int, Any]]  # address -> { storage slot -> value }
+    storage: dict[Address, StorageData]  # address -> { storage slot -> value }
     balance: Any  # address -> balance
 
     # block
@@ -775,7 +781,6 @@ class Exec:  # an execution path
     pc: int
     st: State  # stack and memory
     jumpis: dict[JumpID, dict[bool, int]]  # for loop detection
-    symbolic: bool  # symbolic or concrete storage
     addresses_to_delete: set[Address]
 
     # path
@@ -804,7 +809,6 @@ class Exec:  # an execution path
         self.pc = kwargs["pc"]
         self.st = kwargs["st"]
         self.jumpis = kwargs["jumpis"]
-        self.symbolic = kwargs["symbolic"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
         #
         self.path = kwargs["path"]
@@ -952,7 +956,9 @@ class Exec:  # an execution path
 
         return self.path.check(cond)
 
-    def select(self, array: Any, key: Word, arrays: dict) -> Word:
+    def select(
+        self, array: Any, key: Word, arrays: dict, symbolic: bool = False
+    ) -> Word:
         if array in arrays:
             store = arrays[array]
             if store.decl().name() == "store" and store.num_args() == 3:
@@ -962,11 +968,11 @@ class Exec:  # an execution path
                 if eq(key, key0):  # structural equality
                     return val0
                 if self.check(key == key0) == unsat:  # key != key0
-                    return self.select(base, key, arrays)
+                    return self.select(base, key, arrays, symbolic)
                 if self.check(key != key0) == unsat:  # key == key0
                     return val0
         # empty array
-        elif not self.symbolic and re.search(r"^(storage_.+|balance)_00$", str(array)):
+        elif not symbolic and re.search(r"^(storage_.+|balance)_00$", str(array)):
             # note: simplifying empty array access might have a negative impact on solver performance
             return ZERO
         return Select(array, key)
@@ -1138,23 +1144,23 @@ class SolidityStorage(Storage):
         assert_address(addr)
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
-        if slot not in ex.storage[addr]:
-            ex.storage[addr][slot] = {}
-        if num_keys not in ex.storage[addr][slot]:
-            ex.storage[addr][slot][num_keys] = {}
-        if size_keys not in ex.storage[addr][slot][num_keys]:
+        if slot not in ex.storage[addr].mapping:
+            ex.storage[addr].mapping[slot] = {}
+        if num_keys not in ex.storage[addr].mapping[slot]:
+            ex.storage[addr].mapping[slot][num_keys] = {}
+        if size_keys not in ex.storage[addr].mapping[slot][num_keys]:
             if size_keys == 0:
-                if ex.symbolic:
+                if ex.storage[addr].symbolic:
                     label = f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00"
-                    ex.storage[addr][slot][num_keys][size_keys] = BitVec(
+                    ex.storage[addr].mapping[slot][num_keys][size_keys] = BitVec(
                         label, BitVecSort256
                     )
                 else:
-                    ex.storage[addr][slot][num_keys][size_keys] = ZERO
+                    ex.storage[addr].mapping[slot][num_keys][size_keys] = ZERO
             else:
                 # do not use z3 const array `K(BitVecSort(size_keys), ZERO)` when not ex.symbolic
                 # instead use normal smt array, and generate emptyness axiom; see load()
-                ex.storage[addr][slot][num_keys][size_keys] = cls.empty(
+                ex.storage[addr].mapping[slot][num_keys][size_keys] = cls.empty(
                     addr, slot, keys
                 )
 
@@ -1168,15 +1174,18 @@ class SolidityStorage(Storage):
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
         if num_keys == 0:
-            return ex.storage[addr][slot][num_keys][size_keys]
+            return ex.storage[addr].mapping[slot][num_keys][size_keys]
         else:
-            if not ex.symbolic:
+            if not ex.storage[addr].symbolic:
                 # generate emptyness axiom for each array index, instead of using quantified formula; see init()
                 ex.path.append(
                     Select(cls.empty(addr, slot, keys), concat(keys)) == ZERO
                 )
             return ex.select(
-                ex.storage[addr][slot][num_keys][size_keys], concat(keys), ex.storages
+                ex.storage[addr].mapping[slot][num_keys][size_keys],
+                concat(keys),
+                ex.storages,
+                ex.storage[addr].symbolic,
             )
 
     @classmethod
@@ -1189,7 +1198,7 @@ class SolidityStorage(Storage):
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
         if num_keys == 0:
-            ex.storage[addr][slot][num_keys][size_keys] = val
+            ex.storage[addr].mapping[slot][num_keys][size_keys] = val
         else:
             new_storage_var = Array(
                 f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{1+len(ex.storages):>02}",
@@ -1197,10 +1206,10 @@ class SolidityStorage(Storage):
                 BitVecSort256,
             )
             new_storage = Store(
-                ex.storage[addr][slot][num_keys][size_keys], concat(keys), val
+                ex.storage[addr].mapping[slot][num_keys][size_keys], concat(keys), val
             )
             ex.path.append(new_storage_var == new_storage)
-            ex.storage[addr][slot][num_keys][size_keys] = new_storage_var
+            ex.storage[addr].mapping[slot][num_keys][size_keys] = new_storage_var
             ex.storages[new_storage_var] = new_storage
 
     @classmethod
@@ -1279,17 +1288,22 @@ class GenericStorage(Storage):
     @classmethod
     def init(cls, ex: Exec, addr: Any, loc: BitVecRef) -> None:
         assert_address(addr)
-        if loc.size() not in ex.storage[addr]:
-            ex.storage[addr][loc.size()] = cls.empty(addr, loc)
+        if loc.size() not in ex.storage[addr].mapping:
+            ex.storage[addr].mapping[loc.size()] = cls.empty(addr, loc)
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
         loc = cls.decode(loc)
         cls.init(ex, addr, loc)
-        if not ex.symbolic:
+        if not ex.storage[addr].symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
             ex.path.append(Select(cls.empty(addr, loc), loc) == ZERO)
-        return ex.select(ex.storage[addr][loc.size()], loc, ex.storages)
+        return ex.select(
+            ex.storage[addr].mapping[loc.size()],
+            loc,
+            ex.storages,
+            ex.storage[addr].symbolic,
+        )
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
@@ -1300,9 +1314,9 @@ class GenericStorage(Storage):
             BitVecSorts[loc.size()],
             BitVecSort256,
         )
-        new_storage = Store(ex.storage[addr][loc.size()], loc, val)
+        new_storage = Store(ex.storage[addr].mapping[loc.size()], loc, val)
         ex.path.append(new_storage_var == new_storage)
-        ex.storage[addr][loc.size()] = new_storage_var
+        ex.storage[addr].mapping[loc.size()] = new_storage_var
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
@@ -1833,7 +1847,6 @@ class SEVM:
                 new_ex.pc = ex.pc
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
-                new_ex.symbolic = ex.symbolic
 
                 # set return data (in memory)
                 effective_ret_size = min(ret_size, new_ex.returndatasize())
@@ -1873,7 +1886,6 @@ class SEVM:
                 pc=0,
                 st=State(),
                 jumpis={},
-                symbolic=ex.symbolic,
                 #
                 path=ex.path,
                 alias=ex.alias,
@@ -1975,7 +1987,7 @@ class SEVM:
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
                 exit_code = ONE
-                ret = halmos_cheat_code.handle(ex, arg)
+                ret = halmos_cheat_code.handle(self, ex, arg, stack, step_id)
 
             # vm cheat code
             elif eq(to, hevm_cheat_code.address):
@@ -2132,7 +2144,8 @@ class SEVM:
 
         # setup new account
         ex.set_code(new_addr, Contract(b""))  # existing code must be empty
-        ex.storage[new_addr] = {}  # existing storage may not be empty and reset here
+        # existing storage may not be empty and reset here
+        ex.storage[new_addr] = StorageData()
 
         # transfer value
         self.transfer_value(ex, pranked_caller, new_addr, value)
@@ -2151,7 +2164,6 @@ class SEVM:
             new_ex.pc = ex.pc
             new_ex.st = deepcopy(ex.st)
             new_ex.jumpis = deepcopy(ex.jumpis)
-            new_ex.symbolic = ex.symbolic
 
             if subcall.is_stuck():
                 # internal errors abort the current path,
@@ -2192,7 +2204,6 @@ class SEVM:
             pc=0,
             st=State(),
             jumpis={},
-            symbolic=False,
             #
             path=ex.path,
             alias=ex.alias,
@@ -2308,7 +2319,6 @@ class SEVM:
             pc=target,
             st=deepcopy(ex.st),
             jumpis=deepcopy(ex.jumpis),
-            symbolic=ex.symbolic,
             #
             path=new_path,
             alias=ex.alias.copy(),
@@ -2521,15 +2531,16 @@ class SEVM:
 
                     if account_alias is not None:
                         codesize = len(ex.code[account_alias])
-                    elif (
-                        eq(account, hevm_cheat_code.address)
-                        or eq(account, halmos_cheat_code.address)
-                        or eq(account, console.address)
-                    ):
-                        # dummy arbitrary value, consistent with foundry
-                        codesize = 1 if eq(account, hevm_cheat_code.address) else 0
                     else:
-                        codesize = 0
+                        codesize = (
+                            1  # dummy arbitrary value, consistent with foundry
+                            if eq(account, hevm_cheat_code.address)
+                            # NOTE: the codesize of halmos cheatcode should be non-zero to pass the extcodesize check for external calls with non-empty return types. this behavior differs from foundry.
+                            or eq(account, halmos_cheat_code.address)
+                            # the codesize of console is considered zero in foundry
+                            # or eq(account, console.address)
+                            else 0
+                        )
 
                     ex.st.push(codesize)
 
@@ -2837,7 +2848,6 @@ class SEVM:
         context: CallContext,
         #
         pgm,
-        symbolic,
         path,
     ) -> Exec:
         return Exec(
@@ -2854,7 +2864,6 @@ class SEVM:
             pc=0,
             st=State(),
             jumpis={},
-            symbolic=symbolic,
             #
             path=path,
             alias={},

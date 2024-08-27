@@ -202,7 +202,6 @@ def mk_create_ex(
         context=CallContext(message=message),
         this=this,
         pgm=bytecode,
-        symbolic=True,
         path=Path(solver),
     )
 
@@ -239,7 +238,6 @@ def mk_ex(
         context=CallContext(message=message),
         this=this,
         pgm=bytecode,
-        symbolic=True,
         path=Path(solver),
     )
 

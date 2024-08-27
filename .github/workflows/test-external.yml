@@ -20,11 +20,12 @@ jobs:
       matrix:
         cache-solver: ["", "--cache-solver"]
         project:
-          - repo: "morpho-org/morpho-data-structures"
-            dir: "morpho-data-structures"
-            cmd: "--function testProve --loop 4 --symbolic-storage"
-            branch: ""
-            profile: ""
+        # TODO: enable after migrating morpho-data-structures tests to use new cheatcode instead of --symbolic-storage
+        # - repo: "morpho-org/morpho-data-structures"
+        #   dir: "morpho-data-structures"
+        #   cmd: "--function testProve --loop 4
+        #   branch: ""
+        #   profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
             cmd: "--contract LibUint1024Test --function testProve --loop 256"

@@ -2,9 +2,14 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import "../src/Counter.sol";
+import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
-/// @custom:halmos --loop 4 --symbolic-storage
-contract CounterTest is Counter {
+/// @custom:halmos --loop 4
+contract CounterTest is Counter, SymTest {
+    function setUp() public {
+        svm.enableSymbolicStorage(address(this));
+    }
+
     function check_set(uint n) public {
         set(n);
         assert(cnt == n);

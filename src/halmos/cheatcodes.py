@@ -203,12 +203,20 @@ class Prank:
         return True
 
 
+def symbolic_storage(ex, arg, sevm, stack, step_id):
+    account = uint160(arg.get_word(4))
+    account_alias = sevm.resolve_address_alias(
+        ex, account, stack, step_id, branching=False
+    )
+    ex.storage[account_alias].symbolic = True
+
+
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
     label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
     return BitVec(label, BitVecSorts[bits])
 
 
-def create_uint(ex, arg):
+def create_uint(ex, arg, **kwargs):
     bits = int_of(
         extract_bytes(arg, 4, 32), "symbolic bit size for halmos.createUint()"
     )
@@ -219,12 +227,12 @@ def create_uint(ex, arg):
     return uint256(create_generic(ex, bits, name, f"uint{bits}"))
 
 
-def create_uint256(ex, arg):
+def create_uint256(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
     return create_generic(ex, 256, name, "uint256")
 
 
-def create_int(ex, arg):
+def create_int(ex, arg, **kwargs):
     bits = int_of(
         extract_bytes(arg, 4, 32), "symbolic bit size for halmos.createUint()"
     )
@@ -235,12 +243,12 @@ def create_int(ex, arg):
     return int256(create_generic(ex, bits, name, f"int{bits}"))
 
 
-def create_int256(ex, arg):
+def create_int256(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
     return create_generic(ex, 256, name, "int256")
 
 
-def create_bytes(ex, arg):
+def create_bytes(ex, arg, **kwargs):
     byte_size = int_of(
         extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createBytes()"
     )
@@ -249,7 +257,7 @@ def create_bytes(ex, arg):
     return Concat(con(32), con(byte_size), symbolic_bytes)
 
 
-def create_string(ex, arg):
+def create_string(ex, arg, **kwargs):
     byte_size = int_of(
         extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createString()"
     )
@@ -258,22 +266,22 @@ def create_string(ex, arg):
     return Concat(con(32), con(byte_size), symbolic_string)
 
 
-def create_bytes4(ex, arg):
+def create_bytes4(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
     return Concat(create_generic(ex, 32, name, "bytes4"), con(0, size_bits=224))
 
 
-def create_bytes32(ex, arg):
+def create_bytes32(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
     return create_generic(ex, 256, name, "bytes32")
 
 
-def create_address(ex, arg):
+def create_address(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
     return uint256(create_generic(ex, 160, name, "address"))
 
 
-def create_bool(ex, arg):
+def create_bool(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
     return uint256(create_generic(ex, 1, name, "bool"))
 
@@ -313,13 +321,14 @@ class halmos_cheat_code:
         0xBF72FA66: create_bytes32,  # createBytes32(string)
         0x3B0FA01B: create_address,  # createAddress(string)
         0x6E0BB659: create_bool,  # createBool(string)
+        0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
     }
 
     @staticmethod
-    def handle(ex, arg: BitVecRef) -> BitVecRef:
+    def handle(sevm, ex, arg: BitVecRef, stack, step_id) -> BitVecRef:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
-            return ByteVec(handler(ex, arg))
+            return ByteVec(handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id))
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
         raise HalmosException(error_msg)

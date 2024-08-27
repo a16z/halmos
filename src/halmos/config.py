@@ -160,11 +160,6 @@ class Config:
         choices=["solidity", "generic"],
     )
 
-    symbolic_storage: bool = arg(
-        help="set default storage values to symbolic",
-        global_default=False,
-    )
-
     ffi: bool = arg(
         help="allow the usage of FFI to call external functions",
         global_default=False,

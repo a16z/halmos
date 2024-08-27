@@ -159,9 +159,7 @@ def test_config_file_snake_case(config, toml_parser):
 
 def test_config_e2e(config, parser, toml_parser):
     # when we apply overrides to the default config
-    config_file_data = toml_parser.parse_str(
-        "[global]\nverbose = 42\nsymbolic_storage = true"
-    )
+    config_file_data = toml_parser.parse_str("[global]\nverbose = 42")
     config = config.with_overrides(source="halmos.toml", **config_file_data)
 
     args = parser.parse_args(["-vvv"])
@@ -169,12 +167,10 @@ def test_config_e2e(config, parser, toml_parser):
 
     # then the config object should have the expected values
     assert config.verbose == 3
-    assert config.symbolic_storage is True
     assert config.loop == 2
 
     # and each value should have the expected source
     assert config.value_with_source("verbose") == (3, "command-line")
-    assert config.value_with_source("symbolic_storage") == (True, "halmos.toml")
     assert config.value_with_source("loop") == (2, "default")
 
 

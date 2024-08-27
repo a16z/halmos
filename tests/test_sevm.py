@@ -71,7 +71,6 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         block=mk_block(),
         context=CallContext(message),
         pgm=bytecode,
-        symbolic=True,
         path=Path(solver),
     )
 

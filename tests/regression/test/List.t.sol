@@ -3,9 +3,13 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "forge-std/Test.sol";
 import "../src/List.sol";
+import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
-/// @custom:halmos --symbolic-storage
-contract ListTest is Test, List {
+contract ListTest is SymTest, Test, List {
+    function setUp() public {
+        svm.enableSymbolicStorage(address(this));
+    }
+
     function check_add(uint x) public {
         uint oldSize = arr.length;
         vm.assume(oldSize < type(uint).max);
@@ -32,13 +36,13 @@ contract ListTest is Test, List {
     }
 }
 
-/// @custom:halmos --symbolic-storage
-contract ListTestTest is Test {
+contract ListTestTest is SymTest, Test {
     List list;
 
     function setUp() public {
         list = new List();
         list.add(1);
+        svm.enableSymbolicStorage(address(list));
     }
 
     function check_add(uint x) public {
