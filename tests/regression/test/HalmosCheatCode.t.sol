@@ -115,6 +115,29 @@ contract HalmosCheatCodeTest is SymTest, Test {
         // NOTE: the following reverts due to the failure of the nonzero check for extcodesize(svm)
         // Dummy(address(svm)).foo();
     }
+
+    function check_enableSymbolicStorage_pass(uint val) public {
+        address dummy = address(new Beep());
+        // initial value is zero
+        assertEq(vm.load(dummy, bytes32(0)), 0);
+
+        vm.store(dummy, bytes32(0), bytes32(val));
+        svm.enableSymbolicStorage(dummy);
+        // enableSymbolicStorage updates only uninitialized slots
+        assertEq(vm.load(dummy, bytes32(0)), bytes32(val));
+    }
+
+    function check_enableSymbolicStorage_fail() public {
+        address dummy = address(new Beep());
+        svm.enableSymbolicStorage(dummy);
+        // storage slots have been initialized with a symbolic value
+        assertEq(vm.load(dummy, bytes32(0)), 0); // fail
+    }
+
+    function check_enableSymbolicStorage_nonexistent() public {
+        // symbolic storage is not allowed for a nonexistent account
+        svm.enableSymbolicStorage(address(0xdeadbeef)); // HalmosException
+    }
 }
 
 interface Dummy {

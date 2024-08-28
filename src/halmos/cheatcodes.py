@@ -208,6 +208,11 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
     account_alias = sevm.resolve_address_alias(
         ex, account, stack, step_id, branching=False
     )
+
+    if account_alias is None:
+        error_msg = f"enableSymbolicStorage() is not allowed for a nonexistent account: {hexify(account)}"
+        raise HalmosException(error_msg)
+
     ex.storage[account_alias].symbolic = True
 
 
@@ -528,6 +533,10 @@ class hevm_cheat_code:
                 ex, store_account, stack, step_id, branching=False
             )
 
+            if store_account_alias is None:
+                error_msg = f"vm.store() is not allowed for a nonexistent account: {hexify(store_account)}"
+                raise HalmosException(error_msg)
+
             sevm.sstore(ex, store_account_alias, store_slot, store_value)
             return ret
 
@@ -538,6 +547,11 @@ class hevm_cheat_code:
             load_account_alias = sevm.resolve_address_alias(
                 ex, load_account, stack, step_id, branching=False
             )
+
+            if load_account_alias is None:
+                # since load_account doesn't exist, its storage is empty.
+                # note: the storage cannot be symbolic, as the symbolic storage cheatcode fails for nonexistent addresses.
+                return ByteVec(con(0))
 
             return ByteVec(sevm.sload(ex, load_account_alias, load_slot))
 
