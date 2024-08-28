@@ -1248,8 +1248,26 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_enableSymbolicStorage()",
+                "name": "check_enableSymbolicStorage_fail()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_enableSymbolicStorage_nonexistent()",
                 "exitcode": 3,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_enableSymbolicStorage_pass(uint256)",
+                "exitcode": 0,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
