@@ -47,4 +47,14 @@ contract StoreTest is Test {
         assert(c.a(key) == value);
         assert(uint(vm.load(address(c), bytes32(uint(keccak256(abi.encode(2))) + key))) == value);
     }
+
+    function check_store_nonexistent_account() public {
+        // vm.store() is not allowed for a nonexistent account
+        vm.store(address(0xdeadbeef), bytes32(0), bytes32(0)); // HalmosException
+    }
+
+    function check_load_nonexistent_account(uint slot) public {
+        // vm.load() from nonexistent accounts returns zero
+        assertEq(vm.load(address(0xdeadbeef), bytes32(slot)), 0);
+    }
 }

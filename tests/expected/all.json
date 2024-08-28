@@ -1246,6 +1246,15 @@
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
+            },
+            {
+                "name": "check_enableSymbolicStorage()",
+                "exitcode": 3,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/Library.t.sol:LibraryTest": [
@@ -3151,6 +3160,15 @@
         ],
         "test/Store.t.sol:StoreTest": [
             {
+                "name": "check_load_nonexistent_account(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_store_Array(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
@@ -3171,6 +3189,15 @@
             {
                 "name": "check_store_Scalar(uint256)",
                 "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_store_nonexistent_account()",
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,

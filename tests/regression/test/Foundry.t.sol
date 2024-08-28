@@ -39,7 +39,7 @@ contract EarlyFailTest is Test {
     }
 
     function check_failed_cheatcode() public {
-        // since fail() halts immediately, failed() always return true here
+        // since fail() halts immediately, failed() always returns true here
         assertFalse(failed());
     }
 }

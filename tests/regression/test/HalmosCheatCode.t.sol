@@ -115,6 +115,11 @@ contract HalmosCheatCodeTest is SymTest, Test {
         // NOTE: the following reverts due to the failure of the nonzero check for extcodesize(svm)
         // Dummy(address(svm)).foo();
     }
+
+    function check_enableSymbolicStorage() public {
+        // symbolic storage is not allowed for a nonexistent account
+        svm.enableSymbolicStorage(address(0xdeadbeef)); // HalmosException
+    }
 }
 
 interface Dummy {
