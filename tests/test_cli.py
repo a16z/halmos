@@ -7,7 +7,7 @@ from z3 import (
     Concat,
 )
 
-from halmos.__main__ import str_abi
+from halmos.calldata import str_abi
 from halmos.sevm import Contract, Instruction, con
 from halmos.utils import EVM, hexify
 
