@@ -26,7 +26,7 @@ from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
 from .calldata import FunctionInfo, mk_calldata
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
-from .mapper import BuildOutMap
+from .mapper import BuildOut
 from .utils import (
     Address,
     BitVecSort8,
@@ -219,7 +219,22 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
     ex.storage[account_alias].symbolic = True
 
 
-def create_calldata(ex, arg, sevm, stack, step_id):
+def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
+    filename = name_of(extract_string_argument(arg, 0))
+    contract_name = name_of(extract_string_argument(arg, 1))
+    return create_calldata_generic(
+        ex, arg, sevm, stack, step_id, contract_name, filename
+    )
+
+
+def create_calldata_contract(ex, arg, sevm, stack, step_id):
+    contract_name = name_of(extract_string_argument(arg, 0))
+    return create_calldata_generic(ex, arg, sevm, stack, step_id, contract_name)
+
+
+def create_calldata_generic(
+    ex, arg, sevm, stack, step_id, contract_name, filename=None
+):
     """
     Generate arbitrary symbolic calldata for the given contract.
 
@@ -229,10 +244,7 @@ def create_calldata(ex, arg, sevm, stack, step_id):
     The contract is identified by its filename and contract name.
     TODO: provide variants that require only the contract address or name.
     """
-    filename = name_of(extract_string_argument(arg, 0))
-    contract_name = name_of(extract_string_argument(arg, 1))
-
-    contract_json = BuildOutMap().get_build_out_map()[filename][contract_name][0]
+    contract_json = BuildOut().get_by_name(contract_name, filename)[0]
 
     abi = contract_json["abi"]
     methodIdentifiers = contract_json["methodIdentifiers"]
@@ -370,7 +382,8 @@ class halmos_cheat_code:
         0x3B0FA01B: create_address,  # createAddress(string)
         0x6E0BB659: create_bool,  # createBool(string)
         0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
-        0x88298B32: create_calldata,  # createCalldata(string,string)
+        0x88298B32: create_calldata_file_contract,  # createCalldata(string,string)
+        0xBE92D5A2: create_calldata_contract,  # createCalldata(string)
     }
 
     @staticmethod

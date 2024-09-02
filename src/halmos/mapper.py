@@ -1,5 +1,8 @@
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+from .exceptions import HalmosException
 
 SELECTOR_FIELDS = {
     "VariableDeclaration": "functionSelector",
@@ -76,17 +79,62 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-class BuildOutMap(metaclass=SingletonMeta):
+def build_output_iterator(build_out: dict):
+    for compiler_version in sorted(build_out):
+        build_out_map = build_out[compiler_version]
+        for filename in sorted(build_out_map):
+            for contract_name in sorted(build_out_map[filename]):
+                yield (compiler_version, filename, contract_name, build_out_map)
+
+
+class BuildOut(metaclass=SingletonMeta):
     def __init__(self):
-        self._build_out_map: dict = None
+        self._build_out: dict = None
+        self._build_out_map: dict = defaultdict(lambda: defaultdict(dict))
 
-    def set_build_out_map(self, json_out: dict):
-        self._build_out_map = json_out
+    def set_build_out(self, json_out: dict):
+        self._build_out = json_out
 
-    def get_build_out_map(self) -> dict:
-        if self._build_out_map is None:
+        # create reverse mapping
+        for compiler, file, contract, out in build_output_iterator(json_out):
+            self._build_out_map[contract][file][compiler] = out[file][contract]
+
+    def get_build_out(self) -> dict:
+        if self._build_out is None:
             raise ValueError("empty build out map")
-        return self._build_out_map
+        return self._build_out
+
+    def get_by_name(self, contract_name: str, filename: str = None) -> dict:
+        """
+        Return the build output json for the given contract name. Raise a HalmosException if the contract is not found, or cannot be uniquely determined.
+
+        The optional filename argument is required, if the contract name exists in multiple files.
+
+        Note: this may still raise an exception if the specified contract has been compiled using different compiler versions.
+        """
+        mapping = self._build_out_map[contract_name]
+
+        if not mapping:
+            raise HalmosException(f"{contract_name} is not found")
+
+        if filename is None:
+            if len(mapping) > 1:
+                raise HalmosException(
+                    f"{contract_name} exists in multiple files: {mapping.keys()}"
+                )
+            filename = list(mapping.keys())[0]
+
+        mapping_filename = mapping[filename]
+
+        if not mapping_filename:
+            raise HalmosException(f"{contract_name} is not found in {filename}")
+
+        if len(mapping_filename) > 1:
+            raise HalmosException(
+                f"{filename}:{contract_name} is compiled by multiple compiler versions: {mapping_filename.keys()}"
+            )
+
+        return list(mapping_filename.values())[0]
 
 
 class Mapper(metaclass=SingletonMeta):

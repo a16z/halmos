@@ -39,7 +39,7 @@ from .calldata import FunctionInfo, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException
-from .mapper import BuildOutMap, DeployAddressMapper, Mapper
+from .mapper import BuildOut, DeployAddressMapper, Mapper, build_output_iterator
 from .sevm import (
     EMPTY_BALANCE,
     EVM,
@@ -1366,14 +1366,6 @@ def import_libs(build_out_map: dict, hexcode: str, linkReferences: dict) -> dict
     return libs
 
 
-def build_output_iterator(build_out: dict):
-    for compiler_version in sorted(build_out):
-        build_out_map = build_out[compiler_version]
-        for filename in sorted(build_out_map):
-            for contract_name in sorted(build_out_map[filename]):
-                yield (build_out_map, filename, contract_name)
-
-
 def contract_regex(args):
     if args.contract:
         return f"^{args.contract}$"
@@ -1451,6 +1443,8 @@ def _main(_args=None) -> MainResult:
             traceback.print_exc()
         return MainResult(1)
 
+    BuildOut().set_build_out(build_out)
+
     timer.create_subtimer("tests")
 
     total_passed = 0
@@ -1487,7 +1481,7 @@ def _main(_args=None) -> MainResult:
     # run
     #
 
-    for build_out_map, filename, contract_name in build_output_iterator(build_out):
+    for _, filename, contract_name, build_out_map in build_output_iterator(build_out):
         if not re.search(contract_regex(args), contract_name):
             continue
 
@@ -1503,9 +1497,6 @@ def _main(_args=None) -> MainResult:
             continue
 
         contract_timer = NamedTimer("time")
-
-        # TODO: fix potential race conditions in the test-parallel mode
-        BuildOutMap().set_build_out_map(build_out_map)
 
         abi = contract_json["abi"]
         creation_hexcode = contract_json["bytecode"]["object"]

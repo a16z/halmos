@@ -139,17 +139,35 @@ contract HalmosCheatCodeTest is SymTest, Test {
         svm.enableSymbolicStorage(address(0xdeadbeef)); // HalmosException
     }
 
-    function check_createCalldata_Beep() public {
-        Beep beep = new Beep();
+    function check_createCalldata_Beep_1() public {
         bytes memory data = CreateCalldata(address(svm)).createCalldata("HalmosCheatCode.t.sol", "Beep");
+        _check_createCalldata_Beep(data);
+    }
+
+    function check_createCalldata_Beep_2() public {
+        bytes memory data = CreateCalldata(address(svm)).createCalldata("Beep");
+        _check_createCalldata_Beep(data);
+    }
+
+    function _check_createCalldata_Beep(bytes memory data) public {
+        Beep beep = new Beep();
         (bool success, bytes memory retdata) = address(beep).call(data);
         uint ret = abi.decode(retdata, (uint256));
         assertEq(ret, 42);
     }
 
-    function check_createCalldata_Mock() public {
-        Mock mock = new Mock();
+    function check_createCalldata_Mock_1() public {
         bytes memory data = CreateCalldata(address(svm)).createCalldata("HalmosCheatCode.t.sol", "Mock");
+        _check_createCalldata_Mock(data);
+    }
+
+    function check_createCalldata_Mock_2() public {
+        bytes memory data = CreateCalldata(address(svm)).createCalldata("Mock");
+        _check_createCalldata_Mock(data);
+    }
+
+    function _check_createCalldata_Mock(bytes memory data) public {
+        Mock mock = new Mock();
         (bool success, bytes memory retdata) = address(mock).call(data);
         bytes4 ret = abi.decode(retdata, (bytes4));
         bytes4 expected = bytes4(bytes.concat(data[0], data[1], data[2], data[3]));
@@ -181,6 +199,8 @@ contract Mock {
 interface CreateCalldata {
     // Create calldata
     function createCalldata(string memory filename, string memory contractName) external pure returns (bytes memory data);
+
+    function createCalldata(string memory contractName) external pure returns (bytes memory data);
 }
 
 interface Dummy {
