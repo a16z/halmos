@@ -41,4 +41,9 @@ contract OpenZeppelinERC721Test is ERC721Test {
         vm.prank(accounts[1]);
         token_.setApprovalForAll(accounts[2], true);
     }
+
+    function check_NoBackdoor(bytes4) public {
+        bytes memory _calldata = svm.createCalldata("OpenZeppelinERC721");
+        _check_NoBackdoor(_calldata);
+    }
 }

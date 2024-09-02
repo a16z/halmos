@@ -14,7 +14,7 @@ abstract contract ERC721Test is SymTest, Test {
 
     function setUp() public virtual;
 
-    function check_NoBackdoor(bytes4 selector) public virtual {
+    function _check_NoBackdoor(bytes memory _calldata) public virtual {
         // consider caller and other that are distinct
         address caller = svm.createAddress('caller');
         address other = svm.createAddress('other');
@@ -34,13 +34,7 @@ abstract contract ERC721Test is SymTest, Test {
 
         // consider an arbitrary function call to the token from the caller
         vm.prank(caller);
-        bool success;
-        if (uint32(selector) == 0xb88d4fde) { // TODO: support parameters of type bytes or dynamic arrays
-            (success,) = address(token).call(abi.encodeWithSelector(selector, svm.createAddress('from'), svm.createAddress('to'), svm.createUint256('tokenId'), svm.createBytes(96, 'data')));
-        } else {
-            bytes memory args = svm.createBytes(1024, 'args');
-            (success,) = address(token).call(abi.encodePacked(selector, args));
-        }
+        (bool success,) = address(token).call(_calldata);
         vm.assume(success);
 
         // ensure that the caller cannot spend other's tokens
