@@ -35,11 +35,11 @@ from z3 import (
 )
 
 from .bytevec import ByteVec
-from .calldata import Calldata
+from .calldata import FunctionInfo, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException
-from .mapper import DeployAddressMapper, Mapper
+from .mapper import BuildOutMap, DeployAddressMapper, Mapper
 from .sevm import (
     EMPTY_BALANCE,
     EVM,
@@ -166,61 +166,6 @@ def load_config(_args) -> HalmosConfig:
     config = config.with_overrides(source="command line args", **vars(cli_overrides))
 
     return config
-
-
-@dataclass(frozen=True)
-class FunctionInfo:
-    name: str | None = None
-    sig: str | None = None
-    selector: str | None = None
-
-
-def str_abi(item: dict) -> str:
-    def str_tuple(args: list) -> str:
-        ret = []
-        for arg in args:
-            typ = arg["type"]
-            match = re.search(r"^tuple((\[[0-9]*\])*)$", typ)
-            if match:
-                ret.append(str_tuple(arg["components"]) + match.group(1))
-            else:
-                ret.append(typ)
-        return "(" + ",".join(ret) + ")"
-
-    if item["type"] != "function":
-        raise ValueError(item)
-    return item["name"] + str_tuple(item["inputs"])
-
-
-def find_abi(abi: list, fun_info: FunctionInfo) -> dict:
-    funname, funsig = fun_info.name, fun_info.sig
-    for item in abi:
-        if (
-            item["type"] == "function"
-            and item["name"] == funname
-            and str_abi(item) == funsig
-        ):
-            return item
-    raise ValueError(f"No {funsig} found in {abi}")
-
-
-def mk_calldata(
-    abi: list,
-    fun_info: FunctionInfo,
-    cd: ByteVec,
-    dyn_param_size: list[str],
-    args: HalmosConfig,
-) -> None:
-    # find function abi
-    fun_abi = find_abi(abi, fun_info)
-
-    # no parameters
-    if len(fun_abi["inputs"]) == 0:
-        return
-
-    # generate symbolic ABI calldata
-    calldata = Calldata(args, mk_arrlen(args), dyn_param_size)
-    calldata.create(fun_abi, cd)
 
 
 def mk_block() -> Block:
@@ -1261,16 +1206,6 @@ def render_model(model: StrModel | str) -> str:
     return "".join(sorted(formatted)) if formatted else "∅"
 
 
-def mk_arrlen(args: HalmosConfig) -> dict[str, int]:
-    arrlen = {}
-    if args.array_lengths:
-        for assign in [x.split("=") for x in args.array_lengths.split(",")]:
-            name = assign[0].strip()
-            size = assign[1].strip()
-            arrlen[name] = int(size)
-    return arrlen
-
-
 def get_contract_type(
     ast_nodes: list, contract_name: str
 ) -> tuple[str | None, str | None]:
@@ -1568,6 +1503,9 @@ def _main(_args=None) -> MainResult:
             continue
 
         contract_timer = NamedTimer("time")
+
+        # TODO: fix potential race conditions in the test-parallel mode
+        BuildOutMap().set_build_out_map(build_out_map)
 
         abi = contract_json["abi"]
         creation_hexcode = contract_json["bytecode"]["object"]

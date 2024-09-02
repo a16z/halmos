@@ -11,7 +11,7 @@ from z3 import (
 
 from .bytevec import ByteVec
 from .config import Config as HalmosConfig
-from .sevm import con
+from .utils import con
 
 
 @dataclass(frozen=True)
@@ -210,3 +210,68 @@ class Calldata:
         static = len(tails) == 0
 
         return EncodingResult(heads + tails, total_size, static)
+
+
+@dataclass(frozen=True)
+class FunctionInfo:
+    name: str | None = None
+    sig: str | None = None
+    selector: str | None = None
+
+
+def str_abi(item: dict) -> str:
+    def str_tuple(args: list) -> str:
+        ret = []
+        for arg in args:
+            typ = arg["type"]
+            match = re.search(r"^tuple((\[[0-9]*\])*)$", typ)
+            if match:
+                ret.append(str_tuple(arg["components"]) + match.group(1))
+            else:
+                ret.append(typ)
+        return "(" + ",".join(ret) + ")"
+
+    if item["type"] != "function":
+        raise ValueError(item)
+    return item["name"] + str_tuple(item["inputs"])
+
+
+def find_abi(abi: list, fun_info: FunctionInfo) -> dict:
+    funname, funsig = fun_info.name, fun_info.sig
+    for item in abi:
+        if (
+            item["type"] == "function"
+            and item["name"] == funname
+            and str_abi(item) == funsig
+        ):
+            return item
+    raise ValueError(f"No {funsig} found in {abi}")
+
+
+def mk_calldata(
+    abi: list,
+    fun_info: FunctionInfo,
+    cd: ByteVec,
+    dyn_param_size: list[str],
+    args: HalmosConfig,
+) -> None:
+    # find function abi
+    fun_abi = find_abi(abi, fun_info)
+
+    # no parameters
+    if len(fun_abi["inputs"]) == 0:
+        return
+
+    # generate symbolic ABI calldata
+    calldata = Calldata(args, mk_arrlen(args), dyn_param_size)
+    calldata.create(fun_abi, cd)
+
+
+def mk_arrlen(args: HalmosConfig) -> dict[str, int]:
+    arrlen = {}
+    if args.array_lengths:
+        for assign in [x.split("=") for x in args.array_lengths.split(",")]:
+            name = assign[0].strip()
+            size = assign[1].strip()
+            arrlen[name] = int(size)
+    return arrlen

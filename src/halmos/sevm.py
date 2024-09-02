@@ -23,6 +23,7 @@ from z3 import (
     ArrayRef,
     BitVec,
     BitVecRef,
+    BoolVal,
     Concat,
     Extract,
     Function,
@@ -2066,38 +2067,49 @@ class SEVM:
             # transfer msg.value
             send_callvalue(exit_code_var != ZERO)
 
-            # store return value
-            effective_ret_size = min(ret_size, len(ret))
-            if effective_ret_size > 0:
-                end_loc = ret_loc + effective_ret_size
-                if end_loc > MAX_MEMORY_SIZE:
-                    raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
+            ret_lst = ret if isinstance(ret, list) else [ret]
 
-                ex.st.memory.set_slice(ret_loc, end_loc, ret)
-
-            if not isinstance(ret, ByteVec):
-                raise HalmosException(f"Invalid return value: {ret}")
-
-            ex.context.trace.append(
-                CallContext(
-                    message=Message(
-                        target=to,
-                        caller=pranked_caller,
-                        origin=pranked_origin,
-                        value=fund,
-                        data=ex.st.memory.slice(arg_loc, arg_loc + arg_size),
-                        call_scheme=op,
-                    ),
-                    output=CallOutput(
-                        data=ret,
-                        error=None,
-                    ),
-                    depth=ex.context.depth + 1,
+            for idx, ret_ in enumerate(ret_lst):
+                new_ex = (
+                    self.create_branch(ex, BoolVal(True), ex.pc)
+                    if idx < len(ret_lst) - 1
+                    else ex
                 )
-            )
 
-            ex.advance_pc()
-            stack.push(ex, step_id)
+                # TODO: refactor this return memory setting to be shared with call_known()
+                # store return value
+                effective_ret_size = min(ret_size, len(ret_))
+                if effective_ret_size > 0:
+                    end_loc = ret_loc + effective_ret_size
+                    if end_loc > MAX_MEMORY_SIZE:
+                        raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
+
+                    new_ex.st.memory.set_slice(ret_loc, end_loc, ret_)
+
+                if not isinstance(ret_, ByteVec):
+                    raise HalmosException(f"Invalid return value: {ret_}")
+
+                new_ex.context.trace.append(
+                    CallContext(
+                        # TODO: refactor this message to be shared with call_known()
+                        message=Message(
+                            target=to,
+                            caller=pranked_caller,
+                            origin=pranked_origin,
+                            value=fund,
+                            data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
+                            call_scheme=op,
+                        ),
+                        output=CallOutput(
+                            data=ret_,
+                            error=None,
+                        ),
+                        depth=new_ex.context.depth + 1,
+                    )
+                )
+
+                new_ex.advance_pc()
+                stack.push(new_ex, step_id)
 
         # precompiles or cheatcodes
         if (

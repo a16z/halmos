@@ -138,6 +138,49 @@ contract HalmosCheatCodeTest is SymTest, Test {
         // symbolic storage is not allowed for a nonexistent account
         svm.enableSymbolicStorage(address(0xdeadbeef)); // HalmosException
     }
+
+    function check_createCalldata_Beep() public {
+        Beep beep = new Beep();
+        bytes memory data = CreateCalldata(address(svm)).createCalldata("HalmosCheatCode.t.sol", "Beep");
+        (bool success, bytes memory retdata) = address(beep).call(data);
+        uint ret = abi.decode(retdata, (uint256));
+        assertEq(ret, 42);
+    }
+
+    function check_createCalldata_Mock() public {
+        Mock mock = new Mock();
+        bytes memory data = CreateCalldata(address(svm)).createCalldata("HalmosCheatCode.t.sol", "Mock");
+        (bool success, bytes memory retdata) = address(mock).call(data);
+        bytes4 ret = abi.decode(retdata, (bytes4));
+        bytes4 expected = bytes4(bytes.concat(data[0], data[1], data[2], data[3]));
+        assertEq(ret, expected);
+    }
+}
+
+contract Mock {
+    function foo(uint[] memory x) public returns (bytes4) {
+        if (x.length == 2) {
+            return this.foo.selector;
+        } else {
+            // NOTE: currently not reachable, but it should be once other size combinations are auto-generated
+            return 0;
+        }
+    }
+
+    function bar(bytes memory x) public returns (bytes4) {
+        if (x.length == 65) {
+            return this.bar.selector;
+        } else {
+            // NOTE: currently not reachable, but it should be once other size combinations are auto-generated
+            return 0;
+        }
+    }
+}
+
+// TODO: remove this after updating halmos-cheatcode submodule
+interface CreateCalldata {
+    // Create calldata
+    function createCalldata(string memory filename, string memory contractName) external pure returns (bytes memory data);
 }
 
 interface Dummy {

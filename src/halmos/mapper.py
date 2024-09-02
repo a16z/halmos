@@ -76,6 +76,19 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
+class BuildOutMap(metaclass=SingletonMeta):
+    def __init__(self):
+        self._build_out_map: dict = None
+
+    def set_build_out_map(self, json_out: dict):
+        self._build_out_map = json_out
+
+    def get_build_out_map(self) -> dict:
+        if self._build_out_map is None:
+            raise ValueError("empty build out map")
+        return self._build_out_map
+
+
 class Mapper(metaclass=SingletonMeta):
     """
     Mapping from a contract name to its runtime bytecode and the signatures of functions/events/errors declared in the contract

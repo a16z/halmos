@@ -24,7 +24,9 @@ from z3 import (
 
 from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
+from .calldata import FunctionInfo, mk_calldata
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
+from .mapper import BuildOutMap
 from .utils import (
     Address,
     BitVecSort8,
@@ -33,6 +35,7 @@ from .utils import (
     BitVecSorts,
     Word,
     assert_address,
+    bytes_to_bv_value,
     con,
     con_addr,
     decode_hex,
@@ -216,6 +219,46 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
     ex.storage[account_alias].symbolic = True
 
 
+def create_calldata(ex, arg, sevm, stack, step_id):
+    """
+    Generate arbitrary symbolic calldata for the given contract.
+
+    Dynamic-array arguments are sized in the same way of regular test functions.
+    TODO: generate multiple calldata based on various size combinations.
+
+    The contract is identified by its filename and contract name.
+    TODO: provide variants that require only the contract address or name.
+    """
+    filename = name_of(extract_string_argument(arg, 0))
+    contract_name = name_of(extract_string_argument(arg, 1))
+
+    contract_json = BuildOutMap().get_build_out_map()[filename][contract_name][0]
+
+    abi = contract_json["abi"]
+    methodIdentifiers = contract_json["methodIdentifiers"]
+
+    results = []
+
+    for funsig in methodIdentifiers:
+        funname = funsig.split("(")[0]
+        funselector = methodIdentifiers[funsig]
+        funinfo = FunctionInfo(funname, funsig, funselector)
+
+        dyn_param_size = []
+
+        calldata = ByteVec()
+        calldata.append(int(funselector, 16).to_bytes(4, "big"))
+        mk_calldata(abi, funinfo, calldata, dyn_param_size, sevm.options)
+
+        data = calldata.unwrap()
+        if isinstance(data, bytes):
+            data = bytes_to_bv_value(data)
+
+        results.append(ByteVec(Concat(con(32), con(len(calldata)), data)))
+
+    return results
+
+
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
     label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
     return BitVec(label, BitVecSorts[bits])
@@ -327,13 +370,15 @@ class halmos_cheat_code:
         0x3B0FA01B: create_address,  # createAddress(string)
         0x6E0BB659: create_bool,  # createBool(string)
         0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
+        0x88298B32: create_calldata,  # createCalldata(string,string)
     }
 
     @staticmethod
     def handle(sevm, ex, arg: BitVecRef, stack, step_id) -> BitVecRef:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
-            return ByteVec(handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id))
+            result = handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id)
+            return result if isinstance(result, list) else [ByteVec(result)]
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
         raise HalmosException(error_msg)
@@ -430,6 +475,7 @@ class hevm_cheat_code:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 
+        # vm.assert*
         if funsig in assert_cheatcode_handler:
             vm_assert = assert_cheatcode_handler[funsig](arg)
             not_cond = simplify(Not(vm_assert.cond))
