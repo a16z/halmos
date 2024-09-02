@@ -241,8 +241,8 @@ def create_calldata_generic(
     Dynamic-array arguments are sized in the same way of regular test functions.
     TODO: generate multiple calldata based on various size combinations.
 
-    The contract is identified by its filename and contract name.
-    TODO: provide variants that require only the contract address or name.
+    The contract is identified by its contract name and optional filename.
+    TODO: provide variants that require only the contract address.
     """
     contract_json = BuildOut().get_by_name(contract_name, filename)[0]
 

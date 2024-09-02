@@ -173,6 +173,11 @@ contract HalmosCheatCodeTest is SymTest, Test {
         bytes4 expected = bytes4(bytes.concat(data[0], data[1], data[2], data[3]));
         assertEq(ret, expected);
     }
+
+    function check_createCalldata_Dummy_fail() public {
+        // fail due to ambiguity of Dummy
+        bytes memory data = CreateCalldata(address(svm)).createCalldata("Dummy");
+    }
 }
 
 contract Mock {

@@ -39,7 +39,7 @@ from .calldata import FunctionInfo, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException
-from .mapper import BuildOut, DeployAddressMapper, Mapper, build_output_iterator
+from .mapper import BuildOut, DeployAddressMapper, Mapper
 from .sevm import (
     EMPTY_BALANCE,
     EVM,
@@ -805,9 +805,12 @@ class SetupAndRunSingleArgs:
     setup_args: HalmosConfig
     args: HalmosConfig
     libs: dict
+    build_out_map: dict
 
 
 def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> list[TestResult]:
+    BuildOut().set_build_out(fn_args.build_out_map)
+
     args = fn_args.args
     try:
         setup_ex = setup(
@@ -875,6 +878,8 @@ class RunArgs:
     contract_json: dict
     libs: dict
 
+    build_out_map: dict
+
 
 def run_parallel(run_args: RunArgs) -> list[TestResult]:
     args = run_args.args
@@ -903,6 +908,7 @@ def run_parallel(run_args: RunArgs) -> list[TestResult]:
             setup_config,
             with_devdoc(args, fun_info.sig, run_args.contract_json),
             libs,
+            run_args.build_out_map,
         )
         for fun_info in fun_infos
     ]
@@ -916,6 +922,8 @@ def run_parallel(run_args: RunArgs) -> list[TestResult]:
 
 
 def run_sequential(run_args: RunArgs) -> list[TestResult]:
+    BuildOut().set_build_out(run_args.build_out_map)
+
     args = run_args.args
     setup_info = extract_setup(run_args.methodIdentifiers)
 
@@ -1366,6 +1374,14 @@ def import_libs(build_out_map: dict, hexcode: str, linkReferences: dict) -> dict
     return libs
 
 
+def build_output_iterator(build_out: dict):
+    for compiler_version in sorted(build_out):
+        build_out_map = build_out[compiler_version]
+        for filename in sorted(build_out_map):
+            for contract_name in sorted(build_out_map[filename]):
+                yield (build_out_map, filename, contract_name)
+
+
 def contract_regex(args):
     if args.contract:
         return f"^{args.contract}$"
@@ -1443,8 +1459,6 @@ def _main(_args=None) -> MainResult:
             traceback.print_exc()
         return MainResult(1)
 
-    BuildOut().set_build_out(build_out)
-
     timer.create_subtimer("tests")
 
     total_passed = 0
@@ -1481,7 +1495,7 @@ def _main(_args=None) -> MainResult:
     # run
     #
 
-    for _, filename, contract_name, build_out_map in build_output_iterator(build_out):
+    for build_out_map, filename, contract_name in build_output_iterator(build_out):
         if not re.search(contract_regex(args), contract_name):
             continue
 
@@ -1521,6 +1535,7 @@ def _main(_args=None) -> MainResult:
             contract_args,
             contract_json,
             libs,
+            build_out_map,
         )
 
         enable_parallel = args.test_parallel and num_found > 1

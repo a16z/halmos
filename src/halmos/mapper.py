@@ -79,62 +79,53 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-def build_output_iterator(build_out: dict):
-    for compiler_version in sorted(build_out):
-        build_out_map = build_out[compiler_version]
-        for filename in sorted(build_out_map):
-            for contract_name in sorted(build_out_map[filename]):
-                yield (compiler_version, filename, contract_name, build_out_map)
-
-
 class BuildOut(metaclass=SingletonMeta):
     def __init__(self):
-        self._build_out: dict = None
-        self._build_out_map: dict = defaultdict(lambda: defaultdict(dict))
+        self._build_out_map: dict = None
+        self._build_out_map_reverse: dict = None
 
-    def set_build_out(self, json_out: dict):
-        self._build_out = json_out
+    def set_build_out(self, build_out_map: dict):
+        if self._build_out_map is build_out_map:
+            return
 
+        self._build_out_map = build_out_map
+        self._build_out_map_reverse = None
+
+    def create_build_out_map_reverse(self):
         # create reverse mapping
-        for compiler, file, contract, out in build_output_iterator(json_out):
-            self._build_out_map[contract][file][compiler] = out[file][contract]
-
-    def get_build_out(self) -> dict:
-        if self._build_out is None:
-            raise ValueError("empty build out map")
-        return self._build_out
+        self._build_out_map_reverse = defaultdict(dict)
+        for filename, file_map in self._build_out_map.items():
+            for contract_name, contract_map in file_map.items():
+                self._build_out_map_reverse[contract_name][filename] = contract_map
 
     def get_by_name(self, contract_name: str, filename: str = None) -> dict:
         """
-        Return the build output json for the given contract name. Raise a HalmosException if the contract is not found, or cannot be uniquely determined.
+        Return the build output json for the given contract name.
 
-        The optional filename argument is required, if the contract name exists in multiple files.
+        Raise a HalmosException if the contract is not found, or cannot be uniquely determined.
 
-        Note: this may still raise an exception if the specified contract has been compiled using different compiler versions.
+        The optional filename argument is required, if the contract name appears in multiple files.
         """
-        mapping = self._build_out_map[contract_name]
+        if not self._build_out_map_reverse:
+            self.create_build_out_map_reverse()
+
+        mapping = self._build_out_map_reverse[contract_name]
 
         if not mapping:
             raise HalmosException(f"{contract_name} is not found")
 
         if filename is None:
             if len(mapping) > 1:
-                raise HalmosException(
-                    f"{contract_name} exists in multiple files: {mapping.keys()}"
-                )
+                err_msg = f"{contract_name} exists in multiple files: {mapping.keys()}"
+                raise HalmosException(err_msg)
             filename = list(mapping.keys())[0]
 
-        mapping_filename = mapping[filename]
+        result = mapping.get(filename)
 
-        if not mapping_filename:
+        if not result:
             raise HalmosException(f"{contract_name} is not found in {filename}")
 
-        if len(mapping_filename) > 1:
-            raise HalmosException(
-                f"{filename}:{contract_name} is compiled by multiple compiler versions: {mapping_filename.keys()}"
-            )
-
-        return list(mapping_filename.values())[0]
+        return result
 
 
 class Mapper(metaclass=SingletonMeta):
