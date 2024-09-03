@@ -182,21 +182,11 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
 contract Mock {
     function foo(uint[] memory x) public returns (bytes4) {
-        if (x.length == 2) {
-            return this.foo.selector;
-        } else {
-            // NOTE: currently not reachable, but it should be once other size combinations are auto-generated
-            return 0;
-        }
+        return this.foo.selector;
     }
 
     function bar(bytes memory x) public returns (bytes4) {
-        if (x.length == 65) {
-            return this.bar.selector;
-        } else {
-            // NOTE: currently not reachable, but it should be once other size combinations are auto-generated
-            return 0;
-        }
+        return this.bar.selector;
     }
 }
 

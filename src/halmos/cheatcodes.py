@@ -4,6 +4,7 @@ import json
 import re
 from dataclasses import dataclass
 from subprocess import PIPE, Popen
+from copy import deepcopy
 
 from z3 import (
     ULT,
@@ -262,13 +263,51 @@ def create_calldata_generic(
         calldata.append(int(funselector, 16).to_bytes(4, "big"))
         mk_calldata(abi, funinfo, calldata, dyn_param_size, sevm.options)
 
-        data = calldata.unwrap()
-        if isinstance(data, bytes):
-            data = bytes_to_bv_value(data)
+        calldata_lst = (
+            permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm)
+            if dyn_param_size
+            else [calldata]
+        )
 
-        results.append(ByteVec(Concat(con(32), con(len(calldata)), data)))
+        for calldata in calldata_lst:
+            data = calldata.unwrap()
+            if isinstance(data, bytes):
+                data = bytes_to_bv_value(data)
+
+            results.append(ByteVec(Concat(con(32), con(len(calldata)), data)))
 
     return results
+
+
+def permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm):
+    arrlen_lst = [{}]
+    for param in dyn_param_size:
+        param_name, param_size = param.split("=")
+        param_size = int(param_size)
+
+        new_arrlen_lst = []
+        for arrlen in arrlen_lst:
+            # TODO: use param type to distinguish array and bytes
+            # TODO: consider empty bytes/string
+            # TODO: provide cli flags to specify these values
+            new_size_options = [0, 1, 2] if param_size == 2 else [65, 1024]
+
+            for new_size in new_size_options:
+                new_arrlen = deepcopy(arrlen)
+                new_arrlen[param_name] = new_size
+                new_arrlen_lst.append(new_arrlen)
+
+        arrlen_lst = new_arrlen_lst
+
+    result = []
+    for arrlen in arrlen_lst:
+        calldata = ByteVec()
+        calldata.append(int(funselector, 16).to_bytes(4, "big"))
+        mk_calldata(abi, funinfo, calldata, [], sevm.options, arrlen)
+
+        result.append(calldata)
+
+    return result
 
 
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:

@@ -95,17 +95,22 @@ class Calldata:
         self.arrlen = arrlen
         self.dyn_param_size = dyn_param_size
 
-    def choose_array_len(self, name: str) -> int:
+    def choose_array_len(self, name: str, typ: Type) -> int:
         if name in self.arrlen:
             array_len = self.arrlen[name]
         else:
-            array_len = self.args.loop
+            array_len = (
+                self.args.loop
+                if isinstance(typ, DynamicArrayType)
+                # typ is bytes or string
+                else 65  # ECDSA signature size
+            )
             if self.args.debug:
                 print(
                     f"Warning: no size provided for {name}; default value {array_len} will be used."
                 )
 
-        self.dyn_param_size.append(f"|{name}|={array_len}")
+        self.dyn_param_size.append(f"{name}={array_len}")
 
         return array_len
 
@@ -150,7 +155,7 @@ class Calldata:
 
         # T[]
         if isinstance(typ, DynamicArrayType):
-            array_len = self.choose_array_len(name)
+            array_len = self.choose_array_len(name, typ)
             items = [self.encode(f"{name}[{i}]", typ.base) for i in range(array_len)]
             encoded = self.encode_tuple(items)
             return EncodingResult(
@@ -160,7 +165,8 @@ class Calldata:
         if isinstance(typ, BaseType):
             # bytes, string
             if typ.typ in ["bytes", "string"]:
-                size = 65  # ECDSA signature size  # TODO: use args
+                # TODO: handle empty bytes/string
+                size = self.choose_array_len(name, typ)
                 size_pad_right = ((size + 31) // 32) * 32
                 data = [
                     con(size),
@@ -254,6 +260,7 @@ def mk_calldata(
     cd: ByteVec,
     dyn_param_size: list[str],
     args: HalmosConfig,
+    arrlen: dict[str, int] = None,
 ) -> None:
     # find function abi
     fun_abi = find_abi(abi, fun_info)
@@ -263,7 +270,8 @@ def mk_calldata(
         return
 
     # generate symbolic ABI calldata
-    calldata = Calldata(args, mk_arrlen(args), dyn_param_size)
+    arrlen = mk_arrlen(args) if arrlen is None else arrlen
+    calldata = Calldata(args, arrlen, dyn_param_size)
     calldata.create(fun_abi, cd)
 
 
