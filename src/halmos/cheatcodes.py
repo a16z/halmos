@@ -2,9 +2,9 @@
 
 import json
 import re
+from copy import deepcopy
 from dataclasses import dataclass
 from subprocess import PIPE, Popen
-from copy import deepcopy
 
 from z3 import (
     ULT,
