@@ -288,9 +288,8 @@ def permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm):
         new_arrlen_lst = []
         for arrlen in arrlen_lst:
             # TODO: use param type to distinguish array and bytes
-            # TODO: consider empty bytes/string
             # TODO: provide cli flags to specify these values
-            new_size_options = [0, 1, 2] if param_size == 2 else [65, 1024]
+            new_size_options = [0, 1, 2] if param_size == 2 else [0, 65, 1024]
 
             for new_size in new_size_options:
                 new_arrlen = deepcopy(arrlen)

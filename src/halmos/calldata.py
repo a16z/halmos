@@ -79,8 +79,8 @@ def parse_tuple_type(var: str, items: list[dict]) -> Type:
 @dataclass(frozen=True)
 class EncodingResult:
     data: list[BitVecRef]
-    size: int
-    static: bool
+    size: int  # number of bytes
+    static: bool  # static vs dynamic type
 
 
 class Calldata:
@@ -165,14 +165,14 @@ class Calldata:
         if isinstance(typ, BaseType):
             # bytes, string
             if typ.typ in ["bytes", "string"]:
-                # TODO: handle empty bytes/string
                 size = self.choose_array_len(name, typ)
                 size_pad_right = ((size + 31) // 32) * 32
-                data = [
-                    con(size),
-                    BitVec(f"p_{name}_{typ.typ}", 8 * size_pad_right),
-                ]
-                return EncodingResult(data, 32 + size_pad_right, False)
+                data = (
+                    [BitVec(f"p_{name}_{typ.typ}", 8 * size_pad_right)]
+                    if size > 0
+                    else []  # empty bytes/string
+                )
+                return EncodingResult([con(size)] + data, 32 + size_pad_right, False)
 
             # uintN, intN, address, bool, bytesN
             else:

@@ -182,10 +182,14 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
 contract Mock {
     function foo(uint[] memory x) public returns (bytes4) {
+        console.log("foo");
+        console.log(x.length);
         return this.foo.selector;
     }
 
     function bar(bytes memory x) public returns (bytes4) {
+        console.log("bar");
+        console.log(x.length);
         return this.bar.selector;
     }
 }
