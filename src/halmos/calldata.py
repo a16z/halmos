@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import reduce
 
@@ -104,13 +105,19 @@ class Calldata:
     args: HalmosConfig
     arrlen: dict[str, int]
     dyn_param_size: DynamicParams  # to be updated
+    new_symbol_id: Callable | None
 
     def __init__(
-        self, args: HalmosConfig, arrlen: dict[str, int], dyn_param_size: DynamicParams
+        self,
+        args: HalmosConfig,
+        arrlen: dict[str, int],
+        dyn_param_size: DynamicParams,
+        new_symbol_id: Callable,
     ) -> None:
         self.args = args
         self.arrlen = arrlen
         self.dyn_param_size = dyn_param_size
+        self.new_symbol_id = new_symbol_id
 
     def choose_array_len(self, name: str, typ: Type) -> int:
         if name in self.arrlen:
@@ -180,12 +187,19 @@ class Calldata:
             )
 
         if isinstance(typ, BaseType):
+
+            def new_symbol() -> str:
+                if self.new_symbol_id is None:
+                    return f"p_{name}_{typ.typ}"
+                else:
+                    return f"p_{name}_{typ.typ}_{self.new_symbol_id():>02}"
+
             # bytes, string
             if typ.typ in ["bytes", "string"]:
                 size = self.choose_array_len(name, typ)
                 size_pad_right = ((size + 31) // 32) * 32
                 data = (
-                    [BitVec(f"p_{name}_{typ.typ}", 8 * size_pad_right)]
+                    [BitVec(new_symbol(), 8 * size_pad_right)]
                     if size > 0
                     else []  # empty bytes/string
                 )
@@ -193,7 +207,7 @@ class Calldata:
 
             # uintN, intN, address, bool, bytesN
             else:
-                return EncodingResult([BitVec(f"p_{name}_{typ.typ}", 256)], 32, True)
+                return EncodingResult([BitVec(new_symbol(), 256)], 32, True)
 
         raise ValueError(typ)
 
@@ -278,6 +292,7 @@ def mk_calldata(
     dyn_param_size: DynamicParams,
     args: HalmosConfig,
     arrlen: dict[str, int] = None,
+    new_symbol_id: Callable = None,
 ) -> None:
     # find function abi
     fun_abi = find_abi(abi, fun_info)
@@ -288,7 +303,7 @@ def mk_calldata(
 
     # generate symbolic ABI calldata
     arrlen = mk_arrlen(args) if arrlen is None else arrlen
-    calldata = Calldata(args, arrlen, dyn_param_size)
+    calldata = Calldata(args, arrlen, dyn_param_size, new_symbol_id)
     calldata.create(fun_abi, cd)
 
 

@@ -240,7 +240,6 @@ def create_calldata_generic(
     Generate arbitrary symbolic calldata for the given contract.
 
     Dynamic-array arguments are sized in the same way of regular test functions.
-    TODO: generate multiple calldata based on various size combinations.
 
     The contract is identified by its contract name and optional filename.
     TODO: provide variants that require only the contract address.
@@ -261,10 +260,17 @@ def create_calldata_generic(
 
         calldata = ByteVec()
         calldata.append(int(funselector, 16).to_bytes(4, "big"))
-        mk_calldata(abi, funinfo, calldata, dyn_param_size, sevm.options)
+        mk_calldata(
+            abi,
+            funinfo,
+            calldata,
+            dyn_param_size,
+            sevm.options,
+            new_symbol_id=ex.new_symbol_id,
+        )
 
         calldata_lst = (
-            permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm)
+            permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm, ex)
             if dyn_param_size
             else [calldata]
         )
@@ -279,7 +285,7 @@ def create_calldata_generic(
     return results
 
 
-def permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm):
+def permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm, ex):
     arrlen_lst = [{}]
     for p_name, p_size, p_typ in dyn_param_size:
         # TODO: provide cli flags to specify these values
@@ -304,7 +310,15 @@ def permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm):
     for arrlen in arrlen_lst:
         calldata = ByteVec()
         calldata.append(int(funselector, 16).to_bytes(4, "big"))
-        mk_calldata(abi, funinfo, calldata, DynamicParams(), sevm.options, arrlen)
+        mk_calldata(
+            abi,
+            funinfo,
+            calldata,
+            DynamicParams(),
+            sevm.options,
+            arrlen=arrlen,
+            new_symbol_id=ex.new_symbol_id,
+        )
         result.append(calldata)
 
     return result

@@ -225,6 +225,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/SimpleState.t.sol:SimpleStateTest": [
+            {
+                "name": "check_buggy()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/TotalPrice.t.sol:TotalPriceTest": [
             {
                 "name": "check_eq_totalPriceFixed_totalPriceConservative(uint96,uint32)",
