@@ -37,6 +37,7 @@ contract SimpleStateTest is SymTest, Test {
     function check_buggy() public {
         bool success;
 
+        // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
         for (uint i = 0; i < 10; i++) {
             (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
             vm.assume(success);
