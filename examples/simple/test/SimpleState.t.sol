@@ -37,26 +37,10 @@ contract SimpleStateTest is SymTest, Test {
     function check_buggy() public {
         bool success;
 
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
-        (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
-        vm.assume(success);
+        for (uint i = 0; i < 10; i++) {
+            (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
+            vm.assume(success);
+        }
 
         assertFalse(buggy());
     }
