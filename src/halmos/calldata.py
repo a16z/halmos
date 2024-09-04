@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import reduce
 
 from z3 import (
@@ -83,13 +83,30 @@ class EncodingResult:
     static: bool  # static vs dynamic type
 
 
+@dataclass(frozen=True)
+class DynamicParams:
+    lst: list[tuple] = field(default_factory=list)
+
+    def __str__(self) -> str:
+        return ", ".join([f"{name}={size}" for (name, size, typ) in self.lst])
+
+    def __bool__(self) -> bool:
+        return bool(self.lst)
+
+    def __iter__(self):
+        yield from self.lst
+
+    def append(self, name: str, size: int, typ: Type):
+        self.lst.append((name, size, typ))
+
+
 class Calldata:
     args: HalmosConfig
     arrlen: dict[str, int]
-    dyn_param_size: list[str]  # to be updated
+    dyn_param_size: DynamicParams  # to be updated
 
     def __init__(
-        self, args: HalmosConfig, arrlen: dict[str, int], dyn_param_size: list[str]
+        self, args: HalmosConfig, arrlen: dict[str, int], dyn_param_size: DynamicParams
     ) -> None:
         self.args = args
         self.arrlen = arrlen
@@ -110,7 +127,7 @@ class Calldata:
                     f"Warning: no size provided for {name}; default value {array_len} will be used."
                 )
 
-        self.dyn_param_size.append(f"{name}={array_len}")
+        self.dyn_param_size.append(name, array_len, typ)
 
         return array_len
 
@@ -258,7 +275,7 @@ def mk_calldata(
     abi: list,
     fun_info: FunctionInfo,
     cd: ByteVec,
-    dyn_param_size: list[str],
+    dyn_param_size: DynamicParams,
     args: HalmosConfig,
     arrlen: dict[str, int] = None,
 ) -> None:

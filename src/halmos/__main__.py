@@ -35,7 +35,7 @@ from z3 import (
 )
 
 from .bytevec import ByteVec
-from .calldata import FunctionInfo, mk_calldata
+from .calldata import DynamicParams, FunctionInfo, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException
@@ -431,7 +431,7 @@ def setup(
         calldata = ByteVec()
         calldata.append(int(setup_selector, 16).to_bytes(4, "big"))
 
-        dyn_param_size = []  # TODO: propagate to run
+        dyn_param_size = DynamicParams()  # TODO: propagate to run
         mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
 
         parent_message = setup_ex.message()
@@ -568,7 +568,7 @@ def run(
     cd = ByteVec()
     cd.append(int(funselector, 16).to_bytes(4, "big"))
 
-    dyn_param_size = []
+    dyn_param_size = DynamicParams()
     mk_calldata(abi, fun_info, cd, dyn_param_size, args)
 
     message = Message(
@@ -752,7 +752,7 @@ def run(
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+        f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{dyn_param_size}])"
     )
 
     for idx, _, err in stuck:

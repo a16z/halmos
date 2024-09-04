@@ -25,7 +25,7 @@ from z3 import (
 
 from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
-from .calldata import FunctionInfo, mk_calldata
+from .calldata import DynamicArrayType, DynamicParams, FunctionInfo, mk_calldata
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
 from .mapper import BuildOut
 from .utils import (
@@ -257,7 +257,7 @@ def create_calldata_generic(
         funselector = methodIdentifiers[funsig]
         funinfo = FunctionInfo(funname, funsig, funselector)
 
-        dyn_param_size = []
+        dyn_param_size = DynamicParams()
 
         calldata = ByteVec()
         calldata.append(int(funselector, 16).to_bytes(4, "big"))
@@ -281,29 +281,30 @@ def create_calldata_generic(
 
 def permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm):
     arrlen_lst = [{}]
-    for param in dyn_param_size:
-        param_name, param_size = param.split("=")
-        param_size = int(param_size)
+    for p_name, p_size, p_typ in dyn_param_size:
+        # TODO: provide cli flags to specify these values
+        new_size_options = (
+            [0, 1, 2]  # array lengths
+            if isinstance(p_typ, DynamicArrayType)
+            else [0, 32, 65, 1024]  # bytes/string lengths
+        )
+        if p_size not in new_size_options:
+            new_size_options.append(p_size)
 
+        # consider all size combinations
         new_arrlen_lst = []
         for arrlen in arrlen_lst:
-            # TODO: use param type to distinguish array and bytes
-            # TODO: provide cli flags to specify these values
-            new_size_options = [0, 1, 2] if param_size == 2 else [0, 65, 1024]
-
             for new_size in new_size_options:
                 new_arrlen = deepcopy(arrlen)
-                new_arrlen[param_name] = new_size
+                new_arrlen[p_name] = new_size
                 new_arrlen_lst.append(new_arrlen)
-
         arrlen_lst = new_arrlen_lst
 
     result = []
     for arrlen in arrlen_lst:
         calldata = ByteVec()
         calldata.append(int(funselector, 16).to_bytes(4, "big"))
-        mk_calldata(abi, funinfo, calldata, [], sevm.options, arrlen)
-
+        mk_calldata(abi, funinfo, calldata, DynamicParams(), sevm.options, arrlen)
         result.append(calldata)
 
     return result
