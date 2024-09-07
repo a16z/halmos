@@ -140,12 +140,12 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_createCalldata_Beep_1() public {
-        bytes memory data = CreateCalldata(address(svm)).createCalldata("HalmosCheatCode.t.sol", "Beep");
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Beep");
         _check_createCalldata_Beep(data);
     }
 
     function check_createCalldata_Beep_2() public {
-        bytes memory data = CreateCalldata(address(svm)).createCalldata("Beep");
+        bytes memory data = svm.createCalldata("Beep");
         _check_createCalldata_Beep(data);
     }
 
@@ -157,12 +157,12 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_createCalldata_Mock_1() public {
-        bytes memory data = CreateCalldata(address(svm)).createCalldata("HalmosCheatCode.t.sol", "Mock");
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock");
         _check_createCalldata_Mock(data);
     }
 
     function check_createCalldata_Mock_2() public {
-        bytes memory data = CreateCalldata(address(svm)).createCalldata("Mock");
+        bytes memory data = svm.createCalldata("Mock");
         _check_createCalldata_Mock(data);
     }
 
@@ -176,7 +176,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     function check_createCalldata_Dummy_fail() public {
         // fail due to ambiguity of Dummy
-        bytes memory data = CreateCalldata(address(svm)).createCalldata("Dummy");
+        bytes memory data = svm.createCalldata("Dummy");
     }
 }
 
@@ -199,14 +199,6 @@ contract Mock {
         console.log(y.length);
         return this.baz.selector;
     }
-}
-
-// TODO: remove this after updating halmos-cheatcode submodule
-interface CreateCalldata {
-    // Create calldata
-    function createCalldata(string memory filename, string memory contractName) external pure returns (bytes memory data);
-
-    function createCalldata(string memory contractName) external pure returns (bytes memory data);
 }
 
 interface Dummy {

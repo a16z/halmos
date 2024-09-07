@@ -46,15 +46,7 @@ contract SoladyERC721Test is ERC721Test {
 
     // TODO: remove bytes4 parameter after updating expected output
     function check_NoBackdoor(bytes4) public {
-        bytes memory _calldata = CreateCalldata(address(svm)).createCalldata("SoladyERC721");
+        bytes memory _calldata = svm.createCalldata("SoladyERC721");
         _check_NoBackdoor(_calldata);
     }
-}
-
-// TODO: remove this after updating halmos-cheatcode submodule
-interface CreateCalldata {
-    // Create calldata
-    function createCalldata(string memory filename, string memory contractName) external pure returns (bytes memory data);
-
-    function createCalldata(string memory contractName) external pure returns (bytes memory data);
 }

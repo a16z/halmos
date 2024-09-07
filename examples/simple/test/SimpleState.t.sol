@@ -39,15 +39,10 @@ contract SimpleStateTest is SymTest, Test {
 
         // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
         for (uint i = 0; i < 10; i++) {
-            (success,) = target.call(CreateCalldata(address(svm)).createCalldata("SimpleState"));
+            (success,) = target.call(svm.createCalldata("SimpleState"));
             vm.assume(success);
         }
 
         assertFalse(buggy());
     }
-}
-
-// TODO: remove this after updating halmos-cheatcode submodule
-interface CreateCalldata {
-    function createCalldata(string memory contractName) external pure returns (bytes memory data);
 }
