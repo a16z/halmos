@@ -192,6 +192,13 @@ contract Mock {
         console.log(x.length);
         return this.bar.selector;
     }
+
+    function baz(uint[] memory x, uint[] memory y) public returns (bytes4) {
+        console.log("baz");
+        console.log(x.length);
+        console.log(y.length);
+        return this.baz.selector;
+    }
 }
 
 // TODO: remove this after updating halmos-cheatcode submodule
