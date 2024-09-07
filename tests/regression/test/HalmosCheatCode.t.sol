@@ -166,12 +166,21 @@ contract HalmosCheatCodeTest is SymTest, Test {
         _check_createCalldata_Mock(data);
     }
 
+    function check_createCalldata_Mock_interface() public {
+        bytes memory data = svm.createCalldata("IMock");
+        _check_createCalldata_Mock(data);
+    }
+
     function _check_createCalldata_Mock(bytes memory data) public {
         Mock mock = new Mock();
         (bool success, bytes memory retdata) = address(mock).call(data);
         bytes4 ret = abi.decode(retdata, (bytes4));
         bytes4 expected = bytes4(bytes.concat(data[0], data[1], data[2], data[3]));
-        assertEq(ret, expected);
+        // assertEq(ret, expected);
+        // note: the number of calldata generated == the # of counterexamples
+        if (ret == expected) {
+            assert(false);
+        }
     }
 
     function check_createCalldata_Dummy_fail() public {
@@ -183,22 +192,43 @@ contract HalmosCheatCodeTest is SymTest, Test {
 contract Mock {
     function foo(uint[] memory x) public returns (bytes4) {
         console.log("foo");
-        console.log(x.length);
+        console.log(x.length); // 0, 1, 2
         return this.foo.selector;
     }
 
     function bar(bytes memory x) public returns (bytes4) {
         console.log("bar");
-        console.log(x.length);
+        console.log(x.length); // 0, 32, 65, 1024
         return this.bar.selector;
     }
 
-    function baz(uint[] memory x, uint[] memory y) public returns (bytes4) {
-        console.log("baz");
-        console.log(x.length);
-        console.log(y.length);
-        return this.baz.selector;
+    function zoo(uint[] memory x, bytes memory y) public returns (bytes4) {
+        console.log("zoo");
+        // 12 (= 3 * 4) combinations
+        console.log(x.length); // 0, 1, 2
+        console.log(y.length); // 0, 32, 65, 1024
+        return this.zoo.selector;
     }
+
+    function foobar(bytes[] memory x) public returns (bytes4) {
+        console.log("foobar");
+        // TODO: currently it returns 48 (= 16*3) calldata combinations, while it should do only 21 (= 16+4+1) combinations.
+        console.log(x.length); // 0, 1, 2
+        for (uint i = 0; i < x.length; i++) {
+            console.log(x[i].length); // 0, 32, 65, 1024
+        }
+        return this.foobar.selector;
+    }
+}
+
+interface IMock {
+    function foo(uint[] calldata x) external returns (bytes4);
+
+    function bar(bytes calldata x) external returns (bytes4);
+
+    function zoo(uint[] calldata x, bytes calldata y) external returns (bytes4);
+
+    function foobar(bytes[] calldata x) external returns (bytes4);
 }
 
 interface Dummy {

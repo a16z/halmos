@@ -1231,8 +1231,8 @@
             },
             {
                 "name": "check_createCalldata_Mock_1()",
-                "exitcode": 0,
-                "num_models": 0,
+                "exitcode": 1,
+                "num_models": 67,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -1240,8 +1240,17 @@
             },
             {
                 "name": "check_createCalldata_Mock_2()",
-                "exitcode": 0,
-                "num_models": 0,
+                "exitcode": 1,
+                "num_models": 67,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_interface()",
+                "exitcode": 1,
+                "num_models": 67,
                 "models": null,
                 "num_paths": null,
                 "time": null,
