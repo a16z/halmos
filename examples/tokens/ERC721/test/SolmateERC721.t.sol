@@ -44,8 +44,7 @@ contract SolmateERC721Test is ERC721Test {
         token_.setApprovalForAll(accounts[2], true);
     }
 
-    // TODO: remove bytes4 parameter after updating expected output
-    function check_NoBackdoor(bytes4) public {
+    function check_NoBackdoor() public {
         bytes memory _calldata = svm.createCalldata("SolmateERC721");
         _check_NoBackdoor(_calldata);
     }
