@@ -438,7 +438,7 @@ class halmos_cheat_code:
     }
 
     @staticmethod
-    def handle(sevm, ex, arg: BitVecRef, stack, step_id) -> BitVecRef:
+    def handle(sevm, ex, arg: BitVecRef, stack, step_id) -> list[BitVecRef]:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
             result = handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id)
