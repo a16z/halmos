@@ -298,13 +298,11 @@ def permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm, ex):
             new_size_options.append(p_size)
 
         # consider all size combinations
-        new_arrlen_lst = []
-        for arrlen in arrlen_lst:
-            for new_size in new_size_options:
-                new_arrlen = deepcopy(arrlen)
-                new_arrlen[p_name] = new_size
-                new_arrlen_lst.append(new_arrlen)
-        arrlen_lst = new_arrlen_lst
+        arrlen_lst = [
+            {**arrlen, p_name: new_size}
+            for arrlen in arrlen_lst
+            for new_size in new_size_options
+        ]
 
     result = []
     for arrlen in arrlen_lst:
