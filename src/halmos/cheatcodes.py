@@ -24,7 +24,13 @@ from z3 import (
 
 from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
-from .calldata import DynamicArrayType, DynamicParams, FunctionInfo, mk_calldata
+from .calldata import (
+    DynamicArrayType,
+    DynamicParams,
+    FunctionInfo,
+    find_abi,
+    mk_calldata,
+)
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
 from .mapper import BuildOut
 from .utils import (
@@ -254,6 +260,10 @@ def create_calldata_generic(
         funname = funsig.split("(")[0]
         funselector = methodIdentifiers[funsig]
         funinfo = FunctionInfo(funname, funsig, funselector)
+
+        fun_abi = find_abi(abi, funinfo)
+        if fun_abi["stateMutability"] == "view":
+            continue
 
         dyn_param_size = DynamicParams()
 

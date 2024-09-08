@@ -20,18 +20,17 @@ contract SimpleState {
         require(x >= counter);
         counter -= 1;
     }
+
+    function buggy() public view returns (bool) {
+        return counter == 10;
+    }
 }
 
 contract SimpleStateTest is SymTest, Test {
-    address target;
+    SimpleState target;
 
     function setUp() public {
-        target = address(new SimpleState());
-    }
-
-    function buggy() public returns (bool) {
-        uint counter = uint(vm.load(target, bytes32(0)));
-        return counter == 10;
+        target = new SimpleState();
     }
 
     function check_buggy() public {
@@ -39,10 +38,10 @@ contract SimpleStateTest is SymTest, Test {
 
         // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
         for (uint i = 0; i < 10; i++) {
-            (success,) = target.call(svm.createCalldata("SimpleState"));
+            (success,) = address(target).call(svm.createCalldata("SimpleState"));
             vm.assume(success);
         }
 
-        assertFalse(buggy());
+        assertFalse(target.buggy());
     }
 }
