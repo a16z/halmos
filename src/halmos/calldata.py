@@ -296,7 +296,7 @@ def mk_calldata(
     fun_abi = find_abi(abi, fun_info)
 
     # no parameters
-    if len(fun_abi["inputs"]) == 0:
+    if not fun_abi["inputs"]:
         return
 
     # generate symbolic ABI calldata
