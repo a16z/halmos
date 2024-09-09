@@ -189,10 +189,8 @@ class Calldata:
         if isinstance(typ, BaseType):
 
             def new_symbol() -> str:
-                if self.new_symbol_id is None:
-                    return f"p_{name}_{typ.typ}"
-                else:
-                    return f"p_{name}_{typ.typ}_{self.new_symbol_id():>02}"
+                id_suffix = f"_{self.new_symbol_id():>02}" if self.new_symbol_id else ""
+                return f"p_{name}_{typ.typ}{id_suffix}"
 
             # bytes, string
             if typ.typ in ["bytes", "string"]:
@@ -308,10 +306,11 @@ def mk_calldata(
 
 
 def mk_arrlen(args: HalmosConfig) -> dict[str, int]:
-    arrlen = {}
-    if args.array_lengths:
-        for assign in [x.split("=") for x in args.array_lengths.split(",")]:
-            name = assign[0].strip()
-            size = assign[1].strip()
-            arrlen[name] = int(size)
-    return arrlen
+    if not args.array_lengths:
+        return {}
+
+    name_size_pairs = args.array_lengths.split(",")
+    return {
+        name.strip(): int(size.strip())
+        for name, size in [x.split("=") for x in name_size_pairs]
+    }
