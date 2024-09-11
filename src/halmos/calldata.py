@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import reduce
 
 from z3 import (
@@ -126,7 +126,8 @@ class Calldata:
             sizes = (
                 list(range(self.args.loop + 1))
                 if isinstance(typ, DynamicArrayType)
-                else [0, 32, 1024, 65]  # bytes/string sizes # 65 is ECDSA signature size
+                # typ is bytes or string
+                else [0, 32, 1024, 65]  # 65 is ECDSA signature size
             )
             if self.args.debug:
                 print(
@@ -194,9 +195,7 @@ class Calldata:
             items = [self.encode(f"{name}[{i}]", typ.base) for i in range(max(sizes))]
             encoded = self.encode_tuple(items)
             # generalized encoding for multiple sizes
-            return EncodingResult(
-                [size_var] + encoded.data, 32 + encoded.size, False
-            )
+            return EncodingResult([size_var] + encoded.data, 32 + encoded.size, False)
 
         if isinstance(typ, BaseType):
             new_symbol = f"p_{name}_{typ.typ}_{self.new_symbol_id():>02}"

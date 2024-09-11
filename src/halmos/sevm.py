@@ -42,12 +42,12 @@ from z3 import (
     Xor,
     ZeroExt,
     eq,
+    is_eq,
     is_false,
     is_true,
     sat,
     simplify,
     unsat,
-    is_eq,
 )
 from z3.z3util import is_expr_var
 

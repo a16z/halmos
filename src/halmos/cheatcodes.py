@@ -25,8 +25,6 @@ from z3 import (
 from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
 from .calldata import (
-    DynamicArrayType,
-    DynamicParam,
     FunctionInfo,
     find_abi,
     mk_calldata,
@@ -232,10 +230,13 @@ def create_calldata_contract(ex, arg, sevm, stack, step_id):
 
 def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
     contract_name = name_of(extract_string_argument(arg, 0))
-    include_view_functions = bool(int_of(
-        extract_bytes(arg, 4+32, 32), "symbolic boolean flag for SVM.createCalldata()"
-    ))
-    return create_calldata_generic(ex, arg, sevm, stack, step_id, contract_name, include_view_functions=include_view_functions)
+    include_view = int_of(
+        extract_bytes(arg, 4 + 32 * 1, 32),
+        "symbolic boolean flag for SVM.createCalldata()",
+    )
+    return create_calldata_generic(
+        ex, arg, sevm, stack, step_id, contract_name, include_view=bool(include_view)
+    )
 
 
 def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
@@ -249,16 +250,17 @@ def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
 def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
-    include_view_functions = bool(int_of(
-        extract_bytes(arg, 4+32*2, 32), "symbolic boolean flag for SVM.createCalldata()"
-    ))
+    include_view = int_of(
+        extract_bytes(arg, 4 + 32 * 2, 32),
+        "symbolic boolean flag for SVM.createCalldata()",
+    )
     return create_calldata_generic(
-        ex, arg, sevm, stack, step_id, contract_name, filename, include_view_functions
+        ex, arg, sevm, stack, step_id, contract_name, filename, bool(include_view)
     )
 
 
 def create_calldata_generic(
-    ex, arg, sevm, stack, step_id, contract_name, filename=None, include_view_functions=False
+    ex, arg, sevm, stack, step_id, contract_name, filename=None, include_view=False
 ):
     """
     Generate arbitrary symbolic calldata for the given contract.
@@ -280,7 +282,7 @@ def create_calldata_generic(
         funselector = methodIdentifiers[funsig]
         funinfo = FunctionInfo(funname, funsig, funselector)
 
-        if not include_view_functions:
+        if not include_view:
             fun_abi = find_abi(abi, funinfo)
             if fun_abi["stateMutability"] in ["pure", "view"]:
                 continue
