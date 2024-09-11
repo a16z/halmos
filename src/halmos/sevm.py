@@ -47,7 +47,9 @@ from z3 import (
     sat,
     simplify,
     unsat,
+    is_eq,
 )
+from z3.z3util import is_expr_var
 
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
@@ -627,6 +629,40 @@ class SMTQuery:
     assertions: list  # list of assertion ids
 
 
+@dataclass(frozen=True)
+class Concretization:
+    """
+    Mapping of symbols to concrete values or potential candidates.
+
+    A symbol is mapped to a concrete value when an equality between them is introduced in the path condition.
+    These symbols can be replaced by their concrete values during execution as needed.
+
+    A symbol may also be associated with multiple concrete value candidates.
+    If necessary, the path can later branch for each candidate.
+
+    TODO: Currently, this mechanism is applied only to calldata with dynamic parameters.
+    In the future, it may be used for other purposes, such as concrete hash reasoning.
+    """
+
+    substitution: dict = field(default_factory=dict)  # symbol -> constant
+    candidates: dict = field(default_factory=dict)  # symbol -> set of constants
+
+    def process_cond(self, cond):
+        if not is_eq(cond):
+            return
+        left, right = cond.arg(0), cond.arg(1)
+        if is_expr_var(left) and is_bv_value(right):
+            self.substitution[left] = right
+        elif is_expr_var(right) and is_bv_value(left):
+            self.substitution[right] = left
+
+    def process_dyn_params(self, dyn_params, legacy):
+        for d in dyn_params:
+            # TODO: deprecate legacy behavior
+            size_choices = d.size_choices if not legacy else [d.size_choices[-1]]
+            self.candidates[d.size_symbol] = size_choices
+
+
 class Path:
     # a Path object represents a prefix of the path currently being executed
     # initially, it's an empty path at the beginning of execution
@@ -635,12 +671,14 @@ class Path:
     num_scopes: int
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
     conditions: dict  # cond -> bool (true if explicit branching conditions)
+    concretization: Concretization
     pending: list
 
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = {}
+        self.concretization = Concretization()
         self.pending = []
 
     def __deepcopy__(self, memo):
@@ -654,6 +692,9 @@ class Path:
                 if self.conditions[cond] and not is_true(cond)
             ]
         )
+
+    def process_dyn_params(self, dyn_params, legacy=False):
+        self.concretization.process_dyn_params(dyn_params, legacy)
 
     def to_smt2(self, args) -> SMTQuery:
         # Serialize self.conditions into the SMTLIB format.
@@ -716,6 +757,8 @@ class Path:
         # note: deep copy would be needed later for advanced query optimizations (eg, constant propagation)
         path.conditions = self.conditions.copy()
 
+        path.concretization = deepcopy(self.concretization)
+
         # store the branching condition aside until the new path is activated.
         path.pending.append(cond)
 
@@ -745,9 +788,12 @@ class Path:
             # false shouldn't have been added; raise InfeasiblePath before append() if false
             warn_code(INTERNAL_ERROR, "path.append(false)")
 
-        if cond not in self.conditions:
-            self.solver.add(cond)
-            self.conditions[cond] = branching
+        if cond in self.conditions:
+            return
+
+        self.solver.add(cond)
+        self.conditions[cond] = branching
+        self.concretization.process_cond(cond)
 
     def extend(self, conds, branching=False):
         for cond in conds:
@@ -2393,6 +2439,41 @@ class SEVM:
         )
         return new_ex
 
+    def calldataload(
+        self,
+        ex: Exec,
+        stack: list[tuple[Exec, int]],
+        step_id: int,
+    ) -> None:
+        """
+        Handle generalized calldata encoding. (See calldata.encode for more details on generalized encoding.)
+
+        If the loaded value is a symbol, it may represent a size symbol for dynamic parameters, and can be resolved as follows:
+        - If the symbol is already constrained to a concrete value in the current path condition, it is replaced by that value.
+        - If the symbol is associated with candidate values, the current path is branched over these candidates.
+        """
+
+        offset: int = int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
+        loaded = ex.calldata().get_word(offset)
+
+        if is_expr_var(loaded):
+            concrete_loaded = ex.path.concretization.substitution.get(loaded)
+
+            if concrete_loaded is not None:  # could be zero
+                loaded = concrete_loaded
+
+            elif loaded in ex.path.concretization.candidates:
+                for candidate in ex.path.concretization.candidates[loaded]:
+                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
+                    new_ex.st.push(candidate)
+                    new_ex.advance_pc()
+                    stack.push(new_ex, step_id)
+                return
+
+        ex.st.push(loaded)
+        ex.advance_pc()
+        stack.push(ex, step_id)
+
     def sym_byte_of(self, idx: BitVecRef, w: BitVecRef) -> BitVecRef:
         """generate symbolic BYTE opcode result using 32 nested ite"""
 
@@ -2565,8 +2646,8 @@ class SEVM:
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
 
                 elif opcode == EVM.CALLDATALOAD:
-                    offset: int = int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
-                    ex.st.push(ex.calldata().get_word(offset))
+                    self.calldataload(ex, stack, step_id)
+                    continue
 
                 elif opcode == EVM.CALLDATASIZE:
                     ex.st.push(len(ex.calldata()))

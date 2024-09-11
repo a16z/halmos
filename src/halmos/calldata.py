@@ -85,59 +85,61 @@ class EncodingResult:
 
 
 @dataclass(frozen=True)
-class DynamicParams:
-    lst: list[tuple] = field(default_factory=list)
+class DynamicParam:
+    name: str
+    size_choices: list[int]
+    size_symbol: BitVecRef
+    typ: Type
 
     def __str__(self) -> str:
-        return ", ".join([f"{name}={size}" for (name, size, typ) in self.lst])
-
-    def __bool__(self) -> bool:
-        return bool(self.lst)
-
-    def __iter__(self):
-        yield from self.lst
-
-    def append(self, name: str, size: int, typ: Type):
-        self.lst.append((name, size, typ))
+        return f"{self.name}={self.size_choices}"
 
 
 class Calldata:
     args: HalmosConfig
-    arrlen: dict[str, int]
-    dyn_param_size: DynamicParams  # to be updated
-    new_symbol_id: Callable | None
+    arrlen: dict[str, list[int]]
+    dyn_params: list[DynamicParam]  # to be updated
+    new_symbol_id: Callable
 
     def __init__(
         self,
         args: HalmosConfig,
-        arrlen: dict[str, int],
-        dyn_param_size: DynamicParams,
-        new_symbol_id: Callable,
+        arrlen: dict[str, list[int]],
+        dyn_params: list[DynamicParam],
+        new_symbol_id: Callable | None,
     ) -> None:
         self.args = args
         self.arrlen = arrlen
-        self.dyn_param_size = dyn_param_size
-        self.new_symbol_id = new_symbol_id
+        self.dyn_params = dyn_params
+        self.new_symbol_id = new_symbol_id if new_symbol_id else lambda: ""
 
-    def choose_array_len(self, name: str, typ: Type) -> int:
+    def get_dyn_sizes(self, name: str, typ: Type) -> tuple[list[int], BitVecRef]:
+        """
+        Return the list of size candidates for the given dynamic parameter.
+
+        The candidates are derived from --array_lengths if provided; otherwise, default values are used.
+        """
+
         if name in self.arrlen:
-            array_len = self.arrlen[name]
+            sizes = self.arrlen[name]
         else:
-            array_len = (
-                self.args.loop
+            sizes = (
+                list(range(self.args.loop + 1))
                 if isinstance(typ, DynamicArrayType)
-                # typ is bytes or string
-                else 65  # ECDSA signature size
+                else [0, 32, 1024, 65]  # bytes/string sizes # 65 is ECDSA signature size
             )
             if self.args.debug:
                 print(
-                    f"Warning: no size provided for {name}; default value {array_len} will be used."
+                    f"Warning: no size provided for {name}; default value {sizes} will be used."
                 )
 
-        self.dyn_param_size.append(name, array_len, typ)
+        size_var = BitVec(f"p_{name}_length_{self.new_symbol_id():>02}", 256)
 
-        return array_len
+        self.dyn_params.append(DynamicParam(name, sizes, size_var, typ))
 
+        return (sizes, size_var)
+
+    # TODO: change the interface to return the calldata output
     def create(self, abi: dict, output: ByteVec) -> None:
         """Create calldata of ABI type, and append to output"""
 
@@ -164,6 +166,15 @@ class Calldata:
         """Create symbolic ABI encoded calldata
 
         See https://docs.soliditylang.org/en/latest/abi-spec.html
+
+        For dynamically-sized parameters, multiple size candidates are considered.
+        A generalized encoding is used to represent these candidates, where the size field is symbolized,
+        and the elements are provided assuming the maximum size of the candidates.
+        The size symbols are mapped to their size candidates in the Path, and paths are later split based on these candidate values.
+        (See sevm.calldataload for more details.)
+
+        Note that this encoding approach leverages the non-uniqueness property of ABI encoding.
+        In other words, the generalized encoding is not optimized for the shortest size when smaller sizes are used.
         """
 
         # (T1, T2, ..., Tn)
@@ -179,33 +190,33 @@ class Calldata:
 
         # T[]
         if isinstance(typ, DynamicArrayType):
-            array_len = self.choose_array_len(name, typ)
-            items = [self.encode(f"{name}[{i}]", typ.base) for i in range(array_len)]
+            sizes, size_var = self.get_dyn_sizes(name, typ)
+            items = [self.encode(f"{name}[{i}]", typ.base) for i in range(max(sizes))]
             encoded = self.encode_tuple(items)
+            # generalized encoding for multiple sizes
             return EncodingResult(
-                [con(array_len)] + encoded.data, 32 + encoded.size, False
+                [size_var] + encoded.data, 32 + encoded.size, False
             )
 
         if isinstance(typ, BaseType):
-
-            def new_symbol() -> str:
-                id_suffix = f"_{self.new_symbol_id():>02}" if self.new_symbol_id else ""
-                return f"p_{name}_{typ.typ}{id_suffix}"
+            new_symbol = f"p_{name}_{typ.typ}_{self.new_symbol_id():>02}"
 
             # bytes, string
             if typ.typ in ["bytes", "string"]:
-                size = self.choose_array_len(name, typ)
+                sizes, size_var = self.get_dyn_sizes(name, typ)
+                size = max(sizes)
                 size_pad_right = ((size + 31) // 32) * 32
                 data = (
-                    [BitVec(new_symbol(), 8 * size_pad_right)]
+                    [BitVec(new_symbol, 8 * size_pad_right)]
                     if size > 0
                     else []  # empty bytes/string
                 )
-                return EncodingResult([con(size)] + data, 32 + size_pad_right, False)
+                # generalized encoding for multiple sizes
+                return EncodingResult([size_var] + data, 32 + size_pad_right, False)
 
             # uintN, intN, address, bool, bytesN
             else:
-                return EncodingResult([BitVec(new_symbol(), 256)], 32, True)
+                return EncodingResult([BitVec(new_symbol, 256)], 32, True)
 
         raise ValueError(typ)
 
@@ -255,6 +266,12 @@ class FunctionInfo:
 
 
 def str_abi(item: dict) -> str:
+    """
+    Construct a function signature string from the given function abi item.
+
+    See `tests/test_cli.py:test_str_abi()` for examples.
+    """
+
     def str_tuple(args: list) -> str:
         ret = []
         for arg in args:
@@ -273,6 +290,7 @@ def str_abi(item: dict) -> str:
 
 def find_abi(abi: list, fun_info: FunctionInfo) -> dict:
     funname, funsig = fun_info.name, fun_info.sig
+    # TODO: this currently takes O(n), but should be optimized to O(1) by preprocessing the abi info in advance.
     for item in abi:
         if (
             item["type"] == "function"
@@ -287,9 +305,9 @@ def mk_calldata(
     abi: list,
     fun_info: FunctionInfo,
     cd: ByteVec,
-    dyn_param_size: DynamicParams,
+    dyn_params: list[DynamicParam],
     args: HalmosConfig,
-    arrlen: dict[str, int] = None,
+    arrlen: dict[str, list[int]] = None,
     new_symbol_id: Callable = None,
 ) -> None:
     # find function abi
@@ -301,16 +319,17 @@ def mk_calldata(
 
     # generate symbolic ABI calldata
     arrlen = mk_arrlen(args) if arrlen is None else arrlen
-    calldata = Calldata(args, arrlen, dyn_param_size, new_symbol_id)
+    calldata = Calldata(args, arrlen, dyn_params, new_symbol_id)
     calldata.create(fun_abi, cd)
 
 
-def mk_arrlen(args: HalmosConfig) -> dict[str, int]:
+def mk_arrlen(args: HalmosConfig) -> dict[str, list[int]]:
     if not args.array_lengths:
         return {}
 
-    name_size_pairs = args.array_lengths.split(",")
+    # TODO: update syntax: name1=size1,size2; name2=size3,...; ...
+    name_sizes_pairs = args.array_lengths.split(",")
     return {
-        name.strip(): int(size.strip())
-        for name, size in [x.split("=") for x in name_size_pairs]
+        name.strip(): [int(x.strip()) for x in sizes.split(";")]
+        for name, sizes in [x.split("=") for x in name_sizes_pairs]
     }

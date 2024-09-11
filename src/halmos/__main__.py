@@ -35,7 +35,7 @@ from z3 import (
 )
 
 from .bytevec import ByteVec
-from .calldata import DynamicParams, FunctionInfo, mk_calldata
+from .calldata import FunctionInfo, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException
@@ -431,8 +431,9 @@ def setup(
         calldata = ByteVec()
         calldata.append(int(setup_selector, 16).to_bytes(4, "big"))
 
-        dyn_param_size = DynamicParams()  # TODO: propagate to run
-        mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
+        dyn_params = []  # TODO: propagate to run
+        mk_calldata(abi, setup_info, calldata, dyn_params, args)
+        setup_ex.path.process_dyn_params(dyn_params, legacy=True)
 
         parent_message = setup_ex.message()
         setup_ex.context = CallContext(
@@ -565,11 +566,17 @@ def run(
     # calldata
     #
 
+    sevm = SEVM(args)
+    solver = mk_solver(args)
+    path = Path(solver)
+    path.extend_path(setup_ex.path)
+
     cd = ByteVec()
     cd.append(int(funselector, 16).to_bytes(4, "big"))
 
-    dyn_param_size = DynamicParams()
-    mk_calldata(abi, fun_info, cd, dyn_param_size, args)
+    dyn_params = []
+    mk_calldata(abi, fun_info, cd, dyn_params, args)
+    path.process_dyn_params(dyn_params, legacy=True)
 
     message = Message(
         target=setup_ex.this(),
@@ -586,11 +593,6 @@ def run(
 
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
-
-    sevm = SEVM(args)
-    solver = mk_solver(args)
-    path = Path(solver)
-    path.extend_path(setup_ex.path)
 
     exs = sevm.run(
         Exec(
@@ -752,7 +754,7 @@ def run(
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{dyn_param_size}])"
+        f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{', '.join([str(x) for x in dyn_params])}])"
     )
 
     for idx, _, err in stuck:

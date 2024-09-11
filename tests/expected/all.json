@@ -1212,8 +1212,26 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_createCalldata_Beep_1_excluding_pure()",
+                "exitcode": 4,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_createCalldata_Beep_2()",
                 "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Beep_2_excluding_pure()",
+                "exitcode": 4,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -1232,7 +1250,7 @@
             {
                 "name": "check_createCalldata_Mock_1()",
                 "exitcode": 1,
-                "num_models": 67,
+                "num_models": 40,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -1241,7 +1259,43 @@
             {
                 "name": "check_createCalldata_Mock_2()",
                 "exitcode": 1,
-                "num_models": 67,
+                "num_models": 40,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_2_including_view()",
+                "exitcode": 1,
+                "num_models": 42,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_3()",
+                "exitcode": 1,
+                "num_models": 40,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_4()",
+                "exitcode": 1,
+                "num_models": 40,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_4_including_view()",
+                "exitcode": 1,
+                "num_models": 42,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -1250,7 +1304,16 @@
             {
                 "name": "check_createCalldata_Mock_interface()",
                 "exitcode": 1,
-                "num_models": 67,
+                "num_models": 40,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_interface_including_view()",
+                "exitcode": 1,
+                "num_models": 42,
                 "models": null,
                 "num_paths": null,
                 "time": null,

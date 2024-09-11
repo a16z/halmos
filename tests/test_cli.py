@@ -287,6 +287,41 @@ def test_decode():
     """,
         ),
         (
+            "fooStructArr(uint256,(uint256,uint256)[])",
+            """
+    {
+        "type": "function",
+        "name": "fooStructArr",
+        "inputs": [
+            {
+                "name": "param1",
+                "type": "uint256",
+                "internalType": "uint256"
+            },
+            {
+                "name": "param2",
+                "type": "tuple[]",
+                "internalType": "struct S[]",
+                "components": [
+                    {
+                        "name": "x",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    },
+                    {
+                        "name": "y",
+                        "type": "uint256",
+                        "internalType": "uint256"
+                    }
+                ]
+            }
+        ],
+        "outputs": [],
+        "stateMutability": "nonpayable"
+    }
+    """,
+        ),
+        (
             "fooDynArr(uint256[])",
             """
     {
@@ -347,6 +382,7 @@ def test_decode():
         "fooIntAddress(uint256,address)",
         "fooIntInt(uint256,uint256)",
         "fooStruct(((uint256,uint256),uint256),uint256)",
+        "fooStructArr(uint256,(uint256,uint256)[])",
         "fooDynArr(uint256[])",
         "fooFixArr(uint256[3])",
         "fooBytes(bytes)",

@@ -26,7 +26,7 @@ from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
 from .calldata import (
     DynamicArrayType,
-    DynamicParams,
+    DynamicParam,
     FunctionInfo,
     find_abi,
     mk_calldata,
@@ -225,6 +225,19 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
     ex.storage[account_alias].symbolic = True
 
 
+def create_calldata_contract(ex, arg, sevm, stack, step_id):
+    contract_name = name_of(extract_string_argument(arg, 0))
+    return create_calldata_generic(ex, arg, sevm, stack, step_id, contract_name)
+
+
+def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
+    contract_name = name_of(extract_string_argument(arg, 0))
+    include_view_functions = bool(int_of(
+        extract_bytes(arg, 4+32, 32), "symbolic boolean flag for SVM.createCalldata()"
+    ))
+    return create_calldata_generic(ex, arg, sevm, stack, step_id, contract_name, include_view_functions=include_view_functions)
+
+
 def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
@@ -233,13 +246,19 @@ def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
     )
 
 
-def create_calldata_contract(ex, arg, sevm, stack, step_id):
-    contract_name = name_of(extract_string_argument(arg, 0))
-    return create_calldata_generic(ex, arg, sevm, stack, step_id, contract_name)
+def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
+    filename = name_of(extract_string_argument(arg, 0))
+    contract_name = name_of(extract_string_argument(arg, 1))
+    include_view_functions = bool(int_of(
+        extract_bytes(arg, 4+32*2, 32), "symbolic boolean flag for SVM.createCalldata()"
+    ))
+    return create_calldata_generic(
+        ex, arg, sevm, stack, step_id, contract_name, filename, include_view_functions
+    )
 
 
 def create_calldata_generic(
-    ex, arg, sevm, stack, step_id, contract_name, filename=None
+    ex, arg, sevm, stack, step_id, contract_name, filename=None, include_view_functions=False
 ):
     """
     Generate arbitrary symbolic calldata for the given contract.
@@ -261,11 +280,12 @@ def create_calldata_generic(
         funselector = methodIdentifiers[funsig]
         funinfo = FunctionInfo(funname, funsig, funselector)
 
-        fun_abi = find_abi(abi, funinfo)
-        if fun_abi["stateMutability"] == "view":
-            continue
+        if not include_view_functions:
+            fun_abi = find_abi(abi, funinfo)
+            if fun_abi["stateMutability"] in ["pure", "view"]:
+                continue
 
-        dyn_param_size = DynamicParams()
+        dyn_params = []
 
         calldata = ByteVec()
         calldata.append(int(funselector, 16).to_bytes(4, "big"))
@@ -273,62 +293,21 @@ def create_calldata_generic(
             abi,
             funinfo,
             calldata,
-            dyn_param_size,
+            dyn_params,
             sevm.options,
             new_symbol_id=ex.new_symbol_id,
         )
+        # TODO: this may accumulate dynamic size candidates from multiple calldata into a single path object,
+        # which is not optimal, as unnecessary size candidates will need to be copied during path branching for each calldata.
+        ex.path.process_dyn_params(dyn_params)
 
-        calldata_lst = (
-            permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm, ex)
-            if dyn_param_size
-            else [calldata]
-        )
+        data = calldata.unwrap()
+        if isinstance(data, bytes):
+            data = bytes_to_bv_value(data)
 
-        for calldata in calldata_lst:
-            data = calldata.unwrap()
-            if isinstance(data, bytes):
-                data = bytes_to_bv_value(data)
-
-            results.append(ByteVec(Concat(con(32), con(len(calldata)), data)))
+        results.append(ByteVec(Concat(con(32), con(len(calldata)), data)))
 
     return results
-
-
-def permutate_dyn_size(dyn_param_size, funselector, abi, funinfo, sevm, ex):
-    arrlen_lst = [{}]
-    for p_name, p_size, p_typ in dyn_param_size:
-        # TODO: provide cli flags to specify these values
-        new_size_options = (
-            [0, 1, 2]  # array lengths
-            if isinstance(p_typ, DynamicArrayType)
-            else [0, 32, 65, 1024]  # bytes/string lengths
-        )
-        if p_size not in new_size_options:
-            new_size_options.append(p_size)
-
-        # consider all size combinations
-        arrlen_lst = [
-            {**arrlen, p_name: new_size}
-            for arrlen in arrlen_lst
-            for new_size in new_size_options
-        ]
-
-    result = []
-    for arrlen in arrlen_lst:
-        calldata = ByteVec()
-        calldata.append(int(funselector, 16).to_bytes(4, "big"))
-        mk_calldata(
-            abi,
-            funinfo,
-            calldata,
-            DynamicParams(),
-            sevm.options,
-            arrlen=arrlen,
-            new_symbol_id=ex.new_symbol_id,
-        )
-        result.append(calldata)
-
-    return result
 
 
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
@@ -442,8 +421,10 @@ class halmos_cheat_code:
         0x3B0FA01B: create_address,  # createAddress(string)
         0x6E0BB659: create_bool,  # createBool(string)
         0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
-        0x88298B32: create_calldata_file_contract,  # createCalldata(string,string)
         0xBE92D5A2: create_calldata_contract,  # createCalldata(string)
+        0xDEEF391B: create_calldata_contract_bool,  # createCalldata(string,bool)
+        0x88298B32: create_calldata_file_contract,  # createCalldata(string,string)
+        0x607C5C90: create_calldata_file_contract_bool,  # createCalldata(string,string,bool)
     }
 
     @staticmethod

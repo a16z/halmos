@@ -139,13 +139,23 @@ contract HalmosCheatCodeTest is SymTest, Test {
         svm.enableSymbolicStorage(address(0xdeadbeef)); // HalmosException
     }
 
-    function check_createCalldata_Beep_1() public {
+    function check_createCalldata_Beep_1_excluding_pure() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Beep");
+        _check_createCalldata_Beep(data); // fail // not reachable, no calldata generated above
+    }
+
+    function check_createCalldata_Beep_1() public {
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Beep", true);
         _check_createCalldata_Beep(data);
     }
 
-    function check_createCalldata_Beep_2() public {
+    function check_createCalldata_Beep_2_excluding_pure() public {
         bytes memory data = svm.createCalldata("Beep");
+        _check_createCalldata_Beep(data); // fail // not reachable, no calldata generated above
+    }
+
+    function check_createCalldata_Beep_2() public {
+        bytes memory data = svm.createCalldata("Beep", true);
         _check_createCalldata_Beep(data);
     }
 
@@ -157,17 +167,42 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_createCalldata_Mock_1() public {
-        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock");
+        bytes memory data = svm.createCalldata("Mock");
         _check_createCalldata_Mock(data);
     }
 
     function check_createCalldata_Mock_2() public {
-        bytes memory data = svm.createCalldata("Mock");
+        bytes memory data = svm.createCalldata("Mock", false);
+        _check_createCalldata_Mock(data);
+    }
+
+    function check_createCalldata_Mock_2_including_view() public {
+        bytes memory data = svm.createCalldata("Mock", true);
+        _check_createCalldata_Mock(data);
+    }
+
+    function check_createCalldata_Mock_3() public {
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock");
+        _check_createCalldata_Mock(data);
+    }
+
+    function check_createCalldata_Mock_4() public {
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock", false);
+        _check_createCalldata_Mock(data);
+    }
+
+    function check_createCalldata_Mock_4_including_view() public {
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock", true);
         _check_createCalldata_Mock(data);
     }
 
     function check_createCalldata_Mock_interface() public {
         bytes memory data = svm.createCalldata("IMock");
+        _check_createCalldata_Mock(data);
+    }
+
+    function check_createCalldata_Mock_interface_including_view() public {
+        bytes memory data = svm.createCalldata("IMock", true);
         _check_createCalldata_Mock(data);
     }
 
@@ -190,6 +225,14 @@ contract HalmosCheatCodeTest is SymTest, Test {
 }
 
 contract Mock {
+    function f_pure() public pure returns (bytes4) {
+        return this.f_pure.selector;
+    }
+
+    function f_view() public view returns (bytes4) {
+        return this.f_view.selector;
+    }
+
     function foo(uint[] memory x) public returns (bytes4) {
         console.log("foo");
         console.log(x.length); // 0, 1, 2
@@ -219,9 +262,17 @@ contract Mock {
         }
         return this.foobar.selector;
     }
+
+    // todo: test nested arrays, e.g.:
+    // "bulkAddKeysForMigration((uint256,(bytes,bytes)[])[])": "708e9c70",
+    // "bulkResetKeysForMigration((uint256,bytes[])[])": "46b3f429",
 }
 
 interface IMock {
+    function f_pure() external pure returns (bytes4);
+
+    function f_view() external view returns (bytes4);
+
     function foo(uint[] calldata x) external returns (bytes4);
 
     function bar(bytes calldata x) external returns (bytes4);
