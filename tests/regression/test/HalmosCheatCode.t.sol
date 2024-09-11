@@ -255,7 +255,7 @@ contract Mock {
 
     function foobar(bytes[] memory x) public returns (bytes4) {
         console.log("foobar");
-        // TODO: currently it returns 48 (= 16*3) calldata combinations, while it should do only 21 (= 16+4+1) combinations.
+        // 21 (= 16+4+1) combinations
         console.log(x.length); // 0, 1, 2
         for (uint i = 0; i < x.length; i++) {
             console.log(x[i].length); // 0, 32, 65, 1024
@@ -263,7 +263,7 @@ contract Mock {
         return this.foobar.selector;
     }
 
-    // todo: test nested arrays, e.g.:
+    // TODO: test nested arrays, e.g.:
     // "bulkAddKeysForMigration((uint256,(bytes,bytes)[])[])": "708e9c70",
     // "bulkResetKeysForMigration((uint256,bytes[])[])": "46b3f429",
 }
