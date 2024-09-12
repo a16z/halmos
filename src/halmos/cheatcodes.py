@@ -287,14 +287,10 @@ def create_calldata_generic(
             if fun_abi["stateMutability"] in ["pure", "view"]:
                 continue
 
-        dyn_params = []
-
-        calldata = ByteVec()
-        calldata.append(int(funselector, 16).to_bytes(4, "big"))
-        mk_calldata(
+        dyn_params = []  # to be populated by mk_calldata
+        calldata = mk_calldata(
             abi,
             funinfo,
-            calldata,
             dyn_params,
             sevm.options,
             new_symbol_id=ex.new_symbol_id,

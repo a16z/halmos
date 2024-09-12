@@ -426,13 +426,10 @@ def setup(
 
     setup_timer.create_subtimer("run")
 
-    setup_sig, setup_selector = (setup_info.sig, setup_info.selector)
+    setup_sig = setup_info.sig
     if setup_sig:
-        calldata = ByteVec()
-        calldata.append(int(setup_selector, 16).to_bytes(4, "big"))
-
         dyn_params = []  # TODO: propagate to run
-        mk_calldata(abi, setup_info, calldata, dyn_params, args)
+        calldata = mk_calldata(abi, setup_info, dyn_params, args)
         setup_ex.path.process_dyn_params(dyn_params, legacy=True)
 
         parent_message = setup_ex.message()
@@ -556,7 +553,7 @@ def run(
     fun_info: FunctionInfo,
     args: HalmosConfig,
 ) -> TestResult:
-    funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
+    funname, funsig = fun_info.name, fun_info.sig
     if args.verbose >= 1:
         print(f"Executing {funname}")
 
@@ -571,11 +568,8 @@ def run(
     path = Path(solver)
     path.extend_path(setup_ex.path)
 
-    cd = ByteVec()
-    cd.append(int(funselector, 16).to_bytes(4, "big"))
-
-    dyn_params = []
-    mk_calldata(abi, fun_info, cd, dyn_params, args)
+    dyn_params = []  # to be populated by mk_calldata
+    cd = mk_calldata(abi, fun_info, dyn_params, args)
     path.process_dyn_params(dyn_params, legacy=True)
 
     message = Message(

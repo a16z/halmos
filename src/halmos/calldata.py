@@ -95,6 +95,13 @@ class DynamicParam:
         return f"{self.name}={self.size_choices}"
 
 
+@dataclass(frozen=True)
+class FunctionInfo:
+    name: str | None = None
+    sig: str | None = None
+    selector: str | None = None
+
+
 class Calldata:
     args: HalmosConfig
     arrlen: dict[str, list[int]]
@@ -140,28 +147,34 @@ class Calldata:
 
         return (sizes, size_var)
 
-    # TODO: change the interface to return the calldata output
-    def create(self, abi: dict, output: ByteVec) -> None:
-        """Create calldata of ABI type, and append to output"""
+    def create(self, abi: list, fun_info: FunctionInfo) -> ByteVec:
+        """Create calldata of the given function"""
+
+        # function selector
+        calldata = ByteVec()
+        calldata.append(int(fun_info.selector, 16).to_bytes(4, "big"))
 
         # list of parameter types
-        tuple_type = parse_tuple_type("", abi["inputs"])
+        fun_abi = find_abi(abi, fun_info)
+        tuple_type = parse_tuple_type("", fun_abi["inputs"])
 
         # no parameters
-        if len(tuple_type.items) == 0:
-            return
+        if not tuple_type.items:
+            return calldata
 
-        starting_size = len(output)
+        starting_size = len(calldata)
 
         # ABI encoded symbolic calldata for parameters
         encoded = self.encode("", tuple_type)
         for data in encoded.data:
-            output.append(data)
+            calldata.append(data)
 
         # sanity check
-        calldata_size = len(output) - starting_size
+        calldata_size = len(calldata) - starting_size
         if calldata_size != encoded.size:
             raise ValueError(encoded)
+
+        return calldata
 
     def encode(self, name: str, typ: Type) -> EncodingResult:
         """Create symbolic ABI encoded calldata
@@ -257,13 +270,6 @@ class Calldata:
         return EncodingResult(heads + tails, total_size, static)
 
 
-@dataclass(frozen=True)
-class FunctionInfo:
-    name: str | None = None
-    sig: str | None = None
-    selector: str | None = None
-
-
 def str_abi(item: dict) -> str:
     """
     Construct a function signature string from the given function abi item.
@@ -303,23 +309,14 @@ def find_abi(abi: list, fun_info: FunctionInfo) -> dict:
 def mk_calldata(
     abi: list,
     fun_info: FunctionInfo,
-    cd: ByteVec,
     dyn_params: list[DynamicParam],
     args: HalmosConfig,
     arrlen: dict[str, list[int]] = None,
     new_symbol_id: Callable = None,
 ) -> None:
-    # find function abi
-    fun_abi = find_abi(abi, fun_info)
-
-    # no parameters
-    if not fun_abi["inputs"]:
-        return
-
-    # generate symbolic ABI calldata
     arrlen = mk_arrlen(args) if arrlen is None else arrlen
     calldata = Calldata(args, arrlen, dyn_params, new_symbol_id)
-    calldata.create(fun_abi, cd)
+    return calldata.create(abi, fun_info)
 
 
 def mk_arrlen(args: HalmosConfig) -> dict[str, list[int]]:
