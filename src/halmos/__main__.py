@@ -598,7 +598,7 @@ def run(
         Exec(
             code=setup_ex.code.copy(),  # shallow copy
             storage=deepcopy(setup_ex.storage),
-            balance=setup_ex.balance,  # TODO: add callvalue
+            balance=setup_ex.balance,
             #
             block=deepcopy(setup_ex.block),
             #
