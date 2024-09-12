@@ -277,10 +277,22 @@ def create_calldata_generic(
 
     results = []
 
+    # empty calldata for receive() and empty fallback() function calls
+    results.append(ByteVec(Concat(con(32), con(0))))
+
+    # dummy calldata for nonempty fallback() call
+    fallback_selector = BitVec("fallback_selector", 4 * 8)  # see below for additional constraints
+    fallback_data_size = 1024  # TODO: configurable
+    fallback_data = BitVec("fallback_data", fallback_data_size * 8)
+    results.append(ByteVec(Concat(con(32), con(4+fallback_data_size), fallback_selector, fallback_data)))
+
     for funsig in methodIdentifiers:
         funname = funsig.split("(")[0]
         funselector = methodIdentifiers[funsig]
         funinfo = FunctionInfo(funname, funsig, funselector)
+
+        # assume fallback_selector differs from all existing selectors
+        ex.path.append(fallback_selector != con(int(funselector, 16), 32))
 
         if not include_view:
             fun_abi = find_abi(abi, funinfo)

@@ -225,6 +225,16 @@ contract HalmosCheatCodeTest is SymTest, Test {
 }
 
 contract Mock {
+//  fallback(bytes calldata input) external payable returns (bytes memory output) { }
+    fallback() external payable {
+        console.log("fallback");
+        console.log(msg.data.length);
+    }
+
+    receive() external payable {
+        console.log("receive");
+    }
+
     function f_pure() public pure returns (bytes4) {
         return this.f_pure.selector;
     }
