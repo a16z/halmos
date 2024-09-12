@@ -1373,9 +1373,11 @@ def import_libs(build_out_map: dict, hexcode: str, linkReferences: dict) -> dict
 def build_output_iterator(build_out: dict):
     for compiler_version in sorted(build_out):
         build_out_map = build_out[compiler_version]
+        build_out_map_no_ast = build_out_map.copy()
+        build_out_map_no_ast.pop("ast", None)
         for filename in sorted(build_out_map):
             for contract_name in sorted(build_out_map[filename]):
-                yield (build_out_map, filename, contract_name)
+                yield (build_out_map, build_out_map_no_ast, filename, contract_name)
 
 
 def contract_regex(args):
@@ -1491,7 +1493,7 @@ def _main(_args=None) -> MainResult:
     # run
     #
 
-    for build_out_map, filename, contract_name in build_output_iterator(build_out):
+    for build_out_map, build_out_map_no_ast, filename, contract_name in build_output_iterator(build_out):
         if not re.search(contract_regex(args), contract_name):
             continue
 
@@ -1531,7 +1533,7 @@ def _main(_args=None) -> MainResult:
             contract_args,
             contract_json,
             libs,
-            build_out_map,
+            build_out_map_no_ast,
         )
 
         enable_parallel = args.test_parallel and num_found > 1
