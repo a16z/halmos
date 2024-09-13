@@ -40,9 +40,7 @@ def is_empty_bytes(x) -> bool:
 
 
 def mk_cond(bop, v1, v2):
-
     # handle empty arguments
-
     if is_empty_bytes(v1) and is_empty_bytes(v2):
         if bop == "Eq":
             return BoolVal(True)

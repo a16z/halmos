@@ -35,7 +35,7 @@ from z3 import (
 )
 
 from .bytevec import ByteVec
-from .calldata import FunctionInfo, mk_calldata, str_abi, get_abi
+from .calldata import FunctionInfo, get_abi, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException

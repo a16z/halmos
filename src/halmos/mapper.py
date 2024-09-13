@@ -116,8 +116,9 @@ class BuildOut(metaclass=SingletonMeta):
 
         if filename is None:
             if len(mapping) > 1:
-                err_msg = f"{contract_name} exists in multiple files: {list(mapping.keys())}"
-                raise HalmosException(err_msg)
+                raise HalmosException(
+                    f"{contract_name} exists in multiple files: {list(mapping.keys())}"
+                )
             [filename] = mapping.keys()
 
         result = mapping.get(filename)

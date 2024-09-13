@@ -26,9 +26,8 @@ from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
 from .calldata import (
     FunctionInfo,
-    mk_calldata,
-    str_abi,
     get_abi,
+    mk_calldata,
 )
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
 from .mapper import BuildOut
@@ -243,9 +242,7 @@ def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
 def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
-    return create_calldata_generic(
-        ex, sevm, contract_name, filename
-    )
+    return create_calldata_generic(ex, sevm, contract_name, filename)
 
 
 def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
@@ -260,9 +257,7 @@ def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
     )
 
 
-def create_calldata_generic(
-    ex, sevm, contract_name, filename=None, include_view=False
-):
+def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False):
     """
     Generate arbitrary symbolic calldata for the given contract.
 
