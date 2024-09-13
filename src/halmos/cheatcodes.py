@@ -222,6 +222,8 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
 
     ex.storage[account_alias].symbolic = True
 
+    return ByteVec()  # empty return data
+
 
 def create_calldata_contract(ex, arg, sevm, stack, step_id):
     contract_name = name_of(extract_string_argument(arg, 0))
@@ -340,12 +342,12 @@ def create_uint(ex, arg, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name_of(extract_string_argument(arg, 1))
-    return uint256(create_generic(ex, bits, name, f"uint{bits}"))
+    return ByteVec(uint256(create_generic(ex, bits, name, f"uint{bits}")))
 
 
 def create_uint256(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return create_generic(ex, 256, name, "uint256")
+    return ByteVec(create_generic(ex, 256, name, "uint256"))
 
 
 def create_int(ex, arg, **kwargs):
@@ -356,12 +358,12 @@ def create_int(ex, arg, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name_of(extract_string_argument(arg, 1))
-    return int256(create_generic(ex, bits, name, f"int{bits}"))
+    return ByteVec(int256(create_generic(ex, bits, name, f"int{bits}")))
 
 
 def create_int256(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return create_generic(ex, 256, name, "int256")
+    return ByteVec(create_generic(ex, 256, name, "int256"))
 
 
 def create_bytes(ex, arg, **kwargs):
@@ -384,22 +386,24 @@ def create_string(ex, arg, **kwargs):
 
 def create_bytes4(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return Concat(create_generic(ex, 32, name, "bytes4"), con(0, size_bits=224))
+    result = ByteVec(create_generic(ex, 32, name, "bytes4"))
+    result.append((0).to_bytes(28))  # pad right
+    return result
 
 
 def create_bytes32(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return create_generic(ex, 256, name, "bytes32")
+    return ByteVec(create_generic(ex, 256, name, "bytes32"))
 
 
 def create_address(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return uint256(create_generic(ex, 160, name, "address"))
+    return ByteVec(uint256(create_generic(ex, 160, name, "address")))
 
 
 def create_bool(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return uint256(create_generic(ex, 1, name, "bool"))
+    return ByteVec(uint256(create_generic(ex, 1, name, "bool")))
 
 
 def apply_vmaddr(ex, private_key: Word):
@@ -449,7 +453,7 @@ class halmos_cheat_code:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
             result = handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id)
-            return result if isinstance(result, list) else [ByteVec(result)]
+            return result if isinstance(result, list) else [result]
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
         raise HalmosException(error_msg)
