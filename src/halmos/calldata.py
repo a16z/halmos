@@ -153,8 +153,16 @@ class Calldata:
 
         return (sizes, size_var)
 
-    def create(self, abi: dict, fun_info: FunctionInfo) -> tuple[ByteVec, list[DynamicParam]]:
-        """Create calldata of the given function"""
+    def create(
+        self, abi: dict, fun_info: FunctionInfo
+    ) -> tuple[ByteVec, list[DynamicParam]]:
+        """
+        Create calldata of the given function.
+
+        Returns:
+            A tuple containing the generated calldata, and the size information
+            for all dynamic parameters included in the calldata.
+        """
 
         # function selector
         calldata = ByteVec()
