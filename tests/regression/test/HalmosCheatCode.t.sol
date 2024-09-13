@@ -138,7 +138,10 @@ contract HalmosCheatCodeTest is SymTest, Test {
         // symbolic storage is not allowed for a nonexistent account
         svm.enableSymbolicStorage(address(0xdeadbeef)); // HalmosException
     }
+}
 
+/// @custom:halmos --default-bytes-lengths 0,65
+contract HalmosCreateCalldataTest is SymTest, Test {
     function check_createCalldata_Beep_1_excluding_pure() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Beep");
         _check_createCalldata_Beep(data); // fail because the only function in Beep is pure, which is excluded in createCalldata()
@@ -240,8 +243,12 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function _check_createCalldata_Mock(bytes memory data, bool pass) public {
-        Mock mock = new Mock(false); // use Mock(true) for debugging
-        (bool success, bytes memory retdata) = address(mock).call(data);
+        Mock target = new Mock(false); // use Mock(true) for debugging
+        _check_createCalldata_generic(address(target), data, pass);
+    }
+
+    function _check_createCalldata_generic(address target, bytes memory data, bool pass) public {
+        (bool success, bytes memory retdata) = target.call(data);
         vm.assume(success);
 
         bytes4 ret = abi.decode(retdata, (bytes4));
@@ -254,6 +261,21 @@ contract HalmosCheatCodeTest is SymTest, Test {
             // where the number of calldata combinations is equal to the # of counterexamples.
             assertNotEq(ret, expected);
         }
+    }
+
+    function check_createCalldata_NestedArrays_1_pass() public {
+        bytes memory data = svm.createCalldata("NestedArrays");
+        _check_createCalldata_NestedArrays(data, true);
+    }
+
+    function check_createCalldata_NestedArrays_1_fail() public {
+        bytes memory data = svm.createCalldata("NestedArrays");
+        _check_createCalldata_NestedArrays(data, false);
+    }
+
+    function _check_createCalldata_NestedArrays(bytes memory data, bool pass) public {
+        NestedArrays target = new NestedArrays(false); // use NestedArrays(true) for debugging
+        _check_createCalldata_generic(address(target), data, pass);
     }
 
     function check_createCalldata_Dummy_fail() public {
@@ -301,7 +323,7 @@ contract Mock {
 
     function foo(uint[] memory x) public returns (bytes4) {
         if (log) {
-            console.log("foo");
+            console.log("foo(uint[])");
             console.log(x.length); // 0, 1, 2
         }
         return this.foo.selector;
@@ -309,37 +331,105 @@ contract Mock {
 
     function bar(bytes memory x) public returns (bytes4) {
         if (log) {
-            console.log("bar");
-            console.log(x.length); // 0, 32, 65, 1024
+            console.log("bar(bytes)");
+            console.log(x.length); // 0, 65
         }
         return this.bar.selector;
     }
 
     function zoo(uint[] memory x, bytes memory y) public returns (bytes4) {
         if (log) {
-            console.log("zoo");
-            // 12 (= 3 * 4) combinations
+            console.log("zoo(uint[],bytes)");
+            // 6 (= 3 * 2) combinations
             console.log(x.length); // 0, 1, 2
-            console.log(y.length); // 0, 32, 65, 1024
+            console.log(y.length); // 0, 65
         }
         return this.zoo.selector;
     }
 
     function foobar(bytes[] memory x) public returns (bytes4) {
         if (log) {
-            console.log("foobar");
-            // 21 (= 16+4+1) combinations
+            console.log("foobar(bytes[])");
             console.log(x.length); // 0, 1, 2
+            // 7 (= 1 + 2 + 2*2) combinations
             for (uint i = 0; i < x.length; i++) {
-                console.log(x[i].length); // 0, 32, 65, 1024
+                console.log(x[i].length); // 0, 65
             }
         }
         return this.foobar.selector;
     }
+}
 
-    // TODO: test nested arrays, e.g.:
-    // "bulkAddKeysForMigration((uint256,(bytes,bytes)[])[])": "708e9c70",
-    // "bulkResetKeysForMigration((uint256,bytes[])[])": "46b3f429",
+contract NestedArrays {
+    bool log;
+
+    constructor (bool _log) {
+        log = _log;
+    }
+
+    struct BytesBytes {
+        bytes b1;
+        bytes b2;
+    }
+
+    struct UintBytesBytesArray {
+        uint256 u1;
+        BytesBytes[] u2;
+    }
+
+    struct UintBytesArray {
+        uint256 u1;
+        bytes[] u2;
+    }
+
+    function f_bytes_bytes_array(BytesBytes[] memory x) public returns (bytes4) {
+        if (log) {
+            console.log("f((bytes,bytes)[])");
+            console.log(x.length); // 0, 1, 2
+            // 21 (= 1 + 4 + 4*4) combinations
+            for (uint i = 0; i < x.length; i++) {
+                // 4 (= 2*2) combinations
+                console.log(x[i].b1.length); // 0, 65
+                console.log(x[i].b2.length); // 0, 65
+            }
+        }
+        return this.f_bytes_bytes_array.selector;
+    }
+
+    function f_bytes_bytes_array_array(UintBytesBytesArray[] memory x) public returns (bytes4) {
+        if (log) {
+            console.log("f((uint256,(bytes,bytes)[])[])");
+            console.log(x.length); // 0, 1, 2
+            // 463 (= 1 + 21 + 21*21) combinations
+            for (uint i = 0; i < x.length; i++) {
+                // 21 (= 1 + 4 + 4*4) combinations
+                console.log(x[i].u2.length); // 0, 1, 2
+                for (uint j = 0; j < x[i].u2.length; j++) {
+                    // 4 (= 2*2) combinations
+                    console.log(x[i].u2[j].b1.length); // 0, 65
+                    console.log(x[i].u2[j].b2.length); // 0, 65
+                }
+            }
+        }
+        return this.f_bytes_bytes_array_array.selector;
+    }
+
+    function f_bytes_array_array(UintBytesArray[] memory x) public returns (bytes4) {
+        if (log) {
+            console.log("f((uint256,bytes[])[])");
+            console.log(x.length); // 0, 1, 2
+            // 57 (= 1 + 7 + 7*7) combinations
+            for (uint i = 0; i < x.length; i++) {
+                // 7 (= 1 + 2 + 2*2) combinations
+                console.log(x[i].u2.length); // 0, 1, 2
+                for (uint j = 0; j < x[i].u2.length; j++) {
+                    // 2 combinations
+                    console.log(x[i].u2[j].length);  // 0, 65
+                }
+            }
+        }
+        return this.f_bytes_array_array.selector;
+    }
 }
 
 interface IMock {
