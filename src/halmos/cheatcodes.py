@@ -16,6 +16,7 @@ from z3 import (
     Not,
     Or,
     eq,
+    is_bv,
     is_bv_value,
     is_false,
     simplify,
@@ -24,7 +25,13 @@ from z3 import (
 
 from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
+from .calldata import (
+    FunctionInfo,
+    get_abi,
+    mk_calldata,
+)
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
+from .mapper import BuildOut
 from .utils import (
     Address,
     BitVecSort8,
@@ -215,6 +222,110 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
 
     ex.storage[account_alias].symbolic = True
 
+    return ByteVec()  # empty return data
+
+
+def create_calldata_contract(ex, arg, sevm, stack, step_id):
+    contract_name = name_of(extract_string_argument(arg, 0))
+    return create_calldata_generic(ex, sevm, contract_name)
+
+
+def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
+    contract_name = name_of(extract_string_argument(arg, 0))
+    include_view = int_of(
+        extract_bytes(arg, 4 + 32 * 1, 32),
+        "symbolic boolean flag for SVM.createCalldata()",
+    )
+    return create_calldata_generic(
+        ex, sevm, contract_name, include_view=bool(include_view)
+    )
+
+
+def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
+    filename = name_of(extract_string_argument(arg, 0))
+    contract_name = name_of(extract_string_argument(arg, 1))
+    return create_calldata_generic(ex, sevm, contract_name, filename)
+
+
+def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
+    filename = name_of(extract_string_argument(arg, 0))
+    contract_name = name_of(extract_string_argument(arg, 1))
+    include_view = int_of(
+        extract_bytes(arg, 4 + 32 * 2, 32),
+        "symbolic boolean flag for SVM.createCalldata()",
+    )
+    return create_calldata_generic(
+        ex, sevm, contract_name, filename, bool(include_view)
+    )
+
+
+def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
+    """
+    Return ABI encoding of a tuple containing a single bytes element.
+
+    encoding of a tuple (bytes): 32 (offset) + length + data
+    """
+
+    length = data.size() // 8 if is_bv(data) else len(data)
+    result = ByteVec((32).to_bytes(32) + int(length).to_bytes(32))
+    result.append(data)
+    return result
+
+
+def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False):
+    """
+    Generate arbitrary symbolic calldata for the given contract.
+
+    Dynamic-array arguments are sized in the same way of regular test functions.
+
+    The contract is identified by its contract name and optional filename.
+    TODO: provide variants that require only the contract address.
+    """
+    contract_json = BuildOut().get_by_name(contract_name, filename)[0]
+
+    abi = get_abi(contract_json)
+    methodIdentifiers = contract_json["methodIdentifiers"]
+
+    results = []
+
+    # empty calldata for receive() and fallback()
+    results.append(encode_tuple_bytes(b""))
+
+    # nonempty calldata for fallback()
+    fallback_selector = BitVec(f"fallback_selector_{ex.new_symbol_id():>02}", 4 * 8)
+    fallback_input_length = 1024  # TODO: configurable
+    fallback_input = BitVec(
+        f"fallback_input_{ex.new_symbol_id():>02}", fallback_input_length * 8
+    )
+    results.append(encode_tuple_bytes(Concat(fallback_selector, fallback_input)))
+
+    for funsig in methodIdentifiers:
+        funname = funsig.split("(")[0]
+        funselector = methodIdentifiers[funsig]
+        funinfo = FunctionInfo(funname, funsig, funselector)
+
+        # assume fallback_selector differs from all existing selectors
+        ex.path.append(fallback_selector != con(int(funselector, 16), 32))
+
+        if not include_view:
+            fun_abi = abi[funinfo.sig]
+            if fun_abi["stateMutability"] in ["pure", "view"]:
+                continue
+
+        calldata, dyn_params = mk_calldata(
+            abi,
+            funinfo,
+            sevm.options,
+            new_symbol_id=ex.new_symbol_id,
+        )
+        # TODO: this may accumulate dynamic size candidates from multiple calldata into a single path object,
+        # which is not optimal, as unnecessary size candidates will need to be copied during path branching for each calldata.
+        ex.path.process_dyn_params(dyn_params)
+
+        results.append(encode_tuple_bytes(calldata))
+
+    return results
+
 
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
     label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
@@ -229,12 +340,12 @@ def create_uint(ex, arg, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name_of(extract_string_argument(arg, 1))
-    return uint256(create_generic(ex, bits, name, f"uint{bits}"))
+    return ByteVec(uint256(create_generic(ex, bits, name, f"uint{bits}")))
 
 
 def create_uint256(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return create_generic(ex, 256, name, "uint256")
+    return ByteVec(create_generic(ex, 256, name, "uint256"))
 
 
 def create_int(ex, arg, **kwargs):
@@ -245,12 +356,12 @@ def create_int(ex, arg, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name_of(extract_string_argument(arg, 1))
-    return int256(create_generic(ex, bits, name, f"int{bits}"))
+    return ByteVec(int256(create_generic(ex, bits, name, f"int{bits}")))
 
 
 def create_int256(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return create_generic(ex, 256, name, "int256")
+    return ByteVec(create_generic(ex, 256, name, "int256"))
 
 
 def create_bytes(ex, arg, **kwargs):
@@ -259,7 +370,7 @@ def create_bytes(ex, arg, **kwargs):
     )
     name = name_of(extract_string_argument(arg, 1))
     symbolic_bytes = create_generic(ex, byte_size * 8, name, "bytes")
-    return Concat(con(32), con(byte_size), symbolic_bytes)
+    return encode_tuple_bytes(symbolic_bytes)
 
 
 def create_string(ex, arg, **kwargs):
@@ -268,27 +379,29 @@ def create_string(ex, arg, **kwargs):
     )
     name = name_of(extract_string_argument(arg, 1))
     symbolic_string = create_generic(ex, byte_size * 8, name, "string")
-    return Concat(con(32), con(byte_size), symbolic_string)
+    return encode_tuple_bytes(symbolic_string)
 
 
 def create_bytes4(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return Concat(create_generic(ex, 32, name, "bytes4"), con(0, size_bits=224))
+    result = ByteVec(create_generic(ex, 32, name, "bytes4"))
+    result.append((0).to_bytes(28))  # pad right
+    return result
 
 
 def create_bytes32(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return create_generic(ex, 256, name, "bytes32")
+    return ByteVec(create_generic(ex, 256, name, "bytes32"))
 
 
 def create_address(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return uint256(create_generic(ex, 160, name, "address"))
+    return ByteVec(uint256(create_generic(ex, 160, name, "address")))
 
 
 def create_bool(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return uint256(create_generic(ex, 1, name, "bool"))
+    return ByteVec(uint256(create_generic(ex, 1, name, "bool")))
 
 
 def apply_vmaddr(ex, private_key: Word):
@@ -327,13 +440,18 @@ class halmos_cheat_code:
         0x3B0FA01B: create_address,  # createAddress(string)
         0x6E0BB659: create_bool,  # createBool(string)
         0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
+        0xBE92D5A2: create_calldata_contract,  # createCalldata(string)
+        0xDEEF391B: create_calldata_contract_bool,  # createCalldata(string,bool)
+        0x88298B32: create_calldata_file_contract,  # createCalldata(string,string)
+        0x607C5C90: create_calldata_file_contract_bool,  # createCalldata(string,string,bool)
     }
 
     @staticmethod
-    def handle(sevm, ex, arg: BitVecRef, stack, step_id) -> BitVecRef:
+    def handle(sevm, ex, arg: BitVecRef, stack, step_id) -> list[BitVecRef]:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
-            return ByteVec(handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id))
+            result = handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id)
+            return result if isinstance(result, list) else [result]
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
         raise HalmosException(error_msg)
@@ -430,6 +548,7 @@ class hevm_cheat_code:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 
+        # vm.assert*
         if funsig in assert_cheatcode_handler:
             vm_assert = assert_cheatcode_handler[funsig](arg)
             not_cond = simplify(Not(vm_assert.cond))

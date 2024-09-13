@@ -1,5 +1,8 @@
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, Optional
+
+from .exceptions import HalmosException
 
 SELECTOR_FIELDS = {
     "VariableDeclaration": "functionSelector",
@@ -74,6 +77,56 @@ class SingletonMeta(type):
             cls._instances[cls] = super().__call__(*args, **kwargs)
 
         return cls._instances[cls]
+
+
+class BuildOut(metaclass=SingletonMeta):
+    def __init__(self):
+        self._build_out_map: dict = None
+        self._build_out_map_reverse: dict = None
+
+    def set_build_out(self, build_out_map: dict):
+        if self._build_out_map is build_out_map:
+            return
+
+        self._build_out_map = build_out_map
+        self._build_out_map_reverse = None
+
+    def create_build_out_map_reverse(self):
+        # create reverse mapping
+        self._build_out_map_reverse = defaultdict(dict)
+        for filename, file_map in self._build_out_map.items():
+            for contract_name, contract_map in file_map.items():
+                self._build_out_map_reverse[contract_name][filename] = contract_map
+
+    def get_by_name(self, contract_name: str, filename: str = None) -> dict:
+        """
+        Return the build output json for the given contract name.
+
+        Raise a HalmosException if the contract is not found, or cannot be uniquely determined.
+
+        The optional filename argument is required, if the contract name appears in multiple files.
+        """
+        if not self._build_out_map_reverse:
+            self.create_build_out_map_reverse()
+
+        mapping = self._build_out_map_reverse[contract_name]
+
+        if not mapping:
+            raise HalmosException(f"{contract_name} is not found")
+
+        if filename is None:
+            if len(mapping) > 1:
+                raise HalmosException(
+                    f"{contract_name} exists in multiple files: {list(mapping.keys())}"
+                )
+            [filename] = mapping.keys()
+
+        result = mapping.get(filename)
+
+        if not result:
+            raise HalmosException(f"{contract_name} is not found in {filename}")
+
+        return result
 
 
 class Mapper(metaclass=SingletonMeta):

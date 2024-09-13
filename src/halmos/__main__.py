@@ -35,11 +35,11 @@ from z3 import (
 )
 
 from .bytevec import ByteVec
-from .calldata import Calldata
+from .calldata import FunctionInfo, get_abi, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException
-from .mapper import DeployAddressMapper, Mapper
+from .mapper import BuildOut, DeployAddressMapper, Mapper
 from .sevm import (
     EMPTY_BALANCE,
     EVM,
@@ -166,61 +166,6 @@ def load_config(_args) -> HalmosConfig:
     config = config.with_overrides(source="command line args", **vars(cli_overrides))
 
     return config
-
-
-@dataclass(frozen=True)
-class FunctionInfo:
-    name: str | None = None
-    sig: str | None = None
-    selector: str | None = None
-
-
-def str_abi(item: dict) -> str:
-    def str_tuple(args: list) -> str:
-        ret = []
-        for arg in args:
-            typ = arg["type"]
-            match = re.search(r"^tuple((\[[0-9]*\])*)$", typ)
-            if match:
-                ret.append(str_tuple(arg["components"]) + match.group(1))
-            else:
-                ret.append(typ)
-        return "(" + ",".join(ret) + ")"
-
-    if item["type"] != "function":
-        raise ValueError(item)
-    return item["name"] + str_tuple(item["inputs"])
-
-
-def find_abi(abi: list, fun_info: FunctionInfo) -> dict:
-    funname, funsig = fun_info.name, fun_info.sig
-    for item in abi:
-        if (
-            item["type"] == "function"
-            and item["name"] == funname
-            and str_abi(item) == funsig
-        ):
-            return item
-    raise ValueError(f"No {funsig} found in {abi}")
-
-
-def mk_calldata(
-    abi: list,
-    fun_info: FunctionInfo,
-    cd: ByteVec,
-    dyn_param_size: list[str],
-    args: HalmosConfig,
-) -> None:
-    # find function abi
-    fun_abi = find_abi(abi, fun_info)
-
-    # no parameters
-    if len(fun_abi["inputs"]) == 0:
-        return
-
-    # generate symbolic ABI calldata
-    calldata = Calldata(args, mk_arrlen(args), dyn_param_size)
-    calldata.create(fun_abi, cd)
 
 
 def mk_block() -> Block:
@@ -468,7 +413,7 @@ def deploy_test(
 def setup(
     creation_hexcode: str,
     deployed_hexcode: str,
-    abi: list,
+    abi: dict,
     setup_info: FunctionInfo,
     args: HalmosConfig,
     libs: dict,
@@ -481,13 +426,11 @@ def setup(
 
     setup_timer.create_subtimer("run")
 
-    setup_sig, setup_selector = (setup_info.sig, setup_info.selector)
+    setup_sig = setup_info.sig
     if setup_sig:
-        calldata = ByteVec()
-        calldata.append(int(setup_selector, 16).to_bytes(4, "big"))
-
-        dyn_param_size = []  # TODO: propagate to run
-        mk_calldata(abi, setup_info, calldata, dyn_param_size, args)
+        # TODO: dyn_params may need to be passed to mk_calldata in run()
+        calldata, dyn_params = mk_calldata(abi, setup_info, args)
+        setup_ex.path.process_dyn_params(dyn_params, legacy=True)
 
         parent_message = setup_ex.message()
         setup_ex.context = CallContext(
@@ -606,11 +549,11 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 def run(
     setup_ex: Exec,
-    abi: list,
+    abi: dict,
     fun_info: FunctionInfo,
     args: HalmosConfig,
 ) -> TestResult:
-    funname, funsig, funselector = fun_info.name, fun_info.sig, fun_info.selector
+    funname, funsig = fun_info.name, fun_info.sig
     if args.verbose >= 1:
         print(f"Executing {funname}")
 
@@ -620,11 +563,13 @@ def run(
     # calldata
     #
 
-    cd = ByteVec()
-    cd.append(int(funselector, 16).to_bytes(4, "big"))
+    sevm = SEVM(args)
+    solver = mk_solver(args)
+    path = Path(solver)
+    path.extend_path(setup_ex.path)
 
-    dyn_param_size = []
-    mk_calldata(abi, fun_info, cd, dyn_param_size, args)
+    cd, dyn_params = mk_calldata(abi, fun_info, args)
+    path.process_dyn_params(dyn_params, legacy=True)
 
     message = Message(
         target=setup_ex.this(),
@@ -642,16 +587,11 @@ def run(
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
 
-    sevm = SEVM(args)
-    solver = mk_solver(args)
-    path = Path(solver)
-    path.extend_path(setup_ex.path)
-
     exs = sevm.run(
         Exec(
             code=setup_ex.code.copy(),  # shallow copy
             storage=deepcopy(setup_ex.storage),
-            balance=setup_ex.balance,  # TODO: add callvalue
+            balance=setup_ex.balance,
             #
             block=deepcopy(setup_ex.block),
             #
@@ -807,7 +747,7 @@ def run(
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{', '.join(dyn_param_size)}])"
+        f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{', '.join([str(x) for x in dyn_params])}])"
     )
 
     for idx, _, err in stuck:
@@ -854,15 +794,18 @@ def run(
 class SetupAndRunSingleArgs:
     creation_hexcode: str
     deployed_hexcode: str
-    abi: list
+    abi: dict
     setup_info: FunctionInfo
     fun_info: FunctionInfo
     setup_args: HalmosConfig
     args: HalmosConfig
     libs: dict
+    build_out_map: dict
 
 
 def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> list[TestResult]:
+    BuildOut().set_build_out(fn_args.build_out_map)
+
     args = fn_args.args
     try:
         setup_ex = setup(
@@ -923,12 +866,14 @@ class RunArgs:
     creation_hexcode: str
     deployed_hexcode: str
 
-    abi: list
+    abi: dict
     methodIdentifiers: dict[str, str]
 
     args: HalmosConfig
     contract_json: dict
     libs: dict
+
+    build_out_map: dict
 
 
 def run_parallel(run_args: RunArgs) -> list[TestResult]:
@@ -958,6 +903,7 @@ def run_parallel(run_args: RunArgs) -> list[TestResult]:
             setup_config,
             with_devdoc(args, fun_info.sig, run_args.contract_json),
             libs,
+            run_args.build_out_map,
         )
         for fun_info in fun_infos
     ]
@@ -971,6 +917,8 @@ def run_parallel(run_args: RunArgs) -> list[TestResult]:
 
 
 def run_sequential(run_args: RunArgs) -> list[TestResult]:
+    BuildOut().set_build_out(run_args.build_out_map)
+
     args = run_args.args
     setup_info = extract_setup(run_args.methodIdentifiers)
 
@@ -1259,16 +1207,6 @@ def render_model(model: StrModel | str) -> str:
 
     formatted = [f"\n    {decl} = {val}" for decl, val in model.items()]
     return "".join(sorted(formatted)) if formatted else "∅"
-
-
-def mk_arrlen(args: HalmosConfig) -> dict[str, int]:
-    arrlen = {}
-    if args.array_lengths:
-        for assign in [x.split("=") for x in args.array_lengths.split(",")]:
-            name = assign[0].strip()
-            size = assign[1].strip()
-            arrlen[name] = int(size)
-    return arrlen
 
 
 def get_contract_type(
@@ -1569,7 +1507,7 @@ def _main(_args=None) -> MainResult:
 
         contract_timer = NamedTimer("time")
 
-        abi = contract_json["abi"]
+        abi = get_abi(contract_json)
         creation_hexcode = contract_json["bytecode"]["object"]
         deployed_hexcode = contract_json["deployedBytecode"]["object"]
         linkReferences = contract_json["bytecode"]["linkReferences"]
@@ -1592,6 +1530,7 @@ def _main(_args=None) -> MainResult:
             contract_args,
             contract_json,
             libs,
+            build_out_map,
         )
 
         enable_parallel = args.test_parallel and num_found > 1

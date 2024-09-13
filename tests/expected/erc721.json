@@ -3,7 +3,7 @@
     "test_results": {
         "test/OpenZeppelinERC721.t.sol:OpenZeppelinERC721Test": [
             {
-                "name": "check_NoBackdoor(bytes4)",
+                "name": "check_NoBackdoor()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -23,7 +23,7 @@
         ],
         "test/SoladyERC721.t.sol:SoladyERC721Test": [
             {
-                "name": "check_NoBackdoor(bytes4)",
+                "name": "check_NoBackdoor()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -43,7 +43,7 @@
         ],
         "test/SolmateERC721.t.sol:SolmateERC721Test": [
             {
-                "name": "check_NoBackdoor(bytes4)",
+                "name": "check_NoBackdoor()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,

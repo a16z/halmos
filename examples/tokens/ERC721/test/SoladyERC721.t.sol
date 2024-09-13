@@ -43,4 +43,9 @@ contract SoladyERC721Test is ERC721Test {
         vm.prank(accounts[1]);
         token_.setApprovalForAll(accounts[2], true);
     }
+
+    function check_NoBackdoor() public {
+        bytes memory _calldata = svm.createCalldata("SoladyERC721");
+        _check_NoBackdoor(_calldata);
+    }
 }

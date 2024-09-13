@@ -35,7 +35,30 @@ class VmAssertion:
     msg: str | None
 
 
+def is_empty_bytes(x) -> bool:
+    return isinstance(x, bytes) and not x
+
+
 def mk_cond(bop, v1, v2):
+    # handle empty arguments
+    if is_empty_bytes(v1) and is_empty_bytes(v2):
+        if bop == "Eq":
+            return BoolVal(True)
+        elif bop == "NotEq":
+            return BoolVal(False)
+        else:
+            raise ValueError(f"mk_cond: invalid arguments: {v1} {bop} {v2}")
+
+    elif is_empty_bytes(v1) or is_empty_bytes(v2):
+        if bop == "Eq":
+            return BoolVal(False)
+        elif bop == "NotEq":
+            return BoolVal(True)
+        else:
+            raise ValueError(f"mk_cond: invalid arguments: {v1} {bop} {v2}")
+
+    # now both arguments are non-empty
+
     v1 = bytes_to_bv_value(v1) if isinstance(v1, bytes) else v1
     v2 = bytes_to_bv_value(v2) if isinstance(v2, bytes) else v2
 

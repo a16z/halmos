@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import reduce
 
@@ -11,7 +12,7 @@ from z3 import (
 
 from .bytevec import ByteVec
 from .config import Config as HalmosConfig
-from .sevm import con
+from .utils import con
 
 
 @dataclass(frozen=True)
@@ -79,62 +80,139 @@ def parse_tuple_type(var: str, items: list[dict]) -> Type:
 @dataclass(frozen=True)
 class EncodingResult:
     data: list[BitVecRef]
-    size: int
-    static: bool
+    size: int  # number of bytes
+    static: bool  # static vs dynamic type
+
+
+@dataclass(frozen=True)
+class DynamicParam:
+    name: str
+    size_choices: list[int]
+    size_symbol: BitVecRef
+    typ: Type
+
+    def __str__(self) -> str:
+        return f"{self.name}={self.size_choices}"
+
+
+@dataclass(frozen=True)
+class FunctionInfo:
+    name: str | None = None
+    sig: str | None = None
+    selector: str | None = None
 
 
 class Calldata:
     args: HalmosConfig
-    arrlen: dict[str, int]
-    dyn_param_size: list[str]  # to be updated
+
+    # `arrlen` holds the parsed value of --array-lengths, specifying the sizes for certain dynamic parameters.
+    # `default_bytes_lengths` holds the parsed value of --default-bytes-lengths.
+    #
+    # For dynamic parameters not explicitly listed in --array-lengths, default sizes are used:
+    # - For dynamic arrays: the size ranges from 0 to the value of --loop (inclusive).
+    # - For bytes or strings: the size candidates are given by --default-bytes-lengths.
+    #
+    # TODO: Extend `args` to include `arrlen` and `default_bytes_lengths`
+    #       to prevent re-parsing --array-lengths and --default-bytes-lengths multiple times.
+    arrlen: dict[str, list[int]]
+    default_bytes_lengths: list[int]
+
+    # `dyn_params` will be updated to include the fully resolved size information for all dynamic parameters.
+    dyn_params: list[DynamicParam]
+
+    # Counter for generating unique symbol names.
+    # Required for create_calldata cheatcodes, which may be called multiple times.
+    new_symbol_id: Callable
 
     def __init__(
-        self, args: HalmosConfig, arrlen: dict[str, int], dyn_param_size: list[str]
+        self,
+        args: HalmosConfig,
+        new_symbol_id: Callable | None,
     ) -> None:
         self.args = args
-        self.arrlen = arrlen
-        self.dyn_param_size = dyn_param_size
+        self.arrlen = mk_arrlen(args)
+        self.default_bytes_lengths = [
+            int(x.strip()) for x in self.args.default_bytes_lengths.split(",")
+        ]
+        self.dyn_params = []
+        self.new_symbol_id = new_symbol_id if new_symbol_id else lambda: ""
 
-    def choose_array_len(self, name: str) -> int:
-        if name in self.arrlen:
-            array_len = self.arrlen[name]
-        else:
-            array_len = self.args.loop
+    def get_dyn_sizes(self, name: str, typ: Type) -> tuple[list[int], BitVecRef]:
+        """
+        Return the list of size candidates for the given dynamic parameter.
+
+        The candidates are derived from --array_lengths if provided; otherwise, default values are used.
+        """
+
+        sizes = self.arrlen.get(name)
+
+        if sizes is None:
+            sizes = (
+                list(range(self.args.loop + 1))
+                if isinstance(typ, DynamicArrayType)
+                else self.default_bytes_lengths  # bytes or string
+            )
             if self.args.debug:
                 print(
-                    f"Warning: no size provided for {name}; default value {array_len} will be used."
+                    f"Warning: no size provided for {name}; default value {sizes} will be used."
                 )
 
-        self.dyn_param_size.append(f"|{name}|={array_len}")
+        size_var = BitVec(f"p_{name}_length_{self.new_symbol_id():>02}", 256)
 
-        return array_len
+        self.dyn_params.append(DynamicParam(name, sizes, size_var, typ))
 
-    def create(self, abi: dict, output: ByteVec) -> None:
-        """Create calldata of ABI type, and append to output"""
+        return (sizes, size_var)
+
+    def create(
+        self, abi: dict, fun_info: FunctionInfo
+    ) -> tuple[ByteVec, list[DynamicParam]]:
+        """
+        Create calldata of the given function.
+
+        Returns:
+            A tuple containing the generated calldata, and the size information
+            for all dynamic parameters included in the calldata.
+        """
+
+        # function selector
+        calldata = ByteVec()
+        calldata.append(bytes.fromhex(fun_info.selector))
 
         # list of parameter types
-        tuple_type = parse_tuple_type("", abi["inputs"])
+        fun_abi = abi[fun_info.sig]
+        tuple_type = parse_tuple_type("", fun_abi["inputs"])
 
         # no parameters
-        if len(tuple_type.items) == 0:
-            return
+        if not tuple_type.items:
+            return calldata, self.dyn_params
 
-        starting_size = len(output)
+        starting_size = len(calldata)
 
         # ABI encoded symbolic calldata for parameters
         encoded = self.encode("", tuple_type)
         for data in encoded.data:
-            output.append(data)
+            calldata.append(data)
 
         # sanity check
-        calldata_size = len(output) - starting_size
+        calldata_size = len(calldata) - starting_size
         if calldata_size != encoded.size:
             raise ValueError(encoded)
+
+        return calldata, self.dyn_params
 
     def encode(self, name: str, typ: Type) -> EncodingResult:
         """Create symbolic ABI encoded calldata
 
         See https://docs.soliditylang.org/en/latest/abi-spec.html
+
+        For dynamically-sized parameters, multiple size candidates are considered.
+        A generalized encoding is used to represent these candidates, where the size field is symbolized,
+        and the elements are provided assuming the maximum size of the candidates.
+        The size symbols are mapped to their size candidates in the Path, and paths are later split based on these candidate values.
+        (See sevm.calldataload for more details.)
+
+        Note that this encoding approach leverages the non-uniqueness property of ABI encoding.
+        In other words, the generalized encoding is not optimized for the shortest size when smaller sizes are used.
         """
 
         # (T1, T2, ..., Tn)
@@ -150,27 +228,31 @@ class Calldata:
 
         # T[]
         if isinstance(typ, DynamicArrayType):
-            array_len = self.choose_array_len(name)
-            items = [self.encode(f"{name}[{i}]", typ.base) for i in range(array_len)]
+            sizes, size_var = self.get_dyn_sizes(name, typ)
+            items = [self.encode(f"{name}[{i}]", typ.base) for i in range(max(sizes))]
             encoded = self.encode_tuple(items)
-            return EncodingResult(
-                [con(array_len)] + encoded.data, 32 + encoded.size, False
-            )
+            # generalized encoding for multiple sizes
+            return EncodingResult([size_var] + encoded.data, 32 + encoded.size, False)
 
         if isinstance(typ, BaseType):
+            new_symbol = f"p_{name}_{typ.typ}_{self.new_symbol_id():>02}"
+
             # bytes, string
             if typ.typ in ["bytes", "string"]:
-                size = 65  # ECDSA signature size  # TODO: use args
+                sizes, size_var = self.get_dyn_sizes(name, typ)
+                size = max(sizes)
                 size_pad_right = ((size + 31) // 32) * 32
-                data = [
-                    con(size),
-                    BitVec(f"p_{name}_{typ.typ}", 8 * size_pad_right),
-                ]
-                return EncodingResult(data, 32 + size_pad_right, False)
+                data = (
+                    [BitVec(new_symbol, 8 * size_pad_right)]
+                    if size > 0
+                    else []  # empty bytes/string
+                )
+                # generalized encoding for multiple sizes
+                return EncodingResult([size_var] + data, 32 + size_pad_right, False)
 
             # uintN, intN, address, bool, bytesN
             else:
-                return EncodingResult([BitVec(f"p_{name}_{typ.typ}", 256)], 32, True)
+                return EncodingResult([BitVec(new_symbol, 256)], 32, True)
 
         raise ValueError(typ)
 
@@ -210,3 +292,68 @@ class Calldata:
         static = len(tails) == 0
 
         return EncodingResult(heads + tails, total_size, static)
+
+
+def str_abi(item: dict) -> str:
+    """
+    Construct a function signature string from the given function abi item.
+
+    See `tests/test_cli.py:test_str_abi()` for examples.
+    """
+
+    def str_tuple(args: list) -> str:
+        ret = []
+        for arg in args:
+            typ = arg["type"]
+            match = re.search(r"^tuple((\[[0-9]*\])*)$", typ)
+            if match:
+                ret.append(str_tuple(arg["components"]) + match.group(1))
+            else:
+                ret.append(typ)
+        return "(" + ",".join(ret) + ")"
+
+    if item["type"] != "function":
+        raise ValueError(item)
+    return item["name"] + str_tuple(item["inputs"])
+
+
+def get_abi(contract_json: dict) -> dict:
+    """
+    Return the mapping of function signatures to their ABI info.
+
+    If no mapping exists, construct it using the raw ABI list.
+    """
+
+    abi_dict = contract_json.get("abi_dict")
+
+    # construct and memoize abi mapping
+    if abi_dict is None:
+        abi_dict = {
+            str_abi(item): item
+            for item in contract_json["abi"]
+            if item["type"] == "function"
+        }
+        contract_json["abi_dict"] = abi_dict
+
+    return abi_dict
+
+
+def mk_calldata(
+    abi: dict,
+    fun_info: FunctionInfo,
+    args: HalmosConfig,
+    new_symbol_id: Callable = None,
+) -> tuple[ByteVec, list[DynamicParam]]:
+    return Calldata(args, new_symbol_id).create(abi, fun_info)
+
+
+def mk_arrlen(args: HalmosConfig) -> dict[str, list[int]]:
+    if not args.array_lengths:
+        return {}
+
+    # TODO: update syntax: name1=size1,size2; name2=size3,...; ...
+    name_sizes_pairs = args.array_lengths.split(",")
+    return {
+        name.strip(): [int(x.strip()) for x in sizes.split(";")]
+        for name, sizes in [x.split("=") for x in name_sizes_pairs]
+    }
