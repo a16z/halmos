@@ -127,9 +127,9 @@ class Calldata:
         The candidates are derived from --array_lengths if provided; otherwise, default values are used.
         """
 
-        if name in self.arrlen:
-            sizes = self.arrlen[name]
-        else:
+        sizes = self.arrlen.get(name)
+
+        if sizes is None:
             sizes = (
                 list(range(self.args.loop + 1))
                 if isinstance(typ, DynamicArrayType)
@@ -152,7 +152,7 @@ class Calldata:
 
         # function selector
         calldata = ByteVec()
-        calldata.append(int(fun_info.selector, 16).to_bytes(4, "big"))
+        calldata.append(bytes.fromhex(fun_info.selector))
 
         # list of parameter types
         fun_abi = abi[fun_info.sig]

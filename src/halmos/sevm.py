@@ -2115,10 +2115,11 @@ class SEVM:
 
             ret_lst = ret if isinstance(ret, list) else [ret]
 
+            last_idx = len(ret_lst) - 1
             for idx, ret_ in enumerate(ret_lst):
                 new_ex = (
                     self.create_branch(ex, BoolVal(True), ex.pc)
-                    if idx < len(ret_lst) - 1
+                    if idx < last_idx
                     else ex
                 )
 

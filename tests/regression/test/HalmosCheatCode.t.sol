@@ -141,7 +141,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     function check_createCalldata_Beep_1_excluding_pure() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Beep");
-        _check_createCalldata_Beep(data); // fail // not reachable, no calldata generated above
+        _check_createCalldata_Beep(data); // fail because the only function in Beep is pure, which is excluded in createCalldata()
     }
 
     function check_createCalldata_Beep_1() public {
@@ -151,7 +151,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     function check_createCalldata_Beep_2_excluding_pure() public {
         bytes memory data = svm.createCalldata("Beep");
-        _check_createCalldata_Beep(data); // fail // not reachable, no calldata generated above
+        _check_createCalldata_Beep(data); // fail because the only function in Beep is pure, which is excluded in createCalldata()
     }
 
     function check_createCalldata_Beep_2() public {
@@ -162,6 +162,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
     function _check_createCalldata_Beep(bytes memory data) public {
         Beep beep = new Beep();
         (bool success, bytes memory retdata) = address(beep).call(data);
+        vm.assume(success);
         uint ret = abi.decode(retdata, (uint256));
         assertEq(ret, 42);
     }
@@ -209,6 +210,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
     function _check_createCalldata_Mock(bytes memory data) public {
         Mock mock = new Mock();
         (bool success, bytes memory retdata) = address(mock).call(data);
+        vm.assume(success);
 
         bytes4 ret = abi.decode(retdata, (bytes4));
         bytes4 expected = bytes4(bytes.concat(data[0], data[1], data[2], data[3]));

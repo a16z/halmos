@@ -226,7 +226,7 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
 
 def create_calldata_contract(ex, arg, sevm, stack, step_id):
     contract_name = name_of(extract_string_argument(arg, 0))
-    return create_calldata_generic(ex, arg, sevm, stack, step_id, contract_name)
+    return create_calldata_generic(ex, sevm, contract_name)
 
 
 def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
@@ -236,7 +236,7 @@ def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
         "symbolic boolean flag for SVM.createCalldata()",
     )
     return create_calldata_generic(
-        ex, arg, sevm, stack, step_id, contract_name, include_view=bool(include_view)
+        ex, sevm, contract_name, include_view=bool(include_view)
     )
 
 
@@ -244,7 +244,7 @@ def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     return create_calldata_generic(
-        ex, arg, sevm, stack, step_id, contract_name, filename
+        ex, sevm, contract_name, filename
     )
 
 
@@ -256,12 +256,12 @@ def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
         "symbolic boolean flag for SVM.createCalldata()",
     )
     return create_calldata_generic(
-        ex, arg, sevm, stack, step_id, contract_name, filename, bool(include_view)
+        ex, sevm, contract_name, filename, bool(include_view)
     )
 
 
 def create_calldata_generic(
-    ex, arg, sevm, stack, step_id, contract_name, filename=None, include_view=False
+    ex, sevm, contract_name, filename=None, include_view=False
 ):
     """
     Generate arbitrary symbolic calldata for the given contract.
