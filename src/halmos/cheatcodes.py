@@ -16,6 +16,7 @@ from z3 import (
     Not,
     Or,
     eq,
+    is_bv,
     is_bv_value,
     is_false,
     simplify,
@@ -39,7 +40,6 @@ from .utils import (
     BitVecSorts,
     Word,
     assert_address,
-    bytes_to_bv_value,
     con,
     con_addr,
     decode_hex,
@@ -257,6 +257,13 @@ def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
     )
 
 
+def encode_return_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
+    length = data.size() // 8 if is_bv(data) else len(data)
+    result = ByteVec((32).to_bytes(32) + int(length).to_bytes(32))
+    result.append(data)
+    return result
+
+
 def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False):
     """
     Generate arbitrary symbolic calldata for the given contract.
@@ -273,14 +280,16 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
 
     results = []
 
-    # empty calldata for receive() and empty fallback() function calls
-    results.append(ByteVec(Concat(con(32), con(0))))
+    # empty calldata for receive() and fallback()
+    results.append(encode_return_bytes(b""))
 
-    # dummy calldata for nonempty fallback() call
-    fallback_selector = BitVec("fallback_selector", 4 * 8)  # see below for additional constraints
-    fallback_data_size = 1024  # TODO: configurable
-    fallback_data = BitVec("fallback_data", fallback_data_size * 8)
-    results.append(ByteVec(Concat(con(32), con(4+fallback_data_size), fallback_selector, fallback_data)))
+    # nonempty calldata for fallback()
+    fallback_selector = BitVec(f"fallback_selector_{ex.new_symbol_id():>02}", 4 * 8)
+    fallback_input_length = 1024  # TODO: configurable
+    fallback_input = BitVec(
+        f"fallback_input_{ex.new_symbol_id():>02}", fallback_input_length * 8
+    )
+    results.append(encode_return_bytes(Concat(fallback_selector, fallback_input)))
 
     for funsig in methodIdentifiers:
         funname = funsig.split("(")[0]
@@ -307,11 +316,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
         # which is not optimal, as unnecessary size candidates will need to be copied during path branching for each calldata.
         ex.path.process_dyn_params(dyn_params)
 
-        data = calldata.unwrap()
-        if isinstance(data, bytes):
-            data = bytes_to_bv_value(data)
-
-        results.append(ByteVec(Concat(con(32), con(len(calldata)), data)))
+        results.append(encode_return_bytes(calldata))
 
     return results
 
