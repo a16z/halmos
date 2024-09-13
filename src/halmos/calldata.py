@@ -106,10 +106,18 @@ class Calldata:
     args: HalmosConfig
 
     # `arrlen` holds the parsed value of --array-lengths, specifying the sizes for certain dynamic parameters.
-    # For dynamic parameters not listed in --array-lengths, default sizes are applied.
-    # `dyn_params` contains the fully resolved size information for all dynamic parameters.
-    # TODO: Extend `args` to include `arrlen` to avoid re-parsing --array-lengths multiple times.
+    # `default_bytes_lengths` holds the parsed value of --default-bytes-lengths.
+    #
+    # For dynamic parameters not explicitly listed in --array-lengths, default sizes are used:
+    # - For dynamic arrays: the size ranges from 0 to the value of --loop (inclusive).
+    # - For bytes or strings: the size candidates are given by --default-bytes-lengths.
+    #
+    # TODO: Extend `args` to include `arrlen` and `default_bytes_lengths`
+    #       to prevent re-parsing --array-lengths and --default-bytes-lengths multiple times.
     arrlen: dict[str, list[int]]
+    default_bytes_lengths: list[int]
+
+    # `dyn_params` will be updated to include the fully resolved size information for all dynamic parameters.
     dyn_params: list[DynamicParam]
 
     # Counter for generating unique symbol names.
@@ -123,6 +131,9 @@ class Calldata:
     ) -> None:
         self.args = args
         self.arrlen = mk_arrlen(args)
+        self.default_bytes_lengths = [
+            int(x.strip()) for x in self.args.default_bytes_lengths.split(",")
+        ]
         self.dyn_params = []
         self.new_symbol_id = new_symbol_id if new_symbol_id else lambda: ""
 
@@ -139,8 +150,7 @@ class Calldata:
             sizes = (
                 list(range(self.args.loop + 1))
                 if isinstance(typ, DynamicArrayType)
-                # typ is bytes or string
-                else [0, 32, 1024, 65]  # 65 is ECDSA signature size
+                else self.default_bytes_lengths  # bytes or string
             )
             if self.args.debug:
                 print(

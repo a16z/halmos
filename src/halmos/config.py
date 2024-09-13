@@ -154,6 +154,12 @@ class Config:
         metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
     )
 
+    default_bytes_lengths: str = arg(
+        help="set the default length candidates for bytes and string not specified in --array-lengths",
+        global_default="0,32,1024,65",  # 65 is ECDSA signature size
+        metavar="LENGTH1,LENGTH2,...",
+    )
+
     storage_layout: str = arg(
         help="Select one of the available storage layout models. The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.",
         global_default="solidity",
