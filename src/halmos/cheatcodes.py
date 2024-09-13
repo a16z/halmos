@@ -257,7 +257,13 @@ def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
     )
 
 
-def encode_return_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
+def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
+    """
+    Return ABI encoding of a tuple containing a single bytes element.
+
+    encoding of a tuple (bytes): 32 (offset) + length + data
+    """
+
     length = data.size() // 8 if is_bv(data) else len(data)
     result = ByteVec((32).to_bytes(32) + int(length).to_bytes(32))
     result.append(data)
@@ -281,7 +287,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     results = []
 
     # empty calldata for receive() and fallback()
-    results.append(encode_return_bytes(b""))
+    results.append(encode_tuple_bytes(b""))
 
     # nonempty calldata for fallback()
     fallback_selector = BitVec(f"fallback_selector_{ex.new_symbol_id():>02}", 4 * 8)
@@ -289,7 +295,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     fallback_input = BitVec(
         f"fallback_input_{ex.new_symbol_id():>02}", fallback_input_length * 8
     )
-    results.append(encode_return_bytes(Concat(fallback_selector, fallback_input)))
+    results.append(encode_tuple_bytes(Concat(fallback_selector, fallback_input)))
 
     for funsig in methodIdentifiers:
         funname = funsig.split("(")[0]
@@ -316,7 +322,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
         # which is not optimal, as unnecessary size candidates will need to be copied during path branching for each calldata.
         ex.path.process_dyn_params(dyn_params)
 
-        results.append(encode_return_bytes(calldata))
+        results.append(encode_tuple_bytes(calldata))
 
     return results
 
@@ -364,7 +370,7 @@ def create_bytes(ex, arg, **kwargs):
     )
     name = name_of(extract_string_argument(arg, 1))
     symbolic_bytes = create_generic(ex, byte_size * 8, name, "bytes")
-    return Concat(con(32), con(byte_size), symbolic_bytes)
+    return encode_tuple_bytes(symbolic_bytes)
 
 
 def create_string(ex, arg, **kwargs):
@@ -373,7 +379,7 @@ def create_string(ex, arg, **kwargs):
     )
     name = name_of(extract_string_argument(arg, 1))
     symbolic_string = create_generic(ex, byte_size * 8, name, "string")
-    return Concat(con(32), con(byte_size), symbolic_string)
+    return encode_tuple_bytes(symbolic_string)
 
 
 def create_bytes4(ex, arg, **kwargs):
