@@ -209,10 +209,11 @@ contract HalmosCheatCodeTest is SymTest, Test {
     function _check_createCalldata_Mock(bytes memory data) public {
         Mock mock = new Mock();
         (bool success, bytes memory retdata) = address(mock).call(data);
+
         bytes4 ret = abi.decode(retdata, (bytes4));
         bytes4 expected = bytes4(bytes.concat(data[0], data[1], data[2], data[3]));
-        // assertEq(ret, expected);
-        // note: the number of calldata generated == the # of counterexamples
+
+        // the number of calldata generated == the # of counterexamples
         if (ret == expected) {
             assert(false);
         }
@@ -222,19 +223,31 @@ contract HalmosCheatCodeTest is SymTest, Test {
         // fail due to ambiguity of Dummy
         bytes memory data = svm.createCalldata("Dummy");
     }
+
+    function check_createCalldata_Fallback() public {
+        Fallback fb = new Fallback();
+        bytes memory data = svm.createCalldata("Fallback");
+        (bool success, bytes memory retdata) = address(fb).call(data);
+
+        assertTrue(success);
+        assertEq(retdata, data);
+    }
 }
 
-contract Mock {
-//  fallback(bytes calldata input) external payable returns (bytes memory output) { }
-    fallback() external payable {
+contract Fallback {
+//  fallback() external payable { }
+    fallback(bytes calldata input) external payable returns (bytes memory output) {
         console.log("fallback");
-        console.log(msg.data.length);
+        console.log(input.length);
+        output = input;
     }
 
     receive() external payable {
         console.log("receive");
     }
+}
 
+contract Mock {
     function f_pure() public pure returns (bytes4) {
         return this.f_pure.selector;
     }
