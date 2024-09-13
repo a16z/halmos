@@ -167,57 +167,92 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(ret, 42);
     }
 
-    function check_createCalldata_Mock_1() public {
+    function check_createCalldata_Mock_1_pass() public {
         bytes memory data = svm.createCalldata("Mock");
-        _check_createCalldata_Mock(data);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_1_fail() public {
+        bytes memory data = svm.createCalldata("Mock");
+        _check_createCalldata_Mock(data, false);
     }
 
-    function check_createCalldata_Mock_2_excluding_view() public {
+    function check_createCalldata_Mock_2_excluding_view_pass() public {
         bytes memory data = svm.createCalldata("Mock", false);
-        _check_createCalldata_Mock(data);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_2_excluding_view_fail() public {
+        bytes memory data = svm.createCalldata("Mock", false);
+        _check_createCalldata_Mock(data, false);
     }
 
-    function check_createCalldata_Mock_2_including_view() public {
+    function check_createCalldata_Mock_2_including_view_pass() public {
         bytes memory data = svm.createCalldata("Mock", true);
-        _check_createCalldata_Mock(data);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_2_including_view_fail() public {
+        bytes memory data = svm.createCalldata("Mock", true);
+        _check_createCalldata_Mock(data, false);
     }
 
-    function check_createCalldata_Mock_3() public {
+    function check_createCalldata_Mock_3_pass() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock");
-        _check_createCalldata_Mock(data);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_3_fail() public {
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock");
+        _check_createCalldata_Mock(data, false);
     }
 
-    function check_createCalldata_Mock_4_excluding_view() public {
+    function check_createCalldata_Mock_4_excluding_view_pass() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock", false);
-        _check_createCalldata_Mock(data);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_4_excluding_view_fail() public {
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock", false);
+        _check_createCalldata_Mock(data, false);
     }
 
-    function check_createCalldata_Mock_4_including_view() public {
+    function check_createCalldata_Mock_4_including_view_pass() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock", true);
-        _check_createCalldata_Mock(data);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_4_including_view_fail() public {
+        bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock", true);
+        _check_createCalldata_Mock(data, false);
     }
 
-    function check_createCalldata_Mock_interface_excluding_view() public {
+    function check_createCalldata_Mock_interface_excluding_view_pass() public {
         bytes memory data = svm.createCalldata("IMock");
-        _check_createCalldata_Mock(data);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_interface_excluding_view_fail() public {
+        bytes memory data = svm.createCalldata("IMock");
+        _check_createCalldata_Mock(data, false);
     }
 
-    function check_createCalldata_Mock_interface_including_view() public {
+    function check_createCalldata_Mock_interface_including_view_pass() public {
         bytes memory data = svm.createCalldata("IMock", true);
-        _check_createCalldata_Mock(data);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_interface_including_view_fail() public {
+        bytes memory data = svm.createCalldata("IMock", true);
+        _check_createCalldata_Mock(data, false);
     }
 
-    function _check_createCalldata_Mock(bytes memory data) public {
-        Mock mock = new Mock();
+    function _check_createCalldata_Mock(bytes memory data, bool pass) public {
+        Mock mock = new Mock(false); // use Mock(true) for debugging
         (bool success, bytes memory retdata) = address(mock).call(data);
         vm.assume(success);
 
         bytes4 ret = abi.decode(retdata, (bytes4));
         bytes4 expected = bytes4(bytes.concat(data[0], data[1], data[2], data[3]));
 
-        // the number of calldata generated == the # of counterexamples
-        if (ret == expected) {
-            assert(false);
+        if (pass) {
+            assertEq(ret, expected);
+        } else {
+            // NOTE: the purpose of fail mode is to count the number of calldata combinations,
+            // where the number of calldata combinations is equal to the # of counterexamples.
+            assertNotEq(ret, expected);
         }
     }
 
@@ -250,6 +285,12 @@ contract Fallback {
 }
 
 contract Mock {
+    bool log;
+
+    constructor (bool _log) {
+        log = _log;
+    }
+
     function f_pure() public pure returns (bytes4) {
         return this.f_pure.selector;
     }
@@ -259,31 +300,39 @@ contract Mock {
     }
 
     function foo(uint[] memory x) public returns (bytes4) {
-        console.log("foo");
-        console.log(x.length); // 0, 1, 2
+        if (log) {
+            console.log("foo");
+            console.log(x.length); // 0, 1, 2
+        }
         return this.foo.selector;
     }
 
     function bar(bytes memory x) public returns (bytes4) {
-        console.log("bar");
-        console.log(x.length); // 0, 32, 65, 1024
+        if (log) {
+            console.log("bar");
+            console.log(x.length); // 0, 32, 65, 1024
+        }
         return this.bar.selector;
     }
 
     function zoo(uint[] memory x, bytes memory y) public returns (bytes4) {
-        console.log("zoo");
-        // 12 (= 3 * 4) combinations
-        console.log(x.length); // 0, 1, 2
-        console.log(y.length); // 0, 32, 65, 1024
+        if (log) {
+            console.log("zoo");
+            // 12 (= 3 * 4) combinations
+            console.log(x.length); // 0, 1, 2
+            console.log(y.length); // 0, 32, 65, 1024
+        }
         return this.zoo.selector;
     }
 
     function foobar(bytes[] memory x) public returns (bytes4) {
-        console.log("foobar");
-        // 21 (= 16+4+1) combinations
-        console.log(x.length); // 0, 1, 2
-        for (uint i = 0; i < x.length; i++) {
-            console.log(x[i].length); // 0, 32, 65, 1024
+        if (log) {
+            console.log("foobar");
+            // 21 (= 16+4+1) combinations
+            console.log(x.length); // 0, 1, 2
+            for (uint i = 0; i < x.length; i++) {
+                console.log(x[i].length); // 0, 32, 65, 1024
+            }
         }
         return this.foobar.selector;
     }

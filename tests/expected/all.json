@@ -1257,7 +1257,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createCalldata_Mock_1()",
+                "name": "check_createCalldata_Mock_1_fail()",
                 "exitcode": 1,
                 "num_models": 40,
                 "models": null,
@@ -1266,7 +1266,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createCalldata_Mock_2_excluding_view()",
+                "name": "check_createCalldata_Mock_1_pass()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_2_excluding_view_fail()",
                 "exitcode": 1,
                 "num_models": 40,
                 "models": null,
@@ -1275,7 +1284,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createCalldata_Mock_2_including_view()",
+                "name": "check_createCalldata_Mock_2_excluding_view_pass()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_2_including_view_fail()",
                 "exitcode": 1,
                 "num_models": 42,
                 "models": null,
@@ -1284,7 +1302,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createCalldata_Mock_3()",
+                "name": "check_createCalldata_Mock_2_including_view_pass()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_3_fail()",
                 "exitcode": 1,
                 "num_models": 40,
                 "models": null,
@@ -1293,7 +1320,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createCalldata_Mock_4_excluding_view()",
+                "name": "check_createCalldata_Mock_3_pass()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_4_excluding_view_fail()",
                 "exitcode": 1,
                 "num_models": 40,
                 "models": null,
@@ -1302,7 +1338,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createCalldata_Mock_4_including_view()",
+                "name": "check_createCalldata_Mock_4_excluding_view_pass()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_4_including_view_fail()",
                 "exitcode": 1,
                 "num_models": 42,
                 "models": null,
@@ -1311,7 +1356,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createCalldata_Mock_interface_excluding_view()",
+                "name": "check_createCalldata_Mock_4_including_view_pass()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_interface_excluding_view_fail()",
                 "exitcode": 1,
                 "num_models": 40,
                 "models": null,
@@ -1320,9 +1374,27 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_createCalldata_Mock_interface_including_view()",
+                "name": "check_createCalldata_Mock_interface_excluding_view_pass()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_interface_including_view_fail()",
                 "exitcode": 1,
                 "num_models": 42,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_interface_including_view_pass()",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,
