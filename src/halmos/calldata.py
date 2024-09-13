@@ -147,7 +147,7 @@ class Calldata:
 
         return (sizes, size_var)
 
-    def create(self, abi: list, fun_info: FunctionInfo) -> ByteVec:
+    def create(self, abi: dict, fun_info: FunctionInfo) -> ByteVec:
         """Create calldata of the given function"""
 
         # function selector
@@ -155,7 +155,7 @@ class Calldata:
         calldata.append(int(fun_info.selector, 16).to_bytes(4, "big"))
 
         # list of parameter types
-        fun_abi = find_abi(abi, fun_info)
+        fun_abi = abi[fun_info.sig]
         tuple_type = parse_tuple_type("", fun_abi["inputs"])
 
         # no parameters
@@ -293,21 +293,29 @@ def str_abi(item: dict) -> str:
     return item["name"] + str_tuple(item["inputs"])
 
 
-def find_abi(abi: list, fun_info: FunctionInfo) -> dict:
-    funname, funsig = fun_info.name, fun_info.sig
-    # TODO: this currently takes O(n), but should be optimized to O(1) by preprocessing the abi info in advance.
-    for item in abi:
-        if (
-            item["type"] == "function"
-            and item["name"] == funname
-            and str_abi(item) == funsig
-        ):
-            return item
-    raise ValueError(f"No {funsig} found in {abi}")
+def get_abi(contract_json: dict) -> dict:
+    """
+    Return the mapping of function signatures to their ABI info.
+
+    If no mapping exists, construct it using the raw ABI list.
+    """
+
+    abi_dict = contract_json.get("abi_dict")
+
+    # construct and memoize abi mapping
+    if abi_dict is None:
+        abi_dict = {
+            str_abi(item): item
+            for item in contract_json["abi"]
+            if item["type"] == "function"
+        }
+        contract_json["abi_dict"] = abi_dict
+
+    return abi_dict
 
 
 def mk_calldata(
-    abi: list,
+    abi: dict,
     fun_info: FunctionInfo,
     dyn_params: list[DynamicParam],
     args: HalmosConfig,

@@ -26,8 +26,9 @@ from .assertions import assert_cheatcode_handler
 from .bytevec import ByteVec
 from .calldata import (
     FunctionInfo,
-    find_abi,
     mk_calldata,
+    str_abi,
+    get_abi,
 )
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
 from .mapper import BuildOut
@@ -272,7 +273,7 @@ def create_calldata_generic(
     """
     contract_json = BuildOut().get_by_name(contract_name, filename)[0]
 
-    abi = contract_json["abi"]
+    abi = get_abi(contract_json)
     methodIdentifiers = contract_json["methodIdentifiers"]
 
     results = []
@@ -283,7 +284,7 @@ def create_calldata_generic(
         funinfo = FunctionInfo(funname, funsig, funselector)
 
         if not include_view:
-            fun_abi = find_abi(abi, funinfo)
+            fun_abi = abi[funinfo.sig]
             if fun_abi["stateMutability"] in ["pure", "view"]:
                 continue
 

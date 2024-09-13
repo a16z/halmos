@@ -35,7 +35,7 @@ from z3 import (
 )
 
 from .bytevec import ByteVec
-from .calldata import FunctionInfo, mk_calldata
+from .calldata import FunctionInfo, mk_calldata, str_abi, get_abi
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException
@@ -413,7 +413,7 @@ def deploy_test(
 def setup(
     creation_hexcode: str,
     deployed_hexcode: str,
-    abi: list,
+    abi: dict,
     setup_info: FunctionInfo,
     args: HalmosConfig,
     libs: dict,
@@ -549,7 +549,7 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 def run(
     setup_ex: Exec,
-    abi: list,
+    abi: dict,
     fun_info: FunctionInfo,
     args: HalmosConfig,
 ) -> TestResult:
@@ -795,7 +795,7 @@ def run(
 class SetupAndRunSingleArgs:
     creation_hexcode: str
     deployed_hexcode: str
-    abi: list
+    abi: dict
     setup_info: FunctionInfo
     fun_info: FunctionInfo
     setup_args: HalmosConfig
@@ -867,7 +867,7 @@ class RunArgs:
     creation_hexcode: str
     deployed_hexcode: str
 
-    abi: list
+    abi: dict
     methodIdentifiers: dict[str, str]
 
     args: HalmosConfig
@@ -1508,7 +1508,7 @@ def _main(_args=None) -> MainResult:
 
         contract_timer = NamedTimer("time")
 
-        abi = contract_json["abi"]
+        abi = get_abi(contract_json)
         creation_hexcode = contract_json["bytecode"]["object"]
         deployed_hexcode = contract_json["deployedBytecode"]["object"]
         linkReferences = contract_json["bytecode"]["linkReferences"]
