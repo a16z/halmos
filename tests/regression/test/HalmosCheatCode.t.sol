@@ -144,7 +144,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         _check_createCalldata_Beep(data); // fail because the only function in Beep is pure, which is excluded in createCalldata()
     }
 
-    function check_createCalldata_Beep_1() public {
+    function check_createCalldata_Beep_1_including_pure() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Beep", true);
         _check_createCalldata_Beep(data);
     }
@@ -154,7 +154,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         _check_createCalldata_Beep(data); // fail because the only function in Beep is pure, which is excluded in createCalldata()
     }
 
-    function check_createCalldata_Beep_2() public {
+    function check_createCalldata_Beep_2_including_pure() public {
         bytes memory data = svm.createCalldata("Beep", true);
         _check_createCalldata_Beep(data);
     }
@@ -172,7 +172,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         _check_createCalldata_Mock(data);
     }
 
-    function check_createCalldata_Mock_2() public {
+    function check_createCalldata_Mock_2_excluding_view() public {
         bytes memory data = svm.createCalldata("Mock", false);
         _check_createCalldata_Mock(data);
     }
@@ -187,7 +187,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         _check_createCalldata_Mock(data);
     }
 
-    function check_createCalldata_Mock_4() public {
+    function check_createCalldata_Mock_4_excluding_view() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Mock", false);
         _check_createCalldata_Mock(data);
     }
@@ -197,7 +197,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         _check_createCalldata_Mock(data);
     }
 
-    function check_createCalldata_Mock_interface() public {
+    function check_createCalldata_Mock_interface_excluding_view() public {
         bytes memory data = svm.createCalldata("IMock");
         _check_createCalldata_Mock(data);
     }
