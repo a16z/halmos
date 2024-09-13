@@ -428,8 +428,8 @@ def setup(
 
     setup_sig = setup_info.sig
     if setup_sig:
-        dyn_params = []  # TODO: propagate to run
-        calldata = mk_calldata(abi, setup_info, dyn_params, args)
+        # TODO: dyn_params may need to be passed to mk_calldata in run()
+        calldata, dyn_params = mk_calldata(abi, setup_info, args)
         setup_ex.path.process_dyn_params(dyn_params, legacy=True)
 
         parent_message = setup_ex.message()
@@ -568,8 +568,7 @@ def run(
     path = Path(solver)
     path.extend_path(setup_ex.path)
 
-    dyn_params = []  # to be populated by mk_calldata
-    cd = mk_calldata(abi, fun_info, dyn_params, args)
+    cd, dyn_params = mk_calldata(abi, fun_info, args)
     path.process_dyn_params(dyn_params, legacy=True)
 
     message = Message(

@@ -312,11 +312,9 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
             if fun_abi["stateMutability"] in ["pure", "view"]:
                 continue
 
-        dyn_params = []  # to be populated by mk_calldata
-        calldata = mk_calldata(
+        calldata, dyn_params = mk_calldata(
             abi,
             funinfo,
-            dyn_params,
             sevm.options,
             new_symbol_id=ex.new_symbol_id,
         )

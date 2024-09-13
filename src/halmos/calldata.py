@@ -104,20 +104,26 @@ class FunctionInfo:
 
 class Calldata:
     args: HalmosConfig
+
+    # `arrlen` holds the parsed value of --array-lengths, specifying the sizes for certain dynamic parameters.
+    # For dynamic parameters not listed in --array-lengths, default sizes are applied.
+    # `dyn_params` contains the fully resolved size information for all dynamic parameters.
+    # TODO: Extend `args` to include `arrlen` to avoid re-parsing --array-lengths multiple times.
     arrlen: dict[str, list[int]]
-    dyn_params: list[DynamicParam]  # to be updated
+    dyn_params: list[DynamicParam]
+
+    # Counter for generating unique symbol names.
+    # Required for create_calldata cheatcodes, which may be called multiple times.
     new_symbol_id: Callable
 
     def __init__(
         self,
         args: HalmosConfig,
-        arrlen: dict[str, list[int]],
-        dyn_params: list[DynamicParam],
         new_symbol_id: Callable | None,
     ) -> None:
         self.args = args
-        self.arrlen = arrlen
-        self.dyn_params = dyn_params
+        self.arrlen = mk_arrlen(args)
+        self.dyn_params = []
         self.new_symbol_id = new_symbol_id if new_symbol_id else lambda: ""
 
     def get_dyn_sizes(self, name: str, typ: Type) -> tuple[list[int], BitVecRef]:
@@ -147,7 +153,7 @@ class Calldata:
 
         return (sizes, size_var)
 
-    def create(self, abi: dict, fun_info: FunctionInfo) -> ByteVec:
+    def create(self, abi: dict, fun_info: FunctionInfo) -> tuple[ByteVec, list[DynamicParam]]:
         """Create calldata of the given function"""
 
         # function selector
@@ -160,7 +166,7 @@ class Calldata:
 
         # no parameters
         if not tuple_type.items:
-            return calldata
+            return calldata, self.dyn_params
 
         starting_size = len(calldata)
 
@@ -174,7 +180,7 @@ class Calldata:
         if calldata_size != encoded.size:
             raise ValueError(encoded)
 
-        return calldata
+        return calldata, self.dyn_params
 
     def encode(self, name: str, typ: Type) -> EncodingResult:
         """Create symbolic ABI encoded calldata
@@ -317,14 +323,10 @@ def get_abi(contract_json: dict) -> dict:
 def mk_calldata(
     abi: dict,
     fun_info: FunctionInfo,
-    dyn_params: list[DynamicParam],
     args: HalmosConfig,
-    arrlen: dict[str, list[int]] = None,
     new_symbol_id: Callable = None,
-) -> None:
-    arrlen = mk_arrlen(args) if arrlen is None else arrlen
-    calldata = Calldata(args, arrlen, dyn_params, new_symbol_id)
-    return calldata.create(abi, fun_info)
+) -> tuple[ByteVec, list[DynamicParam]]:
+    return Calldata(args, new_symbol_id).create(abi, fun_info)
 
 
 def mk_arrlen(args: HalmosConfig) -> dict[str, list[int]]:
