@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from typing import Any
@@ -33,6 +34,7 @@ def arg(
     short: str | None = None,
     countable: bool = False,
     global_default_str: str | None = None,
+    action: Callable = None,
 ):
     return dataclass_field(
         default=None,
@@ -45,8 +47,37 @@ def arg(
             "short": short,
             "countable": countable,
             "global_default_str": global_default_str,
+            "action": action,
         },
     )
+
+
+class ParseCSVAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        values = ParseCSVAction.parse(values)
+        setattr(namespace, self.dest, values)
+
+    @staticmethod
+    def parse(values: str) -> list[int]:
+        return [int(x.strip()) for x in values.split(",")]
+
+
+class ParseArrayLengthsAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        values = ParseArrayLengthsAction.parse(values)
+        setattr(namespace, self.dest, values)
+
+    @staticmethod
+    def parse(values: str | None) -> dict[str, list[int]]:
+        if not values:
+            return {}
+
+        # TODO: update syntax: name1=size1,size2; name2=size3,...; ...
+        name_sizes_pairs = values.split(",")
+        return {
+            name.strip(): [int(x.strip()) for x in sizes.split(";")]
+            for name, sizes in [x.split("=") for x in name_sizes_pairs]
+        }
 
 
 # TODO: add kw_only=True when we support Python>=3.10
@@ -152,12 +183,14 @@ class Config:
         help="set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)",
         global_default=None,
         metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
+        action=ParseArrayLengthsAction,
     )
 
     default_bytes_lengths: str = arg(
         help="set the default length candidates for bytes and string not specified in --array-lengths",
         global_default="0,32,1024,65",  # 65 is ECDSA signature size
         metavar="LENGTH1,LENGTH2,...",
+        action=ParseCSVAction,
     )
 
     storage_layout: str = arg(
@@ -528,7 +561,12 @@ def _create_default_config() -> "Config":
         if default == MISSING:
             continue
 
-        values[field.name] = default() if callable(default) else default
+        # retrieve the default value
+        raw_value = default() if callable(default) else default
+
+        # parse the default value, if a custom parser is provided
+        action = field.metadata.get("action", None)
+        values[field.name] = action.parse(raw_value) if action else raw_value
 
     return Config(_parent=None, _source="default", **values)
 
@@ -583,6 +621,8 @@ def _create_arg_parser() -> argparse.ArgumentParser:
             }
             if choices := field_info.metadata.get("choices", None):
                 kwargs["choices"] = choices
+            if action := field_info.metadata.get("action", None):
+                kwargs["action"] = action
             group.add_argument(*names, **kwargs)
 
     return parser

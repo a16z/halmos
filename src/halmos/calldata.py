@@ -105,18 +105,6 @@ class FunctionInfo:
 class Calldata:
     args: HalmosConfig
 
-    # `arrlen` holds the parsed value of --array-lengths, specifying the sizes for certain dynamic parameters.
-    # `default_bytes_lengths` holds the parsed value of --default-bytes-lengths.
-    #
-    # For dynamic parameters not explicitly listed in --array-lengths, default sizes are used:
-    # - For dynamic arrays: the size ranges from 0 to the value of --loop (inclusive).
-    # - For bytes or strings: the size candidates are given by --default-bytes-lengths.
-    #
-    # TODO: Extend `args` to include `arrlen` and `default_bytes_lengths`
-    #       to prevent re-parsing --array-lengths and --default-bytes-lengths multiple times.
-    arrlen: dict[str, list[int]]
-    default_bytes_lengths: list[int]
-
     # `dyn_params` will be updated to include the fully resolved size information for all dynamic parameters.
     dyn_params: list[DynamicParam]
 
@@ -130,10 +118,6 @@ class Calldata:
         new_symbol_id: Callable | None,
     ) -> None:
         self.args = args
-        self.arrlen = mk_arrlen(args)
-        self.default_bytes_lengths = [
-            int(x.strip()) for x in self.args.default_bytes_lengths.split(",")
-        ]
         self.dyn_params = []
         self.new_symbol_id = new_symbol_id if new_symbol_id else lambda: ""
 
@@ -144,13 +128,13 @@ class Calldata:
         The candidates are derived from --array_lengths if provided; otherwise, default values are used.
         """
 
-        sizes = self.arrlen.get(name)
+        sizes = self.args.array_lengths.get(name)
 
         if sizes is None:
             sizes = (
                 list(range(self.args.loop + 1))
                 if isinstance(typ, DynamicArrayType)
-                else self.default_bytes_lengths  # bytes or string
+                else self.args.default_bytes_lengths  # bytes or string
             )
             if self.args.debug:
                 print(
@@ -345,15 +329,3 @@ def mk_calldata(
     new_symbol_id: Callable = None,
 ) -> tuple[ByteVec, list[DynamicParam]]:
     return Calldata(args, new_symbol_id).create(abi, fun_info)
-
-
-def mk_arrlen(args: HalmosConfig) -> dict[str, list[int]]:
-    if not args.array_lengths:
-        return {}
-
-    # TODO: update syntax: name1=size1,size2; name2=size3,...; ...
-    name_sizes_pairs = args.array_lengths.split(",")
-    return {
-        name.strip(): [int(x.strip()) for x in sizes.split(";")]
-        for name, sizes in [x.split("=") for x in name_sizes_pairs]
-    }
