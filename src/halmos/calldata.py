@@ -103,6 +103,9 @@ class FunctionInfo:
 
 
 class Calldata:
+    # For dynamic parameters not explicitly listed in --array-lengths, default sizes are used:
+    # - For dynamic arrays: the size ranges from 0 to the value of --loop (inclusive).
+    # - For bytes or strings: the size candidates are given by --default-bytes-lengths.
     args: HalmosConfig
 
     # `dyn_params` will be updated to include the fully resolved size information for all dynamic parameters.

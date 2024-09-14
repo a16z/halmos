@@ -52,9 +52,9 @@ def arg(
     )
 
 
-class ParseCSVAction(argparse.Action):
+class ParseCSV(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        values = ParseCSVAction.parse(values)
+        values = ParseCSV.parse(values)
         setattr(namespace, self.dest, values)
 
     @staticmethod
@@ -62,9 +62,9 @@ class ParseCSVAction(argparse.Action):
         return [int(x.strip()) for x in values.split(",")]
 
 
-class ParseArrayLengthsAction(argparse.Action):
+class ParseArrayLengths(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        values = ParseArrayLengthsAction.parse(values)
+        values = ParseArrayLengths.parse(values)
         setattr(namespace, self.dest, values)
 
     @staticmethod
@@ -183,14 +183,14 @@ class Config:
         help="set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)",
         global_default=None,
         metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
-        action=ParseArrayLengthsAction,
+        action=ParseArrayLengths,
     )
 
     default_bytes_lengths: str = arg(
         help="set the default length candidates for bytes and string not specified in --array-lengths",
         global_default="0,32,1024,65",  # 65 is ECDSA signature size
         metavar="LENGTH1,LENGTH2,...",
-        action=ParseCSVAction,
+        action=ParseCSV,
     )
 
     storage_layout: str = arg(
