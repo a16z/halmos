@@ -613,7 +613,10 @@ class ByteVec:
 
     def concretize(self, substitution: dict[BitVecRef, BitVecRef]) -> None:
         """
-        Replace all symbols in the chunks with their corresponding concrete values, if they exist in the given substitution mapping.
+        Replace all top-level symbols in the chunks with their corresponding concrete values, if they exist in the given substitution mapping.
+
+        Note: only top-level symbols are currently replaced, not those within nested symbolic terms.
+        This approach is sufficient for current calldata use cases. Performance impacts should be evaluated if all symbol occurrences need to be replaced.
         """
         for offset, chunk in self.chunks.items():
             chunk_data = chunk.data
