@@ -613,7 +613,7 @@ class ByteVec:
 
     def concretize(self, substitution: dict[BitVecRef, BitVecRef]) -> None:
         """
-        Replace all symbols in the chunks with their corresponding concrete values, if they exist in the given substituion mapping.
+        Replace all symbols in the chunks with their corresponding concrete values, if they exist in the given substitution mapping.
         """
         for offset, chunk in self.chunks.items():
             chunk_data = chunk.data
