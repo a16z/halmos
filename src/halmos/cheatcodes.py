@@ -721,6 +721,9 @@ class hevm_cheat_code:
             code_bytes = arg[code_loc : code_loc + code_length]
             ex.set_code(who, code_bytes)
 
+            # vm.etch() initializes but does not clear storage
+            ex.storage.setdefault(who, sevm.mk_storagedata())
+
             return ret
 
         # vm.ffi(string[]) returns (bytes)
