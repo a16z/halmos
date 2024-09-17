@@ -652,11 +652,13 @@ class hevm_cheat_code:
                 ex, store_account, stack, step_id, branching=False
             )
 
-            if store_account_alias is None:
-                error_msg = f"vm.store() is not allowed for a nonexistent account: {hexify(store_account)}"
-                raise HalmosException(error_msg)
+            if store_account_alias is not None:
+                store_account = store_account_alias
 
-            sevm.sstore(ex, store_account_alias, store_slot, store_value)
+            # vm.store() initializes storage if the account is not already initialized
+            ex.storage.setdefault(store_account, sevm.mk_storagedata())
+
+            sevm.sstore(ex, store_account, store_slot, store_value)
             return ret
 
         # vm.load(address,bytes32)
@@ -720,6 +722,9 @@ class hevm_cheat_code:
             code_loc = 4 + code_offset + 32
             code_bytes = arg[code_loc : code_loc + code_length]
             ex.set_code(who, code_bytes)
+
+            # vm.etch() initializes but does not clear storage
+            ex.storage.setdefault(who, sevm.mk_storagedata())
 
             return ret
 

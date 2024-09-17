@@ -2252,6 +2252,7 @@ class SEVM:
 
         # setup new account
         ex.set_code(new_addr, Contract(b""))  # existing code must be empty
+
         # existing storage may not be empty and reset here
         ex.storage[new_addr] = self.mk_storagedata()
 
