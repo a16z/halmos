@@ -5,6 +5,7 @@ from typing import Any, ForwardRef
 
 from sortedcontainers import SortedDict
 from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify
+from z3.z3util import is_expr_var
 
 from .utils import (
     Byte,
@@ -609,6 +610,23 @@ class ByteVec:
             value = If(value, con(1), con(0))
 
         self.set_slice(offset, offset + 32, value)
+
+    def concretize(self, substitution: dict[BitVecRef, BitVecRef]) -> None:
+        """
+        Replace all symbols in the chunks with their corresponding concrete values, if they exist in the given substituion mapping.
+        """
+        for offset, chunk in self.chunks.items():
+            chunk_data = chunk.data
+            if not isinstance(chunk, SymbolicChunk) or not is_expr_var(chunk_data):
+                continue
+
+            concrete_chunk_data = substitution.get(chunk_data)
+            if concrete_chunk_data is None:  # could be zero
+                continue
+
+            self.chunks[offset] = ConcreteChunk(
+                bv_value_to_bytes(concrete_chunk_data), chunk.start, chunk.length
+            )
 
     ### read operations
 
