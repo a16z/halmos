@@ -549,15 +549,17 @@ class TomlParser:
                 )
                 sys.exit(2)
 
-        def parse_value(k, v):
-            if k == "default-bytes-lengths":
-                return ParseCSV.parse(v)
-            elif k == "array-lengths":
-                return ParseArrayLengths.parse(v)
-            else:
-                return v
+        # gather custom actions
+        actions = {
+            field.name: field.metadata.get("action", None) for field in fields(Config)
+        }
 
-        return {k.replace("-", "_"): parse_value(k, v) for k, v in data.items()}
+        result = {}
+        for key, value in data.items():
+            key = key.replace("-", "_")
+            action = actions.get(key)
+            result[key] = action.parse(value) if action else value
+        return result
 
 
 def _create_default_config() -> "Config":
