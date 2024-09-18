@@ -551,7 +551,9 @@ class TomlParser:
 
         # gather custom actions
         actions = {
-            field.name: field.metadata["action"] for field in fields(Config) if "action" in field.metadata
+            field.name: field.metadata["action"]
+            for field in fields(Config)
+            if "action" in field.metadata
         }
 
         result = {}
