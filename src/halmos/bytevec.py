@@ -5,7 +5,6 @@ from typing import Any, ForwardRef
 
 from sortedcontainers import SortedDict
 from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
-from z3.z3util import is_expr_var
 
 from .utils import (
     Byte,
@@ -165,9 +164,7 @@ class Chunk(ABC):
         new_data = simplify(new_data)
 
         return (
-            ConcreteChunk(
-                bv_value_to_bytes(new_data), self.start, self.length
-            )
+            ConcreteChunk(bv_value_to_bytes(new_data), self.start, self.length)
             if is_bv_value(new_data)
             else SymbolicChunk(new_data, self.start, self.length)
         )
