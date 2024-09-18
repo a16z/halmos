@@ -644,8 +644,10 @@ class Concretization:
     In the future, it may be used for other purposes, such as concrete hash reasoning.
     """
 
-    substitution: dict = field(default_factory=dict)  # symbol -> constant
-    candidates: dict = field(default_factory=dict)  # symbol -> set of constants
+    # symbol -> constant
+    substitution: dict[BitVecRef, BitVecRef] = field(default_factory=dict)
+    # symbol -> set of constants
+    candidates: dict[BitVecRef, list[int]] = field(default_factory=dict)
 
     def process_cond(self, cond):
         if not is_eq(cond):
@@ -2864,6 +2866,7 @@ class SEVM:
 
                     if size > 0:
                         data: ByteVec = ex.calldata().slice(offset, offset + size)
+                        data = data.concretize(ex.path.concretization.substitution)
                         ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CODECOPY:

@@ -188,7 +188,7 @@ class Config:
 
     default_bytes_lengths: str = arg(
         help="set the default length candidates for bytes and string not specified in --array-lengths",
-        global_default="0,32,1024,65",  # 65 is ECDSA signature size
+        global_default="0,1024,65",  # 65 is ECDSA signature size
         metavar="LENGTH1,LENGTH2,...",
         action=ParseCSV,
     )
@@ -549,7 +549,19 @@ class TomlParser:
                 )
                 sys.exit(2)
 
-        return {k.replace("-", "_"): v for k, v in data.items()}
+        # gather custom actions
+        actions = {
+            field.name: field.metadata["action"]
+            for field in fields(Config)
+            if "action" in field.metadata
+        }
+
+        result = {}
+        for key, value in data.items():
+            key = key.replace("-", "_")
+            action = actions.get(key)
+            result[key] = action.parse(value) if action else value
+        return result
 
 
 def _create_default_config() -> "Config":

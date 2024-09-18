@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, ForwardRef
 
 from sortedcontainers import SortedDict
-from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify
+from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
 
 from .utils import (
     Byte,
@@ -141,6 +141,33 @@ class Chunk(ABC):
 
     def __len__(self) -> int:
         return self.length
+
+    def concretize(self, substitution: dict[BitVecRef, BitVecRef]) -> "Chunk":
+        """
+        Replace all symbols in the data with their corresponding concrete values,
+        if they exist in the given substitution mapping.
+
+        Return a new object with concrete values, or self if no substitution is made.
+        """
+
+        if not isinstance(self, SymbolicChunk):
+            return self
+
+        data = self.data
+        # TODO: call substitute() only when the data contains variables to be substituted
+        new_data = substitute(data, *substitution.items())
+
+        # NOTE: `new_data is data` doesn't work, because substitute() always returns a new object even if no substitution is made
+        if eq(new_data, data):
+            return self
+
+        new_data = simplify(new_data)
+
+        return (
+            ConcreteChunk(bv_value_to_bytes(new_data), self.start, self.length)
+            if is_bv_value(new_data)
+            else SymbolicChunk(new_data, self.start, self.length)
+        )
 
     @abstractmethod
     def get_byte(self, offset) -> Byte:
@@ -609,6 +636,21 @@ class ByteVec:
             value = If(value, con(1), con(0))
 
         self.set_slice(offset, offset + 32, value)
+
+    def concretize(self, substitution: dict[BitVecRef, BitVecRef]) -> "ByteVec":
+        """
+        Replace all symbols in the chunks with their corresponding concrete values,
+        if they exist in the given substitution mapping.
+
+        Return a new ByteVec object even if no substitution is made.
+        """
+
+        result = ByteVec()
+
+        for chunk in self.chunks.values():
+            result.append(chunk.concretize(substitution))
+
+        return result
 
     ### read operations
 
