@@ -188,7 +188,7 @@ class Config:
 
     default_bytes_lengths: str = arg(
         help="set the default length candidates for bytes and string not specified in --array-lengths",
-        global_default="0,32,1024,65",  # 65 is ECDSA signature size
+        global_default="0,1024,65",  # 65 is ECDSA signature size
         metavar="LENGTH1,LENGTH2,...",
         action=ParseCSV,
     )
