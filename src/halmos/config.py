@@ -549,7 +549,15 @@ class TomlParser:
                 )
                 sys.exit(2)
 
-        return {k.replace("-", "_"): v for k, v in data.items()}
+        def parse_value(k, v):
+            if k == "default-bytes-lengths":
+                return ParseCSV.parse(v)
+            elif k == "array-lengths":
+                return ParseArrayLengths.parse(v)
+            else:
+                return v
+
+        return {k.replace("-", "_"): parse_value(k, v) for k, v in data.items()}
 
 
 def _create_default_config() -> "Config":
