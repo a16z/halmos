@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any, ForwardRef
 
 from sortedcontainers import SortedDict
-from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify
+from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
 from z3.z3util import is_expr_var
 
 from .utils import (
@@ -142,6 +142,35 @@ class Chunk(ABC):
 
     def __len__(self) -> int:
         return self.length
+
+    def concretize(self, substitution: dict[BitVecRef, BitVecRef]) -> "Chunk":
+        """
+        Replace all symbols in the data with their corresponding concrete values,
+        if they exist in the given substitution mapping.
+
+        Return a new object with concrete values, or self if no substitution is made.
+        """
+
+        if not isinstance(self, SymbolicChunk):
+            return self
+
+        data = self.data
+        # TODO: call substitute() only when the data contains variables to be substituted
+        new_data = substitute(data, *substitution.items())
+
+        # NOTE: `new_data is data` doesn't work, because substitute() always returns a new object even if no substitution is made
+        if eq(new_data, data):
+            return self
+
+        new_data = simplify(new_data)
+
+        return (
+            ConcreteChunk(
+                bv_value_to_bytes(new_data), self.start, self.length
+            )
+            if is_bv_value(new_data)
+            else SymbolicChunk(new_data, self.start, self.length)
+        )
 
     @abstractmethod
     def get_byte(self, offset) -> Byte:
@@ -611,25 +640,20 @@ class ByteVec:
 
         self.set_slice(offset, offset + 32, value)
 
-    def concretize(self, substitution: dict[BitVecRef, BitVecRef]) -> None:
+    def concretize(self, substitution: dict[BitVecRef, BitVecRef]) -> "ByteVec":
         """
-        Replace all top-level symbols in the chunks with their corresponding concrete values, if they exist in the given substitution mapping.
+        Replace all symbols in the chunks with their corresponding concrete values,
+        if they exist in the given substitution mapping.
 
-        Note: only top-level symbols are currently replaced, not those within nested symbolic terms.
-        This approach is sufficient for current calldata use cases. Performance impacts should be evaluated if all symbol occurrences need to be replaced.
+        Return a new ByteVec object even if no substitution is made.
         """
-        for offset, chunk in self.chunks.items():
-            chunk_data = chunk.data
-            if not isinstance(chunk, SymbolicChunk) or not is_expr_var(chunk_data):
-                continue
 
-            concrete_chunk_data = substitution.get(chunk_data)
-            if concrete_chunk_data is None:  # could be zero
-                continue
+        result = ByteVec()
 
-            self.chunks[offset] = ConcreteChunk(
-                bv_value_to_bytes(concrete_chunk_data), chunk.start, chunk.length
-            )
+        for chunk in self.chunks.values():
+            result.append(chunk.concretize(substitution))
+
+        return result
 
     ### read operations
 

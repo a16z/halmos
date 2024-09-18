@@ -2866,7 +2866,7 @@ class SEVM:
 
                     if size > 0:
                         data: ByteVec = ex.calldata().slice(offset, offset + size)
-                        data.concretize(ex.path.concretization.substitution)
+                        data = data.concretize(ex.path.concretization.substitution)
                         ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CODECOPY:
