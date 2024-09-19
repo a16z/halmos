@@ -102,6 +102,7 @@ from .utils import (
     is_concrete,
     is_non_zero,
     is_zero,
+    match_dynamic_array_overflow_condition,
     restore_precomputed_hashes,
     sha3_inv,
     str_opcode,
@@ -1001,6 +1002,10 @@ class Exec:  # an execution path
             return sat
 
         if is_false(cond):
+            return unsat
+
+        # Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot))), where offset < 2**64
+        if match_dynamic_array_overflow_condition(cond):
             return unsat
 
         return self.path.check(cond)

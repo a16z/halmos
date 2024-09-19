@@ -7,7 +7,9 @@ from timeit import default_timer as timer
 from typing import Any
 
 from z3 import (
+    Z3_OP_BADD,
     Z3_OP_CONCAT,
+    Z3_OP_ULEQ,
     BitVecNumRef,
     BitVecRef,
     BitVecSort,
@@ -21,11 +23,13 @@ from z3 import (
     SignExt,
     SolverFor,
     ZeroExt,
+    eq,
     is_app,
     is_app_of,
     is_bool,
     is_bv,
     is_bv_value,
+    is_not,
     simplify,
 )
 
@@ -347,6 +351,45 @@ def byte_length(x: Any, strict=True) -> int:
         return math.ceil(x.size() / 8)
 
     raise TypeError(f"byte_length({x}) of type {type(x)}")
+
+
+def match_dynamic_array_overflow_condition(cond: BitVecRef) -> bool:
+    """
+    Check if `cond` matches the following pattern:
+        Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot))), where offset < 2**64
+
+    This condition is satisfied when a dynamic array at `slot` exceeds the storage limit.
+    Since such an overflow is highly unlikely in practice, we assume that this condition is unsat.
+
+    Note: we already assume that any sha3 hash output is smaller than 2**256 - 2**64 (see SEVM.sha3_data()).
+    However, the smt solver may not be able to solve this condition within the branching timeout.
+    In such cases, this explicit pattern serves as a fallback to avoid exploring practically infeasible paths.
+
+    We don't need to handle the negation of this condition, because unknown conditions are conservatively assumed to be sat.
+    """
+
+    # Not(ule)
+    if not is_not(cond):
+        return False
+    ule = cond.arg(0)
+
+    # Not(ULE(left, right)
+    if not is_app_of(ule, Z3_OP_ULEQ):
+        return False
+    left, right = ule.arg(0), ule.arg(1)
+
+    # Not(ULE(f_sha3_256(slot), offset + base))
+    if not (left.decl().name() == "f_sha3_256" and is_app_of(right, Z3_OP_BADD)):
+        return False
+    slot = left.arg(0)
+    offset, base = right.arg(0), right.arg(1)
+
+    # Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot)))
+    if not (base.decl().name() == "f_sha3_256" and eq(base.arg(0), slot)):
+        return False
+
+    # offset < 2**64
+    return is_bv_value(offset) and offset.as_long() < 2**64
 
 
 def stripped(hexstring: str) -> str:
