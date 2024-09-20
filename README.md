@@ -1,7 +1,16 @@
 # Halmos
 
+[![PyPI - Version](https://img.shields.io/pypi/v/halmos)](https://pypi.org/project/halmos)
+[![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fa16z%2Fhalmos%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](https://github.com/a16z/halmos)
 [![License](https://img.shields.io/github/license/a16z/halmos)](https://github.com/a16z/halmos/blob/main/LICENSE)
 [![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+4UhzHduai3MzZmUx)
+
+[**Install**](https://github.com/a16z/halmos?tab=readme-ov-file#installation)
+| [**Getting Started**](https://github.com/a16z/halmos/blob/main/docs/getting-started.md)
+| [**Examples**](https://github.com/a16z/halmos/blob/main/examples/README.md)
+| [**FAQ**](https://github.com/a16z/halmos/wiki/FAQ)
+| [**Chat**][chat]
+| [**awesome-halmos**](https://github.com/redtrama/awesome-halmos)
 
 Halmos is a _symbolic testing_ tool for EVM smart contracts. A Solidity/Foundry frontend is currently offered by default, with plans to provide support for other languages, such as Vyper and Huff, in the future.
 
