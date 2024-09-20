@@ -2364,6 +2364,12 @@ class SEVM:
             follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
+                if self.options.debug:
+                    debug(f"\nloop id: {jid}")
+                    debug(f"loop condition: {cond}")
+                    debug(f"calldata: {ex.calldata()}")
+                    debug("path condition:")
+                    debug(ex.path)
         else:
             # for constant-bounded loops
             follow_true = potential_true
