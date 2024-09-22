@@ -554,7 +554,7 @@ class hevm_cheat_code:
             not_cond = simplify(Not(vm_assert.cond))
 
             if ex.check(not_cond) != unsat:
-                new_ex = sevm.create_branch(ex, not_cond, ex.pc)
+                new_ex = sevm.create_branch(ex, not_cond, ex.pc, info=f"assume {not_cond}")
                 new_ex.halt(data=ByteVec(), error=FailCheatcode(f"{vm_assert}"))
                 stack.push(new_ex, step_id)
 

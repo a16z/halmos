@@ -671,6 +671,12 @@ class Concretization:
             self.candidates[d.size_symbol] = size_choices
 
 
+@dataclass(frozen=True)
+class ConditionData:
+    is_branching: bool
+    info: str
+
+
 class Path:
     # a Path object represents a prefix of the path currently being executed
     # initially, it's an empty path at the beginning of execution
@@ -680,14 +686,14 @@ class Path:
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
     conditions: dict  # cond -> bool (true if explicit branching conditions)
     concretization: Concretization
-    pending: list
+    pending: dict
 
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = {}
         self.concretization = Concretization()
-        self.pending = []
+        self.pending = {}
 
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
@@ -697,9 +703,15 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-                if self.conditions[cond] and not is_true(cond)
+                if self.conditions[cond].is_branching and not is_true(cond)
             ]
-        )
+        ) + "\n----\n" + "".join(
+            [
+                f"- {self.conditions[cond].info}\n"
+                for cond in self.conditions
+                if self.conditions[cond].info
+            ]
+        ) + "\n----\n"
 
     def process_dyn_params(self, dyn_params, legacy=False):
         self.concretization.process_dyn_params(dyn_params, legacy)
@@ -745,7 +757,7 @@ class Path:
     def check(self, cond):
         return self.solver.check(cond)
 
-    def branch(self, cond):
+    def branch(self, cond, info):
         if len(self.pending) > 0:
             raise ValueError("branching from an inactive path", self)
 
@@ -768,7 +780,7 @@ class Path:
         path.concretization = deepcopy(self.concretization)
 
         # store the branching condition aside until the new path is activated.
-        path.pending.append(cond)
+        path.pending[cond] = ConditionData(True, info)
 
         return path
 
@@ -783,10 +795,10 @@ class Path:
 
         self.solver.pop(self.solver.num_scopes() - self.num_scopes)
 
-        self.extend(self.pending, branching=True)
-        self.pending = []
+        self.extend(self.pending)
+        self.pending = {}
 
-    def append(self, cond, branching=False):
+    def append(self, cond, branching=False, info=""):
         cond = simplify(cond)
 
         if is_true(cond):
@@ -800,16 +812,16 @@ class Path:
             return
 
         self.solver.add(cond)
-        self.conditions[cond] = branching
+        self.conditions[cond] = ConditionData(branching, info)
         self.concretization.process_cond(cond)
 
-    def extend(self, conds, branching=False):
-        for cond in conds:
-            self.append(cond, branching=branching)
+    def extend(self, conds):
+        for cond, cond_data in conds.items():
+            self.append(cond, branching=cond_data.is_branching, info=cond_data.info)
 
     def extend_path(self, path):
         # branching conditions are not preserved
-        self.extend(path.conditions.keys())
+        self.extend(path.conditions)
 
 
 @dataclass
@@ -1070,7 +1082,7 @@ class Exec:  # an execution path
             f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
-        self.path.append(new_balance_var == new_balance)
+        self.path.append(new_balance_var == new_balance, info=f"{new_balance_var} := {new_balance}")
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
 
@@ -1292,7 +1304,7 @@ class SolidityStorage(Storage):
             BitVecSort256,
         )
         new_storage = Store(mapping[size_keys], concat(keys), val)
-        ex.path.append(new_storage_var == new_storage)
+        ex.path.append(new_storage_var == new_storage, info=f"{new_storage_var} := {new_storage}")
 
         mapping[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
@@ -1435,7 +1447,7 @@ class GenericStorage(Storage):
             BitVecSort256,
         )
         new_storage = Store(mapping[size_keys], loc, val)
-        ex.path.append(new_storage_var == new_storage)
+        ex.path.append(new_storage_var == new_storage, info=f"{new_storage_var} := {new_storage}")
 
         mapping[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
@@ -1858,12 +1870,12 @@ class SEVM:
             raise HalmosException(f"multiple aliases exist: {hexify(target)}")
 
         for addr, cond in tail:
-            new_ex = self.create_branch(ex, cond, ex.pc)
+            new_ex = self.create_branch(ex, cond, ex.pc, info=f"assume {cond}")
             new_ex.alias[target] = addr
             stack.push(new_ex, step_id)
 
         addr, cond = head
-        ex.path.append(cond)
+        ex.path.append(cond, info=f"assume {cond}")
         ex.alias[target] = addr
         return addr
 
@@ -1884,7 +1896,7 @@ class SEVM:
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
         if is_false(balance_cond):
             raise InfeasiblePath("transfer_value: balance is not enough")
-        ex.path.append(balance_cond)
+        ex.path.append(balance_cond, info=f"assume {balance_cond}")
 
         # conditional transfer
         if condition is not None:
@@ -2135,7 +2147,7 @@ class SEVM:
             exit_code_var = BitVec(
                 f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256
             )
-            ex.path.append(exit_code_var == exit_code)
+            ex.path.append(exit_code_var == exit_code, info=f"{exit_code_var} := {exit_code}")
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
             # transfer msg.value
@@ -2271,7 +2283,7 @@ class SEVM:
             return
 
         for addr in ex.code:
-            ex.path.append(new_addr != addr)  # ensure new address is fresh
+            ex.path.append(new_addr != addr, info=f"assume {new_addr} != {addr}")  # ensure new address is fresh
 
         # backup current state
         orig_code = ex.code.copy()
@@ -2401,15 +2413,15 @@ class SEVM:
 
         if follow_true:
             if follow_false:
-                new_ex_true = self.create_branch(ex, cond_true, target)
+                new_ex_true = self.create_branch(ex, cond_true, target, info=f"assume {cond_true}")
             else:
                 new_ex_true = ex
-                new_ex_true.path.append(cond_true, branching=True)
+                new_ex_true.path.append(cond_true, branching=True, info=f"assume {cond_true}")
                 new_ex_true.pc = target
 
         if follow_false:
             new_ex_false = ex
-            new_ex_false.path.append(cond_false, branching=True)
+            new_ex_false.path.append(cond_false, branching=True, info=f"assume {cond_false}")
             new_ex_false.advance_pc()
 
         if new_ex_true:
@@ -2446,8 +2458,8 @@ class SEVM:
         else:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
-    def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
-        new_path = ex.path.branch(cond)
+    def create_branch(self, ex: Exec, cond: BitVecRef, target: int, info="") -> Exec:
+        new_path = ex.path.branch(cond, info)
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
             storage=deepcopy(ex.storage),
@@ -2500,7 +2512,7 @@ class SEVM:
 
             elif loaded in ex.path.concretization.candidates:
                 for candidate in ex.path.concretization.candidates[loaded]:
-                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
+                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc, info=f"assume {loaded} == {candidate}")
                     new_ex.st.push(candidate)
                     new_ex.advance_pc()
                     stack.push(new_ex, step_id)
