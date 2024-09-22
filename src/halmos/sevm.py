@@ -1853,13 +1853,13 @@ class SEVM:
                     debug(
                         f"Potential address alias: {hexify(addr)} for {hexify(target)}"
                     )
-                potential_aliases.append((addr, alias_cond))
+                potential_aliases.append((addr, alias_cond, f"lazy: {target} := {addr}"))
 
         emptyness_cond = And([target != addr for addr in ex.code])
         if ex.check(emptyness_cond) != unsat:
             if self.options.debug:
                 debug(f"Potential empty address: {hexify(target)}")
-            potential_aliases.append((None, emptyness_cond))
+            potential_aliases.append((None, emptyness_cond, f"assume {emptyness_cond}"))
 
         if not potential_aliases:
             raise InfeasiblePath("resolve_address_alias: no potential aliases")
@@ -1869,13 +1869,13 @@ class SEVM:
         if not branching and tail:
             raise HalmosException(f"multiple aliases exist: {hexify(target)}")
 
-        for addr, cond in tail:
-            new_ex = self.create_branch(ex, cond, ex.pc, info=f"assume {cond}")
+        for addr, cond, cond_info in tail:
+            new_ex = self.create_branch(ex, cond, ex.pc, info=cond_info)
             new_ex.alias[target] = addr
             stack.push(new_ex, step_id)
 
-        addr, cond = head
-        ex.path.append(cond, info=f"assume {cond}")
+        addr, cond, cond_info = head
+        ex.path.append(cond, info=cond_info)
         ex.alias[target] = addr
         return addr
 
@@ -2512,7 +2512,7 @@ class SEVM:
 
             elif loaded in ex.path.concretization.candidates:
                 for candidate in ex.path.concretization.candidates[loaded]:
-                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc, info=f"assume {loaded} == {candidate}")
+                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc, info=f"lazy: {loaded} := {candidate}")
                     new_ex.st.push(candidate)
                     new_ex.advance_pc()
                     stack.push(new_ex, step_id)
