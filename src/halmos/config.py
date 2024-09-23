@@ -333,7 +333,7 @@ class Config:
 
     solver_timeout_assertion: int = arg(
         help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout",
-        global_default=1000,
+        global_default=60_000,
         metavar="TIMEOUT",
         group=solver,
     )
