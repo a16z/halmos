@@ -24,6 +24,7 @@ from z3 import (
     BitVec,
     BitVecRef,
     BoolVal,
+    CheckSatResult,
     Concat,
     Extract,
     Function,
@@ -995,9 +996,18 @@ class Exec:  # an execution path
     def advance_pc(self) -> None:
         self.pc = self.pgm.next_pc(self.pc)
 
-    def check(self, cond: Any) -> Any:
-        cond = simplify(cond)
+    def quick_custom_check(self, cond: BitVecRef) -> CheckSatResult | None:
+        """
+        Quick custom checker for specific known patterns.
 
+        This method checks for certain common conditions that can be evaluated
+        quickly without invoking the full SMT solver.
+
+        Returns:
+            sat if the condition is satisfiable
+            unsat if the condition is unsatisfiable
+            None if the condition requires full SMT solving
+        """
         if is_true(cond):
             return sat
 
@@ -1007,6 +1017,13 @@ class Exec:  # an execution path
         # Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot))), where offset < 2**64
         if match_dynamic_array_overflow_condition(cond):
             return unsat
+
+    def check(self, cond: Any) -> Any:
+        cond = simplify(cond)
+
+        # use quick custom checker for common patterns before falling back to SMT solver
+        if result := self.quick_custom_check(cond):
+            return result
 
         return self.path.check(cond)
 

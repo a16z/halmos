@@ -381,15 +381,10 @@ def match_dynamic_array_overflow_condition(cond: BitVecRef) -> bool:
     # Not(ULE(f_sha3_256(slot), offset + base))
     if not (left.decl().name() == "f_sha3_256" and is_app_of(right, Z3_OP_BADD)):
         return False
-    slot = left.arg(0)
     offset, base = right.arg(0), right.arg(1)
 
-    # Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot)))
-    if not (base.decl().name() == "f_sha3_256" and eq(base.arg(0), slot)):
-        return False
-
-    # offset < 2**64
-    return is_bv_value(offset) and offset.as_long() < 2**64
+    # Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot))) and offset < 2**64
+    return eq(left, base) and is_bv_value(offset) and offset.as_long() < 2**64
 
 
 def stripped(hexstring: str) -> str:
