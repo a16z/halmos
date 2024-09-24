@@ -8,12 +8,12 @@ from z3 import (
     simplify,
 )
 
-from halmos.utils import match_dynamic_array_overflow_condition
+from halmos.utils import f_sha3_256_name, match_dynamic_array_overflow_condition
 
 
 def test_match_dynamic_array_overflow_condition():
     # Create Z3 objects
-    f_sha3_256 = Function("f_sha3_256", BitVecSort(256), BitVecSort(256))
+    f_sha3_256 = Function(f_sha3_256_name, BitVecSort(256), BitVecSort(256))
     slot = BitVec("slot", 256)
     offset = BitVecVal(1000, 256)  # Less than 2**64
 

@@ -95,12 +95,16 @@ from .utils import (
     debug,
     extract_bytes,
     f_ecrecover,
+    f_sha3_256_name,
+    f_sha3_512_name,
+    f_sha3_name,
     hexify,
     int_of,
     is_bool,
     is_bv,
     is_bv_value,
     is_concrete,
+    is_f_sha3_name,
     is_non_zero,
     is_zero,
     match_dynamic_array_overflow_condition,
@@ -1014,7 +1018,7 @@ class Exec:  # an execution path
         if is_false(cond):
             return unsat
 
-        # Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot))), where offset < 2**64
+        # Not(ULE(f_sha3_N(slot), offset + f_sha3_N(slot))), where offset < 2**64
         if match_dynamic_array_overflow_condition(cond):
             return unsat
 
@@ -1085,7 +1089,7 @@ class Exec:  # an execution path
                 data = bytes_to_bv_value(data)
 
             f_sha3 = Function(
-                f"f_sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256
+                f_sha3_name(size * 8), BitVecSorts[size * 8], BitVecSort256
             )
             sha3_expr = f_sha3(data)
         else:
@@ -1310,17 +1314,17 @@ class SolidityStorage(Storage):
     def decode(cls, loc: Any) -> Any:
         loc = normalize(loc)
         # m[k] : hash(k.m)
-        if loc.decl().name() == "f_sha3_512":
+        if loc.decl().name() == f_sha3_512_name:
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
             return cls.decode(base) + (offset, ZERO)
         # a[i] : hash(a) + i
-        elif loc.decl().name() == "f_sha3_256":
+        elif loc.decl().name() == f_sha3_256_name:
             base = loc.arg(0)
             return cls.decode(base) + (ZERO,)
         # m[k] : hash(k.m)  where |k| != 256-bit
-        elif loc.decl().name().startswith("f_sha3_"):
+        elif is_f_sha3_name(loc.decl().name()):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat" and sha3_input.num_args() == 2:
                 offset = simplify(sha3_input.arg(0))
@@ -1439,12 +1443,12 @@ class GenericStorage(Storage):
     @classmethod
     def decode(cls, loc: Any) -> Any:
         loc = normalize(loc)
-        if loc.decl().name() == "f_sha3_512":  # hash(hi,lo), recursively
+        if loc.decl().name() == f_sha3_512_name:  # hash(hi,lo), recursively
             args = loc.arg(0)
             hi = cls.decode(simplify(Extract(511, 256, args)))
             lo = cls.decode(simplify(Extract(255, 0, args)))
             return cls.simple_hash(Concat(hi, lo))
-        elif loc.decl().name().startswith("f_sha3_"):
+        elif is_f_sha3_name(loc.decl().name()):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat":
                 decoded_sha3_input_args = [

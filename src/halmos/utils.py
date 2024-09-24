@@ -98,6 +98,18 @@ f_ecrecover = Function(
 )
 
 
+def is_f_sha3_name(name: str) -> bool:
+    return name.startswith("f_sha3_")
+
+
+def f_sha3_name(bitsize: int) -> str:
+    return f"f_sha3_{bitsize}"
+
+
+f_sha3_256_name = f_sha3_name(256)
+f_sha3_512_name = f_sha3_name(512)
+
+
 def wrap(x: Any) -> Word:
     if is_bv(x):
         return x
@@ -356,7 +368,7 @@ def byte_length(x: Any, strict=True) -> int:
 def match_dynamic_array_overflow_condition(cond: BitVecRef) -> bool:
     """
     Check if `cond` matches the following pattern:
-        Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot))), where offset < 2**64
+        Not(ULE(f_sha3_N(slot), offset + f_sha3_N(slot))), where offset < 2**64
 
     This condition is satisfied when a dynamic array at `slot` exceeds the storage limit.
     Since such an overflow is highly unlikely in practice, we assume that this condition is unsat.
@@ -378,12 +390,12 @@ def match_dynamic_array_overflow_condition(cond: BitVecRef) -> bool:
         return False
     left, right = ule.arg(0), ule.arg(1)
 
-    # Not(ULE(f_sha3_256(slot), offset + base))
-    if not (left.decl().name() == "f_sha3_256" and is_app_of(right, Z3_OP_BADD)):
+    # Not(ULE(f_sha3_N(slot), offset + base))
+    if not (is_f_sha3_name(left.decl().name()) and is_app_of(right, Z3_OP_BADD)):
         return False
     offset, base = right.arg(0), right.arg(1)
 
-    # Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot))) and offset < 2**64
+    # Not(ULE(f_sha3_N(slot), offset + f_sha3_N(slot))) and offset < 2**64
     return eq(left, base) and is_bv_value(offset) and offset.as_long() < 2**64
 
 
