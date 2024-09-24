@@ -1,3 +1,11 @@
+#     ___       ___       ___       ___       ___       ___
+#    /\__\     /\  \     /\__\     /\__\     /\  \     /\  \
+#   /:/__/_   /::\  \   /:/  /    /::L_L_   /::\  \   /::\  \
+#  /::\/\__\ /::\:\__\ /:/__/    /:/L:\__\ /:/\:\__\ /\:\:\__\
+#  \/\::/  / \/\::/  / \:\  \    \/_/:/  / \:\/:/  / \:\:\/__/
+#    /:/  /    /:/  /   \:\__\     /:/  /   \::/  /   \::/  /
+#    \/__/     \/__/     \/__/     \/__/     \/__/     \/__/
+
 [global]
 
 # run tests in the given contract
@@ -27,6 +35,9 @@ depth = 0
 
 # set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)
 # array-lengths = NAME1=LENGTH1,NAME2=LENGTH2,...
+
+# set the default length candidates for bytes and string not specified in --array-lengths
+default-bytes-lengths = "0,1024,65"
 
 # Select one of the available storage layout models
 # The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.
@@ -102,7 +113,7 @@ smt-exp-by-const = 2
 solver-timeout-branching = 1
 
 # set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout
-solver-timeout-assertion = 1000
+solver-timeout-assertion = 60000
 
 # set memory limit (in megabytes) for the solver; 0 means no limit
 solver-max-memory = 0
@@ -112,6 +123,9 @@ solver-max-memory = 0
 
 # set the number of threads for parallel solvers
 # solver-threads = N
+
+# cache unsat queries using unsat cores
+cache-solver = false
 
 ################################################################################
 #                             Experimental options                             #

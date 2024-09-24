@@ -336,6 +336,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Concretization.t.sol:ConcretizationTest": [
+            {
+                "name": "check_custom_calldata_decoding()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Console.t.sol:ConsoleTest": [
             {
                 "name": "check_log_address()",
