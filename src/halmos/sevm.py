@@ -24,6 +24,7 @@ from z3 import (
     BitVec,
     BitVecRef,
     BoolVal,
+    CheckSatResult,
     Concat,
     Extract,
     Function,
@@ -94,14 +95,19 @@ from .utils import (
     debug,
     extract_bytes,
     f_ecrecover,
+    f_sha3_256_name,
+    f_sha3_512_name,
+    f_sha3_name,
     hexify,
     int_of,
     is_bool,
     is_bv,
     is_bv_value,
     is_concrete,
+    is_f_sha3_name,
     is_non_zero,
     is_zero,
+    match_dynamic_array_overflow_condition,
     restore_precomputed_hashes,
     sha3_inv,
     str_opcode,
@@ -994,14 +1000,34 @@ class Exec:  # an execution path
     def advance_pc(self) -> None:
         self.pc = self.pgm.next_pc(self.pc)
 
-    def check(self, cond: Any) -> Any:
-        cond = simplify(cond)
+    def quick_custom_check(self, cond: BitVecRef) -> CheckSatResult | None:
+        """
+        Quick custom checker for specific known patterns.
 
+        This method checks for certain common conditions that can be evaluated
+        quickly without invoking the full SMT solver.
+
+        Returns:
+            sat if the condition is satisfiable
+            unsat if the condition is unsatisfiable
+            None if the condition requires full SMT solving
+        """
         if is_true(cond):
             return sat
 
         if is_false(cond):
             return unsat
+
+        # Not(ULE(f_sha3_N(slot), offset + f_sha3_N(slot))), where offset < 2**64
+        if match_dynamic_array_overflow_condition(cond):
+            return unsat
+
+    def check(self, cond: Any) -> Any:
+        cond = simplify(cond)
+
+        # use quick custom checker for common patterns before falling back to SMT solver
+        if result := self.quick_custom_check(cond):
+            return result
 
         return self.path.check(cond)
 
@@ -1063,7 +1089,7 @@ class Exec:  # an execution path
                 data = bytes_to_bv_value(data)
 
             f_sha3 = Function(
-                f"f_sha3_{size * 8}", BitVecSorts[size * 8], BitVecSort256
+                f_sha3_name(size * 8), BitVecSorts[size * 8], BitVecSort256
             )
             sha3_expr = f_sha3(data)
         else:
@@ -1288,17 +1314,17 @@ class SolidityStorage(Storage):
     def decode(cls, loc: Any) -> Any:
         loc = normalize(loc)
         # m[k] : hash(k.m)
-        if loc.decl().name() == "f_sha3_512":
+        if loc.decl().name() == f_sha3_512_name:
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
             return cls.decode(base) + (offset, ZERO)
         # a[i] : hash(a) + i
-        elif loc.decl().name() == "f_sha3_256":
+        elif loc.decl().name() == f_sha3_256_name:
             base = loc.arg(0)
             return cls.decode(base) + (ZERO,)
         # m[k] : hash(k.m)  where |k| != 256-bit
-        elif loc.decl().name().startswith("f_sha3_"):
+        elif is_f_sha3_name(loc.decl().name()):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat" and sha3_input.num_args() == 2:
                 offset = simplify(sha3_input.arg(0))
@@ -1417,12 +1443,12 @@ class GenericStorage(Storage):
     @classmethod
     def decode(cls, loc: Any) -> Any:
         loc = normalize(loc)
-        if loc.decl().name() == "f_sha3_512":  # hash(hi,lo), recursively
+        if loc.decl().name() == f_sha3_512_name:  # hash(hi,lo), recursively
             args = loc.arg(0)
             hi = cls.decode(simplify(Extract(511, 256, args)))
             lo = cls.decode(simplify(Extract(255, 0, args)))
             return cls.simple_hash(Concat(hi, lo))
-        elif loc.decl().name().startswith("f_sha3_"):
+        elif is_f_sha3_name(loc.decl().name()):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat":
                 decoded_sha3_input_args = [
@@ -2359,6 +2385,12 @@ class SEVM:
             follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
+                if self.options.debug:
+                    debug(f"\nloop id: {jid}")
+                    debug(f"loop condition: {cond}")
+                    debug(f"calldata: {ex.calldata()}")
+                    debug("path condition:")
+                    debug(ex.path)
         else:
             # for constant-bounded loops
             follow_true = potential_true

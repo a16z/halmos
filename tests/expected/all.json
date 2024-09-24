@@ -2365,6 +2365,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Solver.t.sol:SolverTest": [
+            {
+                "name": "check_dynamic_array_overflow()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/StaticContexts.t.sol:StaticContextsTest": [
             {
                 "name": "check_create2_fails()",
