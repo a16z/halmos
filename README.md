@@ -39,6 +39,13 @@ Alternatively, you can download the Docker image that contains halmos and its de
 docker pull .:/workspace ghcr.io/a16z/halmos:0.1.14
 ```
 
+And finally, if you want to install halmos into an isolated virtual environment (so you don't have to deal with dependency issues), you can install it with [uv](https://docs.astral.sh/uv/getting-started/installation/):
+
+```
+curl -LsSf https://astral.sh/uv/install.sh | sh # install UV (see docs for other install methods)
+uv tool install halmos
+```
+
 ## Usage
 
 ```
