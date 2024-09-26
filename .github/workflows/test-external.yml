@@ -20,17 +20,10 @@ jobs:
       matrix:
         cache-solver: ["", "--cache-solver"]
         project:
-        # TODO: enable after migrating morpho-data-structures tests to use new cheatcode instead of --symbolic-storage
-        # - repo: "morpho-org/morpho-data-structures"
-        #   dir: "morpho-data-structures"
-        #   cmd: "--function testProve --loop 4"
-        #   branch: ""
-        #   profile: ""
-        # temporary forked repo with updated tests
-          - repo: "daejunpark/morpho-data-structures"
+          - repo: "morpho-org/morpho-data-structures"
             dir: "morpho-data-structures"
             cmd: "--function testProve --loop 4"
-            branch: "ci/halmos"
+            branch: ""
             profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
