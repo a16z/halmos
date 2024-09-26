@@ -16,6 +16,10 @@ abstract contract ERC20Test is SymTest, Test {
     function setUp() public virtual;
 
     function _checkNoBackdoor(bytes4 selector, bytes memory args, address caller, address other) public virtual {
+        _checkNoBackdoor(abi.encodePacked(selector, args), caller, other);
+    }
+
+    function _checkNoBackdoor(bytes memory data, address caller, address other) public virtual {
         // consider two arbitrary distinct accounts
         vm.assume(other != caller);
 
@@ -26,7 +30,7 @@ abstract contract ERC20Test is SymTest, Test {
 
         // consider an arbitrary function call to the token from the caller
         vm.prank(caller);
-        (bool success,) = address(token).call(abi.encodePacked(selector, args));
+        (bool success,) = address(token).call(data);
         vm.assume(success);
 
         uint256 newBalanceOther = IERC20(token).balanceOf(other);
