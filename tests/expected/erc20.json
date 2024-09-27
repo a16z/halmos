@@ -1,6 +1,62 @@
 {
     "exitcode": 1,
     "test_results": {
+        "test/BackdoorERC20.t.sol:BackdoorERC20Test": [
+            {
+                "name": "check_NoBackdoor_with_createBytes(bytes4,address,address)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_NoBackdoor_with_createCalldata_BackdoorERC20(bytes4,address,address)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_NoBackdoor_with_createCalldata_IERC20(bytes4,address,address)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_NoBackdoor_with_createCalldata_IEmpty(bytes4,address,address)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_transfer(address,address,address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_transferFrom(address,address,address,address,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/CurveTokenV3.t.sol:CurveTokenV3Test": [
             {
                 "name": "check_NoBackdoor(bytes4,address,address)",
