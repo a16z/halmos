@@ -71,9 +71,6 @@ contract EIP2935Test is SymTest, Test {
     }
 
     function check_invariant(address caller, uint value) public {
-        // TODO: what's the expected behavior when caller is HISTORY_STORAGE_ADDRESS?
-        vm.assume(caller != HISTORY_STORAGE_ADDRESS);
-
         // set balances
         uint old_HISTORY_STORAGE_ADDRESS_balance = svm.createUint(96, "HISTORY_STORAGE_ADDRESS.balance");
         uint old_caller_balance = svm.createUint(96, "caller.balance");
@@ -122,12 +119,16 @@ contract EIP2935Test is SymTest, Test {
     }
 
     function _check_balance_update(address caller, uint value, bool success, uint old_HISTORY_STORAGE_ADDRESS_balance, uint old_caller_balance) internal {
-        if (success) {
-            assertEq(HISTORY_STORAGE_ADDRESS.balance, old_HISTORY_STORAGE_ADDRESS_balance + value);
-            assertEq(caller.balance, old_caller_balance - value);
-        } else {
-            assertEq(HISTORY_STORAGE_ADDRESS.balance, old_HISTORY_STORAGE_ADDRESS_balance);
+        if (caller == HISTORY_STORAGE_ADDRESS) {
             assertEq(caller.balance, old_caller_balance);
+        } else {
+            if (success) {
+                assertEq(HISTORY_STORAGE_ADDRESS.balance, old_HISTORY_STORAGE_ADDRESS_balance + value);
+                assertEq(caller.balance, old_caller_balance - value);
+            } else {
+                assertEq(HISTORY_STORAGE_ADDRESS.balance, old_HISTORY_STORAGE_ADDRESS_balance);
+                assertEq(caller.balance, old_caller_balance);
+            }
         }
     }
 
