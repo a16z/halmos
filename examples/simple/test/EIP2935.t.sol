@@ -6,6 +6,42 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 // functional correctness test for the system contract bytecode in https://eips.ethereum.org/EIPS/eip-2935
 
+/*
+ *  At the beginning of processing a block where `block.number == 8192*k + i`,
+ *  the `set` operation updates the storage as follows, where `calldata[0:32] == blockhash(8192*k + i-1)`:
+ *
+ *      Slot    Data                                        New data after `set` operation
+ *
+ *        0     blockhash(8192* k    +  0   )               <unchanged>
+ *        1     blockhash(8192* k    +  1   )               <unchanged>
+ *       ...    ...                                         ...
+ *       i-2    blockhash(8192* k    + i-2  )               <unchanged>
+ *       i-1    blockhash(8192*(k-1) + i-1  )   == set ==>  blockhash(8192*k + i-1)
+ *        i     blockhash(8192*(k-1) +  i   )               <unchanged>
+ *       ...    ...                                         ...
+ *      8190    blockhash(8192*(k-1) + 8190 )               <unchanged>
+ *      8191    blockhash(8192*(k-1) + 8191 )               <unchanged>
+ *      8192    0                                           <unchanged>
+ *       ...    ...                                         ...
+ *   2^256-1    0                                           <unchanged>
+ *
+ *  Then, during the processing of the block at `8192*k + i`,
+ *  the `get` operation reads the storage at the slot `calldata[0:32] % 8192`,
+ *  as long as `calldata[0:32]` falls within the range `[8192*(k-1) + i, 8192*k + i-1]` (inclusive).
+ *  Otherwise, it returns 0.
+ */
+
+/*
+ *  Edge cases:
+ *
+ *  When `block.number == 0`:
+ *  - The `set` operation updates slot 8191 with the given `calldata[0:32]` value.
+ *    If this value is non-zero, it could lead to storage corruption.
+ *  - The `get` operation reads from slot `calldata[0:32] % 8192`, rather than immediately returning 0.
+ *    If the storage is corrupted, this operation may retrieve corrupted data.
+ *  - While this is not relevant to the Ethereum chain, it could pose issues for other EVM chains upon creation.
+ */
+
 /// @custom:halmos --storage-layout generic
 contract EIP2935Test is SymTest, Test {
     address constant HISTORY_STORAGE_ADDRESS = address(0x0AAE40965E6800cD9b1f4b05ff21581047E3F91e);
