@@ -25,6 +25,11 @@ jobs:
             cmd: "--function testProve --loop 4"
             branch: ""
             profile: ""
+          - repo: "morpho-org/morpho-blue"
+            dir: "morpho-blue"
+            cmd: ""
+            branch: ""
+            profile: "test"
           - repo: "a16z/cicada"
             dir: "cicada"
             cmd: "--contract LibUint1024Test --function testProve --loop 256"
@@ -102,7 +107,7 @@ jobs:
         run: docker run halmos-image --version
 
       - name: Test external repo
-        run: docker run -v .:/workspace halmos-image ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 3 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
+        run: docker run -e FOUNDRY_PROFILE -v .:/workspace halmos-image ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 3 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
         working-directory: ${{ matrix.project.dir }}
         env:
           FOUNDRY_PROFILE: ${{ matrix.project.profile }}
