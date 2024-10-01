@@ -59,7 +59,14 @@ class ParseCSV(argparse.Action):
 
     @staticmethod
     def parse(values: str) -> list[int]:
-        return [int(x.strip()) for x in values.split(",")]
+        result = [int(x) for _x in values.split(",") if (x := _x.strip())]
+        if not result:
+            raise ValueError(f"expected a non-empty list of integers, got '{values}'")
+        return result
+
+    @staticmethod
+    def unparse(values: list[int]) -> str:
+        return ",".join([str(v) for v in values])
 
 
 class ParseErrorCodes(argparse.Action):
@@ -75,7 +82,16 @@ class ParseErrorCodes(argparse.Action):
             return set()
 
         # support multiple bases: decimal, hex, etc.
-        return set(int(x.strip(), 0) for x in values.split(","))
+        result = set(int(x, 0) for _x in values.split(",") if (x := _x.strip()))
+        if not result:
+            raise ValueError(f"expected a non-empty list of integers, got '{values}'")
+        return result
+
+    @staticmethod
+    def unparse(values: set[int]) -> str:
+        if not values:
+            return "*"
+        return ",".join([f"0x{v:02x}" for v in values])
 
 
 class ParseArrayLengths(argparse.Action):
@@ -88,12 +104,18 @@ class ParseArrayLengths(argparse.Action):
         if not values:
             return {}
 
-        # TODO: update syntax: name1=size1,size2; name2=size3,...; ...
-        name_sizes_pairs = values.split(",")
+        # TODO: update syntax: name1={size1,size2},name2=size3,...
+        name_sizes_pairs = [x.split("=") for _x in values.split(",") if (x := _x.strip())]
         return {
-            name.strip(): [int(x.strip()) for x in sizes.split(";")]
-            for name, sizes in [x.split("=") for x in name_sizes_pairs]
+            name.strip(): [int(x) for _x in sizes.split(";") if (x := _x.strip())]
+            for name, sizes in name_sizes_pairs
         }
+
+    @staticmethod
+    def unparse(values: dict[str, list[int]]) -> str:
+        return ",".join(
+            [f"{k}={';'.join([str(v) for v in vs])}" for k, vs in values.items()]
+        )
 
 
 # TODO: add kw_only=True when we support Python>=3.10
@@ -731,6 +753,10 @@ def main():
             continue
 
         group_name = field_info.metadata.get("group", None)
+        if group_name == deprecated:
+            # skip deprecated options
+            continue
+
         if group_name != current_group_name:
             separator = "#" * 80
             lines.append(f"\n{separator}")
@@ -745,6 +771,11 @@ def main():
 
         (value, source) = config.value_with_source(field_info.name)
         default = field_info.metadata.get("global_default", None)
+
+        # unparse value if action is provided
+        # note: this is a workaround because not all types can be represented in toml syntax, e.g., sets.
+        if action := field_info.metadata.get("action", None):
+            value = action.unparse(value)
 
         # callable defaults mean that the default value is not a hardcoded constant
         # it depends on the context, so don't emit it in the config file unless it
