@@ -18,7 +18,15 @@ import "forge-std/Test.sol";
  *  - 0x51: If you call a zero-initialized variable of internal function type.
  */
 
+contract C {
+    function inc(uint x) public returns (uint) {
+        return x + 1;
+    }
+}
+
 contract PanicTest is Test {
+    C c = new C();
+
     function _panic(uint code) internal pure {
         // revert Panic(code);
         bytes memory data = abi.encodeWithSignature("Panic(uint256)", code);
@@ -131,5 +139,56 @@ contract PanicTest is Test {
 
     function check_panic_0x12_pass(uint x) public returns (uint) {
         return 10 / x;
+    }
+
+    //
+    // panic propagation
+    //
+
+    /// @custom:halmos --panic-error-codes 0x11
+    function check_panic_inc_fail(uint x) public returns (uint) {
+        // 0x11: overflow
+        return c.inc(x); // counterexample: x == 2^256 - 1
+    }
+
+    //
+    // capturing different types of reverts
+    //
+
+    /// @custom:halmos --panic-error-codes 0x11
+    function check_panic_inc_overflow_fail(uint x) public returns (uint) {
+        // fail due to overflow, Panic(0x11)
+        // but no assertion violation
+        assert(x + 1 > x); // counterexample: x == 2^256 - 1
+    }
+
+    function check_panic_inc_overflow_pass(uint x) public returns (uint) {
+        // pass because the overflow path is silently ignored, then the assertion holds for non-overflow paths
+        assert(x + 1 > x); // pass; overflow ignored
+    }
+
+    function check_panic_inc_assert_fail(uint x) public returns (uint) {
+        // fail due to assertion failure, Panic(0x01)
+        // but no overflow
+        unchecked {
+            assert(x + 1 > x); // counterexample: x == 2^256 - 1
+        }
+    }
+
+    /// @custom:halmos --panic-error-codes 0x11
+    function check_panic_inc_assert_pass(uint x) public returns (uint) {
+        // pass because the assertion violation error code is ignored, and there's no overflow
+        unchecked {
+            assert(x + 1 > x); // pass, assertion violation ignored
+        }
+    }
+
+    /// @custom:halmos --panic-error-codes 0xff
+    function check_panic_inc_cheatcode_fail(uint x) public returns (uint) {
+        // fail even if Panic(1) is ignored,
+        // because assertion cheatcode failures are handled separately and are always captured
+        unchecked {
+            assertGt(x + 1, x); // counterexample: x == 2^256 - 1
+        }
     }
 }
