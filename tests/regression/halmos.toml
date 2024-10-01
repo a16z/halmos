@@ -24,6 +24,9 @@ function = "check_"
 # The --function prefix is automatically added, unless the regex starts with '^'.
 match-test = ""
 
+# specify Panic error codes to be treated as test failures; use '*' to include all error codes
+panic-error-codes = "0x01"
+
 # set loop unrolling bounds
 loop = 2
 
@@ -34,7 +37,7 @@ width = 0
 depth = 0
 
 # set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)
-# array-lengths = NAME1=LENGTH1,NAME2=LENGTH2,...
+array-lengths = ""
 
 # set the default length candidates for bytes and string not specified in --array-lengths
 default-bytes-lengths = "0,1024,65"

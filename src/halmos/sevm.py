@@ -131,6 +131,9 @@ EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D8
 ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
 
+# bytes4(keccak256("Panic(uint256)"))
+PANIC_SELECTOR = bytes.fromhex("4E487B71")
+
 EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
 
 # TODO: make this configurable
@@ -903,14 +906,36 @@ class Exec:  # an execution path
     def is_halted(self) -> bool:
         return self.context.output.data is not None
 
-    def reverted_with(self, expected: ByteVec) -> bool:
-        if not isinstance(self.context.output.error, Revert):
+    def is_panic_of(self, expected_error_codes: set[int]) -> bool:
+        """
+        Check if the error is Panic(k) for any k in the given error code set.
+        An empty set or None will match any error code.
+
+        Panic(k) is encoded as 36 bytes (4 + 32) consisting of:
+            bytes4(keccak256("Panic(uint256)")) + bytes32(k)
+        """
+
+        output = self.context.output
+
+        if not isinstance(output.error, Revert):
             return False
 
-        returndata = self.context.output.data[: byte_length(expected)]
+        error_data = output.data
+        if byte_length(error_data) != 36:
+            return False
 
-        # bytevec equality check, will take care of length check, bv vs symbolic, etc.
-        return returndata == expected
+        error_selector = error_data[0:4].unwrap()
+        if error_selector != PANIC_SELECTOR:
+            return False
+
+        # match any error code
+        if not expected_error_codes:
+            return True
+
+        # the argument of Panic is expected to be concrete
+        # NOTE: symbolic error code will be silently ignored
+        error_code = unbox_int(error_data[4:36].unwrap())
+        return error_code in expected_error_codes
 
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)

@@ -108,14 +108,6 @@ sys.setrecursionlimit(1024 * 4)
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
 
-# Panic(1)
-# bytes4(keccak256("Panic(uint256)")) + bytes32(1)
-ASSERT_FAIL = ByteVec(
-    bytes.fromhex(
-        "4E487B710000000000000000000000000000000000000000000000000000000000000001"
-    )
-)
-
 VERBOSITY_TRACE_COUNTEREXAMPLE = 2
 VERBOSITY_TRACE_SETUP = 3
 VERBOSITY_TRACE_PATHS = 4
@@ -673,11 +665,13 @@ def run(
             print("\nTrace:")
             render_trace(ex.context)
 
-        error_output = ex.context.output.error
-        if ex.reverted_with(ASSERT_FAIL) or is_global_fail_set(ex.context):
+        output = ex.context.output
+        error_output = output.error
+        if ex.is_panic_of(args.panic_error_codes) or is_global_fail_set(ex.context):
             if args.verbose >= 1:
                 print(f"Found potential path (id: {idx+1})")
-                print(f"{error_output}")
+                panic_code = unbox_int(output.data[4:36].unwrap())
+                print(f"Panic(0x{panic_code:02x}) {error_output}")
 
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 traces[idx] = rendered_trace(ex.context)
