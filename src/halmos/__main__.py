@@ -697,6 +697,9 @@ def run(
                 traces[idx] = f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
 
         elif not error_output:
+            if args.print_success_states:
+                print(f"# {idx+1}")
+                print(ex)
             normal += 1
 
         # 0 width is unlimited
