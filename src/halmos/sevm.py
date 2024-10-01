@@ -132,7 +132,7 @@ ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
 
 # bytes4(keccak256("Panic(uint256)"))
-PANIC_SELECTOR = ByteVec(bytes.fromhex("4E487B71"))
+PANIC_SELECTOR = bytes.fromhex("4E487B71")
 
 EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
 
@@ -924,7 +924,7 @@ class Exec:  # an execution path
         if byte_length(error_data) != 36:
             return False
 
-        error_selector = error_data[0:4]
+        error_selector = error_data[0:4].unwrap()
         if error_selector != PANIC_SELECTOR:
             return False
 
