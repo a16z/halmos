@@ -906,7 +906,7 @@ class Exec:  # an execution path
     def is_halted(self) -> bool:
         return self.context.output.data is not None
 
-    def reverted_with_panic(self, expected_error_codes: set[int]) -> bool:
+    def is_panic_of(self, expected_error_codes: set[int]) -> bool:
         """
         Check if the error is Panic(k) for any k in the given error code set.
         An empty set or None will match any error code.

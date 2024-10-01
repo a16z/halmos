@@ -667,10 +667,11 @@ def run(
 
         output = ex.context.output
         error_output = output.error
-        if ex.reverted_with_panic(args.panic_error_codes) or is_global_fail_set(ex.context):
+        if ex.is_panic_of(args.panic_error_codes) or is_global_fail_set(ex.context):
             if args.verbose >= 1:
                 print(f"Found potential path (id: {idx+1})")
-                print(f"Panic(0x{unbox_int(output.data[4:36].unwrap()):02x}) {error_output}")
+                panic_code = unbox_int(output.data[4:36].unwrap())
+                print(f"Panic(0x{panic_code:02x}) {error_output}")
 
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 traces[idx] = rendered_trace(ex.context)
