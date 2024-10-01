@@ -933,6 +933,7 @@ class Exec:  # an execution path
             return True
 
         # the argument of Panic is expected to be concrete
+        # NOTE: symbolic error code will be silently ignored
         error_code = unbox_int(error_data[4:36].unwrap())
         return error_code in expected_error_codes
 

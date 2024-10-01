@@ -1791,7 +1791,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_panic_11_fail(uint256)",
+                "name": "check_panic_0x11_fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "models": null,
@@ -1800,7 +1800,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_panic_11_pass(uint256)",
+                "name": "check_panic_0x11_pass(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1809,7 +1809,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_panic_12_fail(uint256)",
+                "name": "check_panic_0x12_fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
                 "models": null,
@@ -1818,9 +1818,27 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_panic_12_pass(uint256)",
+                "name": "check_panic_0x12_pass(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_10_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_16_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -1864,6 +1882,24 @@
             },
             {
                 "name": "check_panic_5_fail_old(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_7_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_8_fail(bool)",
                 "exitcode": 1,
                 "num_models": 1,
                 "models": null,
