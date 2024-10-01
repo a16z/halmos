@@ -62,6 +62,22 @@ class ParseCSV(argparse.Action):
         return [int(x.strip()) for x in values.split(",")]
 
 
+class ParseErrorCodes(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        values = ParseErrorCodes.parse(values)
+        setattr(namespace, self.dest, values)
+
+    @staticmethod
+    def parse(values: str) -> set[int]:
+        values = values.strip()
+        # return empty set, which will be interpreted as matching any value in Exec.reverted_with_panic()
+        if values == "*":
+            return set()
+
+        # support multiple bases: decimal, hex, etc.
+        return set(int(x.strip(), 0) for x in values.split(","))
+
+
 class ParseArrayLengths(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         values = ParseArrayLengths.parse(values)
@@ -159,6 +175,13 @@ class Config:
         global_default="",
         metavar="FUNCTION_NAME_REGEX",
         short="mt",
+    )
+
+    panic_error_codes: str = arg(
+        help="specify Panic error codes to be treated as test failures; use '*' to include all error codes",
+        global_default="0x01",
+        metavar="ERROR_CODE1,ERROR_CODE2,...",
+        action=ParseErrorCodes,
     )
 
     loop: int = arg(
