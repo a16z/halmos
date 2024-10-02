@@ -293,6 +293,12 @@ class Config:
         group=debugging,
     )
 
+    print_success_states: bool = arg(
+        help="print successful execution states",
+        global_default=False,
+        group=debugging,
+    )
+
     print_failed_states: bool = arg(
         help="print failed execution states",
         global_default=False,
