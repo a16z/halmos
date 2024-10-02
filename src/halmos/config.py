@@ -2,10 +2,10 @@ import argparse
 import os
 import sys
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
-from typing import Any, Generator
+from typing import Any
 
 import toml
 
@@ -111,7 +111,9 @@ class ParseArrayLengths(argparse.Action):
 
         # TODO: update syntax: name1={size1,size2},name2=size3,...
         return {
-            name.strip(): ensure_non_empty([int(x) for x in parse_csv(sizes, sep=";")], values)
+            name.strip(): ensure_non_empty(
+                [int(x) for x in parse_csv(sizes, sep=";")], values
+            )
             for name, sizes in (x.split("=") for x in parse_csv(values))
         }
 

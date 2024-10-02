@@ -6,6 +6,9 @@ import pytest
 
 from halmos.config import (
     Config,
+    ParseArrayLengths,
+    ParseCSV,
+    ParseErrorCodes,
     arg_parser,
     default_config,
     resolve_config_files,
@@ -13,7 +16,7 @@ from halmos.config import (
 from halmos.config import (
     toml_parser as get_toml_parser,
 )
-from halmos.config import ParseCSV, ParseErrorCodes, ParseArrayLengths
+
 
 @pytest.fixture
 def config():
@@ -274,13 +277,19 @@ def test_parse_array_lengths():
     assert ParseArrayLengths.parse("x=1;2;,y=3;,") == {"x": [1, 2], "y": [3]}
     assert ParseArrayLengths.parse(" x = 1 ; 2 , y = 3 ") == {"x": [1, 2], "y": [3]}
     assert ParseArrayLengths.parse(" , x = 1 ; 2 , y = 3 , ") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse(" , x = ; 1 ; 2 ; , y = ; 3 ; , ") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse(" , x = ; 1 ; 2 ; , y = ; 3 ; , ") == {
+        "x": [1, 2],
+        "y": [3],
+    }
 
 
 def test_unparse_array_lengths():
     assert ParseArrayLengths.unparse({}) == ""
     assert ParseArrayLengths.unparse({"x": [1]}) == "x=1"
-    assert ParseArrayLengths.unparse({"x": [1, 2], "y": [3]}) in {"x=1;2,y=3", "y=3,x=1;2"}
+    assert ParseArrayLengths.unparse({"x": [1, 2], "y": [3]}) in {
+        "x=1;2,y=3",
+        "y=3,x=1;2",
+    }
 
 
 def test_parse_array_lengths_roundtrip():
