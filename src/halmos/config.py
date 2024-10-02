@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from typing import Any
@@ -52,6 +52,17 @@ def arg(
     )
 
 
+def ensure_non_empty(values: list | set | dict, raw_values: str) -> list:
+    if not values:
+        raise ValueError(f"required a non-empty list, but got {raw_values}")
+    return values
+
+
+def parse_csv(values: str, sep: str = ",") -> Generator[Any, None, None]:
+    """Parse a CSV string and return a generator of *non-empty* values."""
+    return (x for _x in values.split(sep) if (x := _x.strip()))
+
+
 class ParseCSV(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         values = ParseCSV.parse(values)
@@ -59,7 +70,33 @@ class ParseCSV(argparse.Action):
 
     @staticmethod
     def parse(values: str) -> list[int]:
-        return [int(x.strip()) for x in values.split(",")]
+        return ensure_non_empty([int(x) for x in parse_csv(values)], values)
+
+    @staticmethod
+    def unparse(values: list[int]) -> str:
+        return ",".join([str(v) for v in values])
+
+
+class ParseErrorCodes(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        values = ParseErrorCodes.parse(values)
+        setattr(namespace, self.dest, values)
+
+    @staticmethod
+    def parse(values: str) -> set[int]:
+        values = values.strip()
+        # return empty set, which will be interpreted as matching any value in Exec.reverted_with_panic()
+        if values == "*":
+            return set()
+
+        # support multiple bases: decimal, hex, etc.
+        return ensure_non_empty(set(int(x, 0) for x in parse_csv(values)), values)
+
+    @staticmethod
+    def unparse(values: set[int]) -> str:
+        if not values:
+            return "*"
+        return ",".join([f"0x{v:02x}" for v in values])
 
 
 class ParseArrayLengths(argparse.Action):
@@ -72,12 +109,19 @@ class ParseArrayLengths(argparse.Action):
         if not values:
             return {}
 
-        # TODO: update syntax: name1=size1,size2; name2=size3,...; ...
-        name_sizes_pairs = values.split(",")
+        # TODO: update syntax: name1={size1,size2},name2=size3,...
         return {
-            name.strip(): [int(x.strip()) for x in sizes.split(";")]
-            for name, sizes in [x.split("=") for x in name_sizes_pairs]
+            name.strip(): ensure_non_empty(
+                [int(x) for x in parse_csv(sizes, sep=";")], sizes
+            )
+            for name, sizes in (x.split("=") for x in parse_csv(values))
         }
+
+    @staticmethod
+    def unparse(values: dict[str, list[int]]) -> str:
+        return ",".join(
+            [f"{k}={';'.join([str(v) for v in vs])}" for k, vs in values.items()]
+        )
 
 
 # TODO: add kw_only=True when we support Python>=3.10
@@ -159,6 +203,13 @@ class Config:
         global_default="",
         metavar="FUNCTION_NAME_REGEX",
         short="mt",
+    )
+
+    panic_error_codes: str = arg(
+        help="specify Panic error codes to be treated as test failures; use '*' to include all error codes",
+        global_default="0x01",
+        metavar="ERROR_CODE1,ERROR_CODE2,...",
+        action=ParseErrorCodes,
     )
 
     loop: int = arg(
@@ -266,6 +317,12 @@ class Config:
 
     print_states: bool = arg(
         help="print all final execution states",
+        global_default=False,
+        group=debugging,
+    )
+
+    print_success_states: bool = arg(
+        help="print successful execution states",
         global_default=False,
         group=debugging,
     )
@@ -702,6 +759,10 @@ def main():
             continue
 
         group_name = field_info.metadata.get("group", None)
+        if group_name == deprecated:
+            # skip deprecated options
+            continue
+
         if group_name != current_group_name:
             separator = "#" * 80
             lines.append(f"\n{separator}")
@@ -716,6 +777,11 @@ def main():
 
         (value, source) = config.value_with_source(field_info.name)
         default = field_info.metadata.get("global_default", None)
+
+        # unparse value if action is provided
+        # note: this is a workaround because not all types can be represented in toml syntax, e.g., sets.
+        if action := field_info.metadata.get("action", None):
+            value = action.unparse(value)
 
         # callable defaults mean that the default value is not a hardcoded constant
         # it depends on the context, so don't emit it in the config file unless it
