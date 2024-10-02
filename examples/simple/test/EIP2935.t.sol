@@ -42,7 +42,7 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
  *  - While this is not relevant to the Ethereum chain, it could pose issues for other EVM chains upon creation.
  */
 
-/// @custom:halmos --storage-layout generic
+/// @custom:halmos --storage-layout generic --panic-error-codes *
 contract EIP2935Test is SymTest, Test {
     address constant HISTORY_STORAGE_ADDRESS = address(0x0AAE40965E6800cD9b1f4b05ff21581047E3F91e);
     address constant SYSTEM_ADDRESS = address(0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE);
