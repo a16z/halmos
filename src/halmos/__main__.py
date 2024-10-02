@@ -422,7 +422,7 @@ def setup(
     if setup_sig:
         # TODO: dyn_params may need to be passed to mk_calldata in run()
         calldata, dyn_params = mk_calldata(abi, setup_info, args)
-        setup_ex.path.process_dyn_params(dyn_params, legacy=True)
+        setup_ex.path.process_dyn_params(dyn_params)
 
         parent_message = setup_ex.message()
         setup_ex.context = CallContext(

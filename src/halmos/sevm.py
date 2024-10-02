@@ -667,11 +667,9 @@ class Concretization:
         elif is_expr_var(right) and is_bv_value(left):
             self.substitution[right] = left
 
-    def process_dyn_params(self, dyn_params, legacy):
+    def process_dyn_params(self, dyn_params):
         for d in dyn_params:
-            # TODO: deprecate legacy behavior
-            size_choices = d.size_choices if not legacy else [d.size_choices[-1]]
-            self.candidates[d.size_symbol] = size_choices
+            self.candidates[d.size_symbol] = d.size_choices
 
 
 class Path:
@@ -704,8 +702,8 @@ class Path:
             ]
         )
 
-    def process_dyn_params(self, dyn_params, legacy=False):
-        self.concretization.process_dyn_params(dyn_params, legacy)
+    def process_dyn_params(self, dyn_params):
+        self.concretization.process_dyn_params(dyn_params)
 
     def to_smt2(self, args) -> SMTQuery:
         # Serialize self.conditions into the SMTLIB format.
