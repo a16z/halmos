@@ -135,7 +135,7 @@ class Calldata:
 
         if sizes is None:
             sizes = (
-                list(range(self.args.loop + 1))
+                self.args.default_array_lengths
                 if isinstance(typ, DynamicArrayType)
                 else self.args.default_bytes_lengths  # bytes or string
             )

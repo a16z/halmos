@@ -231,14 +231,21 @@ class Config:
     )
 
     array_lengths: str = arg(
-        help="set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)",
+        help="specify lengths for dynamic-sized arrays, bytes, and string",
         global_default=None,
         metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
         action=ParseArrayLengths,
     )
 
+    default_array_lengths: str = arg(
+        help="set default lengths for dynamic-sized arrays (excluding bytes and string) not specified in --array-lengths",
+        global_default="0,1,2",
+        metavar="LENGTH1,LENGTH2,...",
+        action=ParseCSV,
+    )
+
     default_bytes_lengths: str = arg(
-        help="set the default length candidates for bytes and string not specified in --array-lengths",
+        help="set default lengths for bytes and string not specified in --array-lengths",
         global_default="0,1024,65",  # 65 is ECDSA signature size
         metavar="LENGTH1,LENGTH2,...",
         action=ParseCSV,
