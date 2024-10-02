@@ -5,7 +5,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
-from typing import Any
+from typing import Any, Generator
 
 import toml
 
@@ -52,6 +52,17 @@ def arg(
     )
 
 
+def ensure_non_empty(values: list | set | dict, raw_values: str) -> list:
+    if not values:
+        raise ValueError(f"required a non-empty list, but got {raw_values}")
+    return values
+
+
+def parse_csv(values: str, sep: str = ",") -> Generator[Any, None, None]:
+    """Parse a CSV string and return a generator of values."""
+    return (x for _x in values.split(sep) if (x := _x.strip()))
+
+
 class ParseCSV(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         values = ParseCSV.parse(values)
@@ -59,10 +70,7 @@ class ParseCSV(argparse.Action):
 
     @staticmethod
     def parse(values: str) -> list[int]:
-        result = [int(x) for _x in values.split(",") if (x := _x.strip())]
-        if not result:
-            raise ValueError(f"expected a non-empty list of integers, got '{values}'")
-        return result
+        return ensure_non_empty([int(x) for x in parse_csv(values)], values)
 
     @staticmethod
     def unparse(values: list[int]) -> str:
@@ -82,10 +90,7 @@ class ParseErrorCodes(argparse.Action):
             return set()
 
         # support multiple bases: decimal, hex, etc.
-        result = set(int(x, 0) for _x in values.split(",") if (x := _x.strip()))
-        if not result:
-            raise ValueError(f"expected a non-empty list of integers, got '{values}'")
-        return result
+        return ensure_non_empty(set(int(x, 0) for x in parse_csv(values)), values)
 
     @staticmethod
     def unparse(values: set[int]) -> str:
@@ -105,10 +110,9 @@ class ParseArrayLengths(argparse.Action):
             return {}
 
         # TODO: update syntax: name1={size1,size2},name2=size3,...
-        name_sizes_pairs = [x.split("=") for _x in values.split(",") if (x := _x.strip())]
         return {
-            name.strip(): [int(x) for _x in sizes.split(";") if (x := _x.strip())]
-            for name, sizes in name_sizes_pairs
+            name.strip(): ensure_non_empty([int(x) for x in parse_csv(sizes, sep=";")], values)
+            for name, sizes in (x.split("=") for x in parse_csv(values))
         }
 
     @staticmethod

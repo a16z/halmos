@@ -258,6 +258,10 @@ def test_parse_error_codes_roundtrip():
 
 
 def test_parse_array_lengths():
+    with pytest.raises(ValueError):
+        ParseArrayLengths.parse("x=")
+        ParseArrayLengths.parse("x= ")
+        ParseArrayLengths.parse("x=;")
     assert ParseArrayLengths.parse("") == {}
     assert ParseArrayLengths.parse(" ") == {}
     assert ParseArrayLengths.parse(",") == {}
