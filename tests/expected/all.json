@@ -2627,7 +2627,7 @@
             {
                 "name": "check_assertEq(address[],address[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2645,7 +2645,7 @@
             {
                 "name": "check_assertEq(bool[],bool[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2654,7 +2654,7 @@
             {
                 "name": "check_assertEq(bytes,bytes)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2672,7 +2672,7 @@
             {
                 "name": "check_assertEq(bytes32[],bytes32[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2690,7 +2690,7 @@
             {
                 "name": "check_assertEq(int256[],int256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2699,7 +2699,7 @@
             {
                 "name": "check_assertEq(string,string)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2717,7 +2717,7 @@
             {
                 "name": "check_assertEq(uint256[],uint256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2816,7 +2816,7 @@
             {
                 "name": "check_assertNotEq(address[],address[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2834,7 +2834,7 @@
             {
                 "name": "check_assertNotEq(bool[],bool[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2843,7 +2843,7 @@
             {
                 "name": "check_assertNotEq(bytes,bytes)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2861,7 +2861,7 @@
             {
                 "name": "check_assertNotEq(bytes32[],bytes32[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2879,7 +2879,7 @@
             {
                 "name": "check_assertNotEq(int256[],int256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2888,7 +2888,7 @@
             {
                 "name": "check_assertNotEq(string,string)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2906,7 +2906,7 @@
             {
                 "name": "check_assertNotEq(uint256[],uint256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2935,7 +2935,7 @@
             {
                 "name": "check_assertEq(address[],address[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2953,7 +2953,7 @@
             {
                 "name": "check_assertEq(bool[],bool[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2962,7 +2962,7 @@
             {
                 "name": "check_assertEq(bytes,bytes)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2980,7 +2980,7 @@
             {
                 "name": "check_assertEq(bytes32[],bytes32[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2998,7 +2998,7 @@
             {
                 "name": "check_assertEq(int256[],int256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3007,7 +3007,7 @@
             {
                 "name": "check_assertEq(string,string)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3025,7 +3025,7 @@
             {
                 "name": "check_assertEq(uint256[],uint256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3124,7 +3124,7 @@
             {
                 "name": "check_assertNotEq(address[],address[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3142,7 +3142,7 @@
             {
                 "name": "check_assertNotEq(bool[],bool[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3151,7 +3151,7 @@
             {
                 "name": "check_assertNotEq(bytes,bytes)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3169,7 +3169,7 @@
             {
                 "name": "check_assertNotEq(bytes32[],bytes32[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3187,7 +3187,7 @@
             {
                 "name": "check_assertNotEq(int256[],int256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3196,7 +3196,7 @@
             {
                 "name": "check_assertNotEq(string,string)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3214,7 +3214,7 @@
             {
                 "name": "check_assertNotEq(uint256[],uint256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,

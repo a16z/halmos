@@ -561,7 +561,7 @@ def run(
     path.extend_path(setup_ex.path)
 
     cd, dyn_params = mk_calldata(abi, fun_info, args)
-    path.process_dyn_params(dyn_params, legacy=True)
+    path.process_dyn_params(dyn_params)
 
     message = Message(
         target=setup_ex.this(),
