@@ -59,7 +59,7 @@ def ensure_non_empty(values: list | set | dict, raw_values: str) -> list:
 
 
 def parse_csv(values: str, sep: str = ",") -> Generator[Any, None, None]:
-    """Parse a CSV string and return a generator of values."""
+    """Parse a CSV string and return a generator of *non-empty* values."""
     return (x for _x in values.split(sep) if (x := _x.strip()))
 
 
@@ -112,7 +112,7 @@ class ParseArrayLengths(argparse.Action):
         # TODO: update syntax: name1={size1,size2},name2=size3,...
         return {
             name.strip(): ensure_non_empty(
-                [int(x) for x in parse_csv(sizes, sep=";")], values
+                [int(x) for x in parse_csv(sizes, sep=";")], sizes
             )
             for name, sizes in (x.split("=") for x in parse_csv(values))
         }
