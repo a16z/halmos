@@ -139,7 +139,11 @@ contract EIP7002Test is SymTest, Test {
 
                 // ensure new queue element
                 uint queueTailSlot = WITHDRAWAL_REQUEST_QUEUE_STORAGE_OFFSET + initState.queueTailIndex * 3;
-                assertEq(_getQueueItem(queueTailSlot), bytes.concat(bytes32(uint(uint160(caller))), data, bytes8(0)));
+                bytes memory queueItem = _getQueueItem(queueTailSlot);
+                assertEq(queueItem, bytes.concat(bytes32(uint(uint160(caller))), data, bytes8(0)));
+                // ensure no dirty bits for source address, and zero padding at the end
+                assertEq(bytes12(this.slice(queueItem, 0, 12)), bytes12(0));
+                assertEq(bytes8(this.slice(queueItem, 88, 96)), bytes8(0));
 
                 // TODO: properties about fee calculation
             } else {
@@ -151,7 +155,7 @@ contract EIP7002Test is SymTest, Test {
         }
     }
 
-    /// @custom:halmos --loop 17
+    /// @custom:halmos --loop 16
     function check_system_operation(address caller, uint value) public {
         // system operation
         vm.assume(caller == SYSTEM_ADDRESS);
@@ -175,21 +179,19 @@ contract EIP7002Test is SymTest, Test {
         assertTrue(success);
 
         // ensure excess update
-        // TODO: use max(..., 0) to handle the subtraction overflow
         if (initState.excess != EXCESS_INHIBITOR) {
-            assertEq(newState.excess, initState.excess + initState.count - TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK);
+            assertEq(newState.excess, subcap(initState.excess + initState.count, TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK));
         } else {
             // TODO: figure out the purpose of this logic
-            assertEq(newState.excess,                    initState.count - TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK);
+            assertEq(newState.excess, subcap(                   initState.count, TARGET_WITHDRAWAL_REQUESTS_PER_BLOCK));
         }
 
         // ensure count reset
         assertEq(newState.count, 0);
 
-        // TODO: ensure no overflow in the subtractions below
-        uint oldQueueSize = initState.queueTailIndex - initState.queueHeadIndex;
-        uint newQueueSize = newState.queueTailIndex - newState.queueHeadIndex;
-        uint numDequeued = oldQueueSize - newQueueSize;
+        uint oldQueueSize = sub(initState.queueTailIndex, initState.queueHeadIndex);
+        uint newQueueSize = sub(newState.queueTailIndex, newState.queueHeadIndex);
+        uint numDequeued = sub(oldQueueSize, newQueueSize);
 
         // ensure queue pointer updates
         if (oldQueueSize <= MAX_WITHDRAWAL_REQUESTS_PER_BLOCK) {
@@ -217,7 +219,7 @@ contract EIP7002Test is SymTest, Test {
 
                 uint retOffset = 76 * i;
                 // check source address
-                // TODO: ensure invariant that all source addresses are valid (no dirty higher bits)
+                // NOTE: it was ensured that source addresses are valid (no dirty higher bits) in user operation
                 assertEq(_getSource(queueCurrItem), address(uint160(bytes20(this.slice(retdata, retOffset + 0, retOffset + 20)))));
 
                 // check validator pubkey
@@ -236,5 +238,22 @@ contract EIP7002Test is SymTest, Test {
     // helper
     function slice(bytes calldata data, uint start, uint end) external pure returns (bytes memory) {
         return data[start:end];
+    }
+
+    function subcap(uint x, uint y) internal pure returns (uint) {
+        if (y >= x) return 0;
+        return x - y;
+    }
+
+    function sub(uint x, uint y) internal pure returns (uint) {
+        assertGe(x, y);
+        return x - y;
+    }
+
+    function add(uint x, uint y) internal pure returns (uint z) {
+        unchecked {
+            z = x + y;
+        }
+        assertGe(z, x);
     }
 }
