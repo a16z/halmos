@@ -145,9 +145,11 @@ contract EIP7002Test is SymTest, Test {
                 assertEq(bytes12(this.slice(queueItem, 0, 12)), bytes12(0));
                 assertEq(bytes8(this.slice(queueItem, 88, 96)), bytes8(0));
 
-                // TODO: properties about fee calculation
+                // ensure sufficient fee
+                assertGe(value, _getFee());
             } else {
-                // TODO: ensure revert only due to insufficient fees
+                // ensure that the failure is only due to insufficient fee
+                assertLt(value, _getFee());
             }
         } else {
             // ensure revert when calldatasize is neither 0 nor 56
@@ -219,7 +221,6 @@ contract EIP7002Test is SymTest, Test {
 
                 uint retOffset = 76 * i;
                 // check source address
-                // NOTE: it was ensured that source addresses are valid (no dirty higher bits) in user operation
                 assertEq(_getSource(queueCurrItem), address(uint160(bytes20(this.slice(retdata, retOffset + 0, retOffset + 20)))));
 
                 // check validator pubkey
@@ -235,21 +236,50 @@ contract EIP7002Test is SymTest, Test {
         }
     }
 
-    // helper
+    function _getFee() internal view returns (uint) {
+        return _fake_exponential(
+            MIN_WITHDRAWAL_REQUEST_FEE,
+            initState.excess,
+            WITHDRAWAL_REQUEST_FEE_UPDATE_FRACTION
+        );
+    }
+
+    // pseudocode from https://eips.ethereum.org/EIPS/eip-7002
+    // NOTE: the purpose of this is to ensure that the geas implementation matches the pseudocode math, rather than verifying the math itself
+    function _fake_exponential(uint factor, uint numerator, uint denominator) internal pure returns (uint) {
+        unchecked {
+            uint i = 1;
+            uint output = 0;
+            uint numerator_accum = factor * denominator;
+            while (numerator_accum > 0) {
+                output += numerator_accum;
+                numerator_accum = (numerator_accum * numerator) / (denominator * i);
+                i += 1;
+            }
+            return output / denominator;
+        }
+    }
+
+    // helpers
+
+    // workaround for memory bytes slice
     function slice(bytes calldata data, uint start, uint end) external pure returns (bytes memory) {
         return data[start:end];
     }
 
+    // compute max(x - y, 0)
     function subcap(uint x, uint y) internal pure returns (uint) {
         if (y >= x) return 0;
         return x - y;
     }
 
+    // ensure no overflow in subtraction
     function sub(uint x, uint y) internal pure returns (uint) {
         assertGe(x, y);
         return x - y;
     }
 
+    // ensure no overflow in addition
     function add(uint x, uint y) internal pure returns (uint z) {
         unchecked {
             z = x + y;
