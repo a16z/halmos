@@ -1,12 +1,12 @@
 import argparse
 import os
+import re
 import sys
 from collections import OrderedDict
 from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from typing import Any
-import re
 
 import toml
 
@@ -53,9 +53,9 @@ def arg(
     )
 
 
-def ensure_non_empty(values: list | set | dict, raw_values: str) -> list:
+def ensure_non_empty(values: list | set | dict) -> list:
     if not values:
-        raise ValueError(f"required a non-empty list, but got {raw_values}")
+        raise ValueError("required a non-empty list")
     return values
 
 
@@ -71,7 +71,7 @@ class ParseCSV(argparse.Action):
 
     @staticmethod
     def parse(values: str) -> list[int]:
-        return ensure_non_empty([int(x) for x in parse_csv(values)], values)
+        return ensure_non_empty([int(x) for x in parse_csv(values)])
 
     @staticmethod
     def unparse(values: list[int]) -> str:
@@ -91,7 +91,7 @@ class ParseErrorCodes(argparse.Action):
             return set()
 
         # support multiple bases: decimal, hex, etc.
-        return ensure_non_empty(set(int(x, 0) for x in parse_csv(values)), values)
+        return ensure_non_empty(set(int(x, 0) for x in parse_csv(values)))
 
     @staticmethod
     def unparse(values: set[int]) -> str:
@@ -122,11 +122,12 @@ class ParseArrayLengths(argparse.Action):
             raise ValueError(f"invalid array lengths format: {values}")
 
         matches = re.findall(r"(\w+)=(?:\{([\d,]+)\}|(\d+))", values)
-        result = {}
-        for name, sizes_lst, single_size in matches:
-            sizes = sizes_lst or single_size
-            result[name.strip()] = ensure_non_empty([int(x) for x in parse_csv(sizes)], sizes)
-        return result
+        return {
+            name.strip(): ensure_non_empty(
+                [int(x) for x in parse_csv(sizes_lst or single_size)]
+            )
+            for name, sizes_lst, single_size in matches
+        }
 
     @staticmethod
     def unparse(values: dict[str, list[int]]) -> str:

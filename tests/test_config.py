@@ -279,7 +279,10 @@ def test_parse_array_lengths():
     assert ParseArrayLengths.parse("x={1,2},y=3,") == {"x": [1, 2], "y": [3]}
     assert ParseArrayLengths.parse("x={1,2,},y={3,},") == {"x": [1, 2], "y": [3]}
     assert ParseArrayLengths.parse(" x = { 1 , 2 } , y = 3 ") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse(" x = { 1 , 2 } , y = 3 , ") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse(" x = { 1 , 2 } , y = 3 , ") == {
+        "x": [1, 2],
+        "y": [3],
+    }
     assert ParseArrayLengths.parse(" x = { , 1 , 2 , } , y = { , 3 , } , ") == {
         "x": [1, 2],
         "y": [3],
