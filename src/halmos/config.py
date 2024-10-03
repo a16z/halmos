@@ -432,7 +432,9 @@ class Config:
     ### Deprecated
 
     test_parallel: bool = arg(
-        help="(Deprecated; no-op) run tests in parallel", global_default=False, group=deprecated
+        help="(Deprecated; no-op) run tests in parallel",
+        global_default=False,
+        group=deprecated,
     )
 
     solver_parallel: bool = arg(
