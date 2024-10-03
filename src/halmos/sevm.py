@@ -2523,7 +2523,9 @@ class SEVM:
 
             elif loaded in ex.path.concretization.candidates:
                 if self.options.debug:
-                    debug(f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}")
+                    debug(
+                        f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}"
+                    )
 
                 for candidate in ex.path.concretization.candidates[loaded]:
                     new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
