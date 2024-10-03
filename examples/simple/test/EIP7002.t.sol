@@ -102,8 +102,8 @@ contract EIP7002Test is SymTest, Test {
         vm.assume(initState.queueTailIndex < 2**64);
     }
 
-    /// @custom:halmos --loop 16
-    function check_user_operation(address caller, uint value) public {
+    /// @custom:halmos --loop 16 --array-lengths data={0,1,2,32,56,64,1024}
+    function check_user_operation(address caller, uint value, bytes memory data) public {
         // user operation
         vm.assume(caller != SYSTEM_ADDRESS);
 
@@ -111,15 +111,7 @@ contract EIP7002Test is SymTest, Test {
         uint callerBalance = svm.createUint(96, "caller.balance");
         vm.deal(caller, callerBalance);
 
-        // TODO: use multiple bytes sizes feature
-        bytes memory data;
-        if (svm.createBool("datasize0")) {
-            data = hex"";
-        } else if (svm.createBool("datasize56")) {
-            data = svm.createBytes(56, "data");
-        } else {
-            data = svm.createBytes(1024, "data");
-        }
+        //console.log(data.length);
 
         // call WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS
         vm.prank(caller);
@@ -157,17 +149,14 @@ contract EIP7002Test is SymTest, Test {
         }
     }
 
-    /// @custom:halmos --loop 16
-    function check_system_operation(address caller, uint value) public {
+    /// @custom:halmos --loop 16 --array-lengths data={1024}
+    function check_system_operation(address caller, uint value, bytes memory data) public {
         // system operation
         vm.assume(caller == SYSTEM_ADDRESS);
 
         // set symbolic balance for caller
         uint callerBalance = svm.createUint(96, "caller.balance");
         vm.deal(caller, callerBalance);
-
-        // TODO: arbitrary calldata sizes
-        bytes memory data = svm.createBytes(1024, "data");
 
         // call WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS
         vm.prank(caller);
