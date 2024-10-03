@@ -6,6 +6,7 @@ from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from typing import Any
+import re
 
 import toml
 
@@ -109,18 +110,28 @@ class ParseArrayLengths(argparse.Action):
         if not values:
             return {}
 
-        # TODO: update syntax: name1={size1,size2},name2=size3,...
-        return {
-            name.strip(): ensure_non_empty(
-                [int(x) for x in parse_csv(sizes, sep=";")], sizes
-            )
-            for name, sizes in (x.split("=") for x in parse_csv(values))
-        }
+        # syntax: --array-lengths name1=sizes1,name2=sizes2,...
+        # where sizes is either a comma-separated list of integers enclosed in curly braces, or a single integer
+
+        # remove all white spaces to simplify the pattern matching
+        values = "".join(values.split())
+
+        # check if the format is correct
+        # note that the findall pattern below is not sufficient for this check
+        if not re.match(r"^(\w+=(\{[\d,]+\}|\d+)(,|$))*$", values):
+            raise ValueError(f"invalid array lengths format: {values}")
+
+        matches = re.findall(r"(\w+)=(?:\{([\d,]+)\}|(\d+))", values)
+        result = {}
+        for name, sizes_lst, single_size in matches:
+            sizes = sizes_lst or single_size
+            result[name.strip()] = ensure_non_empty([int(x) for x in parse_csv(sizes)], sizes)
+        return result
 
     @staticmethod
     def unparse(values: dict[str, list[int]]) -> str:
         return ",".join(
-            [f"{k}={';'.join([str(v) for v in vs])}" for k, vs in values.items()]
+            [f"{k}={{{','.join([str(v) for v in vs])}}}" for k, vs in values.items()]
         )
 
 
@@ -231,9 +242,9 @@ class Config:
     )
 
     array_lengths: str = arg(
-        help="specify lengths for dynamic-sized arrays, bytes, and string",
+        help="specify lengths for dynamic-sized arrays, bytes, and string. Lengths can be specified as a comma-separated list of integers enclosed in curly braces, or as a single integer.",
         global_default=None,
-        metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
+        metavar="NAME1={LENGTH1,LENGTH2,...},NAME2=LENGTH3,...",
         action=ParseArrayLengths,
     )
 

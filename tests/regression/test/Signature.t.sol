@@ -397,7 +397,8 @@ contract SignatureTest is SymTest, Test {
         assertEq(vm.addr(key2), addr2);
     }
 
-    /// @custom:halmos --array-lengths keyName=32
+    // TODO: remove the following option after fixing issue in case of empty keyName
+    /// @custom:halmos --array-lengths keyName={65,1024}
     function check_makeAddrAndKey_vmsign_ecrecover_e2e_symbolic(
         string memory keyName,
         bytes32 digest

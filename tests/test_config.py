@@ -262,22 +262,25 @@ def test_parse_error_codes_roundtrip():
 
 def test_parse_array_lengths():
     with pytest.raises(ValueError):
+        # advancing commas not allowed
+        ParseArrayLengths.parse(",")
+        ParseArrayLengths.parse(",x=1")
+        # empty sizes not allowed
         ParseArrayLengths.parse("x=")
-        ParseArrayLengths.parse("x= ")
-        ParseArrayLengths.parse("x=;")
+        ParseArrayLengths.parse("x={}")
     assert ParseArrayLengths.parse("") == {}
     assert ParseArrayLengths.parse(" ") == {}
-    assert ParseArrayLengths.parse(",") == {}
     assert ParseArrayLengths.parse("x=1") == {"x": [1]}
+    # trailing commas are allowed
     assert ParseArrayLengths.parse("x=1,") == {"x": [1]}
-    assert ParseArrayLengths.parse("x=1;2,y=3") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse("x=1;2;,y=3") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse("x=1;2,y=3;") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse("x=1;2,y=3,") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse("x=1;2;,y=3;,") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse(" x = 1 ; 2 , y = 3 ") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse(" , x = 1 ; 2 , y = 3 , ") == {"x": [1, 2], "y": [3]}
-    assert ParseArrayLengths.parse(" , x = ; 1 ; 2 ; , y = ; 3 ; , ") == {
+    assert ParseArrayLengths.parse("x={1,2},y=3") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse("x={1,2,},y=3") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse("x={1,2},y={3,}") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse("x={1,2},y=3,") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse("x={1,2,},y={3,},") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse(" x = { 1 , 2 } , y = 3 ") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse(" x = { 1 , 2 } , y = 3 , ") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse(" x = { , 1 , 2 , } , y = { , 3 , } , ") == {
         "x": [1, 2],
         "y": [3],
     }
@@ -285,10 +288,10 @@ def test_parse_array_lengths():
 
 def test_unparse_array_lengths():
     assert ParseArrayLengths.unparse({}) == ""
-    assert ParseArrayLengths.unparse({"x": [1]}) == "x=1"
+    assert ParseArrayLengths.unparse({"x": [1]}) == "x={1}"
     assert ParseArrayLengths.unparse({"x": [1, 2], "y": [3]}) in {
-        "x=1;2,y=3",
-        "y=3,x=1;2",
+        "x={1,2},y={3}",
+        "y={3},x={1,2}",
     }
 
 
