@@ -423,10 +423,6 @@ class Config:
 
     ### Experimental options
 
-    test_parallel: bool = arg(
-        help="run tests in parallel", global_default=False, group=experimental
-    )
-
     symbolic_jump: bool = arg(
         help="support symbolic jump destination",
         global_default=False,
@@ -434,6 +430,10 @@ class Config:
     )
 
     ### Deprecated
+
+    test_parallel: bool = arg(
+        help="(Deprecated; no-op) run tests in parallel", global_default=False, group=deprecated
+    )
 
     solver_parallel: bool = arg(
         help="(Deprecated; no-op; use --solver-threads instead) run assertion solvers in parallel",
