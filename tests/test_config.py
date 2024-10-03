@@ -268,11 +268,13 @@ def test_parse_array_lengths():
         # empty sizes not allowed
         ParseArrayLengths.parse("x=")
         ParseArrayLengths.parse("x={}")
+        # invalid names
+        ParseArrayLengths.parse("x{0}=1")
     assert ParseArrayLengths.parse("") == {}
     assert ParseArrayLengths.parse(" ") == {}
     assert ParseArrayLengths.parse("x=1") == {"x": [1]}
     # arbitrary expressions are allowed for names
-    assert ParseArrayLengths.parse("x[0]=1") == {"x": [1]}
+    assert ParseArrayLengths.parse("x[0]=1") == {"x[0]": [1]}
     # trailing commas are allowed
     assert ParseArrayLengths.parse("x=1,") == {"x": [1]}
     assert ParseArrayLengths.parse("x={1,2},y=3") == {"x": [1, 2], "y": [3]}
