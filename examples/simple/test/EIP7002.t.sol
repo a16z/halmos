@@ -30,10 +30,11 @@ contract EIP7002Test is SymTest, Test {
         uint count;
         uint queueHeadIndex;
         uint queueTailIndex;
-        // TODO: add untouched slots
+        uint anySlotValue;
     }
 
-    State initState;
+    State internal initState;
+    uint internal anySlot; // a universally quantified variable representing any storage slot
 
     function _setUpBlock() internal {
         vm.fee(svm.createUint256("block.basefee"));
@@ -53,7 +54,9 @@ contract EIP7002Test is SymTest, Test {
         uint queueHeadIndex = uint(vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(WITHDRAWAL_REQUEST_QUEUE_HEAD_STORAGE_SLOT)));
         uint queueTailIndex = uint(vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(WITHDRAWAL_REQUEST_QUEUE_TAIL_STORAGE_SLOT)));
 
-        return State(balance, excess, count, queueHeadIndex, queueTailIndex);
+        uint anySlotValue = uint(vm.load(WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS, bytes32(anySlot)));
+
+        return State(balance, excess, count, queueHeadIndex, queueTailIndex, anySlotValue);
     }
 
     function _getQueueItem(uint slot) internal view returns (bytes memory) {
@@ -91,6 +94,9 @@ contract EIP7002Test is SymTest, Test {
         // set symbolic block info
         _setUpBlock();
 
+        // create a symbol for an arbitrary storage slot number
+        anySlot = svm.createUint256("anySlot");
+
         // record initial state
         initState = _getState();
 
@@ -102,6 +108,15 @@ contract EIP7002Test is SymTest, Test {
         vm.assume(initState.queueTailIndex < 2**64);
     }
 
+    function _callContract(address caller, uint value, bytes memory data) internal returns (bool success, bytes memory retdata, State memory newState) {
+        // call WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS
+        vm.prank(caller);
+        (success, retdata) = WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS.call{value: value}(data);
+
+        // record the updated state
+        newState = _getState();
+    }
+
     /// @custom:halmos --loop 16 --array-lengths data={0,1,2,32,56,64,1024}
     function check_user_operation(address caller, uint value, bytes memory data) public {
         // user operation
@@ -111,25 +126,26 @@ contract EIP7002Test is SymTest, Test {
         uint callerBalance = svm.createUint(96, "caller.balance");
         vm.deal(caller, callerBalance);
 
-        //console.log(data.length);
+        // call contract
+        (bool success, bytes memory retdata, State memory newState) = _callContract(caller, value, data);
 
-        // call WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS
-        vm.prank(caller);
-        (bool success, bytes memory retdata) = WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS.call{value: value}(data);
-
-        // record the updated state
-        State memory newState = _getState();
+        // ensure balance updates
+        if (success) {
+            _check_balance_update(newState, value, caller, callerBalance);
+        }
 
         if (data.length == 0) {
             assertTrue(success);
             assertEq(uint(bytes32(retdata)), initState.excess);
-            // TODO: assertEq(initState, newState);
+            // ensure no storage updates
+            assertEq(newState.anySlotValue, initState.anySlotValue);
         } else if (data.length == 56) {
             if (success) {
                 // ensure count has increased
                 assertEq(newState.count, initState.count + 1);
 
                 // ensure new queue element
+                assertEq(newState.queueTailIndex, initState.queueTailIndex + 1);
                 uint queueTailSlot = WITHDRAWAL_REQUEST_QUEUE_STORAGE_OFFSET + initState.queueTailIndex * 3;
                 bytes memory queueItem = _getQueueItem(queueTailSlot);
                 assertEq(queueItem, bytes.concat(bytes32(uint(uint160(caller))), data, bytes8(0)));
@@ -139,6 +155,19 @@ contract EIP7002Test is SymTest, Test {
 
                 // ensure sufficient fee
                 assertGe(value, _getFee());
+
+                // ensure no storage updates other than count, queue tail index, or the new queue item
+                if (
+                    anySlot != WITHDRAWAL_REQUEST_COUNT_STORAGE_SLOT &&         // count
+                    anySlot != WITHDRAWAL_REQUEST_QUEUE_TAIL_STORAGE_SLOT &&    // queue tail index
+                    (anySlot < queueTailSlot || anySlot >= queueTailSlot + 3)   // new queue item
+                ) {
+                    // NOTE: excess is not updated // TODO: figure out why
+                    assertEq(newState.anySlotValue, initState.anySlotValue);
+                }
+
+                // ensure empty return data
+                assertEq(retdata.length, 0);
             } else {
                 // ensure that the failure is only due to insufficient fee
                 assertLt(value, _getFee());
@@ -158,14 +187,8 @@ contract EIP7002Test is SymTest, Test {
         uint callerBalance = svm.createUint(96, "caller.balance");
         vm.deal(caller, callerBalance);
 
-        // call WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS
-        vm.prank(caller);
-        (bool success, bytes memory retdata) = WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS.call{value: value}(data);
-
-        // record the updated state
-        State memory newState = _getState();
-
-        //console.log("system");
+        // call contract
+        (bool success, bytes memory retdata, State memory newState) = _callContract(caller, value, data);
 
         assertTrue(success);
 
@@ -198,9 +221,6 @@ contract EIP7002Test is SymTest, Test {
         // ensure retdata size
         assertEq(retdata.length, 76 * numDequeued);
 
-        //console.log("numDequeued");
-        //console.log(numDequeued);
-
         // check retdata
         for (uint i = 0; i < numDequeued; i++) {
             // TODO: to avoid slowdown as iteration progresses. use push/pop feature once available.
@@ -218,10 +238,28 @@ contract EIP7002Test is SymTest, Test {
                 // ensure big-endian amount
                 assertEq(_getAmountBE(queueCurrItem), bytes8(this.slice(retdata, retOffset + 68, retOffset + 76)));
 
-                //console.log(i);
-                //console.log("");
+                // NOTE: the else branch will continue with further iterations
                 return;
             }
+        }
+
+        // ensure no storage update other than excess, count, and queue head/tail indexes
+        // NOTE: "removed" queue elements are not reset to zero in storage, so they remain unchanged
+        if (anySlot >= WITHDRAWAL_REQUEST_QUEUE_STORAGE_OFFSET) {
+            assertEq(newState.anySlotValue, initState.anySlotValue);
+        }
+    }
+
+    function _check_balance_update(State memory newState, uint value, address caller, uint callerBalance) internal {
+        if (caller != WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS) {
+            assertEq(newState.balance, initState.balance + value);
+            assertEq(caller.balance, callerBalance - value);
+        } else {
+            // caller == WITHDRAWAL_REQUEST_PREDEPLOY_ADDRESS
+            // self transfer, no balance change
+            assertEq(caller.balance, callerBalance);
+            // new balance set earlier by vm.deal(caller, callerBalance)
+            assertEq(newState.balance, callerBalance);
         }
     }
 
