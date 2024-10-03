@@ -118,10 +118,10 @@ class ParseArrayLengths(argparse.Action):
 
         # check if the format is correct
         # note that the findall pattern below is not sufficient for this check
-        if not re.match(r"^(\w+=(\{[\d,]+\}|\d+)(,|$))*$", values):
+        if not re.match(r"^([^=,\{\}]+=(\{[\d,]+\}|\d+)(,|$))*$", values):
             raise ValueError(f"invalid array lengths format: {values}")
 
-        matches = re.findall(r"(\w+)=(?:\{([\d,]+)\}|(\d+))", values)
+        matches = re.findall(r"([^=,\{\}]+)=(?:\{([\d,]+)\}|(\d+))", values)
         return {
             name.strip(): ensure_non_empty(
                 [int(x) for x in parse_csv(sizes_lst or single_size)]
