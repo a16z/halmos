@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 import sys
 from collections import OrderedDict
 from collections.abc import Callable, Generator
@@ -52,9 +53,9 @@ def arg(
     )
 
 
-def ensure_non_empty(values: list | set | dict, raw_values: str) -> list:
+def ensure_non_empty(values: list | set | dict) -> list:
     if not values:
-        raise ValueError(f"required a non-empty list, but got {raw_values}")
+        raise ValueError("required a non-empty list")
     return values
 
 
@@ -70,7 +71,7 @@ class ParseCSV(argparse.Action):
 
     @staticmethod
     def parse(values: str) -> list[int]:
-        return ensure_non_empty([int(x) for x in parse_csv(values)], values)
+        return ensure_non_empty([int(x) for x in parse_csv(values)])
 
     @staticmethod
     def unparse(values: list[int]) -> str:
@@ -90,7 +91,7 @@ class ParseErrorCodes(argparse.Action):
             return set()
 
         # support multiple bases: decimal, hex, etc.
-        return ensure_non_empty(set(int(x, 0) for x in parse_csv(values)), values)
+        return ensure_non_empty(set(int(x, 0) for x in parse_csv(values)))
 
     @staticmethod
     def unparse(values: set[int]) -> str:
@@ -109,18 +110,29 @@ class ParseArrayLengths(argparse.Action):
         if not values:
             return {}
 
-        # TODO: update syntax: name1={size1,size2},name2=size3,...
+        # syntax: --array-lengths name1=sizes1,name2=sizes2,...
+        # where sizes is either a comma-separated list of integers enclosed in curly braces, or a single integer
+
+        # remove all white spaces to simplify the pattern matching
+        values = "".join(values.split())
+
+        # check if the format is correct
+        # note that the findall pattern below is not sufficient for this check
+        if not re.match(r"^([^=,\{\}]+=(\{[\d,]+\}|\d+)(,|$))*$", values):
+            raise ValueError(f"invalid array lengths format: {values}")
+
+        matches = re.findall(r"([^=,\{\}]+)=(?:\{([\d,]+)\}|(\d+))", values)
         return {
             name.strip(): ensure_non_empty(
-                [int(x) for x in parse_csv(sizes, sep=";")], sizes
+                [int(x) for x in parse_csv(sizes_lst or single_size)]
             )
-            for name, sizes in (x.split("=") for x in parse_csv(values))
+            for name, sizes_lst, single_size in matches
         }
 
     @staticmethod
     def unparse(values: dict[str, list[int]]) -> str:
         return ",".join(
-            [f"{k}={';'.join([str(v) for v in vs])}" for k, vs in values.items()]
+            [f"{k}={{{','.join([str(v) for v in vs])}}}" for k, vs in values.items()]
         )
 
 
@@ -231,15 +243,22 @@ class Config:
     )
 
     array_lengths: str = arg(
-        help="set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)",
+        help="specify lengths for dynamic-sized arrays, bytes, and string types. Lengths can be specified as a comma-separated list of integers enclosed in curly braces, or as a single integer.",
         global_default=None,
-        metavar="NAME1=LENGTH1,NAME2=LENGTH2,...",
+        metavar="NAME1={LENGTH1,LENGTH2,...},NAME2=LENGTH3,...",
         action=ParseArrayLengths,
     )
 
+    default_array_lengths: str = arg(
+        help="set default lengths for dynamic-sized arrays (excluding bytes and string) not specified in --array-lengths",
+        global_default="0,1,2",
+        metavar="LENGTH1,LENGTH2,...",
+        action=ParseCSV,
+    )
+
     default_bytes_lengths: str = arg(
-        help="set the default length candidates for bytes and string not specified in --array-lengths",
-        global_default="0,1024,65",  # 65 is ECDSA signature size
+        help="set default lengths for bytes and string types not specified in --array-lengths",
+        global_default="0,65,1024",  # 65 is ECDSA signature size
         metavar="LENGTH1,LENGTH2,...",
         action=ParseCSV,
     )

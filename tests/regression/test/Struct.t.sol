@@ -30,7 +30,7 @@ contract StructTest {
         assert(result == 0); // expected to fail and generate a counterexample that incorporates all calldata symbols
     }
 
-    /// @custom:halmos --array-lengths p=1,p[0]=1
+    /// @custom:halmos --array-lengths p=1,p[0]=1 --default-array-lengths 2
     function check_StructArrayArray(
         Point[][] memory p,
         Point[2][] memory q,
@@ -69,7 +69,7 @@ contract StructTest {
     }
 }
 
-/// @custom:halmos --solver-timeout-assertion 0
+/// @custom:halmos --solver-timeout-assertion 0 --default-array-lengths 2
 contract StructTest2 {
     struct P {
         uint x;
