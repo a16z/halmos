@@ -52,8 +52,14 @@ jobs:
       - name: Install halmos
         run: python -m pip install -e .
 
+      - name: Setup Z3
+        id: z3
+        uses: cda-tum/setup-z3@v1
+        with:
+          version: 4.12.6
+
       - name: Run pytest
         run: pytest -v --ignore=tests/lib --ignore=tests/test_halmos.py --ignore=tests/test_traces.py ${{ inputs.pytest-options }}
 
       - name: Run test
-        run: python tests/test_halmos.py tests/regression --halmos-options="-st --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}"
+        run: python tests/test_halmos.py tests/regression --halmos-options="-st --solver-threads 1 --solver-command z3 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}"
