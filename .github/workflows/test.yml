@@ -53,4 +53,6 @@ jobs:
         run: python -m pip install -e .
 
       - name: Run pytest
-        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
+        run: |
+          pytest -v -k --ignore=tests/lib --ignore=tests/test_halmos.py --ignore=tests/test_traces.py ${{ inputs.pytest-options }}
+          python tests/test_halmos.py tests/regression --halmos-options="-st --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}"

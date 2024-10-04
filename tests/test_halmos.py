@@ -1,51 +1,38 @@
+import argparse
 import dataclasses
 import json
 
-import pytest
+from halmos.__main__ import _main
 
-from halmos.__main__ import _main, rendered_calldata
-from halmos.bytevec import ByteVec
-from halmos.sevm import con
-
-
-@pytest.mark.parametrize(
-    "cmd, expected_path",
-    [
-        (
-            ["--root", "tests/regression"],
-            "tests/expected/all.json",
-        ),
-        (
-            ["--root", "tests/ffi"],
-            "tests/expected/ffi.json",
-        ),
-        (
-            ["--root", "tests/solver"],
-            "tests/expected/solver.json",
-        ),
-        (
-            ["--root", "examples/simple"],
-            "tests/expected/simple.json",
-        ),
-        (
-            ["--root", "examples/tokens/ERC20"],
-            "tests/expected/erc20.json",
-        ),
-        (
-            ["--root", "examples/tokens/ERC721"],
-            "tests/expected/erc721.json",
-        ),
-    ],
-    ids=(
-        "tests/regression",
-        "tests/ffi",
-        "long:tests/solver",
-        "long:examples/simple",
-        "long:examples/tokens/ERC20",
-        "long:examples/tokens/ERC721",
+tests_config = {
+    "tests/regression": (
+        ["--root", "tests/regression"],
+        "tests/expected/all.json",
     ),
-)
-def test_main(cmd, expected_path, halmos_options):
+    "tests/ffi": (
+        ["--root", "tests/ffi"],
+        "tests/expected/ffi.json",
+    ),
+    "tests/solver": (
+        ["--root", "tests/solver"],
+        "tests/expected/solver.json",
+    ),
+    "examples/simple": (
+        ["--root", "examples/simple"],
+        "tests/expected/simple.json",
+    ),
+    "examples/tokens/ERC20": (
+        ["--root", "examples/tokens/ERC20"],
+        "tests/expected/erc20.json",
+    ),
+    "examples/tokens/ERC721": (
+        ["--root", "examples/tokens/ERC721"],
+        "tests/expected/erc721.json",
+    ),
+}
+
+
+def _test_main(cmd, expected_path, halmos_options):
     actual = dataclasses.asdict(_main(cmd + halmos_options.split()))
     with open(expected_path, encoding="utf8") as f:
         expected = json.load(f)
@@ -53,14 +40,7 @@ def test_main(cmd, expected_path, halmos_options):
     assert_eq(expected["test_results"], actual["test_results"])
 
 
-@pytest.mark.parametrize(
-    "cmd",
-    [
-        ["--root", "tests/regression", "--contract", "SetupFailTest"],
-    ],
-    ids=("SetupFailTest",),
-)
-def test_main_fail(cmd, halmos_options):
+def _test_main_fail(cmd, halmos_options):
     actual = dataclasses.asdict(_main(cmd + halmos_options.split()))
     assert actual["exitcode"] != 0
 
@@ -77,21 +57,20 @@ def assert_eq(m1: dict, m2: dict) -> int:
             assert r1["num_models"] == r2["num_models"], f"{c} {r1['name']}"
 
 
-def test_rendered_calldata_symbolic():
-    assert rendered_calldata(ByteVec([con(1, 8), con(2, 8), con(3, 8)])) == "0x010203"
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run halmos tests")
+    parser.add_argument("test", help="Test to run")
+    parser.add_argument(
+        "--halmos-options", default="", help="Options to pass to halmos"
+    )
 
+    args = parser.parse_args()
 
-def test_rendered_calldata_symbolic_singleton():
-    assert rendered_calldata(ByteVec(con(0x42, 8))) == "0x42"
+    _test_main(*tests_config[args.test], args.halmos_options)
 
-
-def test_rendered_calldata_concrete():
-    assert rendered_calldata(ByteVec([1, 2, 3])) == "0x010203"
-
-
-def test_rendered_calldata_mixed():
-    assert rendered_calldata(ByteVec([con(1, 8), 2, con(3, 8)])) == "0x010203"
-
-
-def test_rendered_calldata_empty():
-    assert rendered_calldata(ByteVec()) == "0x"
+    # run extra tests
+    if args.test == "tests/regression":
+        _test_main_fail(
+            ["--root", "tests/regression", "--contract", "SetupFailTest"],
+            args.halmos_options,
+        )

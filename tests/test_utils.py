@@ -8,6 +8,9 @@ from z3 import (
     simplify,
 )
 
+from halmos.__main__ import rendered_calldata
+from halmos.bytevec import ByteVec
+from halmos.sevm import con
 from halmos.utils import f_sha3_256_name, match_dynamic_array_overflow_condition
 
 
@@ -54,3 +57,23 @@ def test_match_dynamic_array_overflow_condition():
     slot2 = BitVec("slot2", 256)
     mismatched_slots = Not(ULE(f_sha3_256(slot), offset + f_sha3_256(slot2)))
     assert not match_dynamic_array_overflow_condition(mismatched_slots)
+
+
+def test_rendered_calldata_symbolic():
+    assert rendered_calldata(ByteVec([con(1, 8), con(2, 8), con(3, 8)])) == "0x010203"
+
+
+def test_rendered_calldata_symbolic_singleton():
+    assert rendered_calldata(ByteVec(con(0x42, 8))) == "0x42"
+
+
+def test_rendered_calldata_concrete():
+    assert rendered_calldata(ByteVec([1, 2, 3])) == "0x010203"
+
+
+def test_rendered_calldata_mixed():
+    assert rendered_calldata(ByteVec([con(1, 8), 2, con(3, 8)])) == "0x010203"
+
+
+def test_rendered_calldata_empty():
+    assert rendered_calldata(ByteVec()) == "0x"
