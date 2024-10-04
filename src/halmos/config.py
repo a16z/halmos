@@ -243,7 +243,7 @@ class Config:
     )
 
     array_lengths: str = arg(
-        help="specify lengths for dynamic-sized arrays, bytes, and string. Lengths can be specified as a comma-separated list of integers enclosed in curly braces, or as a single integer.",
+        help="specify lengths for dynamic-sized arrays, bytes, and string types. Lengths can be specified as a comma-separated list of integers enclosed in curly braces, or as a single integer.",
         global_default=None,
         metavar="NAME1={LENGTH1,LENGTH2,...},NAME2=LENGTH3,...",
         action=ParseArrayLengths,
@@ -257,7 +257,7 @@ class Config:
     )
 
     default_bytes_lengths: str = arg(
-        help="set default lengths for bytes and string not specified in --array-lengths",
+        help="set default lengths for bytes and string types not specified in --array-lengths",
         global_default="0,65,1024",  # 65 is ECDSA signature size
         metavar="LENGTH1,LENGTH2,...",
         action=ParseCSV,
