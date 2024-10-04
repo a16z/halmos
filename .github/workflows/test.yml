@@ -34,7 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: false
+          submodules: recursive
 
       - name: Install foundry
         uses: foundry-rs/foundry-toolchain@v1
