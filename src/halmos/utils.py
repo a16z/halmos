@@ -581,7 +581,7 @@ def info(text: str) -> None:
 
 
 def debug(text: str) -> None:
-    print(color_debug(text))
+    print(color_debug(text), flush=True)
 
 
 def indent_text(text: str, n: int = 4) -> str:
