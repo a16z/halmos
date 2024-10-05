@@ -19,7 +19,6 @@ from importlib import metadata
 
 from z3 import (
     Z3_OP_CONCAT,
-    BitVec,
     BitVecNumRef,
     BitVecRef,
     Bool,
@@ -172,10 +171,6 @@ def mk_block() -> Block:
         timestamp=ONE,
     )
     return block
-
-
-def mk_addr(name: str) -> Address:
-    return BitVec(name, 160)
 
 
 def mk_this() -> Address:

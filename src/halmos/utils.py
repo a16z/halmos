@@ -221,8 +221,8 @@ def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
 
-#   # reset any remaining solver states from the default context
-#   solver.reset()
+    #   # reset any remaining solver states from the default context
+    #   solver.reset()
 
     # set timeout
     solver.set(timeout=timeout)

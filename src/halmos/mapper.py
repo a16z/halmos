@@ -79,6 +79,15 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
+class MyId(metaclass=SingletonMeta):
+    def __init__(self):
+        self.counter: int = 0
+
+    def mint(self) -> int:
+        self.counter += 1
+        return self.counter
+
+
 class BuildOut(metaclass=SingletonMeta):
     def __init__(self):
         self._build_out_map: dict = None

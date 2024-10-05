@@ -31,7 +31,7 @@ from .calldata import (
     mk_calldata,
 )
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
-from .mapper import BuildOut
+from .mapper import BuildOut, MyId
 from .utils import (
     Address,
     BitVecSort8,
@@ -292,10 +292,10 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     results.append(encode_tuple_bytes(b""))
 
     # nonempty calldata for fallback()
-    fallback_selector = BitVec(f"fallback_selector_{ex.new_symbol_id():>02}", 4 * 8)
+    fallback_selector = BitVec(f"fallback_selector_{MyId().mint()}", 4 * 8)
     fallback_input_length = 1024  # TODO: configurable
     fallback_input = BitVec(
-        f"fallback_input_{ex.new_symbol_id():>02}", fallback_input_length * 8
+        f"fallback_input_{MyId().mint()}", fallback_input_length * 8
     )
     results.append(encode_tuple_bytes(Concat(fallback_selector, fallback_input)))
 
@@ -328,7 +328,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
 
 
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
-    label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
+    label = f"halmos_{var_name}_{type_name}_{MyId().mint()}"
     return BitVec(label, BitVecSorts[bits])
 
 
