@@ -496,17 +496,7 @@ def setup(
     if args.statistics:
         print(setup_timer.report())
 
-    if setup_ex.path.solver.num_scopes() > 0:
-        warn(f"non empty scope: {setup_ex.path.solver.num_scopes()}")
-        sys.exit(1)
-
-    debug("setup solver reset...")
     setup_ex.path.solver.reset()
-    debug("setup solver reset done")
-
-    if setup_ex.path.solver.assertions():
-        warn(f"non empty state: {setup_ex.path.solver.assertions()}")
-        sys.exit(1)
 
     return setup_ex
 
@@ -725,17 +715,7 @@ def run(
     else:
         thread_pool.shutdown(wait=True)
 
-    if solver.num_scopes() > 0:
-        warn(f"non empty scope: {solver.num_scopes()}")
-        sys.exit(1)
-
-    debug("solver reset...")
     solver.reset()
-    debug("solver reset done")
-
-    if solver.assertions():
-        warn(f"non empty state: {solver.assertions()}")
-        sys.exit(1)
 
     counter = Counter(str(m.result) for m in models)
     if counter["sat"] > 0:
