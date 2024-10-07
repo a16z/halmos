@@ -1835,7 +1835,7 @@ class SEVM:
         self.storage_model.store(ex, addr, loc, val)
 
     def resolve_address_alias(
-        self, ex: Exec, target: Address, stack, step_id, branching=True
+        self, ex: Exec, target: Address, stack, step_id, allow_branching=True
     ) -> Address:
         assert_bv(target)
         assert_address(target)
@@ -1880,7 +1880,7 @@ class SEVM:
 
         head, *tail = potential_aliases
 
-        if not branching and tail:
+        if not allow_branching and tail:
             raise HalmosException(f"multiple aliases exist: {hexify(target)}")
 
         for addr, cond in tail:
