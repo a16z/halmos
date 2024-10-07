@@ -1858,6 +1858,9 @@ class SEVM:
 
         potential_aliases = []
         for addr in ex.code:
+            # exclude the test contract from alias candidates
+            if addr == FOUNDRY_TEST:
+                continue
             alias_cond = target == addr
             if ex.check(alias_cond) != unsat:
                 if self.options.debug:
