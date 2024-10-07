@@ -1889,7 +1889,7 @@ class SEVM:
             stack.push(new_ex, step_id)
 
         addr, cond = head
-        ex.path.append(cond)
+        ex.path.append(cond, branching=True)
         ex.alias[target] = addr
         return addr
 
