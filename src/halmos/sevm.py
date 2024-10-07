@@ -1835,7 +1835,7 @@ class SEVM:
         self.storage_model.store(ex, addr, loc, val)
 
     def resolve_address_alias(
-        self, ex: Exec, target: Address, stack, step_id, branching=True
+        self, ex: Exec, target: Address, stack, step_id, allow_branching=True
     ) -> Address:
         assert_bv(target)
         assert_address(target)
@@ -1858,6 +1858,9 @@ class SEVM:
 
         potential_aliases = []
         for addr in ex.code:
+            # exclude the test contract from alias candidates
+            if addr == FOUNDRY_TEST:
+                continue
             alias_cond = target == addr
             if ex.check(alias_cond) != unsat:
                 if self.options.debug:
@@ -1877,7 +1880,7 @@ class SEVM:
 
         head, *tail = potential_aliases
 
-        if not branching and tail:
+        if not allow_branching and tail:
             raise HalmosException(f"multiple aliases exist: {hexify(target)}")
 
         for addr, cond in tail:
@@ -1886,7 +1889,7 @@ class SEVM:
             stack.push(new_ex, step_id)
 
         addr, cond = head
-        ex.path.append(cond)
+        ex.path.append(cond, branching=True)
         ex.alias[target] = addr
         return addr
 
