@@ -3,26 +3,32 @@
 #### Usage Examples
 
 - [Simple examples](simple/README.md)
-- [ERC20](tokens/ERC20/): verifying OpenZeppelin and Solmate ERC20 tokens, and finding the DEI token bug exploited by the [Deus DAO hack](https://rekt.news/deus-dao-r3kt/).
-- [ERC721](tokens/ERC721/): verifying OpenZeppelin and Solmate ERC721 tokens.
+- [ERC20](tokens/ERC20/): verifies OpenZeppelin and Solmate ERC20 tokens, including identifying the DEI token bug exploited in the [Deus DAO hack](https://rekt.news/deus-dao-r3kt/).
+- [ERC721](tokens/ERC721/): verifies OpenZeppelin and Solmate ERC721 tokens.
 
 #### Halmos Tests in External Projects
 
-- [Morpho Data Structures] ([TestProveLogarithmicBuckets]): verifying Morpho's complex data structure.
-- [Cicada] ([LibPrimeTest], [LibUint1024Test]): verifying Cicada's big (1024-bit) number arithmetic library.
-- [Farcaster] ([IdRegistrySymTest], [KeyRegistrySymTest]): verifying the state machine invariants of Farcaster onchain registry contracts.
-- [Solady Verification]: verifying the fixed-point math library of Solady.
+- [Morpho Blue] ([HalmosTest]): verifies the Morpho Blue protocol.
+- [Farcaster] ([IdRegistrySymTest], [KeyRegistrySymTest]): verifies state machine invariants in Farcaster's onchain registry contracts.
+- [Snekmate] ([ERC20TestHalmos], [ERC721TestHalmos], [ERC1155TestHalmos]): verifies Snekmate's Vyper token contracts.
+- [Cicada] ([LibPrimeTest], [LibUint1024Test]): verifies Cicada's 1024-bit number arithmetic library.
+- [Solady Verification]: verifies Solady's fixed-point math library.
 
-[Morpho Data Structures]: <https://github.com/morpho-org/morpho-data-structures>
-[TestProveLogarithmicBuckets]: <https://github.com/morpho-org/morpho-data-structures/blob/7f40c102e6bb852746d0d3c2f97ac3f39dae3c9c/test/TestLogarithmicBuckets.t.sol#L121-L182>
+[Morpho Blue]: <https://github.com/morpho-org/morpho-blue>
+[HalmosTest]: <https://github.com/morpho-org/morpho-blue/blob/main/test/halmos/HalmosTest.sol>
+
+[Snekmate]: <https://github.com/pcaversaccio/snekmate>
+[ERC20TestHalmos]: <https://github.com/pcaversaccio/snekmate/blob/main/test/tokens/halmos/ERC20TestHalmos.t.sol>
+[ERC721TestHalmos]: <https://github.com/pcaversaccio/snekmate/blob/main/test/tokens/halmos/ERC721TestHalmos.t.sol>
+[ERC1155TestHalmos]: <https://github.com/pcaversaccio/snekmate/blob/main/test/tokens/halmos/ERC1155TestHalmos.t.sol>
 
 [Cicada]: <https://github.com/a16z/cicada>
 [LibPrimeTest]: <https://github.com/a16z/cicada/blob/c4dde7737778df759172ecdf7b4b044c60ce1f09/test/LibPrime.t.sol#L220-L232>
 [LibUint1024Test]: <https://github.com/a16z/cicada/blob/c4dde7737778df759172ecdf7b4b044c60ce1f09/test/LibUint1024.t.sol#L222-L245>
 
 [Farcaster]: <https://github.com/farcasterxyz/contracts>
-[IdRegistrySymTest]: <https://github.com/farcasterxyz/contracts/blob/e56b5765ca28a7df149fb434315df0188a6ab14a/test/IdRegistry/IdRegistry.st.sol>
-[KeyRegistrySymTest]: <https://github.com/farcasterxyz/contracts/blob/e56b5765ca28a7df149fb434315df0188a6ab14a/test/KeyRegistry/KeyRegistry.st.sol>
+[IdRegistrySymTest]: <https://github.com/farcasterxyz/contracts/blob/main/test/IdRegistry/IdRegistry.symbolic.t.sol>
+[KeyRegistrySymTest]: <https://github.com/farcasterxyz/contracts/blob/main/test/KeyRegistry/KeyRegistry.symbolic.t.sol>
 
 [Solady Verification]: <https://github.com/zobront/halmos-solady>
 
