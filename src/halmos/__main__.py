@@ -18,6 +18,7 @@ from enum import Enum
 from importlib import metadata
 
 from z3 import (
+    Solver,
     Z3_OP_CONCAT,
     BitVec,
     BitVecNumRef,
@@ -339,6 +340,7 @@ def deploy_test(
     sevm: SEVM,
     args: HalmosConfig,
     libs: dict,
+    solver: Solver,
 ) -> Exec:
     this = mk_this()
     message = Message(
@@ -357,7 +359,7 @@ def deploy_test(
         block=mk_block(),
         context=CallContext(message=message),
         pgm=None,  # to be added
-        path=Path(mk_solver(args)),
+        path=Path(solver),
     )
 
     # deploy libraries and resolve library placeholders in hexcode
@@ -409,12 +411,13 @@ def setup(
     setup_info: FunctionInfo,
     args: HalmosConfig,
     libs: dict,
+    solver: Solver,
 ) -> Exec:
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
     sevm = SEVM(args)
-    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
+    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs, solver)
 
     setup_timer.create_subtimer("run")
 
@@ -565,6 +568,7 @@ def run(
     abi: dict,
     fun_info: FunctionInfo,
     args: HalmosConfig,
+    solver: Solver,
 ) -> TestResult:
     funname, funsig = fun_info.name, fun_info.sig
     if args.verbose >= 1:
@@ -577,7 +581,6 @@ def run(
     #
 
     sevm = SEVM(args)
-    solver = mk_solver(args)
     path = Path(solver)
     path.extend_path(setup_ex.path)
 
@@ -795,9 +798,9 @@ def run(
 
     # return test result
     if args.minimal_json_output:
-        test_result = TestResult(funsig, exitcode, len(counterexamples))
+        return TestResult(funsig, exitcode, len(counterexamples))
     else:
-        test_result = TestResult(
+        return TestResult(
             funsig,
             exitcode,
             len(counterexamples),
@@ -806,11 +809,6 @@ def run(
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
         )
-
-    # reset any remaining solver states from the default context
-    solver.reset()
-
-    return test_result
 
 
 @dataclass(frozen=True)
@@ -947,6 +945,7 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
 
     try:
         setup_config = with_devdoc(args, setup_info.sig, run_args.contract_json)
+        setup_solver = mk_solver(setup_config)
         setup_ex = setup(
             run_args.creation_hexcode,
             run_args.deployed_hexcode,
@@ -954,11 +953,14 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
             setup_info,
             setup_config,
             run_args.libs,
+            setup_solver,
         )
     except Exception as err:
         error(f"Error: {setup_info.sig} failed: {type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
+        # reset any remaining solver states from the default context
+        setup_solver.reset()
         return []
 
     test_results = []
@@ -968,9 +970,10 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
         )
         try:
             test_config = with_devdoc(args, funsig, run_args.contract_json)
+            solver = mk_solver(test_config)
             if test_config.debug:
                 debug(f"{test_config.formatted_layers()}")
-            test_result = run(setup_ex, run_args.abi, fun_info, test_config)
+            test_result = run(setup_ex, run_args.abi, fun_info, test_config, solver)
         except Exception as err:
             print(f"{color_error('[ERROR]')} {funsig}")
             error(f"{type(err).__name__}: {err}")
@@ -978,11 +981,14 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
                 traceback.print_exc()
             test_results.append(TestResult(funsig, Exitcode.EXCEPTION.value))
             continue
+        finally:
+            # reset any remaining solver states from the default context
+            solver.reset()
 
         test_results.append(test_result)
 
     # reset any remaining solver states from the default context
-    setup_ex.path.solver.reset()
+    setup_solver.reset()
 
     return test_results
 
