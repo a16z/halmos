@@ -26,6 +26,7 @@ from z3 import (
     BoolVal,
     CheckSatResult,
     Concat,
+    Context,
     Extract,
     Function,
     If,
@@ -35,7 +36,6 @@ from z3 import (
     Select,
     SignExt,
     Solver,
-    SolverFor,
     SRem,
     Store,
     UDiv,
@@ -92,6 +92,7 @@ from .utils import (
     con,
     con_addr,
     concat,
+    create_solver,
     debug,
     extract_bytes,
     f_ecrecover,
@@ -734,10 +735,13 @@ class Path:
         ids = [str(cond.get_id()) for cond in self.conditions]
 
         if args.cache_solver:
-            tmp_solver = SolverFor("QF_AUFBV")
+            tmp_solver = create_solver(ctx=Context())
             for cond in self.conditions:
-                tmp_solver.assert_and_track(cond, str(cond.get_id()))
+                tmp_solver.assert_and_track(
+                    cond.translate(tmp_solver.ctx), str(cond.get_id())
+                )
             query = tmp_solver.to_smt2()
+            tmp_solver.reset()
         else:
             query = self.solver.to_smt2()
         query = query.replace("(check-sat)", "")  # see __main__.solve()
