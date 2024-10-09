@@ -725,18 +725,6 @@ def run(
     else:
         thread_pool.shutdown(wait=True)
 
-    if solver.num_scopes() > 0:
-        warn(f"non empty scope: {solver.num_scopes()}")
-        sys.exit(1)
-
-    debug("solver reset...")
-    solver.reset()
-    debug("solver reset done")
-
-    if solver.assertions():
-        warn(f"non empty state: {solver.assertions()}")
-        sys.exit(1)
-
     counter = Counter(str(m.result) for m in models)
     if counter["sat"] > 0:
         passfail = red("[FAIL]")
@@ -791,11 +779,13 @@ def run(
         with open(args.log, "w") as json_file:
             json.dump(steps, json_file)
 
+
+
     # return test result
     if args.minimal_json_output:
-        return TestResult(funsig, exitcode, len(counterexamples))
+        test_result = TestResult(funsig, exitcode, len(counterexamples))
     else:
-        return TestResult(
+        test_result = TestResult(
             funsig,
             exitcode,
             len(counterexamples),
@@ -804,6 +794,21 @@ def run(
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
         )
+
+    if solver.num_scopes() > 0:
+        warn(f"non empty scope: {solver.num_scopes()}")
+        sys.exit(1)
+
+    debug("solver reset...")
+    solver.reset()
+    debug("solver reset done")
+
+    if solver.assertions():
+        warn(f"non empty state: {solver.assertions()}")
+        sys.exit(1)
+
+
+    return test_result
 
 
 @dataclass(frozen=True)
