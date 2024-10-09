@@ -774,9 +774,9 @@ def run(
 
     # return test result
     if args.minimal_json_output:
-        return TestResult(funsig, exitcode, len(counterexamples))
+        test_result = TestResult(funsig, exitcode, len(counterexamples))
     else:
-        return TestResult(
+        test_result = TestResult(
             funsig,
             exitcode,
             len(counterexamples),
@@ -785,6 +785,11 @@ def run(
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
         )
+
+    # reset any remaining solver states from the default context
+    solver.reset()
+
+    return test_result
 
 
 @dataclass(frozen=True)
@@ -954,6 +959,9 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
             continue
 
         test_results.append(test_result)
+
+    # reset any remaining solver states from the default context
+    setup_ex.path.solver.reset()
 
     return test_results
 
