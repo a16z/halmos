@@ -971,6 +971,8 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
 
         test_results.append(test_result)
 
+    debug("end run_sequential()")
+
     debug("setup solver reset...")
     setup_ex.path.solver.reset()
     debug("setup solver reset done")
@@ -1585,6 +1587,8 @@ def _main(_args=None) -> MainResult:
             + f" --match-test '{test_regex(args)}'"
         )
         return MainResult(1)
+
+    debug("ending _main()")
 
     exitcode = 0 if total_failed == 0 else 1
     return on_exit(exitcode)
