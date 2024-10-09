@@ -500,14 +500,6 @@ def setup(
         warn(f"non empty scope: {setup_ex.path.solver.num_scopes()}")
         sys.exit(1)
 
-    debug("setup solver reset...")
-    setup_ex.path.solver.reset()
-    debug("setup solver reset done")
-
-    if setup_ex.path.solver.assertions():
-        warn(f"non empty state: {setup_ex.path.solver.assertions()}")
-        sys.exit(1)
-
     return setup_ex
 
 
@@ -978,6 +970,14 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
             continue
 
         test_results.append(test_result)
+
+    debug("setup solver reset...")
+    setup_ex.path.solver.reset()
+    debug("setup solver reset done")
+
+    if setup_ex.path.solver.assertions():
+        warn(f"non empty state: {setup_ex.path.solver.assertions()}")
+        sys.exit(1)
 
     return test_results
 
