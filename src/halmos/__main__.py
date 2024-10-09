@@ -1078,6 +1078,7 @@ def solve(
             if args.cache_solver and result == unsat
             else None
         )
+        solver.reset()
         return result, model, unsat_core
 
 
