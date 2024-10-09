@@ -95,7 +95,7 @@ from .warnings import (
 )
 
 StrModel = dict[str, str]
-AnyModel = ModelRef | StrModel
+AnyModel = StrModel | str
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -504,11 +504,31 @@ def setup(
     return setup_ex
 
 
+class PotentialModel:
+    model: AnyModel
+    is_valid: bool
+
+    def __init__(self, model: ModelRef | str, args: HalmosConfig) -> None:
+        # convert model into string to avoid pickling errors for z3 (ctypes) objects containing pointers
+        self.model = (
+            to_str_model(model, args.print_full_model)
+            if isinstance(model, ModelRef)
+            else model
+        )
+        self.is_valid = is_model_valid(model)
+
+    def __str__(self) -> str:
+        if isinstance(self.model, str):
+            return f"see {self.model}"
+
+        formatted = [f"\n    {decl} = {val}" for decl, val in self.model.items()]
+        return "".join(sorted(formatted)) if formatted else "∅"
+
+
 @dataclass(frozen=True)
 class ModelWithContext:
     # can be a filename containing the model or a dict with variable assignments
-    model: StrModel | str | None
-    is_valid: bool | None
+    model: PotentialModel | None
     index: int
     result: CheckSatResult
     unsat_core: list | None
@@ -623,7 +643,7 @@ def run(
         m = future_model.result()
         models.append(m)
 
-        model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
+        model, index, result = m.model, m.index, m.result
         if result == unsat:
             if m.unsat_core:
                 unsat_cores.append(m.unsat_core)
@@ -631,13 +651,13 @@ def run(
 
         # model could be an empty dict here
         if model is not None:
-            if is_valid:
-                print(red(f"Counterexample: {render_model(model)}"))
+            if model.is_valid:
+                print(red(f"Counterexample: {model}"))
                 counterexamples.append(model)
             else:
                 warn_code(
                     COUNTEREXAMPLE_INVALID,
-                    f"Counterexample (potentially invalid): {render_model(model)}",
+                    f"Counterexample (potentially invalid): {model}",
                 )
                 counterexamples.append(model)
         else:
@@ -975,10 +995,6 @@ class GenModelArgs:
     dump_dirname: str | None = None
 
 
-def copy_model(model: ModelRef) -> dict:
-    return {decl: model[decl] for decl in model}
-
-
 def parse_unsat_core(output) -> list | None:
     # parsing example:
     #   unsat
@@ -998,7 +1014,7 @@ def parse_unsat_core(output) -> list | None:
 
 def solve(
     query: SMTQuery, args: HalmosConfig, dump_filename: str | None = None
-) -> tuple[CheckSatResult, ModelRef, list | None]:
+) -> tuple[CheckSatResult, PotentialModel | None, list | None]:
     if args.dump_smt_queries or args.solver_command:
         if not dump_filename:
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
@@ -1056,7 +1072,7 @@ def solve(
                 unsat_core = parse_unsat_core(res_str) if args.cache_solver else None
                 return unsat, None, unsat_core
             elif res_str_head == "sat":
-                return sat, f"{dump_filename}.out", None
+                return sat, PotentialModel(f"{dump_filename}.out", args), None
             else:
                 return unknown, None, None
         except subprocess.TimeoutExpired:
@@ -1072,7 +1088,7 @@ def solve(
             result = solver.check(*ids)
         else:
             result = solver.check()
-        model = copy_model(solver.model()) if result == sat else None
+        model = PotentialModel(solver.model(), args) if result == sat else None
         unsat_core = (
             [str(core) for core in solver.unsat_core()]
             if args.cache_solver and result == unsat
@@ -1111,7 +1127,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
     res, model, unsat_core = solve(sexpr, args, dump_filename)
 
-    if res == sat and not is_model_valid(model):
+    if res == sat and not model.is_valid:
         if args.verbose >= 1:
             print("  Checking again with refinement")
 
@@ -1119,10 +1135,6 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
         res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
 
     return package_result(model, idx, res, unsat_core, args)
-
-
-def is_unknown(result: CheckSatResult, model: ModelRef) -> bool:
-    return result == unknown or (result == sat and not is_model_valid(model))
 
 
 def refine(query: SMTQuery) -> SMTQuery:
@@ -1148,7 +1160,7 @@ def refine(query: SMTQuery) -> SMTQuery:
 
 
 def package_result(
-    model: ModelRef | str | None,
+    model: PotentialModel | None,
     idx: int,
     result: CheckSatResult,
     unsat_core: list | None,
@@ -1157,31 +1169,20 @@ def package_result(
     if result == unsat:
         if args.verbose >= 1:
             print(f"  Invalid path; ignored (path id: {idx+1})")
-        return ModelWithContext(None, None, idx, result, unsat_core)
+        return ModelWithContext(None, idx, result, unsat_core)
 
     if result == sat:
         if args.verbose >= 1:
             print(f"  Valid path; counterexample generated (path id: {idx+1})")
-
-        # convert model into string to avoid pickling errors for z3 (ctypes) objects containing pointers
-        is_valid = None
-        if model:
-            if isinstance(model, str):
-                is_valid = True
-                model = f"see {model}"
-            else:
-                is_valid = is_model_valid(model)
-                model = to_str_model(model, args.print_full_model)
-
-        return ModelWithContext(model, is_valid, idx, result, None)
+        return ModelWithContext(model, idx, result, None)
 
     else:
         if args.verbose >= 1:
             print(f"  Timeout (path id: {idx+1})")
-        return ModelWithContext(None, None, idx, result, None)
+        return ModelWithContext(None, idx, result, None)
 
 
-def is_model_valid(model: AnyModel) -> bool:
+def is_model_valid(model: ModelRef | str) -> bool:
     # TODO: evaluate the path condition against the given model after excluding f_evm_* symbols,
     #       since the f_evm_* symbols may still appear in valid models.
 
@@ -1205,14 +1206,6 @@ def to_str_model(model: ModelRef, print_full_model: bool) -> StrModel:
 
     select_model = filter(select, model) if not print_full_model else model
     return {str(decl): stringify(str(decl), model[decl]) for decl in select_model}
-
-
-def render_model(model: StrModel | str) -> str:
-    if isinstance(model, str):
-        return model
-
-    formatted = [f"\n    {decl} = {val}" for decl, val in model.items()]
-    return "".join(sorted(formatted)) if formatted else "∅"
 
 
 def get_contract_type(
