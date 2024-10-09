@@ -518,6 +518,7 @@ class PotentialModel:
         self.is_valid = is_model_valid(model)
 
     def __str__(self) -> str:
+        # expected to be a filename
         if isinstance(self.model, str):
             return f"see {self.model}"
 
