@@ -1237,6 +1237,7 @@ class SolidityStorage(Storage):
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
         return Array(
+            # note: uuid is excluded to be deterministic
             f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
             BitVecSorts[size_keys],
             BitVecSort256,
@@ -1268,6 +1269,7 @@ class SolidityStorage(Storage):
         # size_keys == 0
         mapping[size_keys] = (
             BitVec(
+                # note: uuid is excluded to be deterministic
                 f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
                 BitVecSort256,
             )
@@ -1406,6 +1408,7 @@ class GenericStorage(Storage):
     @classmethod
     def empty(cls, addr: BitVecRef, loc: BitVecRef) -> ArrayRef:
         return Array(
+            # note: uuid is excluded to be deterministic
             f"storage_{id_str(addr)}_{loc.size()}_00",
             BitVecSorts[loc.size()],
             BitVecSort256,
