@@ -18,7 +18,6 @@ from enum import Enum
 from importlib import metadata
 
 from z3 import (
-    Solver,
     Z3_OP_CONCAT,
     BitVec,
     BitVecNumRef,
@@ -27,6 +26,7 @@ from z3 import (
     CheckSatResult,
     Context,
     ModelRef,
+    Solver,
     is_app,
     is_bv,
     sat,
