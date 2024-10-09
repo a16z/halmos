@@ -11,7 +11,7 @@ import time
 import traceback
 import uuid
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 from enum import Enum
@@ -811,56 +811,6 @@ def run(
         )
 
 
-@dataclass(frozen=True)
-class SetupAndRunSingleArgs:
-    creation_hexcode: str
-    deployed_hexcode: str
-    abi: dict
-    setup_info: FunctionInfo
-    fun_info: FunctionInfo
-    setup_args: HalmosConfig
-    args: HalmosConfig
-    libs: dict
-    build_out_map: dict
-
-
-def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> list[TestResult]:
-    BuildOut().set_build_out(fn_args.build_out_map)
-
-    args = fn_args.args
-    try:
-        setup_ex = setup(
-            fn_args.creation_hexcode,
-            fn_args.deployed_hexcode,
-            fn_args.abi,
-            fn_args.setup_info,
-            fn_args.setup_args,
-            fn_args.libs,
-        )
-    except Exception as err:
-        error(f"Error: {fn_args.setup_info.sig} failed: {type(err).__name__}: {err}")
-
-        if args.debug:
-            traceback.print_exc()
-        return []
-
-    try:
-        test_result = run(
-            setup_ex,
-            fn_args.abi,
-            fn_args.fun_info,
-            fn_args.args,
-        )
-    except Exception as err:
-        print(f"{color_error('[ERROR]')} {fn_args.fun_info.sig}")
-        error(f"{type(err).__name__}: {err}")
-        if args.debug:
-            traceback.print_exc()
-        return [TestResult(fn_args.fun_info.sig, Exitcode.EXCEPTION.value)]
-
-    return [test_result]
-
-
 def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
     setup_sigs = sorted(
         [
@@ -895,46 +845,6 @@ class RunArgs:
     libs: dict
 
     build_out_map: dict
-
-
-def run_parallel(run_args: RunArgs) -> list[TestResult]:
-    args = run_args.args
-    creation_hexcode, deployed_hexcode, abi, methodIdentifiers, libs = (
-        run_args.creation_hexcode,
-        run_args.deployed_hexcode,
-        run_args.abi,
-        run_args.methodIdentifiers,
-        run_args.libs,
-    )
-
-    setup_info = extract_setup(methodIdentifiers)
-    setup_config = with_devdoc(args, setup_info.sig, run_args.contract_json)
-    fun_infos = [
-        FunctionInfo(funsig.split("(")[0], funsig, methodIdentifiers[funsig])
-        for funsig in run_args.funsigs
-    ]
-
-    single_run_args = [
-        SetupAndRunSingleArgs(
-            creation_hexcode,
-            deployed_hexcode,
-            abi,
-            setup_info,
-            fun_info,
-            setup_config,
-            with_devdoc(args, fun_info.sig, run_args.contract_json),
-            libs,
-            run_args.build_out_map,
-        )
-        for fun_info in fun_infos
-    ]
-
-    # dispatch to the shared process pool
-    with ProcessPoolExecutor() as process_pool:
-        test_results = list(process_pool.map(setup_and_run_single, single_run_args))
-    test_results = sum(test_results, [])  # flatten lists
-
-    return test_results
 
 
 def run_sequential(run_args: RunArgs) -> list[TestResult]:
@@ -1539,9 +1449,7 @@ def _main(_args=None) -> MainResult:
             build_out_map,
         )
 
-        enable_parallel = args.test_parallel and num_found > 1
-        run_method = run_parallel if enable_parallel else run_sequential
-        test_results = run_method(run_args)
+        test_results = run_sequential(run_args)
 
         num_passed = sum(r.exitcode == 0 for r in test_results)
         num_failed = num_found - num_passed
