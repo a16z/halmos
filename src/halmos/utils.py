@@ -2,6 +2,7 @@
 
 import math
 import re
+import uuid
 from functools import partial
 from timeit import default_timer as timer
 from typing import Any
@@ -108,6 +109,10 @@ def f_sha3_name(bitsize: int) -> str:
 
 f_sha3_256_name = f_sha3_name(256)
 f_sha3_512_name = f_sha3_name(512)
+
+
+def uid() -> str:
+    return uuid.uuid4().hex[:7]
 
 
 def wrap(x: Any) -> Word:

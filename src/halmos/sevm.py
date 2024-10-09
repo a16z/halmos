@@ -112,6 +112,7 @@ from .utils import (
     sha3_inv,
     str_opcode,
     stripped,
+    uid,
     uint8,
     uint160,
     uint256,
@@ -1090,7 +1091,7 @@ class Exec:  # an execution path
         assert_uint256(value)
         addr = uint160(addr)
         new_balance_var = Array(
-            f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
+            f"balance_{uid()}_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
         self.path.append(new_balance_var == new_balance)
@@ -1310,7 +1311,7 @@ class SolidityStorage(Storage):
             return
 
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{1+len(ex.storages):>02}",
+            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
@@ -1453,7 +1454,7 @@ class GenericStorage(Storage):
         mapping = ex.storage[addr].mapping
 
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{size_keys}_{1+len(ex.storages):>02}",
+            f"storage_{id_str(addr)}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
@@ -2156,7 +2157,7 @@ class SEVM:
 
             # push exit code
             exit_code_var = BitVec(
-                f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256
+                f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
             )
             ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
