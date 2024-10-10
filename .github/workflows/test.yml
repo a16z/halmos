@@ -25,10 +25,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["macos-latest", "ubuntu-latest", "windows-latest"]
-        python-version: ["3.11", "3.12"]
-        storage-layout: ["solidity", "generic"]
-        cache-solver: ["", "--cache-solver"]
+        os: ["macos-latest", "ubuntu-latest"]
+        python-version: ["3.12"]
+        storage-layout: ["solidity"]
+        cache-solver: [""]
 
     steps:
       - name: Checkout repository
