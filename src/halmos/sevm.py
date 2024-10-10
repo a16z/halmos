@@ -26,7 +26,6 @@ from z3 import (
     BoolVal,
     CheckSatResult,
     Concat,
-    Context,
     Extract,
     Function,
     If,
@@ -736,11 +735,9 @@ class Path:
 
         if args.cache_solver:
             # TODO: investigate whether a separate context is necessary here
-            tmp_solver = create_solver(ctx=Context())
+            tmp_solver = create_solver()
             for cond in self.conditions:
-                tmp_solver.assert_and_track(
-                    cond.translate(tmp_solver.ctx), str(cond.get_id())
-                )
+                tmp_solver.assert_and_track(cond, str(cond.get_id()))
             query = tmp_solver.to_smt2()
             tmp_solver.reset()
         else:
