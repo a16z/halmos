@@ -21,6 +21,7 @@ from z3 import (
     If,
     Not,
     SignExt,
+    Solver,
     SolverFor,
     ZeroExt,
     eq,
@@ -30,6 +31,7 @@ from z3 import (
     is_bv,
     is_bv_value,
     is_not,
+    sat,
     simplify,
 )
 
@@ -340,7 +342,9 @@ def unbox_int(x: Any) -> Any:
     return x
 
 
-def int_of(x: Any, err: str = "expected concrete value but got") -> int:
+def int_of(
+    x: Any, err: str = "expected concrete value but got", solver: Solver = None
+) -> int:
     """
     Converts int-like objects to int or raises NotConcreteError
     """
@@ -348,6 +352,14 @@ def int_of(x: Any, err: str = "expected concrete value but got") -> int:
 
     if isinstance(res, int):
         return res
+
+    # if the value is still symbolic at this point, check if it can be evaluated
+    # concretely with the current solver state
+    if solver is not None and solver.check() == sat:
+        m = solver.model()
+        res = m.evaluate(x)
+        if is_bv_value(res):
+            return res.as_long()
 
     raise NotConcreteError(f"{err}: {x}")
 

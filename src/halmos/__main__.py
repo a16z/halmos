@@ -350,6 +350,7 @@ def deploy_test(
         call_scheme=EVM.CREATE,
     )
 
+    solver = mk_solver(args)
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
         storage={this: sevm.mk_storagedata()},
@@ -357,7 +358,7 @@ def deploy_test(
         block=mk_block(),
         context=CallContext(message=message),
         pgm=None,  # to be added
-        path=Path(mk_solver(args)),
+        path=Path(solver),
     )
 
     # deploy libraries and resolve library placeholders in hexcode
@@ -395,7 +396,7 @@ def deploy_test(
 
     # reset vm state
     ex.pc = 0
-    ex.st = State()
+    ex.st = State(solver=solver)
     ex.context.output = CallOutput()
     ex.jumpis = {}
 
@@ -592,7 +593,7 @@ def run(
             #
             pgm=setup_ex.code[setup_ex.this()],
             pc=0,
-            st=State(),
+            st=State(solver=solver),
             jumpis={},
             #
             path=path,
