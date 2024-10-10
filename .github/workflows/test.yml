@@ -27,7 +27,6 @@ jobs:
       matrix:
         os: ["macos-latest", "ubuntu-latest", "windows-latest"]
         python-version: ["3.11", "3.12"]
-        parallel: ["", "--test-parallel"]
         storage-layout: ["solidity", "generic"]
         cache-solver: ["", "--cache-solver"]
 
@@ -35,6 +34,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          # note: it is faster to let foundry do a sparse checkout of the missing libraries rather than having the action do a git checkout of the submodules
           submodules: false
 
       - name: Install foundry
@@ -54,4 +54,4 @@ jobs:
         run: python -m pip install -e .
 
       - name: Run pytest
-        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st ${{ matrix.parallel }} --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
+        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --disable-gc --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}

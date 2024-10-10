@@ -80,6 +80,9 @@ print-mem = false
 # print all final execution states
 print-states = false
 
+# print successful execution states
+print-success-states = false
+
 # print failed execution states
 print-failed-states = false
 
@@ -133,9 +136,6 @@ cache-solver = false
 ################################################################################
 #                             Experimental options                             #
 ################################################################################
-
-# run tests in parallel
-test-parallel = false
 
 # support symbolic jump destination
 symbolic-jump = false

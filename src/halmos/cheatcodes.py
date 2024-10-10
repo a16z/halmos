@@ -55,6 +55,7 @@ from .utils import (
     red,
     secp256k1n,
     stripped,
+    uid,
     uint160,
     uint256,
 )
@@ -292,10 +293,12 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     results.append(encode_tuple_bytes(b""))
 
     # nonempty calldata for fallback()
-    fallback_selector = BitVec(f"fallback_selector_{ex.new_symbol_id():>02}", 4 * 8)
+    fallback_selector = BitVec(
+        f"fallback_selector_{uid()}_{ex.new_symbol_id():>02}", 4 * 8
+    )
     fallback_input_length = 1024  # TODO: configurable
     fallback_input = BitVec(
-        f"fallback_input_{ex.new_symbol_id():>02}", fallback_input_length * 8
+        f"fallback_input_{uid()}_{ex.new_symbol_id():>02}", fallback_input_length * 8
     )
     results.append(encode_tuple_bytes(Concat(fallback_selector, fallback_input)))
 
@@ -328,7 +331,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
 
 
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
-    label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
+    label = f"halmos_{var_name}_{type_name}_{uid()}_{ex.new_symbol_id():>02}"
     return BitVec(label, BitVecSorts[bits])
 
 

@@ -382,6 +382,12 @@ class Config:
         group=debugging,
     )
 
+    disable_gc: bool = arg(
+        help="disable Python's automatic garbage collection for cyclic objects. This does not affect reference counting based garbage collection.",
+        global_default=False,
+        group=debugging,
+    )
+
     ### Build options
 
     forge_build_out: str = arg(
@@ -442,10 +448,6 @@ class Config:
 
     ### Experimental options
 
-    test_parallel: bool = arg(
-        help="run tests in parallel", global_default=False, group=experimental
-    )
-
     symbolic_jump: bool = arg(
         help="support symbolic jump destination",
         global_default=False,
@@ -453,6 +455,12 @@ class Config:
     )
 
     ### Deprecated
+
+    test_parallel: bool = arg(
+        help="(Deprecated; no-op) run tests in parallel",
+        global_default=False,
+        group=deprecated,
+    )
 
     solver_parallel: bool = arg(
         help="(Deprecated; no-op; use --solver-threads instead) run assertion solvers in parallel",
