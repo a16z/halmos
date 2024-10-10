@@ -11,7 +11,7 @@ import time
 import traceback
 import uuid
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 from enum import Enum
@@ -637,7 +637,7 @@ def run(
     models: list[ModelWithContext] = []
     stuck = []
 
-    process_pool = ProcessPoolExecutor(max_workers=args.solver_threads)
+    thread_pool = ThreadPoolExecutor(max_workers=args.solver_threads)
     result_exs = []
     future_models = []
     counterexamples = []
@@ -703,7 +703,7 @@ def run(
 
             query = ex.path.to_smt2(args)
 
-            future_model = process_pool.submit(
+            future_model = thread_pool.submit(
                 gen_model_from_sexpr,
                 GenModelArgs(args, idx, query, unsat_cores, dump_dirname),
             )
@@ -738,10 +738,10 @@ def run(
         ):
             time.sleep(1)
 
-        process_pool.shutdown(wait=False, cancel_futures=True)
+        thread_pool.shutdown(wait=False, cancel_futures=True)
 
     else:
-        process_pool.shutdown(wait=True)
+        thread_pool.shutdown(wait=True)
 
     counter = Counter(str(m.result) for m in models)
     if counter["sat"] > 0:
