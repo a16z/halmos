@@ -27,6 +27,8 @@ jobs:
       matrix:
         os: ["macos-latest", "ubuntu-latest", "windows-latest"]
         python-version: ["3.11", "3.12"]
+        storage-layout: ["solidity", "generic"]
+        cache-solver: ["", "--cache-solver"]
 
     steps:
       - name: Checkout repository
@@ -51,14 +53,5 @@ jobs:
       - name: Install halmos
         run: python -m pip install -e .
 
-      - name: Run pytest, solidity
-        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-max-memory 2048 --solver-threads 1 --storage-layout solidity --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
-
-      - name: Run pytest, generic
-        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-max-memory 2048 --solver-threads 1 --storage-layout generic --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
-
-      - name: Run pytest, solidity, cache solver
-        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-max-memory 2048 --solver-threads 1 --storage-layout solidity --cache-solver --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
-
-      - name: Run pytest, generic, cache solver
-        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-max-memory 2048 --solver-threads 1 --storage-layout generic --cache-solver --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
+      - name: Run pytest
+        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-max-memory 2048 --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
