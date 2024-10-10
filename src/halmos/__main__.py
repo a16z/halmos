@@ -507,6 +507,7 @@ def setup(
     return setup_ex
 
 
+@dataclass
 class PotentialModel:
     model: AnyModel
     is_valid: bool
