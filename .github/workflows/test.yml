@@ -27,7 +27,7 @@ jobs:
       matrix:
         os: ["macos-latest", "ubuntu-latest"]
         python-version: ["3.12"]
-        storage-layout: ["solidity"]
+        storage-layout: ["solidity", "generic"]
         cache-solver: [""]
 
     steps:
