@@ -54,4 +54,4 @@ jobs:
         run: python -m pip install -e .
 
       - name: Run pytest
-        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-max-memory 2048 --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
+        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --disable-gc --solver-max-memory 2048 --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}

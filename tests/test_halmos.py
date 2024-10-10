@@ -2,7 +2,6 @@ import dataclasses
 import json
 
 import pytest
-import gc
 
 from halmos.__main__ import _main, rendered_calldata
 from halmos.bytevec import ByteVec
@@ -47,7 +46,6 @@ from halmos.sevm import con
     ),
 )
 def test_main(cmd, expected_path, halmos_options):
-    gc.disable()
     actual = dataclasses.asdict(_main(cmd + halmos_options.split()))
     with open(expected_path, encoding="utf8") as f:
         expected = json.load(f)

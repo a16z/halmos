@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import gc
 import io
 import json
 import os
@@ -1336,6 +1337,9 @@ def _main(_args=None) -> MainResult:
     if args.version:
         print(f"halmos {metadata.version('halmos')}")
         return MainResult(0)
+
+    if args.disable_gc:
+        gc.disable()
 
     #
     # compile
