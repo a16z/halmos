@@ -60,4 +60,4 @@ jobs:
           version: 4.12.6
 
       - name: Run pytest
-        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-max-memory 2048 --solver-command z3 --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }} -s --log-cli-level=
+        run: pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --solver-max-memory 2048 --solver-command z3 --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} --solver-timeout-assertion 0 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
