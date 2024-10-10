@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import gc
 import io
 import json
 import os
@@ -11,7 +12,7 @@ import time
 import traceback
 import uuid
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import asdict, dataclass
 from enum import Enum
@@ -26,6 +27,7 @@ from z3 import (
     CheckSatResult,
     Context,
     ModelRef,
+    Solver,
     is_app,
     is_bv,
     sat,
@@ -95,7 +97,7 @@ from .warnings import (
 )
 
 StrModel = dict[str, str]
-AnyModel = ModelRef | StrModel
+AnyModel = StrModel | str
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -339,6 +341,7 @@ def deploy_test(
     sevm: SEVM,
     args: HalmosConfig,
     libs: dict,
+    solver: Solver,
 ) -> Exec:
     this = mk_this()
     message = Message(
@@ -410,12 +413,13 @@ def setup(
     setup_info: FunctionInfo,
     args: HalmosConfig,
     libs: dict,
+    solver: Solver,
 ) -> Exec:
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
     sevm = SEVM(args)
-    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs)
+    setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs, solver)
 
     setup_timer.create_subtimer("run")
 
@@ -505,11 +509,33 @@ def setup(
     return setup_ex
 
 
+@dataclass
+class PotentialModel:
+    model: AnyModel
+    is_valid: bool
+
+    def __init__(self, model: ModelRef | str, args: HalmosConfig) -> None:
+        # convert model into string to avoid pickling errors for z3 (ctypes) objects containing pointers
+        self.model = (
+            to_str_model(model, args.print_full_model)
+            if isinstance(model, ModelRef)
+            else model
+        )
+        self.is_valid = is_model_valid(model)
+
+    def __str__(self) -> str:
+        # expected to be a filename
+        if isinstance(self.model, str):
+            return f"see {self.model}"
+
+        formatted = [f"\n    {decl} = {val}" for decl, val in self.model.items()]
+        return "".join(sorted(formatted)) if formatted else "∅"
+
+
 @dataclass(frozen=True)
 class ModelWithContext:
     # can be a filename containing the model or a dict with variable assignments
-    model: StrModel | str | None
-    is_valid: bool | None
+    model: PotentialModel | None
     index: int
     result: CheckSatResult
     unsat_core: list | None
@@ -545,6 +571,7 @@ def run(
     abi: dict,
     fun_info: FunctionInfo,
     args: HalmosConfig,
+    solver: Solver,
 ) -> TestResult:
     funname, funsig = fun_info.name, fun_info.sig
     if args.verbose >= 1:
@@ -557,7 +584,6 @@ def run(
     #
 
     sevm = SEVM(args)
-    solver = mk_solver(args)
     path = Path(solver)
     path.extend_path(setup_ex.path)
 
@@ -624,7 +650,7 @@ def run(
         m = future_model.result()
         models.append(m)
 
-        model, is_valid, index, result = m.model, m.is_valid, m.index, m.result
+        model, index, result = m.model, m.index, m.result
         if result == unsat:
             if m.unsat_core:
                 unsat_cores.append(m.unsat_core)
@@ -632,13 +658,13 @@ def run(
 
         # model could be an empty dict here
         if model is not None:
-            if is_valid:
-                print(red(f"Counterexample: {render_model(model)}"))
+            if model.is_valid:
+                print(red(f"Counterexample: {model}"))
                 counterexamples.append(model)
             else:
                 warn_code(
                     COUNTEREXAMPLE_INVALID,
-                    f"Counterexample (potentially invalid): {render_model(model)}",
+                    f"Counterexample (potentially invalid): {model}",
                 )
                 counterexamples.append(model)
         else:
@@ -788,56 +814,6 @@ def run(
         )
 
 
-@dataclass(frozen=True)
-class SetupAndRunSingleArgs:
-    creation_hexcode: str
-    deployed_hexcode: str
-    abi: dict
-    setup_info: FunctionInfo
-    fun_info: FunctionInfo
-    setup_args: HalmosConfig
-    args: HalmosConfig
-    libs: dict
-    build_out_map: dict
-
-
-def setup_and_run_single(fn_args: SetupAndRunSingleArgs) -> list[TestResult]:
-    BuildOut().set_build_out(fn_args.build_out_map)
-
-    args = fn_args.args
-    try:
-        setup_ex = setup(
-            fn_args.creation_hexcode,
-            fn_args.deployed_hexcode,
-            fn_args.abi,
-            fn_args.setup_info,
-            fn_args.setup_args,
-            fn_args.libs,
-        )
-    except Exception as err:
-        error(f"Error: {fn_args.setup_info.sig} failed: {type(err).__name__}: {err}")
-
-        if args.debug:
-            traceback.print_exc()
-        return []
-
-    try:
-        test_result = run(
-            setup_ex,
-            fn_args.abi,
-            fn_args.fun_info,
-            fn_args.args,
-        )
-    except Exception as err:
-        print(f"{color_error('[ERROR]')} {fn_args.fun_info.sig}")
-        error(f"{type(err).__name__}: {err}")
-        if args.debug:
-            traceback.print_exc()
-        return [TestResult(fn_args.fun_info.sig, Exitcode.EXCEPTION.value)]
-
-    return [test_result]
-
-
 def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
     setup_sigs = sorted(
         [
@@ -874,46 +850,6 @@ class RunArgs:
     build_out_map: dict
 
 
-def run_parallel(run_args: RunArgs) -> list[TestResult]:
-    args = run_args.args
-    creation_hexcode, deployed_hexcode, abi, methodIdentifiers, libs = (
-        run_args.creation_hexcode,
-        run_args.deployed_hexcode,
-        run_args.abi,
-        run_args.methodIdentifiers,
-        run_args.libs,
-    )
-
-    setup_info = extract_setup(methodIdentifiers)
-    setup_config = with_devdoc(args, setup_info.sig, run_args.contract_json)
-    fun_infos = [
-        FunctionInfo(funsig.split("(")[0], funsig, methodIdentifiers[funsig])
-        for funsig in run_args.funsigs
-    ]
-
-    single_run_args = [
-        SetupAndRunSingleArgs(
-            creation_hexcode,
-            deployed_hexcode,
-            abi,
-            setup_info,
-            fun_info,
-            setup_config,
-            with_devdoc(args, fun_info.sig, run_args.contract_json),
-            libs,
-            run_args.build_out_map,
-        )
-        for fun_info in fun_infos
-    ]
-
-    # dispatch to the shared process pool
-    with ProcessPoolExecutor() as process_pool:
-        test_results = list(process_pool.map(setup_and_run_single, single_run_args))
-    test_results = sum(test_results, [])  # flatten lists
-
-    return test_results
-
-
 def run_sequential(run_args: RunArgs) -> list[TestResult]:
     BuildOut().set_build_out(run_args.build_out_map)
 
@@ -922,6 +858,7 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
 
     try:
         setup_config = with_devdoc(args, setup_info.sig, run_args.contract_json)
+        setup_solver = mk_solver(setup_config)
         setup_ex = setup(
             run_args.creation_hexcode,
             run_args.deployed_hexcode,
@@ -929,11 +866,14 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
             setup_info,
             setup_config,
             run_args.libs,
+            setup_solver,
         )
     except Exception as err:
         error(f"Error: {setup_info.sig} failed: {type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
+        # reset any remaining solver states from the default context
+        setup_solver.reset()
         return []
 
     test_results = []
@@ -943,9 +883,10 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
         )
         try:
             test_config = with_devdoc(args, funsig, run_args.contract_json)
+            solver = mk_solver(test_config)
             if test_config.debug:
                 debug(f"{test_config.formatted_layers()}")
-            test_result = run(setup_ex, run_args.abi, fun_info, test_config)
+            test_result = run(setup_ex, run_args.abi, fun_info, test_config, solver)
         except Exception as err:
             print(f"{color_error('[ERROR]')} {funsig}")
             error(f"{type(err).__name__}: {err}")
@@ -953,8 +894,14 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
                 traceback.print_exc()
             test_results.append(TestResult(funsig, Exitcode.EXCEPTION.value))
             continue
+        finally:
+            # reset any remaining solver states from the default context
+            solver.reset()
 
         test_results.append(test_result)
+
+    # reset any remaining solver states from the default context
+    setup_solver.reset()
 
     return test_results
 
@@ -966,10 +913,6 @@ class GenModelArgs:
     sexpr: SMTQuery
     known_unsat_cores: list[list]
     dump_dirname: str | None = None
-
-
-def copy_model(model: ModelRef) -> dict:
-    return {decl: model[decl] for decl in model}
 
 
 def parse_unsat_core(output) -> list | None:
@@ -991,7 +934,7 @@ def parse_unsat_core(output) -> list | None:
 
 def solve(
     query: SMTQuery, args: HalmosConfig, dump_filename: str | None = None
-) -> tuple[CheckSatResult, ModelRef, list | None]:
+) -> tuple[CheckSatResult, PotentialModel | None, list | None]:
     if args.dump_smt_queries or args.solver_command:
         if not dump_filename:
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
@@ -1049,7 +992,7 @@ def solve(
                 unsat_core = parse_unsat_core(res_str) if args.cache_solver else None
                 return unsat, None, unsat_core
             elif res_str_head == "sat":
-                return sat, f"{dump_filename}.out", None
+                return sat, PotentialModel(f"{dump_filename}.out", args), None
             else:
                 return unknown, None, None
         except subprocess.TimeoutExpired:
@@ -1065,12 +1008,13 @@ def solve(
             result = solver.check(*ids)
         else:
             result = solver.check()
-        model = copy_model(solver.model()) if result == sat else None
+        model = PotentialModel(solver.model(), args) if result == sat else None
         unsat_core = (
             [str(core) for core in solver.unsat_core()]
             if args.cache_solver and result == unsat
             else None
         )
+        solver.reset()
         return result, model, unsat_core
 
 
@@ -1103,7 +1047,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
     res, model, unsat_core = solve(sexpr, args, dump_filename)
 
-    if res == sat and not is_model_valid(model):
+    if res == sat and not model.is_valid:
         if args.verbose >= 1:
             print("  Checking again with refinement")
 
@@ -1111,10 +1055,6 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
         res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
 
     return package_result(model, idx, res, unsat_core, args)
-
-
-def is_unknown(result: CheckSatResult, model: ModelRef) -> bool:
-    return result == unknown or (result == sat and not is_model_valid(model))
 
 
 def refine(query: SMTQuery) -> SMTQuery:
@@ -1140,7 +1080,7 @@ def refine(query: SMTQuery) -> SMTQuery:
 
 
 def package_result(
-    model: ModelRef | str | None,
+    model: PotentialModel | None,
     idx: int,
     result: CheckSatResult,
     unsat_core: list | None,
@@ -1149,31 +1089,20 @@ def package_result(
     if result == unsat:
         if args.verbose >= 1:
             print(f"  Invalid path; ignored (path id: {idx+1})")
-        return ModelWithContext(None, None, idx, result, unsat_core)
+        return ModelWithContext(None, idx, result, unsat_core)
 
     if result == sat:
         if args.verbose >= 1:
             print(f"  Valid path; counterexample generated (path id: {idx+1})")
-
-        # convert model into string to avoid pickling errors for z3 (ctypes) objects containing pointers
-        is_valid = None
-        if model:
-            if isinstance(model, str):
-                is_valid = True
-                model = f"see {model}"
-            else:
-                is_valid = is_model_valid(model)
-                model = to_str_model(model, args.print_full_model)
-
-        return ModelWithContext(model, is_valid, idx, result, None)
+        return ModelWithContext(model, idx, result, None)
 
     else:
         if args.verbose >= 1:
             print(f"  Timeout (path id: {idx+1})")
-        return ModelWithContext(None, None, idx, result, None)
+        return ModelWithContext(None, idx, result, None)
 
 
-def is_model_valid(model: AnyModel) -> bool:
+def is_model_valid(model: ModelRef | str) -> bool:
     # TODO: evaluate the path condition against the given model after excluding f_evm_* symbols,
     #       since the f_evm_* symbols may still appear in valid models.
 
@@ -1197,14 +1126,6 @@ def to_str_model(model: ModelRef, print_full_model: bool) -> StrModel:
 
     select_model = filter(select, model) if not print_full_model else model
     return {str(decl): stringify(str(decl), model[decl]) for decl in select_model}
-
-
-def render_model(model: StrModel | str) -> str:
-    if isinstance(model, str):
-        return model
-
-    formatted = [f"\n    {decl} = {val}" for decl, val in model.items()]
-    return "".join(sorted(formatted)) if formatted else "∅"
 
 
 def get_contract_type(
@@ -1418,6 +1339,9 @@ def _main(_args=None) -> MainResult:
         print(f"halmos {metadata.version('halmos')}")
         return MainResult(0)
 
+    if args.disable_gc:
+        gc.disable()
+
     #
     # compile
     #
@@ -1531,9 +1455,7 @@ def _main(_args=None) -> MainResult:
             build_out_map,
         )
 
-        enable_parallel = args.test_parallel and num_found > 1
-        run_method = run_parallel if enable_parallel else run_sequential
-        test_results = run_method(run_args)
+        test_results = run_sequential(run_args)
 
         num_passed = sum(r.exitcode == 0 for r in test_results)
         num_failed = num_found - num_passed

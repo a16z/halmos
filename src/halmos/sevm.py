@@ -27,6 +27,7 @@ from z3 import (
     BoolVal,
     CheckSatResult,
     Concat,
+    Context,
     Extract,
     Function,
     If,
@@ -36,7 +37,6 @@ from z3 import (
     Select,
     SignExt,
     Solver,
-    SolverFor,
     SRem,
     Store,
     UDiv,
@@ -94,6 +94,7 @@ from .utils import (
     con,
     con_addr,
     concat,
+    create_solver,
     debug,
     extract_bytes,
     f_ecrecover,
@@ -114,6 +115,7 @@ from .utils import (
     sha3_inv,
     str_opcode,
     stripped,
+    uid,
     uint8,
     uint160,
     uint256,
@@ -738,10 +740,14 @@ class Path:
         ids = [str(cond.get_id()) for cond in self.conditions]
 
         if args.cache_solver:
-            tmp_solver = SolverFor("QF_AUFBV")
+            # TODO: investigate whether a separate context is necessary here
+            tmp_solver = create_solver(ctx=Context())
             for cond in self.conditions:
-                tmp_solver.assert_and_track(cond, str(cond.get_id()))
+                tmp_solver.assert_and_track(
+                    cond.translate(tmp_solver.ctx), str(cond.get_id())
+                )
             query = tmp_solver.to_smt2()
+            tmp_solver.reset()
         else:
             query = self.solver.to_smt2()
         query = query.replace("(check-sat)", "")  # see __main__.solve()
@@ -1095,7 +1101,7 @@ class Exec:  # an execution path
         assert_uint256(value)
         addr = uint160(addr)
         new_balance_var = Array(
-            f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
+            f"balance_{uid()}_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
         self.path.append(new_balance_var == new_balance)
@@ -1284,6 +1290,7 @@ class SolidityStorage(Storage):
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
         return Array(
+            # note: uuid is excluded to be deterministic
             f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
             BitVecSorts[size_keys],
             BitVecSort256,
@@ -1315,6 +1322,7 @@ class SolidityStorage(Storage):
         # size_keys == 0
         mapping[size_keys] = (
             BitVec(
+                # note: uuid is excluded to be deterministic
                 f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
                 BitVecSort256,
             )
@@ -1358,7 +1366,7 @@ class SolidityStorage(Storage):
             return
 
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{1+len(ex.storages):>02}",
+            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
@@ -1453,6 +1461,7 @@ class GenericStorage(Storage):
     @classmethod
     def empty(cls, addr: BitVecRef, loc: BitVecRef) -> ArrayRef:
         return Array(
+            # note: uuid is excluded to be deterministic
             f"storage_{id_str(addr)}_{loc.size()}_00",
             BitVecSorts[loc.size()],
             BitVecSort256,
@@ -1501,7 +1510,7 @@ class GenericStorage(Storage):
         mapping = ex.storage[addr].mapping
 
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{size_keys}_{1+len(ex.storages):>02}",
+            f"storage_{id_str(addr)}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
@@ -2204,7 +2213,7 @@ class SEVM:
 
             # push exit code
             exit_code_var = BitVec(
-                f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256
+                f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
             )
             ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
