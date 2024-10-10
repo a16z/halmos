@@ -13,6 +13,7 @@ from typing import (
     TypeVar,
 )
 
+from eth_hash.auto import keccak
 from z3 import (
     UGE,
     UGT,
@@ -87,6 +88,7 @@ from .utils import (
     assert_address,
     assert_bv,
     assert_uint256,
+    bv_value_to_bytes,
     byte_length,
     bytes_to_bv_value,
     con,
@@ -127,7 +129,8 @@ from .warnings import (
 Steps = dict[int, dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
-EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470)
+EMPTY_KECCAK = 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470
+EMPTY_KECCAK_BV = con(EMPTY_KECCAK)
 ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
 
@@ -1104,31 +1107,67 @@ class Exec:  # an execution path
         sha3_image = self.sha3_data(data)
         self.st.push(sha3_image)
 
-    def sha3_data(self, data: Bytes) -> Word:
+    def sha3_hash(self, data: Bytes) -> bytes | None:
+        """return concrete bytes if the hash can be evaluated, otherwise None"""
+
         size = byte_length(data)
 
-        if size > 0:
-            if isinstance(data, bytes):
-                data = bytes_to_bv_value(data)
+        if size == 0:
+            return EMPTY_KECCAK.to_bytes(32, byteorder="big")
 
-            f_sha3 = Function(
-                f_sha3_name(size * 8), BitVecSorts[size * 8], BitVecSort256
-            )
-            sha3_expr = f_sha3(data)
+        if isinstance(data, bytes):
+            return keccak(data)
+
+        if is_bv_value(data):
+            return keccak(bv_value_to_bytes(data))
+
+        if isinstance(data, int):
+            # the problem here is that we're not sure about the bit-width of the int
+            # this is not supposed to happen, so just log and move on
+            debug(f"eval_sha3 received unexpected int value ({data})")
+
+        return None
+
+    def sha3_expr(self, data: Bytes) -> Word:
+        """return a symbolic sha3 expression, e.g. f_sha3_256(data)"""
+
+        bitsize = byte_length(data) * 8
+        if bitsize == 0:
+            return EMPTY_KECCAK_BV
+
+        if isinstance(data, bytes):
+            data = bytes_to_bv_value(data)
+
+        fname = f_sha3_name(bitsize)
+        f_sha3 = Function(fname, BitVecSorts[bitsize], BitVecSort256)
+        return f_sha3(data)
+
+    def sha3_data(self, data: Bytes) -> Word:
+        sha3_expr = self.sha3_expr(data)
+        sha3_hash = self.sha3_hash(data)
+        sha3_hash_bv = sha3_expr
+
+        if sha3_hash is not None:
+            sha3_hash_bv = bytes_to_bv_value(sha3_hash)
+            self.path.append(sha3_expr == sha3_hash_bv)
+
         else:
-            sha3_expr = EMPTY_KECCAK
-
-        # assume hash values are sufficiently smaller than the uint max
-        self.path.append(ULE(sha3_expr, 2**256 - 2**64))
+            # assume hash values are sufficiently smaller than the uint max
+            self.path.append(ULE(sha3_expr, 2**256 - 2**64))
 
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
 
         # handle create2 hash
-        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xFF, size_bits=8)):
-            return con(create2_magic_address + self.sha3s[sha3_expr])
+        size = byte_length(data)
+        if size == 85:
+            first_byte = unbox_int(ByteVec(data).get_byte(0))
+            if isinstance(first_byte, int) and first_byte == 0xFF:
+                return con(create2_magic_address + self.sha3s[sha3_expr])
         else:
-            return sha3_expr
+            # prefer concrete hash value over symbolic one when possible
+            # this lets us evaluate keccak in expressions (concat, extract, memory, etc.)
+            return sha3_hash_bv
 
     def assume_sha3_distinct(self, sha3_expr) -> None:
         # skip if already exist
@@ -2997,9 +3036,14 @@ class SEVM:
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     val = unbox_int(insn.operand)
                     if isinstance(val, int):
-                        if opcode == EVM.PUSH32 and val in sha3_inv:
-                            # restore precomputed hashes
-                            ex.st.push(ex.sha3_data(con(sha3_inv[val])))
+                        if opcode == EVM.PUSH32:
+                            if val in sha3_inv:
+                                # restore precomputed hashes
+                                ex.st.push(ex.sha3_data(con(sha3_inv[val])))
+                            elif val == EMPTY_KECCAK:
+                                ex.st.push(ex.sha3_data(b""))
+                            else:
+                                ex.st.push(val)
                         else:
                             ex.st.push(val)
                     else:

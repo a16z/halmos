@@ -66,7 +66,7 @@ def test_main_fail(cmd, halmos_options):
 
 
 def assert_eq(m1: dict, m2: dict) -> int:
-    assert list(m1.keys()) == list(m2.keys())
+    assert sorted(list(m1.keys())) == sorted(list(m2.keys()))
     for c in m1:
         l1 = sorted(m1[c], key=lambda x: x["name"])
         l2 = sorted(m2[c], key=lambda x: x["name"])
