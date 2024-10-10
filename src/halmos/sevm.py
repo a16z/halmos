@@ -735,6 +735,7 @@ class Path:
         ids = [str(cond.get_id()) for cond in self.conditions]
 
         if args.cache_solver:
+            # TODO: investigate whether a separate context is necessary here
             tmp_solver = create_solver(ctx=Context())
             for cond in self.conditions:
                 tmp_solver.assert_and_track(
