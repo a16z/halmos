@@ -1155,10 +1155,6 @@ class Exec:  # an execution path
         if sha3_hash is not None:
             self.path.append(sha3_expr == bytes_to_bv_value(sha3_hash))
 
-        else:
-            # assume hash values are sufficiently smaller than the uint max
-            self.path.append(ULE(sha3_expr, 2**256 - 2**64))
-
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
 
@@ -1193,7 +1189,11 @@ class Exec:  # an execution path
                 # inputs have different sizes: assume the outputs are different
                 self.path.append(sha3_expr != prev_sha3_expr)
 
+        # assume hash values are non-zero and sufficiently smaller than the uint max
+        # TODO: assume they are sufficiently larger than 0
         self.path.append(sha3_expr != ZERO)
+        self.path.append(ULE(sha3_expr, 2**256 - 2**64))
+
         self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
