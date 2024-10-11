@@ -76,4 +76,47 @@ contract ConcretizationTest is SymTest, Test {
         assertEq(success1, success2);
         assertEq(retdata1, retdata2);
     }
+
+    function check_memory_index(uint idx) public {
+        uint[3] memory arr = [uint(0), 1, 2];
+
+        vm.assume(idx == 0 || idx == 1 || idx == 2);
+
+        // there are three paths at this point
+        assertEq(arr[idx], idx);
+    }
+
+    uint[3] arr = [0, 1, 2];
+    function check_storage_slot(uint idx) public {
+        vm.assume(idx == 0 || idx == 1 || idx == 2);
+        assertEq(arr[idx], idx);
+    }
+
+    function check_calldata_index(bytes calldata data, uint idx) external {
+        vm.assume(idx == 0 || idx == 1 || idx == 2);
+
+        vm.assume(data.length > 2);
+
+        vm.assume(data[0] == bytes1(uint8(0)));
+        vm.assume(data[1] == bytes1(uint8(1)));
+        vm.assume(data[2] == bytes1(uint8(2)));
+
+        assertEq(data[idx], bytes1(uint8(idx)));
+    }
+
+    function check_memory_size(uint idx) public {
+        uint[] memory arr;
+
+        vm.assume(idx == 0 || idx == 1 || idx == 2 || idx == 3);
+
+        arr = new uint[](idx);
+        for (uint i = 0; i < idx; i++) {
+            arr[i] = i;
+        }
+
+        assertEq(arr.length, idx);
+        if (idx > 0) assertEq(arr[0], 0);
+        if (idx > 1) assertEq(arr[1], 1);
+        if (idx > 2) assertEq(arr[2], 2);
+    }
 }
