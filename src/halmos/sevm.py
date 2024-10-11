@@ -389,15 +389,13 @@ class CallContext:
 class State:
     stack: list[Word]
     memory: ByteVec
-    solver: Solver | None
 
-    def __init__(self, solver: Solver) -> None:
+    def __init__(self) -> None:
         self.stack = []
         self.memory = ByteVec()
-        self.solver = solver
 
     def __deepcopy__(self, memo):  # -> State:
-        st = State(solver=self.solver)
+        st = State()
         st.stack = self.stack.copy()
         st.memory = self.memory.copy()
         return st
@@ -450,7 +448,7 @@ class State:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
     def mloc(self) -> int:
-        loc: int = int_of(self.pop(), "symbolic memory offset", solver=self.solver)
+        loc: int = int_of(self.pop(), "symbolic memory offset")
         if loc > MAX_MEMORY_SIZE:
             raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
         return loc
@@ -827,7 +825,7 @@ class Path:
 @dataclass
 class StorageData:
     symbolic: bool = False
-    mapping: dict = field(default_factory=dict, repr=False)
+    mapping: dict = field(default_factory=dict)
 
 
 class Exec:  # an execution path
@@ -1173,16 +1171,9 @@ class Exec:  # an execution path
             if isinstance(first_byte, int) and first_byte == 0xFF:
                 return con(create2_magic_address + self.sha3s[sha3_expr])
         else:
-            # we have a choice here: return the concrete hash value or the symbol
-            # - if we return the value, we can directly process expressions
-            # - if we return the symbol, we can use the extra information to help
-            #   with things like recovering storage base slots
-            #
-            # for now, we return the symbol, and if we need a concrete value, we can
-            # lazily evaluate it at the point of use
-            #
-            # see: halmos.utils:int_of
-            return sha3_expr
+            # prefer concrete hash value over symbolic one when possible
+            # this lets us evaluate keccak in expressions (concat, extract, memory, etc.)
+            return sha3_hash_bv
 
     def assume_sha3_distinct(self, sha3_expr) -> None:
         # skip if already exist
@@ -2091,7 +2082,7 @@ class SEVM:
                 #
                 pgm=ex.code[to],
                 pc=0,
-                st=State(solver=ex.path.solver),
+                st=State(),
                 jumpis={},
                 #
                 path=ex.path,
@@ -2422,7 +2413,7 @@ class SEVM:
             #
             pgm=create_code,
             pc=0,
-            st=State(solver=ex.path.solver),
+            st=State(),
             jumpis={},
             #
             path=ex.path,
@@ -3134,7 +3125,7 @@ class SEVM:
             #
             pgm=pgm,
             pc=0,
-            st=State(path.solver),
+            st=State(),
             jumpis={},
             #
             path=path,
