@@ -1151,11 +1151,9 @@ class Exec:  # an execution path
     def sha3_data(self, data: Bytes) -> Word:
         sha3_expr = self.sha3_expr(data)
         sha3_hash = self.sha3_hash(data)
-        sha3_hash_bv = sha3_expr
 
         if sha3_hash is not None:
-            sha3_hash_bv = bytes_to_bv_value(sha3_hash)
-            self.path.append(sha3_expr == sha3_hash_bv)
+            self.path.append(sha3_expr == bytes_to_bv_value(sha3_hash))
 
         else:
             # assume hash values are sufficiently smaller than the uint max
@@ -1171,9 +1169,7 @@ class Exec:  # an execution path
             if isinstance(first_byte, int) and first_byte == 0xFF:
                 return con(create2_magic_address + self.sha3s[sha3_expr])
         else:
-            # prefer concrete hash value over symbolic one when possible
-            # this lets us evaluate keccak in expressions (concat, extract, memory, etc.)
-            return sha3_hash_bv
+            return sha3_expr
 
     def assume_sha3_distinct(self, sha3_expr) -> None:
         # skip if already exist
@@ -3048,14 +3044,9 @@ class SEVM:
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     val = unbox_int(insn.operand)
                     if isinstance(val, int):
-                        if opcode == EVM.PUSH32:
-                            if val in sha3_inv:
-                                # restore precomputed hashes
-                                ex.st.push(ex.sha3_data(con(sha3_inv[val])))
-                            elif val == EMPTY_KECCAK:
-                                ex.st.push(ex.sha3_data(b""))
-                            else:
-                                ex.st.push(val)
+                        if opcode == EVM.PUSH32 and val in sha3_inv:
+                            # restore precomputed hashes
+                            ex.st.push(ex.sha3_data(con(sha3_inv[val])))
                         else:
                             ex.st.push(val)
                     else:

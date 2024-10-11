@@ -360,7 +360,7 @@ def deploy_test(
         block=mk_block(),
         context=CallContext(message=message),
         pgm=None,  # to be added
-        path=Path(mk_solver(args)),
+        path=Path(solver),
     )
 
     # deploy libraries and resolve library placeholders in hexcode
