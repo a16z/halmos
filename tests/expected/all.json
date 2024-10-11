@@ -3768,6 +3768,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/SymbolicCall.t.sol:SymbolicCallTest": [
+            {
+                "name": "check_foo(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/TestConstructor.t.sol:TestConstructorTest": [
             {
                 "name": "check_value()",

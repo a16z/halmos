@@ -214,7 +214,7 @@ class Prank:
 def symbolic_storage(ex, arg, sevm, stack, step_id):
     account = uint160(arg.get_word(4))
     account_alias = sevm.resolve_address_alias(
-        ex, account, stack, step_id, branching=False
+        ex, account, stack, step_id, allow_branching=False
     )
 
     if account_alias is None:
@@ -652,7 +652,7 @@ class hevm_cheat_code:
             store_slot = uint256(arg.get_word(36))
             store_value = uint256(arg.get_word(68))
             store_account_alias = sevm.resolve_address_alias(
-                ex, store_account, stack, step_id, branching=False
+                ex, store_account, stack, step_id, allow_branching=False
             )
 
             if store_account_alias is None:
@@ -667,7 +667,7 @@ class hevm_cheat_code:
             load_account = uint160(arg.get_word(4))
             load_slot = uint256(arg.get_word(36))
             load_account_alias = sevm.resolve_address_alias(
-                ex, load_account, stack, step_id, branching=False
+                ex, load_account, stack, step_id, allow_branching=False
             )
 
             if load_account_alias is None:
