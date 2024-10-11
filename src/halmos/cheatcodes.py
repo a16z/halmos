@@ -568,7 +568,7 @@ class hevm_cheat_code:
             assume_cond = simplify(is_non_zero(arg.get_word(4)))
             if is_false(assume_cond):
                 raise InfeasiblePath("vm.assume(false)")
-            ex.path.append(assume_cond)
+            ex.path.append(assume_cond, branching=True)
             return ret
 
         # vm.getCode(string)
