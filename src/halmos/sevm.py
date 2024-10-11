@@ -452,7 +452,7 @@ class State:
 
     def ret(self, subst: dict = None) -> ByteVec:
         loc: int = self.mloc(subst)
-        size: int = int_of(self.pop(), subst, "symbolic return data size")  # size in bytes
+        size: int = int_of(self.pop(), subst, "symbolic return data size")
 
         returndata_slice = self.memory.slice(loc, loc + size)
         return returndata_slice
@@ -2922,7 +2922,7 @@ class SEVM:
 
                 elif opcode == EVM.RETURNDATACOPY:
                     loc: int = ex.mloc()
-                    offset: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
+                    offset = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
                     end_loc = loc + size
 

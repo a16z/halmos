@@ -8,7 +8,6 @@ from timeit import default_timer as timer
 from typing import Any
 
 from z3 import (
-    substitute,
     Z3_OP_BADD,
     Z3_OP_CONCAT,
     Z3_OP_ULEQ,
@@ -33,6 +32,7 @@ from z3 import (
     is_bv_value,
     is_not,
     simplify,
+    substitute,
 )
 
 from halmos.exceptions import HalmosException, NotConcreteError
