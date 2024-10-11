@@ -64,7 +64,6 @@ contract Sha3Test is Test, SymTest {
         }
     }
 
-    /* TODO: need lazy concretization
     function check_concrete_keccak_memory_lookup() external {
         bytes32 hash = keccak256(abi.encodePacked(uint256(3)));
         uint256 bit = uint256(hash) & 1;
@@ -76,7 +75,6 @@ contract Sha3Test is Test, SymTest {
         // checks that we don't fail with symbolic memory offset error
         console2.log(x[bit]);
     }
-    */
 
     function _assert_eq(bytes memory data1, bytes memory data2) internal {
         assert(keccak256(data1) == keccak256(data2));

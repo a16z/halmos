@@ -2289,6 +2289,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_concrete_keccak_memory_lookup()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_empty_hash_value()",
                 "exitcode": 0,
                 "num_models": 0,
