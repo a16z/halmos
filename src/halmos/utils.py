@@ -347,6 +347,8 @@ def int_of(x: Any, subst: dict = None, err: str = None) -> int:
     """
     Converts int-like objects to int or raises NotConcreteError
     """
+
+    # attempt to replace symbolic (sub-)terms with their concrete values
     if subst and is_bv(x) and not is_bv_value(x):
         x = simplify(substitute(x, *subst.items()))
 

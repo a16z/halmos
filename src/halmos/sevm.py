@@ -643,19 +643,20 @@ class SMTQuery:
 @dataclass(frozen=True)
 class Concretization:
     """
-    Mapping of symbols to concrete values or potential candidates.
+    Mapping of terms to concrete values, and of symbols to potential candidates.
 
-    A symbol is mapped to a concrete value when an equality between them is introduced in the path condition.
-    These symbols can be replaced by their concrete values during execution as needed.
+    A term is mapped to a concrete value when an equality between them is introduced in the path condition.
+    These terms can be replaced by their concrete values during execution as needed.
+    Note that cyclic substitutions do not occur, as terms are reduced to a ground value rather than another term.
 
     A symbol may also be associated with multiple concrete value candidates.
     If necessary, the path can later branch for each candidate.
 
-    TODO: Currently, this mechanism is applied only to calldata with dynamic parameters.
-    In the future, it may be used for other purposes, such as concrete hash reasoning.
+    TODO: Currently, the branching mechanism based on candidates is only applied to calldata with dynamic parameters.
+    In the future, it may be used for other purposes.
     """
 
-    # symbol -> constant
+    # term -> constant
     substitution: dict[BitVecRef, BitVecRef] = field(default_factory=dict)
     # symbol -> set of constants
     candidates: dict[BitVecRef, list[int]] = field(default_factory=dict)
