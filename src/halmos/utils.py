@@ -8,6 +8,7 @@ from timeit import default_timer as timer
 from typing import Any
 
 from z3 import (
+    substitute,
     Z3_OP_BADD,
     Z3_OP_CONCAT,
     Z3_OP_ULEQ,
@@ -342,15 +343,19 @@ def unbox_int(x: Any) -> Any:
     return x
 
 
-def int_of(x: Any, err: str = "expected concrete value but got") -> int:
+def int_of(x: Any, subst: dict = None, err: str = None) -> int:
     """
     Converts int-like objects to int or raises NotConcreteError
     """
+    if subst and is_bv(x) and not is_bv_value(x):
+        x = simplify(substitute(x, *subst.items()))
+
     res = unbox_int(x)
 
     if isinstance(res, int):
         return res
 
+    err = err or "expected concrete value but got"
     raise NotConcreteError(f"{err}: {x}")
 
 

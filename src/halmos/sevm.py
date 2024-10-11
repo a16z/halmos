@@ -444,15 +444,15 @@ class State:
     def swap(self, n: int) -> None:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
-    def mloc(self) -> int:
-        loc: int = int_of(self.pop(), "symbolic memory offset")
+    def mloc(self, subst: dict = None) -> int:
+        loc: int = int_of(self.pop(), subst, "symbolic memory offset")
         if loc > MAX_MEMORY_SIZE:
             raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
         return loc
 
-    def ret(self) -> ByteVec:
-        loc: int = self.mloc()
-        size: int = int_of(self.pop(), "symbolic return data size")  # size in bytes
+    def ret(self, subst: dict = None) -> ByteVec:
+        loc: int = self.mloc(subst)
+        size: int = int_of(self.pop(), subst, "symbolic return data size")  # size in bytes
 
         returndata_slice = self.memory.slice(loc, loc + size)
         return returndata_slice
@@ -664,9 +664,9 @@ class Concretization:
         if not is_eq(cond):
             return
         left, right = cond.arg(0), cond.arg(1)
-        if is_expr_var(left) and is_bv_value(right):
+        if is_bv_value(right):  # not is_bv_value(left)
             self.substitution[left] = right
-        elif is_expr_var(right) and is_bv_value(left):
+        elif is_bv_value(left):  # not is_bv_value(right)
             self.substitution[right] = left
 
     def process_dyn_params(self, dyn_params):
@@ -1104,8 +1104,8 @@ class Exec:  # an execution path
         self.balances[new_balance_var] = new_balance
 
     def sha3(self) -> None:
-        loc: int = self.st.mloc()
-        size: int = int_of(self.st.pop(), "symbolic SHA3 data size")
+        loc: int = self.mloc()
+        size: int = self.int_of(self.st.pop(), "symbolic SHA3 data size")
         data = self.st.memory.slice(loc, loc + size).unwrap() if size else b""
         sha3_image = self.sha3_data(data)
         self.st.push(sha3_image)
@@ -1227,6 +1227,15 @@ class Exec:  # an execution path
 
         return (creation_hexcode, deployed_hexcode)
 
+    def mloc(self) -> int:
+        return self.st.mloc(self.path.concretization.substitution)
+
+    def ret(self) -> ByteVec:
+        return self.st.ret(self.path.concretization.substitution)
+
+    def int_of(self, x: Any, err: str = None) -> int:
+        return int_of(x, self.path.concretization.substitution, err)
+
 
 class Storage:
     pass
@@ -1284,7 +1293,7 @@ class SolidityStorage(Storage):
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
-        (slot, keys, num_keys, size_keys) = cls.get_key_structure(loc)
+        (slot, keys, num_keys, size_keys) = cls.get_key_structure(ex, loc)
 
         cls.init(ex, addr, slot, keys, num_keys, size_keys)
 
@@ -1306,7 +1315,7 @@ class SolidityStorage(Storage):
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
-        (slot, keys, num_keys, size_keys) = cls.get_key_structure(loc)
+        (slot, keys, num_keys, size_keys) = cls.get_key_structure(ex, loc)
 
         cls.init(ex, addr, slot, keys, num_keys, size_keys)
 
@@ -1329,12 +1338,12 @@ class SolidityStorage(Storage):
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
-    def get_key_structure(cls, loc) -> tuple:
+    def get_key_structure(cls, ex, loc) -> tuple:
         offsets = cls.decode(loc)
         if not len(offsets) > 0:
             raise ValueError(offsets)
 
-        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
+        slot, keys = ex.int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
 
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
@@ -1944,11 +1953,11 @@ class SEVM:
         to = uint160(ex.st.pop())
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-        arg_loc: int = ex.st.mloc()
-        arg_size: int = int_of(ex.st.pop(), "symbolic CALL input data size")
+        arg_loc: int = ex.mloc()
+        arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
 
-        ret_loc: int = ex.st.mloc()
-        ret_size: int = int_of(ex.st.pop(), "symbolic CALL return data size")
+        ret_loc: int = ex.mloc()
+        ret_size: int = ex.int_of(ex.st.pop(), "symbolic CALL return data size")
 
         if not arg_size >= 0:
             raise ValueError(arg_size)
@@ -2102,7 +2111,7 @@ class SEVM:
             # modexp
             elif eq(to, con_addr(5)):
                 exit_code = con(1)
-                modulus_size = int_of(extract_bytes(arg, 64, 32))
+                modulus_size = ex.int_of(extract_bytes(arg, 64, 32))
                 f_modexp = Function(
                     f"f_modexp_{arg_size}_{modulus_size}",
                     BitVecSorts[arg_size],
@@ -2248,8 +2257,8 @@ class SEVM:
             raise WriteInStaticContext(ex.context_str())
 
         value: Word = ex.st.pop()
-        loc: int = int_of(ex.st.pop(), "symbolic CREATE offset")
-        size: int = int_of(ex.st.pop(), "symbolic CREATE size")
+        loc: int = ex.int_of(ex.st.pop(), "symbolic CREATE offset")
+        size: int = ex.int_of(ex.st.pop(), "symbolic CREATE size")
 
         if op == EVM.CREATE2:
             salt = ex.st.pop()
@@ -2398,7 +2407,7 @@ class SEVM:
     ) -> None:
         jid = ex.jumpi_id()
 
-        target: int = int_of(ex.st.pop(), "symbolic JUMPI target")
+        target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
         cond: Word = ex.st.pop()
 
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
@@ -2524,7 +2533,7 @@ class SEVM:
         - If the symbol is associated with candidate values, the current path is branched over these candidates.
         """
 
-        offset: int = int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
+        offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
         loaded = ex.calldata().get_word(offset)
 
         if is_expr_var(loaded):
@@ -2627,9 +2636,9 @@ class SEVM:
                             error=InvalidOpcode(opcode),
                         )
                     elif opcode == EVM.REVERT:
-                        ex.halt(data=ex.st.ret(), error=Revert())
+                        ex.halt(data=ex.ret(), error=Revert())
                     elif opcode == EVM.RETURN:
-                        ex.halt(data=ex.st.ret())
+                        ex.halt(data=ex.ret())
                     else:
                         raise ValueError(opcode)
 
@@ -2716,7 +2725,7 @@ class SEVM:
                     ex.st.push(LShR(ex.st.pop(), w))  # bvlshr
 
                 elif opcode == EVM.SIGNEXTEND:
-                    w = int_of(ex.st.pop(), "symbolic SIGNEXTEND size")
+                    w = ex.int_of(ex.st.pop(), "symbolic SIGNEXTEND size")
                     if w <= 30:  # if w == 31, result is SignExt(0, value) == value
                         bl = (w + 1) * 8
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
@@ -2769,9 +2778,9 @@ class SEVM:
                     )
                     ex.st.pop()
 
-                    loc: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
-                    offset: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
-                    size: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
+                    loc: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
 
                     if size > 0:
                         end_loc = loc + size
@@ -2880,16 +2889,16 @@ class SEVM:
                     ex.st.pop()
 
                 elif opcode == EVM.MLOAD:
-                    loc: int = ex.st.mloc()
+                    loc: int = ex.mloc()
                     ex.st.push(ex.st.memory.get_word(loc))
 
                 elif opcode == EVM.MSTORE:
-                    loc: int = ex.st.mloc()
+                    loc: int = ex.mloc()
                     val: Word = ex.st.pop()
                     ex.st.memory.set_word(loc, uint256(val))
 
                 elif opcode == EVM.MSTORE8:
-                    loc: int = ex.st.mloc()
+                    loc: int = ex.mloc()
                     val: Word = ex.st.pop()
                     ex.st.memory.set_byte(loc, uint8(val))
 
@@ -2912,9 +2921,9 @@ class SEVM:
                     ex.st.push(ex.returndatasize())
 
                 elif opcode == EVM.RETURNDATACOPY:
-                    loc: int = ex.st.mloc()
-                    offset: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
-                    size: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
+                    loc: int = ex.mloc()
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
@@ -2928,9 +2937,9 @@ class SEVM:
                         ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CALLDATACOPY:
-                    loc: int = ex.st.mloc()
-                    offset: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
-                    size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
+                    loc: int = ex.mloc()
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
@@ -2942,9 +2951,9 @@ class SEVM:
                         ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CODECOPY:
-                    loc: int = ex.st.mloc()
-                    offset: int = int_of(ex.st.pop(), "symbolic CODECOPY offset")
-                    size: int = int_of(ex.st.pop(), "symbolic CODECOPY size")
+                    loc: int = ex.mloc()
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
@@ -2955,9 +2964,9 @@ class SEVM:
                         ex.st.memory.set_slice(loc, loc + size, codeslice)
 
                 elif opcode == EVM.MCOPY:
-                    dest_offset = int_of(ex.st.pop(), "symbolic MCOPY destOffset")
-                    src_offset = int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
-                    size = int_of(ex.st.pop(), "symbolic MCOPY size")
+                    dest_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY destOffset")
+                    src_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
+                    size = ex.int_of(ex.st.pop(), "symbolic MCOPY size")
 
                     if size > 0:
                         src_end_loc = src_offset + size
@@ -2997,8 +3006,8 @@ class SEVM:
                         raise WriteInStaticContext(ex.context_str())
 
                     num_topics: int = opcode - EVM.LOG0
-                    loc: int = ex.st.mloc()
-                    size: int = int_of(ex.st.pop(), "symbolic LOG data size")
+                    loc: int = ex.mloc()
+                    size: int = ex.int_of(ex.st.pop(), "symbolic LOG data size")
                     topics = list(ex.st.pop() for _ in range(num_topics))
                     data = ex.st.memory.slice(loc, loc + size)
                     ex.emit_log(EventLog(ex.this(), topics, data))
