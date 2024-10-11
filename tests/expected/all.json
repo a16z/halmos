@@ -2271,7 +2271,25 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_hash_collision_with_empty()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_no_hash_collision_assumption()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_only_empty_bytes_matches_empty_hash(bytes)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,

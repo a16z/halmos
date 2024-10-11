@@ -11,6 +11,7 @@ from z3 import (
     Z3_OP_BADD,
     Z3_OP_CONCAT,
     Z3_OP_ULEQ,
+    BitVec,
     BitVecNumRef,
     BitVecRef,
     BitVecSort,
@@ -109,6 +110,9 @@ def f_sha3_name(bitsize: int) -> str:
 
 f_sha3_256_name = f_sha3_name(256)
 f_sha3_512_name = f_sha3_name(512)
+
+f_sha3_0_name = f_sha3_name(0)
+f_sha3_empty = BitVec(f_sha3_0_name, BitVecSort256)
 
 
 def uid() -> str:

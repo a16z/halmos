@@ -100,6 +100,7 @@ from .utils import (
     f_ecrecover,
     f_sha3_256_name,
     f_sha3_512_name,
+    f_sha3_empty,
     f_sha3_name,
     hexify,
     int_of,
@@ -132,7 +133,6 @@ Steps = dict[int, dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
 EMPTY_KECCAK = 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470
-EMPTY_KECCAK_BV = con(EMPTY_KECCAK)
 ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
 
@@ -1139,7 +1139,7 @@ class Exec:  # an execution path
 
         bitsize = byte_length(data) * 8
         if bitsize == 0:
-            return EMPTY_KECCAK_BV
+            return f_sha3_empty
 
         if isinstance(data, bytes):
             data = bytes_to_bv_value(data)
@@ -3044,9 +3044,15 @@ class SEVM:
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     val = unbox_int(insn.operand)
                     if isinstance(val, int):
-                        if opcode == EVM.PUSH32 and val in sha3_inv:
-                            # restore precomputed hashes
-                            ex.st.push(ex.sha3_data(con(sha3_inv[val])))
+                        if opcode == EVM.PUSH32:
+                            if val in sha3_inv:
+                                # restore precomputed hashes
+                                ex.st.push(ex.sha3_data(con(sha3_inv[val])))
+                            # TODO: support more commonly used concrete keccak values
+                            elif val == EMPTY_KECCAK:
+                                ex.st.push(ex.sha3_data(b""))
+                            else:
+                                ex.st.push(val)
                         else:
                             ex.st.push(val)
                     else:
