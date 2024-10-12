@@ -1159,7 +1159,8 @@ class Exec:  # an execution path
             # ensure the hash value is within the safe range assumed below
             sha3_hash_int = int.from_bytes(sha3_hash, "big")
             if sha3_hash_int == 0 or sha3_hash_int > 2**256 - 2**64:
-                raise HalmosException(f"hash value outside expected range: {sha3_hash.hex()}")
+                error_msg = f"hash value outside expected range: {sha3_hash.hex()}"
+                raise HalmosException(error_msg)
 
         else:
             # assume hash values are non-zero and sufficiently small to prevent overflow when adding reasonable offsets
