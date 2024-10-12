@@ -1156,6 +1156,16 @@ class Exec:  # an execution path
         if sha3_hash is not None:
             self.path.append(sha3_expr == bytes_to_bv_value(sha3_hash))
 
+            # ensure the hash value is within the safe range assumed below
+            sha3_hash_int = int.from_bytes(sha3_hash, "big")
+            if sha3_hash_int == 0 or sha3_hash_int > 2**256 - 2**64:
+                raise HalmosException(f"hash value outside expected range: {sha3_hash.hex()}")
+
+        else:
+            # assume hash values are non-zero and sufficiently small to prevent overflow when adding reasonable offsets
+            self.path.append(sha3_expr != ZERO)
+            self.path.append(ULE(sha3_expr, 2**256 - 2**64))
+
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
 
@@ -1189,11 +1199,6 @@ class Exec:  # an execution path
             else:
                 # inputs have different sizes: assume the outputs are different
                 self.path.append(sha3_expr != prev_sha3_expr)
-
-        # assume hash values are non-zero and sufficiently smaller than the uint max
-        # TODO: assume they are sufficiently larger than 0
-        self.path.append(sha3_expr != ZERO)
-        self.path.append(ULE(sha3_expr, 2**256 - 2**64))
 
         self.sha3s[sha3_expr] = len(self.sha3s)
 
