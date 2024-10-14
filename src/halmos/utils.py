@@ -11,6 +11,7 @@ from z3 import (
     Z3_OP_BADD,
     Z3_OP_CONCAT,
     Z3_OP_ULEQ,
+    BitVec,
     BitVecNumRef,
     BitVecRef,
     BitVecSort,
@@ -108,8 +109,15 @@ def f_sha3_name(bitsize: int) -> str:
     return f"f_sha3_{bitsize}"
 
 
+f_sha3_0_name = f_sha3_name(0)
 f_sha3_256_name = f_sha3_name(256)
 f_sha3_512_name = f_sha3_name(512)
+
+# NOTE: another way to encode the empty keccak is to use 0-ary function like:
+#         f_sha3_empty = Function(f_sha3_0_name, BitVecSort256)
+#       then `f_sha3_empty()` is equivalent to `BitVec(f_sha3_0_name, BitVecSort256)`.
+#       in both cases, decl() == f_sha3_0_name, and num_args() == 0.
+f_sha3_empty = BitVec(f_sha3_0_name, BitVecSort256)
 
 
 def uid() -> str:
