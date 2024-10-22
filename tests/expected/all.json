@@ -338,7 +338,43 @@
         ],
         "test/Concretization.t.sol:ConcretizationTest": [
             {
+                "name": "check_calldata_index(bytes,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_custom_calldata_decoding()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_memory_index(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_memory_size(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_storage_slot(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1771,6 +1807,206 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Panic.t.sol:PanicTest": [
+            {
+                "name": "check_panic_0_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_0_pass(bool)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_0x11_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_0x11_pass(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_0x12_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_0x12_pass(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_10_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_16_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_1_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_1_pass(bool)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_2_or_3_fail_2(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_2_or_3_fail_3(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_5_fail_old(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_7_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_8_fail(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_any_fail_4(bool)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_inc_assert_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_inc_assert_pass(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_inc_cheatcode_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_inc_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_inc_overflow_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_panic_inc_overflow_pass(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Prank.t.sol:PrankSetUpTest": [
             {
                 "name": "check_prank(address)",
@@ -2044,6 +2280,33 @@
         ],
         "test/Sha3.t.sol:Sha3Test": [
             {
+                "name": "check_concrete_keccak_does_not_split_paths()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_concrete_keccak_memory_lookup()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_empty_hash_value()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_hash()",
                 "exitcode": 0,
                 "num_models": 0,
@@ -2053,7 +2316,25 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_hash_collision_with_empty()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_no_hash_collision_assumption()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_only_empty_bytes_matches_empty_hash(bytes)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -2427,7 +2708,7 @@
             {
                 "name": "check_assertEq(address[],address[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2445,7 +2726,7 @@
             {
                 "name": "check_assertEq(bool[],bool[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2454,7 +2735,7 @@
             {
                 "name": "check_assertEq(bytes,bytes)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2472,7 +2753,7 @@
             {
                 "name": "check_assertEq(bytes32[],bytes32[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2490,7 +2771,7 @@
             {
                 "name": "check_assertEq(int256[],int256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2499,7 +2780,7 @@
             {
                 "name": "check_assertEq(string,string)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2517,7 +2798,7 @@
             {
                 "name": "check_assertEq(uint256[],uint256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2616,7 +2897,7 @@
             {
                 "name": "check_assertNotEq(address[],address[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2634,7 +2915,7 @@
             {
                 "name": "check_assertNotEq(bool[],bool[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2643,7 +2924,7 @@
             {
                 "name": "check_assertNotEq(bytes,bytes)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2661,7 +2942,7 @@
             {
                 "name": "check_assertNotEq(bytes32[],bytes32[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2679,7 +2960,7 @@
             {
                 "name": "check_assertNotEq(int256[],int256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2688,7 +2969,7 @@
             {
                 "name": "check_assertNotEq(string,string)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2706,7 +2987,7 @@
             {
                 "name": "check_assertNotEq(uint256[],uint256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2735,7 +3016,7 @@
             {
                 "name": "check_assertEq(address[],address[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2753,7 +3034,7 @@
             {
                 "name": "check_assertEq(bool[],bool[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2762,7 +3043,7 @@
             {
                 "name": "check_assertEq(bytes,bytes)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2780,7 +3061,7 @@
             {
                 "name": "check_assertEq(bytes32[],bytes32[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2798,7 +3079,7 @@
             {
                 "name": "check_assertEq(int256[],int256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2807,7 +3088,7 @@
             {
                 "name": "check_assertEq(string,string)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2825,7 +3106,7 @@
             {
                 "name": "check_assertEq(uint256[],uint256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 8,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2924,7 +3205,7 @@
             {
                 "name": "check_assertNotEq(address[],address[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2942,7 +3223,7 @@
             {
                 "name": "check_assertNotEq(bool[],bool[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2951,7 +3232,7 @@
             {
                 "name": "check_assertNotEq(bytes,bytes)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2969,7 +3250,7 @@
             {
                 "name": "check_assertNotEq(bytes32[],bytes32[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2987,7 +3268,7 @@
             {
                 "name": "check_assertNotEq(int256[],int256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -2996,7 +3277,7 @@
             {
                 "name": "check_assertNotEq(string,string)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3014,7 +3295,7 @@
             {
                 "name": "check_assertNotEq(uint256[],uint256[])",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -3517,6 +3798,17 @@
                 "name": "check_S((uint256,uint256[],uint256),(uint256,(uint256,uint256[],uint256),uint256[],(uint256,uint256[],uint256)[],uint256[1],(uint256,uint256[],uint256)[][])[])",
                 "exitcode": 1,
                 "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SymbolicCall.t.sol:SymbolicCallTest": [
+            {
+                "name": "check_foo(address)",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,

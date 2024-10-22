@@ -55,6 +55,7 @@ from .utils import (
     red,
     secp256k1n,
     stripped,
+    uid,
     uint160,
     uint256,
 )
@@ -213,7 +214,7 @@ class Prank:
 def symbolic_storage(ex, arg, sevm, stack, step_id):
     account = uint160(arg.get_word(4))
     account_alias = sevm.resolve_address_alias(
-        ex, account, stack, step_id, branching=False
+        ex, account, stack, step_id, allow_branching=False
     )
 
     if account_alias is None:
@@ -292,10 +293,12 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     results.append(encode_tuple_bytes(b""))
 
     # nonempty calldata for fallback()
-    fallback_selector = BitVec(f"fallback_selector_{ex.new_symbol_id():>02}", 4 * 8)
+    fallback_selector = BitVec(
+        f"fallback_selector_{uid()}_{ex.new_symbol_id():>02}", 4 * 8
+    )
     fallback_input_length = 1024  # TODO: configurable
     fallback_input = BitVec(
-        f"fallback_input_{ex.new_symbol_id():>02}", fallback_input_length * 8
+        f"fallback_input_{uid()}_{ex.new_symbol_id():>02}", fallback_input_length * 8
     )
     results.append(encode_tuple_bytes(Concat(fallback_selector, fallback_input)))
 
@@ -328,7 +331,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
 
 
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
-    label = f"halmos_{var_name}_{type_name}_{ex.new_symbol_id():>02}"
+    label = f"halmos_{var_name}_{type_name}_{uid()}_{ex.new_symbol_id():>02}"
     return BitVec(label, BitVecSorts[bits])
 
 
@@ -565,7 +568,7 @@ class hevm_cheat_code:
             assume_cond = simplify(is_non_zero(arg.get_word(4)))
             if is_false(assume_cond):
                 raise InfeasiblePath("vm.assume(false)")
-            ex.path.append(assume_cond)
+            ex.path.append(assume_cond, branching=True)
             return ret
 
         # vm.getCode(string)
@@ -649,7 +652,7 @@ class hevm_cheat_code:
             store_slot = uint256(arg.get_word(36))
             store_value = uint256(arg.get_word(68))
             store_account_alias = sevm.resolve_address_alias(
-                ex, store_account, stack, step_id, branching=False
+                ex, store_account, stack, step_id, allow_branching=False
             )
 
             if store_account_alias is None:
@@ -664,7 +667,7 @@ class hevm_cheat_code:
             load_account = uint160(arg.get_word(4))
             load_slot = uint256(arg.get_word(36))
             load_account_alias = sevm.resolve_address_alias(
-                ex, load_account, stack, step_id, branching=False
+                ex, load_account, stack, step_id, allow_branching=False
             )
 
             if load_account_alias is None:

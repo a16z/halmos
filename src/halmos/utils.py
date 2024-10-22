@@ -2,6 +2,7 @@
 
 import math
 import re
+import uuid
 from functools import partial
 from timeit import default_timer as timer
 from typing import Any
@@ -10,6 +11,7 @@ from z3 import (
     Z3_OP_BADD,
     Z3_OP_CONCAT,
     Z3_OP_ULEQ,
+    BitVec,
     BitVecNumRef,
     BitVecRef,
     BitVecSort,
@@ -31,6 +33,7 @@ from z3 import (
     is_bv_value,
     is_not,
     simplify,
+    substitute,
 )
 
 from halmos.exceptions import HalmosException, NotConcreteError
@@ -106,8 +109,19 @@ def f_sha3_name(bitsize: int) -> str:
     return f"f_sha3_{bitsize}"
 
 
+f_sha3_0_name = f_sha3_name(0)
 f_sha3_256_name = f_sha3_name(256)
 f_sha3_512_name = f_sha3_name(512)
+
+# NOTE: another way to encode the empty keccak is to use 0-ary function like:
+#         f_sha3_empty = Function(f_sha3_0_name, BitVecSort256)
+#       then `f_sha3_empty()` is equivalent to `BitVec(f_sha3_0_name, BitVecSort256)`.
+#       in both cases, decl() == f_sha3_0_name, and num_args() == 0.
+f_sha3_empty = BitVec(f_sha3_0_name, BitVecSort256)
+
+
+def uid() -> str:
+    return uuid.uuid4().hex[:7]
 
 
 def wrap(x: Any) -> Word:
@@ -220,9 +234,6 @@ def is_concat(x: BitVecRef) -> bool:
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
-
-    # reset any remaining solver states from the default context
-    solver.reset()
 
     # set timeout
     solver.set(timeout=timeout)
@@ -340,15 +351,21 @@ def unbox_int(x: Any) -> Any:
     return x
 
 
-def int_of(x: Any, err: str = "expected concrete value but got") -> int:
+def int_of(x: Any, subst: dict = None, err: str = None) -> int:
     """
     Converts int-like objects to int or raises NotConcreteError
     """
+
+    # attempt to replace symbolic (sub-)terms with their concrete values
+    if subst and is_bv(x) and not is_bv_value(x):
+        x = simplify(substitute(x, *subst.items()))
+
     res = unbox_int(x)
 
     if isinstance(res, int):
         return res
 
+    err = err or "expected concrete value but got"
     raise NotConcreteError(f"{err}: {x}")
 
 

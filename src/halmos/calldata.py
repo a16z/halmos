@@ -12,7 +12,7 @@ from z3 import (
 
 from .bytevec import ByteVec
 from .config import Config as HalmosConfig
-from .utils import con
+from .utils import con, uid
 
 
 @dataclass(frozen=True)
@@ -135,7 +135,7 @@ class Calldata:
 
         if sizes is None:
             sizes = (
-                list(range(self.args.loop + 1))
+                self.args.default_array_lengths
                 if isinstance(typ, DynamicArrayType)
                 else self.args.default_bytes_lengths  # bytes or string
             )
@@ -144,7 +144,7 @@ class Calldata:
                     f"Warning: no size provided for {name}; default value {sizes} will be used."
                 )
 
-        size_var = BitVec(f"p_{name}_length_{self.new_symbol_id():>02}", 256)
+        size_var = BitVec(f"p_{name}_length_{uid()}_{self.new_symbol_id():>02}", 256)
 
         self.dyn_params.append(DynamicParam(name, sizes, size_var, typ))
 
@@ -222,7 +222,7 @@ class Calldata:
             return EncodingResult([size_var] + encoded.data, 32 + encoded.size, False)
 
         if isinstance(typ, BaseType):
-            new_symbol = f"p_{name}_{typ.typ}_{self.new_symbol_id():>02}"
+            new_symbol = f"p_{name}_{typ.typ}_{uid()}_{self.new_symbol_id():>02}"
 
             # bytes, string
             if typ.typ in ["bytes", "string"]:

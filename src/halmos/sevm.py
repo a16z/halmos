@@ -13,6 +13,7 @@ from typing import (
     TypeVar,
 )
 
+from eth_hash.auto import keccak
 from z3 import (
     UGE,
     UGT,
@@ -26,6 +27,7 @@ from z3 import (
     BoolVal,
     CheckSatResult,
     Concat,
+    Context,
     Extract,
     Function,
     If,
@@ -35,7 +37,6 @@ from z3 import (
     Select,
     SignExt,
     Solver,
-    SolverFor,
     SRem,
     Store,
     UDiv,
@@ -87,16 +88,19 @@ from .utils import (
     assert_address,
     assert_bv,
     assert_uint256,
+    bv_value_to_bytes,
     byte_length,
     bytes_to_bv_value,
     con,
     con_addr,
     concat,
+    create_solver,
     debug,
     extract_bytes,
     f_ecrecover,
     f_sha3_256_name,
     f_sha3_512_name,
+    f_sha3_empty,
     f_sha3_name,
     hexify,
     int_of,
@@ -112,6 +116,7 @@ from .utils import (
     sha3_inv,
     str_opcode,
     stripped,
+    uid,
     uint8,
     uint160,
     uint256,
@@ -127,9 +132,12 @@ from .warnings import (
 Steps = dict[int, dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
-EMPTY_KECCAK = con(0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470)
+EMPTY_KECCAK = 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470
 ZERO, ONE = con(0), con(1)
 MAX_CALL_DEPTH = 1024
+
+# bytes4(keccak256("Panic(uint256)"))
+PANIC_SELECTOR = bytes.fromhex("4E487B71")
 
 EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
 
@@ -439,15 +447,15 @@ class State:
     def swap(self, n: int) -> None:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
-    def mloc(self) -> int:
-        loc: int = int_of(self.pop(), "symbolic memory offset")
+    def mloc(self, subst: dict = None) -> int:
+        loc: int = int_of(self.pop(), subst, "symbolic memory offset")
         if loc > MAX_MEMORY_SIZE:
             raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
         return loc
 
-    def ret(self) -> ByteVec:
-        loc: int = self.mloc()
-        size: int = int_of(self.pop(), "symbolic return data size")  # size in bytes
+    def ret(self, subst: dict = None) -> ByteVec:
+        loc: int = self.mloc(subst)
+        size: int = int_of(self.pop(), subst, "symbolic return data size")
 
         returndata_slice = self.memory.slice(loc, loc + size)
         return returndata_slice
@@ -638,19 +646,20 @@ class SMTQuery:
 @dataclass(frozen=True)
 class Concretization:
     """
-    Mapping of symbols to concrete values or potential candidates.
+    Mapping of terms to concrete values, and of symbols to potential candidates.
 
-    A symbol is mapped to a concrete value when an equality between them is introduced in the path condition.
-    These symbols can be replaced by their concrete values during execution as needed.
+    A term is mapped to a concrete value when an equality between them is introduced in the path condition.
+    These terms can be replaced by their concrete values during execution as needed.
+    Note that cyclic substitutions do not occur, as terms are reduced to a ground value rather than another term.
 
     A symbol may also be associated with multiple concrete value candidates.
     If necessary, the path can later branch for each candidate.
 
-    TODO: Currently, this mechanism is applied only to calldata with dynamic parameters.
-    In the future, it may be used for other purposes, such as concrete hash reasoning.
+    TODO: Currently, the branching mechanism based on candidates is only applied to calldata with dynamic parameters.
+    In the future, it may be used for other purposes.
     """
 
-    # symbol -> constant
+    # term -> constant
     substitution: dict[BitVecRef, BitVecRef] = field(default_factory=dict)
     # symbol -> set of constants
     candidates: dict[BitVecRef, list[int]] = field(default_factory=dict)
@@ -659,16 +668,14 @@ class Concretization:
         if not is_eq(cond):
             return
         left, right = cond.arg(0), cond.arg(1)
-        if is_expr_var(left) and is_bv_value(right):
+        if is_bv_value(right):  # not is_bv_value(left)
             self.substitution[left] = right
-        elif is_expr_var(right) and is_bv_value(left):
+        elif is_bv_value(left):  # not is_bv_value(right)
             self.substitution[right] = left
 
-    def process_dyn_params(self, dyn_params, legacy):
+    def process_dyn_params(self, dyn_params):
         for d in dyn_params:
-            # TODO: deprecate legacy behavior
-            size_choices = d.size_choices if not legacy else [d.size_choices[-1]]
-            self.candidates[d.size_symbol] = size_choices
+            self.candidates[d.size_symbol] = d.size_choices
 
 
 @dataclass(frozen=True)
@@ -713,8 +720,8 @@ class Path:
             ]
         ) + "\n----\n"
 
-    def process_dyn_params(self, dyn_params, legacy=False):
-        self.concretization.process_dyn_params(dyn_params, legacy)
+    def process_dyn_params(self, dyn_params):
+        self.concretization.process_dyn_params(dyn_params)
 
     def to_smt2(self, args) -> SMTQuery:
         # Serialize self.conditions into the SMTLIB format.
@@ -744,10 +751,14 @@ class Path:
         ids = [str(cond.get_id()) for cond in self.conditions]
 
         if args.cache_solver:
-            tmp_solver = SolverFor("QF_AUFBV")
+            # TODO: investigate whether a separate context is necessary here
+            tmp_solver = create_solver(ctx=Context())
             for cond in self.conditions:
-                tmp_solver.assert_and_track(cond, str(cond.get_id()))
+                tmp_solver.assert_and_track(
+                    cond.translate(tmp_solver.ctx), str(cond.get_id())
+                )
             query = tmp_solver.to_smt2()
+            tmp_solver.reset()
         else:
             query = self.solver.to_smt2()
         query = query.replace("(check-sat)", "")  # see __main__.solve()
@@ -915,14 +926,36 @@ class Exec:  # an execution path
     def is_halted(self) -> bool:
         return self.context.output.data is not None
 
-    def reverted_with(self, expected: ByteVec) -> bool:
-        if not isinstance(self.context.output.error, Revert):
+    def is_panic_of(self, expected_error_codes: set[int]) -> bool:
+        """
+        Check if the error is Panic(k) for any k in the given error code set.
+        An empty set or None will match any error code.
+
+        Panic(k) is encoded as 36 bytes (4 + 32) consisting of:
+            bytes4(keccak256("Panic(uint256)")) + bytes32(k)
+        """
+
+        output = self.context.output
+
+        if not isinstance(output.error, Revert):
             return False
 
-        returndata = self.context.output.data[: byte_length(expected)]
+        error_data = output.data
+        if byte_length(error_data) != 36:
+            return False
 
-        # bytevec equality check, will take care of length check, bv vs symbolic, etc.
-        return returndata == expected
+        error_selector = error_data[0:4].unwrap()
+        if error_selector != PANIC_SELECTOR:
+            return False
+
+        # match any error code
+        if not expected_error_codes:
+            return True
+
+        # the argument of Panic is expected to be concrete
+        # NOTE: symbolic error code will be silently ignored
+        error_code = unbox_int(error_data[4:36].unwrap())
+        return error_code in expected_error_codes
 
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
@@ -1079,7 +1112,7 @@ class Exec:  # an execution path
         assert_uint256(value)
         addr = uint160(addr)
         new_balance_var = Array(
-            f"balance_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
+            f"balance_{uid()}_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
         self.path.append(new_balance_var == new_balance, info=f"{new_balance_var} := {new_balance}")
@@ -1087,35 +1120,74 @@ class Exec:  # an execution path
         self.balances[new_balance_var] = new_balance
 
     def sha3(self) -> None:
-        loc: int = self.st.mloc()
-        size: int = int_of(self.st.pop(), "symbolic SHA3 data size")
+        loc: int = self.mloc()
+        size: int = self.int_of(self.st.pop(), "symbolic SHA3 data size")
         data = self.st.memory.slice(loc, loc + size).unwrap() if size else b""
         sha3_image = self.sha3_data(data)
         self.st.push(sha3_image)
 
-    def sha3_data(self, data: Bytes) -> Word:
+    def sha3_hash(self, data: Bytes) -> bytes | None:
+        """return concrete bytes if the hash can be evaluated, otherwise None"""
+
         size = byte_length(data)
 
-        if size > 0:
-            if isinstance(data, bytes):
-                data = bytes_to_bv_value(data)
+        if size == 0:
+            return EMPTY_KECCAK.to_bytes(32, byteorder="big")
 
-            f_sha3 = Function(
-                f_sha3_name(size * 8), BitVecSorts[size * 8], BitVecSort256
-            )
-            sha3_expr = f_sha3(data)
+        if isinstance(data, bytes):
+            return keccak(data)
+
+        if is_bv_value(data):
+            return keccak(bv_value_to_bytes(data))
+
+        if isinstance(data, int):
+            # the problem here is that we're not sure about the bit-width of the int
+            # this is not supposed to happen, so just log and move on
+            debug(f"eval_sha3 received unexpected int value ({data})")
+
+        return None
+
+    def sha3_expr(self, data: Bytes) -> Word:
+        """return a symbolic sha3 expression, e.g. f_sha3_256(data)"""
+
+        bitsize = byte_length(data) * 8
+        if bitsize == 0:
+            return f_sha3_empty
+
+        if isinstance(data, bytes):
+            data = bytes_to_bv_value(data)
+
+        fname = f_sha3_name(bitsize)
+        f_sha3 = Function(fname, BitVecSorts[bitsize], BitVecSort256)
+        return f_sha3(data)
+
+    def sha3_data(self, data: Bytes) -> Word:
+        sha3_expr = self.sha3_expr(data)
+        sha3_hash = self.sha3_hash(data)
+
+        if sha3_hash is not None:
+            self.path.append(sha3_expr == bytes_to_bv_value(sha3_hash))
+
+            # ensure the hash value is within the safe range assumed below
+            sha3_hash_int = int.from_bytes(sha3_hash, "big")
+            if sha3_hash_int == 0 or sha3_hash_int > 2**256 - 2**64:
+                error_msg = f"hash value outside expected range: {sha3_hash.hex()}"
+                raise HalmosException(error_msg)
+
         else:
-            sha3_expr = EMPTY_KECCAK
-
-        # assume hash values are sufficiently smaller than the uint max
-        self.path.append(ULE(sha3_expr, 2**256 - 2**64))
+            # assume hash values are non-zero and sufficiently small to prevent overflow when adding reasonable offsets
+            self.path.append(sha3_expr != ZERO)
+            self.path.append(ULE(sha3_expr, 2**256 - 2**64))
 
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
 
         # handle create2 hash
-        if size == 85 and eq(extract_bytes(data, 0, 1), con(0xFF, size_bits=8)):
-            return con(create2_magic_address + self.sha3s[sha3_expr])
+        size = byte_length(data)
+        if size == 85:
+            first_byte = unbox_int(ByteVec(data).get_byte(0))
+            if isinstance(first_byte, int) and first_byte == 0xFF:
+                return con(create2_magic_address + self.sha3s[sha3_expr])
         else:
             return sha3_expr
 
@@ -1141,7 +1213,6 @@ class Exec:  # an execution path
                 # inputs have different sizes: assume the outputs are different
                 self.path.append(sha3_expr != prev_sha3_expr)
 
-        self.path.append(sha3_expr != ZERO)
         self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
@@ -1210,6 +1281,15 @@ class Exec:  # an execution path
 
         return (creation_hexcode, deployed_hexcode)
 
+    def mloc(self) -> int:
+        return self.st.mloc(self.path.concretization.substitution)
+
+    def ret(self) -> ByteVec:
+        return self.st.ret(self.path.concretization.substitution)
+
+    def int_of(self, x: Any, err: str = None) -> int:
+        return int_of(x, self.path.concretization.substitution, err)
+
 
 class Storage:
     pass
@@ -1225,6 +1305,7 @@ class SolidityStorage(Storage):
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
         return Array(
+            # note: uuid is excluded to be deterministic
             f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
             BitVecSorts[size_keys],
             BitVecSort256,
@@ -1256,6 +1337,7 @@ class SolidityStorage(Storage):
         # size_keys == 0
         mapping[size_keys] = (
             BitVec(
+                # note: uuid is excluded to be deterministic
                 f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
                 BitVecSort256,
             )
@@ -1265,7 +1347,7 @@ class SolidityStorage(Storage):
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
-        (slot, keys, num_keys, size_keys) = cls.get_key_structure(loc)
+        (slot, keys, num_keys, size_keys) = cls.get_key_structure(ex, loc)
 
         cls.init(ex, addr, slot, keys, num_keys, size_keys)
 
@@ -1287,7 +1369,7 @@ class SolidityStorage(Storage):
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
-        (slot, keys, num_keys, size_keys) = cls.get_key_structure(loc)
+        (slot, keys, num_keys, size_keys) = cls.get_key_structure(ex, loc)
 
         cls.init(ex, addr, slot, keys, num_keys, size_keys)
 
@@ -1299,7 +1381,7 @@ class SolidityStorage(Storage):
             return
 
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{1+len(ex.storages):>02}",
+            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
@@ -1310,12 +1392,12 @@ class SolidityStorage(Storage):
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
-    def get_key_structure(cls, loc) -> tuple:
+    def get_key_structure(cls, ex, loc) -> tuple:
         offsets = cls.decode(loc)
         if not len(offsets) > 0:
             raise ValueError(offsets)
 
-        slot, keys = int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
+        slot, keys = ex.int_of(offsets[0], "symbolic storage base slot"), offsets[1:]
 
         num_keys = len(keys)
         size_keys = cls.bitsize(keys)
@@ -1394,6 +1476,7 @@ class GenericStorage(Storage):
     @classmethod
     def empty(cls, addr: BitVecRef, loc: BitVecRef) -> ArrayRef:
         return Array(
+            # note: uuid is excluded to be deterministic
             f"storage_{id_str(addr)}_{loc.size()}_00",
             BitVecSorts[loc.size()],
             BitVecSort256,
@@ -1442,7 +1525,7 @@ class GenericStorage(Storage):
         mapping = ex.storage[addr].mapping
 
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{size_keys}_{1+len(ex.storages):>02}",
+            f"storage_{id_str(addr)}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
@@ -1824,7 +1907,7 @@ class SEVM:
         self.storage_model.store(ex, addr, loc, val)
 
     def resolve_address_alias(
-        self, ex: Exec, target: Address, stack, step_id, branching=True
+        self, ex: Exec, target: Address, stack, step_id, allow_branching=True
     ) -> Address:
         assert_bv(target)
         assert_address(target)
@@ -1847,6 +1930,9 @@ class SEVM:
 
         potential_aliases = []
         for addr in ex.code:
+            # exclude the test contract from alias candidates
+            if addr == FOUNDRY_TEST:
+                continue
             alias_cond = target == addr
             if ex.check(alias_cond) != unsat:
                 if self.options.debug:
@@ -1866,7 +1952,7 @@ class SEVM:
 
         head, *tail = potential_aliases
 
-        if not branching and tail:
+        if not allow_branching and tail:
             raise HalmosException(f"multiple aliases exist: {hexify(target)}")
 
         for addr, cond, cond_info in tail:
@@ -1875,7 +1961,7 @@ class SEVM:
             stack.push(new_ex, step_id)
 
         addr, cond, cond_info = head
-        ex.path.append(cond, info=cond_info)
+        ex.path.append(cond, info=cond_info, branching=True)
         ex.alias[target] = addr
         return addr
 
@@ -1921,11 +2007,11 @@ class SEVM:
         to = uint160(ex.st.pop())
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-        arg_loc: int = ex.st.mloc()
-        arg_size: int = int_of(ex.st.pop(), "symbolic CALL input data size")
+        arg_loc: int = ex.mloc()
+        arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
 
-        ret_loc: int = ex.st.mloc()
-        ret_size: int = int_of(ex.st.pop(), "symbolic CALL return data size")
+        ret_loc: int = ex.mloc()
+        ret_size: int = ex.int_of(ex.st.pop(), "symbolic CALL return data size")
 
         if not arg_size >= 0:
             raise ValueError(arg_size)
@@ -2079,7 +2165,7 @@ class SEVM:
             # modexp
             elif eq(to, con_addr(5)):
                 exit_code = con(1)
-                modulus_size = int_of(extract_bytes(arg, 64, 32))
+                modulus_size = ex.int_of(extract_bytes(arg, 64, 32))
                 f_modexp = Function(
                     f"f_modexp_{arg_size}_{modulus_size}",
                     BitVecSorts[arg_size],
@@ -2145,7 +2231,7 @@ class SEVM:
 
             # push exit code
             exit_code_var = BitVec(
-                f"call_exit_code_{ex.new_call_id():>02}", BitVecSort256
+                f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
             )
             ex.path.append(exit_code_var == exit_code, info=f"{exit_code_var} := {exit_code}")
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
@@ -2225,8 +2311,8 @@ class SEVM:
             raise WriteInStaticContext(ex.context_str())
 
         value: Word = ex.st.pop()
-        loc: int = int_of(ex.st.pop(), "symbolic CREATE offset")
-        size: int = int_of(ex.st.pop(), "symbolic CREATE size")
+        loc: int = ex.int_of(ex.st.pop(), "symbolic CREATE offset")
+        size: int = ex.int_of(ex.st.pop(), "symbolic CREATE size")
 
         if op == EVM.CREATE2:
             salt = ex.st.pop()
@@ -2375,7 +2461,7 @@ class SEVM:
     ) -> None:
         jid = ex.jumpi_id()
 
-        target: int = int_of(ex.st.pop(), "symbolic JUMPI target")
+        target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
         cond: Word = ex.st.pop()
 
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
@@ -2501,7 +2587,7 @@ class SEVM:
         - If the symbol is associated with candidate values, the current path is branched over these candidates.
         """
 
-        offset: int = int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
+        offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
         loaded = ex.calldata().get_word(offset)
 
         if is_expr_var(loaded):
@@ -2511,6 +2597,11 @@ class SEVM:
                 loaded = concrete_loaded
 
             elif loaded in ex.path.concretization.candidates:
+                if self.options.debug:
+                    debug(
+                        f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}"
+                    )
+
                 for candidate in ex.path.concretization.candidates[loaded]:
                     new_ex = self.create_branch(ex, loaded == candidate, ex.pc, info=f"lazy: {loaded} := {candidate}")
                     new_ex.st.push(candidate)
@@ -2599,9 +2690,9 @@ class SEVM:
                             error=InvalidOpcode(opcode),
                         )
                     elif opcode == EVM.REVERT:
-                        ex.halt(data=ex.st.ret(), error=Revert())
+                        ex.halt(data=ex.ret(), error=Revert())
                     elif opcode == EVM.RETURN:
-                        ex.halt(data=ex.st.ret())
+                        ex.halt(data=ex.ret())
                     else:
                         raise ValueError(opcode)
 
@@ -2688,7 +2779,7 @@ class SEVM:
                     ex.st.push(LShR(ex.st.pop(), w))  # bvlshr
 
                 elif opcode == EVM.SIGNEXTEND:
-                    w = int_of(ex.st.pop(), "symbolic SIGNEXTEND size")
+                    w = ex.int_of(ex.st.pop(), "symbolic SIGNEXTEND size")
                     if w <= 30:  # if w == 31, result is SignExt(0, value) == value
                         bl = (w + 1) * 8
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
@@ -2741,9 +2832,9 @@ class SEVM:
                     )
                     ex.st.pop()
 
-                    loc: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
-                    offset: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
-                    size: int = int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
+                    loc: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
 
                     if size > 0:
                         end_loc = loc + size
@@ -2852,16 +2943,16 @@ class SEVM:
                     ex.st.pop()
 
                 elif opcode == EVM.MLOAD:
-                    loc: int = ex.st.mloc()
+                    loc: int = ex.mloc()
                     ex.st.push(ex.st.memory.get_word(loc))
 
                 elif opcode == EVM.MSTORE:
-                    loc: int = ex.st.mloc()
+                    loc: int = ex.mloc()
                     val: Word = ex.st.pop()
                     ex.st.memory.set_word(loc, uint256(val))
 
                 elif opcode == EVM.MSTORE8:
-                    loc: int = ex.st.mloc()
+                    loc: int = ex.mloc()
                     val: Word = ex.st.pop()
                     ex.st.memory.set_byte(loc, uint8(val))
 
@@ -2884,9 +2975,9 @@ class SEVM:
                     ex.st.push(ex.returndatasize())
 
                 elif opcode == EVM.RETURNDATACOPY:
-                    loc: int = ex.st.mloc()
-                    offset: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
-                    size: int = int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
+                    loc: int = ex.mloc()
+                    offset = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
@@ -2900,9 +2991,9 @@ class SEVM:
                         ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CALLDATACOPY:
-                    loc: int = ex.st.mloc()
-                    offset: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
-                    size: int = int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
+                    loc: int = ex.mloc()
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
@@ -2914,9 +3005,9 @@ class SEVM:
                         ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CODECOPY:
-                    loc: int = ex.st.mloc()
-                    offset: int = int_of(ex.st.pop(), "symbolic CODECOPY offset")
-                    size: int = int_of(ex.st.pop(), "symbolic CODECOPY size")
+                    loc: int = ex.mloc()
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
@@ -2927,9 +3018,9 @@ class SEVM:
                         ex.st.memory.set_slice(loc, loc + size, codeslice)
 
                 elif opcode == EVM.MCOPY:
-                    dest_offset = int_of(ex.st.pop(), "symbolic MCOPY destOffset")
-                    src_offset = int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
-                    size = int_of(ex.st.pop(), "symbolic MCOPY size")
+                    dest_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY destOffset")
+                    src_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
+                    size = ex.int_of(ex.st.pop(), "symbolic MCOPY size")
 
                     if size > 0:
                         src_end_loc = src_offset + size
@@ -2969,8 +3060,8 @@ class SEVM:
                         raise WriteInStaticContext(ex.context_str())
 
                     num_topics: int = opcode - EVM.LOG0
-                    loc: int = ex.st.mloc()
-                    size: int = int_of(ex.st.pop(), "symbolic LOG data size")
+                    loc: int = ex.mloc()
+                    size: int = ex.int_of(ex.st.pop(), "symbolic LOG data size")
                     topics = list(ex.st.pop() for _ in range(num_topics))
                     data = ex.st.memory.slice(loc, loc + size)
                     ex.emit_log(EventLog(ex.this(), topics, data))
@@ -2981,9 +3072,15 @@ class SEVM:
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     val = unbox_int(insn.operand)
                     if isinstance(val, int):
-                        if opcode == EVM.PUSH32 and val in sha3_inv:
-                            # restore precomputed hashes
-                            ex.st.push(ex.sha3_data(con(sha3_inv[val])))
+                        if opcode == EVM.PUSH32:
+                            if val in sha3_inv:
+                                # restore precomputed hashes
+                                ex.st.push(ex.sha3_data(con(sha3_inv[val])))
+                            # TODO: support more commonly used concrete keccak values
+                            elif val == EMPTY_KECCAK:
+                                ex.st.push(ex.sha3_data(b""))
+                            else:
+                                ex.st.push(val)
                         else:
                             ex.st.push(val)
                     else:

@@ -6,6 +6,9 @@ import pytest
 
 from halmos.config import (
     Config,
+    ParseArrayLengths,
+    ParseCSV,
+    ParseErrorCodes,
     arg_parser,
     default_config,
     resolve_config_files,
@@ -185,3 +188,129 @@ def test_config_pickle(config, parser):
     # then the config object should be the same
     assert config == unpickled
     assert unpickled.value_with_source("verbose") == (3, "command-line")
+
+
+def test_parse_csv():
+    with pytest.raises(ValueError):
+        ParseCSV.parse("")
+        ParseCSV.parse(" ")
+        ParseCSV.parse(",")
+    assert ParseCSV.parse("0") == [0]
+    assert ParseCSV.parse("0,") == [0]
+    assert ParseCSV.parse("1,2,3") == [1, 2, 3]
+    assert ParseCSV.parse("1,2,3,") == [1, 2, 3]
+    assert ParseCSV.parse(" 1 , 2 , 3 ") == [1, 2, 3]
+    assert ParseCSV.parse(" , 1 , 2 , 3 , ") == [1, 2, 3]
+
+
+def test_unparse_csv():
+    assert ParseCSV.unparse([]) == ""
+    assert ParseCSV.unparse([0]) == "0"
+    assert ParseCSV.unparse([1, 2, 3]) == "1,2,3"
+
+
+def test_parse_csv_roundtrip():
+    test_cases = [
+        [0],
+        [1, 2, 3],
+    ]
+
+    for original in test_cases:
+        unparsed = ParseCSV.unparse(original)
+        parsed = ParseCSV.parse(unparsed)
+        assert parsed == original, f"Roundtrip failed for {original}"
+
+
+def test_parse_error_codes():
+    with pytest.raises(ValueError):
+        ParseErrorCodes.parse("")
+        ParseErrorCodes.parse(" ")
+        ParseErrorCodes.parse(",")
+        ParseErrorCodes.parse("1,*")
+        ParseErrorCodes.parse(",*")
+        ParseErrorCodes.parse("*,")
+    assert ParseErrorCodes.parse("*") == set()
+    assert ParseErrorCodes.parse(" * ") == set()
+    assert ParseErrorCodes.parse("0") == {0}
+    assert ParseErrorCodes.parse("0,") == {0}
+    assert ParseErrorCodes.parse("1,2,3") == {1, 2, 3}
+    assert ParseErrorCodes.parse("1,2,3,") == {1, 2, 3}
+    assert ParseErrorCodes.parse(" 1 , 2 , 3 ") == {1, 2, 3}
+    assert ParseErrorCodes.parse(" , 1 , 2 , 3 , ") == {1, 2, 3}
+    assert ParseErrorCodes.parse(" 0b10 , 0o10 , 10, 0x10 ") == {2, 8, 10, 16}
+
+
+def test_unparse_error_codes():
+    assert ParseErrorCodes.unparse(set()) == "*"
+    assert ParseErrorCodes.unparse({0}) == "0x00"
+    assert ParseErrorCodes.unparse({1, 2}) in {"0x01,0x02", "0x02,0x01"}
+
+
+def test_parse_error_codes_roundtrip():
+    test_cases = [
+        set(),
+        {0},
+        {1, 2},
+        {1, 2, 3},
+    ]
+
+    for original in test_cases:
+        unparsed = ParseErrorCodes.unparse(original)
+        parsed = ParseErrorCodes.parse(unparsed)
+        assert parsed == original, f"Roundtrip failed for {original}"
+
+
+def test_parse_array_lengths():
+    with pytest.raises(ValueError):
+        # advancing commas not allowed
+        ParseArrayLengths.parse(",")
+        ParseArrayLengths.parse(",x=1")
+        # empty sizes not allowed
+        ParseArrayLengths.parse("x=")
+        ParseArrayLengths.parse("x={}")
+        # invalid names
+        ParseArrayLengths.parse("x{0}=1")
+    assert ParseArrayLengths.parse("") == {}
+    assert ParseArrayLengths.parse(" ") == {}
+    assert ParseArrayLengths.parse("x=1") == {"x": [1]}
+    # arbitrary expressions are allowed for names
+    assert ParseArrayLengths.parse("x[0]=1") == {"x[0]": [1]}
+    # trailing commas are allowed
+    assert ParseArrayLengths.parse("x=1,") == {"x": [1]}
+    assert ParseArrayLengths.parse("x={1,2},y=3") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse("x={1,2,},y=3") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse("x={1,2},y={3,}") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse("x={1,2},y=3,") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse("x={1,2,},y={3,},") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse(" x = { 1 , 2 } , y = 3 ") == {"x": [1, 2], "y": [3]}
+    assert ParseArrayLengths.parse(" x = { 1 , 2 } , y = 3 , ") == {
+        "x": [1, 2],
+        "y": [3],
+    }
+    assert ParseArrayLengths.parse(" x = { , 1 , 2 , } , y = { , 3 , } , ") == {
+        "x": [1, 2],
+        "y": [3],
+    }
+
+
+def test_unparse_array_lengths():
+    assert ParseArrayLengths.unparse({}) == ""
+    assert ParseArrayLengths.unparse({"x": [1]}) == "x={1}"
+    assert ParseArrayLengths.unparse({"x": [1, 2], "y": [3]}) in {
+        "x={1,2},y={3}",
+        "y={3},x={1,2}",
+    }
+
+
+def test_parse_array_lengths_roundtrip():
+    test_cases = [
+        {},
+        {"x": [1]},
+        {"x": [1, 2], "y": [3]},
+        {"x": [1, 2, 3], "y": [4, 5], "z": [6]},
+    ]
+
+    for original in test_cases:
+        unparsed = ParseArrayLengths.unparse(original)
+        parsed = ParseArrayLengths.parse(unparsed)
+        assert parsed == original, f"Roundtrip failed for {original}"

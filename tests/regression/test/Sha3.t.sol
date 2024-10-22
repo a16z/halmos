@@ -5,6 +5,9 @@ import "forge-std/Test.sol";
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 contract Sha3Test is Test, SymTest {
+    // 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+    bytes32 constant EMPTY_HASH = keccak256("");
+
     function check_hash() public {
         _assert_eq("", "");
         _assert_eq("1", "1");
@@ -24,6 +27,53 @@ contract Sha3Test is Test, SymTest {
         bytes memory data32_2 = svm.createBytes(32, "data32_2");
         vm.assume(keccak256(data32_1) == keccak256(data32_2));
         assert(data32_1[0] == data32_2[0]);
+    }
+
+    function check_hash_collision_with_empty() public {
+        bytes memory data = svm.createBytes(1, "data");
+        assertNotEq(keccak256(data), keccak256(""));
+    }
+
+    function check_empty_hash_value() public {
+        assertEq(keccak256(""), EMPTY_HASH);
+
+        // TODO: uncomment when we support empty bytes
+        // bytes memory data = svm.createBytes(0, "data");
+        // assertEq(keccak256(data), EMPTY_HASH);
+    }
+
+    function check_only_empty_bytes_matches_empty_hash(bytes memory data) public {
+        // empty hash value
+        vm.assume(keccak256(data) == EMPTY_HASH);
+        assertEq(data.length, 0);
+    }
+
+    function check_concrete_keccak_does_not_split_paths() external {
+        bytes32 hash = keccak256("data");
+        uint256 bit = uint256(hash) & 1;
+
+        // this tests that the hash value is concrete
+        // if it was symbolic, we would split paths and fail in the even case
+        // (keccak("data") is odd)
+        if (uint256(hash) & 1 == 0) {
+            console2.log("even");
+            assert(false);
+        } else {
+            console2.log("odd");
+            assert(true);
+        }
+    }
+
+    function check_concrete_keccak_memory_lookup() external {
+        bytes32 hash = keccak256(abi.encodePacked(uint256(3)));
+        uint256 bit = uint256(hash) & 1;
+
+        string[] memory x = new string[](2);
+        x[0] = "even";
+        x[1] = "odd";
+
+        // checks that we don't fail with symbolic memory offset error
+        console2.log(x[bit]);
     }
 
     function _assert_eq(bytes memory data1, bytes memory data2) internal {
