@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
-from enum import Enum
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from copy import deepcopy
@@ -57,6 +56,7 @@ from z3 import (
 from z3.z3util import is_expr_var
 from z3.z3consts import Z3_OP_EQ
 
+from .fuzzing import fuzzing_stub
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
@@ -78,6 +78,7 @@ from .exceptions import (
     WriteInStaticContext,
 )
 from .utils import (
+    ConditionType,
     EVM,
     Address,
     BitVecSort8,
@@ -682,14 +683,6 @@ class Concretization:
             self.candidates[d.size_symbol] = d.size_choices
 
 
-class ConditionType(Enum):
-    INTERNAL = 0
-    BRANCHING = 1
-    ASSUMPTION = 2
-    ASSIGNMENT = 3
-    CONCRETIZATION = 4
-
-
 @dataclass(frozen=True)
 class ConditionData:
     info: ConditionType
@@ -727,18 +720,31 @@ class Path:
                 for cond in self.conditions
                 if self.conditions[cond].info != ConditionType.INTERNAL and not is_true(cond)
             ]
-        ) + "\n----\n" + "".join(
-            [
-                f"- {self.conditions[cond].pyexpr}\n"
-                for cond in self.conditions
-                if self.conditions[cond].pyexpr
-            ]
-        ) + "\n----\n" + "\n".join(
-            [str(var) for var in self.var_set]
-        ) + "\n----\n"
+        )
 
     def process_dyn_params(self, dyn_params):
         self.concretization.process_dyn_params(dyn_params)
+
+    def to_fuzzing(self) -> str:
+        result = fuzzing_stub
+        result += "def TestOneInput(data):\n"
+        result += "    try:\n"
+        result += "        idx = [0]\n"
+        result += "".join([f"        {var} = mk_int(data, idx)\n" for var in self.var_set])
+        result += "".join([
+            f"        {self.conditions[cond].pyexpr}\n"
+            for cond in self.conditions
+            if self.conditions[cond].pyexpr
+        ])
+        result += "    except Skip:\n"
+        result += "        return\n"
+        result += "    print('\\n>>>>>>>>>>>>>>>>')\n"
+        result += "".join([f"    print('{var} =', {var})\n" for var in self.var_set])
+        result += "    print('<<<<<<<<<<<<<<<<')\n"
+        result += "    raise RuntimeError('Assertion Violated!')\n"
+        result += f"atheris.Setup(sys.argv + ['-max_len={len(self.var_set)*32}', '-len_control=0'], TestOneInput)\n"
+        result += "atheris.Fuzz()\n"
+        return result
 
     def to_pyexpr(self, cond, cond_type) -> str:
         if cond_type == ConditionType.INTERNAL:

@@ -33,6 +33,7 @@ from .calldata import (
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
 from .mapper import BuildOut
 from .utils import (
+    ConditionType,
     Address,
     BitVecSort8,
     BitVecSort160,
@@ -308,7 +309,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
         funinfo = FunctionInfo(funname, funsig, funselector)
 
         # assume fallback_selector differs from all existing selectors
-        ex.path.append(fallback_selector != con(int(funselector, 16), 32))
+        ex.path.append(fallback_selector != con(int(funselector, 16), 32), info=ConditionType.ASSUMPTION)
 
         if not include_view:
             fun_abi = abi[funinfo.sig]
@@ -568,7 +569,7 @@ class hevm_cheat_code:
             assume_cond = simplify(is_non_zero(arg.get_word(4)))
             if is_false(assume_cond):
                 raise InfeasiblePath("vm.assume(false)")
-            ex.path.append(assume_cond, branching=True)
+            ex.path.append(assume_cond, info=ConditionType.ASSUMPTION)
             return ret
 
         # vm.getCode(string)

@@ -6,6 +6,7 @@ import uuid
 from functools import partial
 from timeit import default_timer as timer
 from typing import Any
+from enum import Enum
 
 from z3 import (
     Z3_OP_BADD,
@@ -118,6 +119,14 @@ f_sha3_512_name = f_sha3_name(512)
 #       then `f_sha3_empty()` is equivalent to `BitVec(f_sha3_0_name, BitVecSort256)`.
 #       in both cases, decl() == f_sha3_0_name, and num_args() == 0.
 f_sha3_empty = BitVec(f_sha3_0_name, BitVecSort256)
+
+
+class ConditionType(Enum):
+    INTERNAL = 0
+    BRANCHING = 1
+    ASSUMPTION = 2
+    ASSIGNMENT = 3
+    CONCRETIZATION = 4
 
 
 def uid() -> str:

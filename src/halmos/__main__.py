@@ -704,9 +704,11 @@ def run(
 
             query = ex.path.to_smt2(args)
 
+            fuzzing = ex.path.to_fuzzing()
+
             future_model = thread_pool.submit(
                 gen_model_from_sexpr,
-                GenModelArgs(args, idx, query, unsat_cores, dump_dirname),
+                GenModelArgs(args, idx, query, fuzzing, unsat_cores, dump_dirname),
             )
             future_model.add_done_callback(future_callback)
             future_models.append(future_model)
@@ -910,6 +912,7 @@ class GenModelArgs:
     args: HalmosConfig
     idx: int
     sexpr: SMTQuery
+    fuzzing: str
     known_unsat_cores: list[list]
     dump_dirname: str | None = None
 
@@ -930,6 +933,34 @@ def parse_unsat_core(output) -> list | None:
         warn(f"error in parsing unsat core: {output}")
         return None
 
+
+def fuzz(harness: str, args: HalmosConfig, dump_filename: str):
+    with open(dump_filename, "w") as f:
+        f.write(harness)
+
+    if args.debug:
+        print("  Checking with external fuzzer")
+        print(f"    {args.fuzzer_command} {dump_filename} >{dump_filename}.out")
+
+    cmd = args.fuzzer_command.split() + [dump_filename]
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=args.fuzzer_timeout
+        )
+
+        with open(f"{dump_filename}.out", "w") as f:
+            f.write(result.stdout)
+
+        with open(f"{dump_filename}.err", "w") as f:
+            f.write(result.stderr)
+
+        #if result.returncode == 77:
+        if "RuntimeError: Assertion Violated!" in result.stdout:
+            return sat, PotentialModel(f"{dump_filename}.out", args), None
+        else:
+            return unknown, None, None
+    except subprocess.TimeoutExpired:
+        return unknown, None, None
 
 def solve(
     query: SMTQuery, args: HalmosConfig, dump_filename: str | None = None
@@ -1052,6 +1083,11 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
         refined_filename = dump_filename.replace(".smt2", ".refined.smt2")
         res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
+
+    if res == sat:
+        res_fuzz = fuzz(fn_args.fuzzing, args, f"{dump_dirname}/{idx+1}.py")
+        if args.verbose >= 1:
+            print(f"  Fuzzing {res_fuzz}")
 
     return package_result(model, idx, res, unsat_core, args)
 

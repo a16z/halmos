@@ -446,6 +446,20 @@ class Config:
         help="cache unsat queries using unsat cores", global_default=False, group=solver
     )
 
+    fuzzer_command: str = arg(
+        help="use the given command when invoking fuzzer",
+        global_default="python3",
+        metavar="COMMAND",
+        group=solver,
+    )
+
+    fuzzer_timeout: int = arg(
+        help="set timeout (in seconds) for fuzzer",
+        global_default=10,
+        metavar="TIMEOUT",
+        group=solver,
+    )
+
     ### Experimental options
 
     symbolic_jump: bool = arg(
