@@ -15,6 +15,8 @@ from typing import (
 
 from eth_hash.auto import keccak
 from z3 import (
+    is_app,
+    is_const,
     UGE,
     UGT,
     ULE,
@@ -52,6 +54,7 @@ from z3 import (
     unsat,
 )
 from z3.z3util import is_expr_var
+from z3.z3consts import Z3_OP_EQ
 
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
@@ -684,6 +687,29 @@ class ConditionData:
     info: str
 
 
+def to_pyexpr(term) -> str:
+    if not is_app(term):
+        raise ValueError(term)
+
+    if is_const(term):
+    #   if is_expr_var(term):
+    #       var_set.append(term)
+        return str(term)
+
+    def _decl() -> str:
+        decl = term.decl()
+        kind = decl.kind()
+
+        if kind == Z3_OP_EQ:
+            return "EQ"
+
+        return decl.name().upper()
+
+    args = [to_pyexpr(arg) for arg in term.children()]
+    params = [str(param) for param in term.params()]
+    return f"{_decl()}({', '.join(params + args)})"
+
+
 class Path:
     # a Path object represents a prefix of the path currently being executed
     # initially, it's an empty path at the beginning of execution
@@ -1115,7 +1141,7 @@ class Exec:  # an execution path
             f"balance_{uid()}_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
-        self.path.append(new_balance_var == new_balance, info=f"{new_balance_var} := {new_balance}")
+        self.path.append(new_balance_var == new_balance, info=f"{new_balance_var} = {to_pyexpr(new_balance)}")
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
 
@@ -1386,7 +1412,7 @@ class SolidityStorage(Storage):
             BitVecSort256,
         )
         new_storage = Store(mapping[size_keys], concat(keys), val)
-        ex.path.append(new_storage_var == new_storage, info=f"{new_storage_var} := {new_storage}")
+        ex.path.append(new_storage_var == new_storage, info=f"{new_storage_var} := {to_pyexpr(new_storage)}")
 
         mapping[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
@@ -1530,7 +1556,7 @@ class GenericStorage(Storage):
             BitVecSort256,
         )
         new_storage = Store(mapping[size_keys], loc, val)
-        ex.path.append(new_storage_var == new_storage, info=f"{new_storage_var} := {new_storage}")
+        ex.path.append(new_storage_var == new_storage, info=f"{new_storage_var} := {to_pyexpr(new_storage)}")
 
         mapping[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
@@ -1939,13 +1965,13 @@ class SEVM:
                     debug(
                         f"Potential address alias: {hexify(addr)} for {hexify(target)}"
                     )
-                potential_aliases.append((addr, alias_cond, f"lazy: {target} := {addr}"))
+                potential_aliases.append((addr, alias_cond, f"lazy: {to_pyexpr(target)} := {to_pyexpr(addr)}"))
 
         emptyness_cond = And([target != addr for addr in ex.code])
         if ex.check(emptyness_cond) != unsat:
             if self.options.debug:
                 debug(f"Potential empty address: {hexify(target)}")
-            potential_aliases.append((None, emptyness_cond, f"assume {emptyness_cond}"))
+            potential_aliases.append((None, emptyness_cond, f"assume({emptyness_cond})"))
 
         if not potential_aliases:
             raise InfeasiblePath("resolve_address_alias: no potential aliases")
@@ -1982,7 +2008,7 @@ class SEVM:
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
         if is_false(balance_cond):
             raise InfeasiblePath("transfer_value: balance is not enough")
-        ex.path.append(balance_cond, info=f"assume {balance_cond}")
+        ex.path.append(balance_cond, info=f"assume({to_pyexpr(balance_cond)})")
 
         # conditional transfer
         if condition is not None:
@@ -2233,7 +2259,7 @@ class SEVM:
             exit_code_var = BitVec(
                 f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
             )
-            ex.path.append(exit_code_var == exit_code, info=f"{exit_code_var} := {exit_code}")
+            ex.path.append(exit_code_var == exit_code, info=f"{exit_code_var} := {to_pyexpr(exit_code)}")
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
             # transfer msg.value
@@ -2369,7 +2395,7 @@ class SEVM:
             return
 
         for addr in ex.code:
-            ex.path.append(new_addr != addr, info=f"assume {new_addr} != {addr}")  # ensure new address is fresh
+            ex.path.append(new_addr != addr, info=f"assume({to_pyexpr(new_addr)} != {to_pyexpr(addr)})")  # ensure new address is fresh
 
         # backup current state
         orig_code = ex.code.copy()
@@ -2499,15 +2525,15 @@ class SEVM:
 
         if follow_true:
             if follow_false:
-                new_ex_true = self.create_branch(ex, cond_true, target, info=f"assume {cond_true}")
+                new_ex_true = self.create_branch(ex, cond_true, target, info=f"assume({to_pyexpr(cond_true)})")
             else:
                 new_ex_true = ex
-                new_ex_true.path.append(cond_true, branching=True, info=f"assume {cond_true}")
+                new_ex_true.path.append(cond_true, branching=True, info=f"assume({to_pyexpr(cond_true)})")
                 new_ex_true.pc = target
 
         if follow_false:
             new_ex_false = ex
-            new_ex_false.path.append(cond_false, branching=True, info=f"assume {cond_false}")
+            new_ex_false.path.append(cond_false, branching=True, info=f"assume({to_pyexpr(cond_false)})")
             new_ex_false.advance_pc()
 
         if new_ex_true:
@@ -2603,7 +2629,7 @@ class SEVM:
                     )
 
                 for candidate in ex.path.concretization.candidates[loaded]:
-                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc, info=f"lazy: {loaded} := {candidate}")
+                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc, info=f"lazy: {loaded} := {to_pyexpr(candidate)}")
                     new_ex.st.push(candidate)
                     new_ex.advance_pc()
                     stack.push(new_ex, step_id)
