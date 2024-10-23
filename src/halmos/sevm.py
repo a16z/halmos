@@ -54,7 +54,7 @@ from z3 import (
     unsat,
 )
 from z3.z3util import is_expr_var
-from z3.z3consts import Z3_OP_EQ
+from z3.z3consts import Z3_OP_EQ, Z3_OP_CONCAT
 
 from .fuzzing import fuzzing_stub
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
@@ -778,6 +778,10 @@ class Path:
 
             if kind == Z3_OP_EQ:
                 return "EQ"
+
+            if kind == Z3_OP_CONCAT:
+                sizes = ",".join([str(arg.size()) for arg in term.children()])
+                return f"CONCAT({sizes})"
 
             return decl.name().upper()
 

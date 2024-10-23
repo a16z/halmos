@@ -1084,7 +1084,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
         refined_filename = dump_filename.replace(".smt2", ".refined.smt2")
         res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
 
-    if res == sat:
+    if res == sat or res == unknown:
         res_fuzz = fuzz(fn_args.fuzzing, args, f"{dump_dirname}/{idx+1}.py")
         if args.verbose >= 1:
             print(f"  Fuzzing {res_fuzz}")

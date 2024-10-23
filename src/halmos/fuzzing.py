@@ -19,6 +19,9 @@ def F_EVM_BVUDIV_256(x, y):
         return 0
     return (x // y) % 2**256
 
+def IF(c, x, y):
+    return x if c else y
+
 def AND(x, y):
     return x and y
 
@@ -35,7 +38,20 @@ def BVULE(x, y):
     return x <= y
 
 def EXTRACT(hi, lo, x):
-    return (x % 2**(hi+1)) / 2**lo
+    return (x % 2**(hi+1)) // 2**lo
+
+def CONCAT(*sizes):
+    def _concat(*args):
+        if len(args) != len(sizes):
+            raise ValueError(args, sizes)
+        result = 0
+        for arg, size in zip(args, sizes):
+            if arg >= 2**size:
+                raise ValueError(arg, size)
+            result <<= size
+            result += arg
+        return result
+    return _concat
 
 def mk_int(data, idx):
     if len(data) < idx[0]+32:
