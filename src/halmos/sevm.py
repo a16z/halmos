@@ -742,6 +742,7 @@ class Path:
         result += "".join([f"    print('{var} =', {var})\n" for var in self.var_set])
         result += "    print('<<<<<<<<<<<<<<<<')\n"
         result += "    raise RuntimeError('Assertion Violated!')\n"
+        # https://llvm.org/docs/LibFuzzer.html#options
         result += f"atheris.Setup(sys.argv + ['-max_len={len(self.var_set)*32}', '-len_control=0'], TestOneInput)\n"
         result += "atheris.Fuzz()\n"
         return result
