@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
+from enum import Enum
 from collections import defaultdict
 from collections.abc import Callable, Iterator
 from copy import deepcopy
@@ -681,33 +682,18 @@ class Concretization:
             self.candidates[d.size_symbol] = d.size_choices
 
 
+class ConditionType(Enum):
+    INTERNAL = 0
+    BRANCHING = 1
+    ASSUMPTION = 2
+    ASSIGNMENT = 3
+    CONCRETIZATION = 4
+
+
 @dataclass(frozen=True)
 class ConditionData:
-    is_branching: bool
-    info: str
-
-
-def to_pyexpr(term) -> str:
-    if not is_app(term):
-        raise ValueError(term)
-
-    if is_const(term):
-    #   if is_expr_var(term):
-    #       var_set.append(term)
-        return str(term)
-
-    def _decl() -> str:
-        decl = term.decl()
-        kind = decl.kind()
-
-        if kind == Z3_OP_EQ:
-            return "EQ"
-
-        return decl.name().upper()
-
-    args = [to_pyexpr(arg) for arg in term.children()]
-    params = [str(param) for param in term.params()]
-    return f"{_decl()}({', '.join(params + args)})"
+    info: ConditionType
+    pyexpr: str
 
 
 class Path:
@@ -721,11 +707,14 @@ class Path:
     concretization: Concretization
     pending: dict
 
+    var_set: set
+
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = {}
         self.concretization = Concretization()
+        self.var_set = set()
         self.pending = {}
 
     def __deepcopy__(self, memo):
@@ -736,18 +725,59 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-                if self.conditions[cond].is_branching and not is_true(cond)
+                if self.conditions[cond].info != ConditionType.INTERNAL and not is_true(cond)
             ]
         ) + "\n----\n" + "".join(
             [
-                f"- {self.conditions[cond].info}\n"
+                f"- {self.conditions[cond].pyexpr}\n"
                 for cond in self.conditions
-                if self.conditions[cond].info
+                if self.conditions[cond].pyexpr
             ]
+        ) + "\n----\n" + "\n".join(
+            [str(var) for var in self.var_set]
         ) + "\n----\n"
 
     def process_dyn_params(self, dyn_params):
         self.concretization.process_dyn_params(dyn_params)
+
+    def to_pyexpr(self, cond, cond_type) -> str:
+        if cond_type == ConditionType.INTERNAL:
+            return None
+
+        if cond_type == ConditionType.ASSIGNMENT:
+            decl = cond.decl()
+            if decl.kind() != Z3_OP_EQ:
+                raise ValueError(cond, cond_type)
+            left, right = cond.arg(0), cond.arg(1)
+            return f"{self._to_pyexpr(left)} = {self._to_pyexpr(right)}"
+
+        if cond_type == ConditionType.CONCRETIZATION:
+            raise NotImplementedError()
+
+        return f"assume({self._to_pyexpr(cond)})"
+
+    def _to_pyexpr(self, term) -> str:
+        if not is_app(term):
+            raise ValueError(term)
+
+        # constants or variables
+        if is_const(term):
+            if is_expr_var(term):
+                self.var_set.add(term)
+            return str(term)
+
+        def _decl() -> str:
+            decl = term.decl()
+            kind = decl.kind()
+
+            if kind == Z3_OP_EQ:
+                return "EQ"
+
+            return decl.name().upper()
+
+        args = [self._to_pyexpr(arg) for arg in term.children()]
+        params = [str(param) for param in term.params()]
+        return f"{_decl()}({', '.join(params + args)})"
 
     def to_smt2(self, args) -> SMTQuery:
         # Serialize self.conditions into the SMTLIB format.
@@ -816,8 +846,10 @@ class Path:
 
         path.concretization = deepcopy(self.concretization)
 
+        path.var_set = self.var_set.copy()
+
         # store the branching condition aside until the new path is activated.
-        path.pending[cond] = ConditionData(True, info)
+        path.pending[cond] = ConditionData(info, None)
 
         return path
 
@@ -835,7 +867,7 @@ class Path:
         self.extend(self.pending)
         self.pending = {}
 
-    def append(self, cond, branching=False, info=""):
+    def append(self, cond, info=ConditionType.INTERNAL):
         cond = simplify(cond)
 
         if is_true(cond):
@@ -849,12 +881,12 @@ class Path:
             return
 
         self.solver.add(cond)
-        self.conditions[cond] = ConditionData(branching, info)
+        self.conditions[cond] = ConditionData(info, self.to_pyexpr(cond, info))
         self.concretization.process_cond(cond)
 
     def extend(self, conds):
         for cond, cond_data in conds.items():
-            self.append(cond, branching=cond_data.is_branching, info=cond_data.info)
+            self.append(cond, info=cond_data.info)
 
     def extend_path(self, path):
         # branching conditions are not preserved
@@ -1141,7 +1173,7 @@ class Exec:  # an execution path
             f"balance_{uid()}_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
         new_balance = Store(self.balance, addr, value)
-        self.path.append(new_balance_var == new_balance, info=f"{new_balance_var} = {to_pyexpr(new_balance)}")
+        self.path.append(new_balance_var == new_balance, info=ConditionType.ASSIGNMENT)
         self.balance = new_balance_var
         self.balances[new_balance_var] = new_balance
 
@@ -1412,7 +1444,7 @@ class SolidityStorage(Storage):
             BitVecSort256,
         )
         new_storage = Store(mapping[size_keys], concat(keys), val)
-        ex.path.append(new_storage_var == new_storage, info=f"{new_storage_var} := {to_pyexpr(new_storage)}")
+        ex.path.append(new_storage_var == new_storage, info=ConditionType.ASSIGNMENT)
 
         mapping[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
@@ -1556,7 +1588,7 @@ class GenericStorage(Storage):
             BitVecSort256,
         )
         new_storage = Store(mapping[size_keys], loc, val)
-        ex.path.append(new_storage_var == new_storage, info=f"{new_storage_var} := {to_pyexpr(new_storage)}")
+        ex.path.append(new_storage_var == new_storage, info=ConditionType.ASSIGNMENT)
 
         mapping[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
@@ -1965,13 +1997,13 @@ class SEVM:
                     debug(
                         f"Potential address alias: {hexify(addr)} for {hexify(target)}"
                     )
-                potential_aliases.append((addr, alias_cond, f"lazy: {to_pyexpr(target)} := {to_pyexpr(addr)}"))
+                potential_aliases.append((addr, alias_cond, ConditionType.CONCRETIZATION))
 
         emptyness_cond = And([target != addr for addr in ex.code])
         if ex.check(emptyness_cond) != unsat:
             if self.options.debug:
                 debug(f"Potential empty address: {hexify(target)}")
-            potential_aliases.append((None, emptyness_cond, f"assume({emptyness_cond})"))
+            potential_aliases.append((None, emptyness_cond, ConditionType.ASSUMPTION))
 
         if not potential_aliases:
             raise InfeasiblePath("resolve_address_alias: no potential aliases")
@@ -1981,13 +2013,13 @@ class SEVM:
         if not allow_branching and tail:
             raise HalmosException(f"multiple aliases exist: {hexify(target)}")
 
-        for addr, cond, cond_info in tail:
-            new_ex = self.create_branch(ex, cond, ex.pc, info=cond_info)
+        for addr, cond, cond_type in tail:
+            new_ex = self.create_branch(ex, cond, ex.pc, info=cond_type)
             new_ex.alias[target] = addr
             stack.push(new_ex, step_id)
 
-        addr, cond, cond_info = head
-        ex.path.append(cond, info=cond_info, branching=True)
+        addr, cond, cond_type = head
+        ex.path.append(cond, info=cond_type)
         ex.alias[target] = addr
         return addr
 
@@ -2008,7 +2040,7 @@ class SEVM:
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
         if is_false(balance_cond):
             raise InfeasiblePath("transfer_value: balance is not enough")
-        ex.path.append(balance_cond, info=f"assume({to_pyexpr(balance_cond)})")
+        ex.path.append(balance_cond, info=ConditionType.ASSUMPTION)
 
         # conditional transfer
         if condition is not None:
@@ -2259,7 +2291,7 @@ class SEVM:
             exit_code_var = BitVec(
                 f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
             )
-            ex.path.append(exit_code_var == exit_code, info=f"{exit_code_var} := {to_pyexpr(exit_code)}")
+            ex.path.append(exit_code_var == exit_code, info=ConditionType.ASSIGNMENT)
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
             # transfer msg.value
@@ -2395,7 +2427,7 @@ class SEVM:
             return
 
         for addr in ex.code:
-            ex.path.append(new_addr != addr, info=f"assume({to_pyexpr(new_addr)} != {to_pyexpr(addr)})")  # ensure new address is fresh
+            ex.path.append(new_addr != addr, info=ConditionType.ASSUMPTION)  # ensure new address is fresh
 
         # backup current state
         orig_code = ex.code.copy()
@@ -2525,15 +2557,15 @@ class SEVM:
 
         if follow_true:
             if follow_false:
-                new_ex_true = self.create_branch(ex, cond_true, target, info=f"assume({to_pyexpr(cond_true)})")
+                new_ex_true = self.create_branch(ex, cond_true, target, info=ConditionType.BRANCHING)
             else:
                 new_ex_true = ex
-                new_ex_true.path.append(cond_true, branching=True, info=f"assume({to_pyexpr(cond_true)})")
+                new_ex_true.path.append(cond_true, info=ConditionType.BRANCHING)
                 new_ex_true.pc = target
 
         if follow_false:
             new_ex_false = ex
-            new_ex_false.path.append(cond_false, branching=True, info=f"assume({to_pyexpr(cond_false)})")
+            new_ex_false.path.append(cond_false, info=ConditionType.BRANCHING)
             new_ex_false.advance_pc()
 
         if new_ex_true:
@@ -2570,7 +2602,7 @@ class SEVM:
         else:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
-    def create_branch(self, ex: Exec, cond: BitVecRef, target: int, info="") -> Exec:
+    def create_branch(self, ex: Exec, cond: BitVecRef, target: int, info=ConditionType.INTERNAL) -> Exec:
         new_path = ex.path.branch(cond, info)
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
@@ -2629,7 +2661,7 @@ class SEVM:
                     )
 
                 for candidate in ex.path.concretization.candidates[loaded]:
-                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc, info=f"lazy: {loaded} := {to_pyexpr(candidate)}")
+                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc, info=ConditionType.CONCRETIZATION)
                     new_ex.st.push(candidate)
                     new_ex.advance_pc()
                     stack.push(new_ex, step_id)
