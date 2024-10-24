@@ -934,7 +934,7 @@ def parse_unsat_core(output) -> list | None:
         return None
 
 
-def fuzz(harness: str, args: HalmosConfig, dump_dirname, dump_filename: str):
+def fuzz(harness: str, args: HalmosConfig, dump_dirname: str, dump_filename: str):
     with open(dump_filename, "w") as f:
         f.write(harness)
 
@@ -942,7 +942,11 @@ def fuzz(harness: str, args: HalmosConfig, dump_dirname, dump_filename: str):
         print("  Checking with external fuzzer")
         print(f"    {args.fuzzer_command} {dump_filename} >{dump_filename}.out")
 
-    cmd = args.fuzzer_command.split() + [dump_filename, f"-artifact_prefix={dump_dirname}/"]
+    # note: -artifact_prefix requires a trailing slash
+    artifact_prefix = f"-artifact_prefix={dump_dirname}/"
+
+    # note: additional flags must come after dump_filename
+    cmd = args.fuzzer_command.split() + [dump_filename, artifact_prefix]
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=args.fuzzer_timeout
