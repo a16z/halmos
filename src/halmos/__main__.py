@@ -934,7 +934,7 @@ def parse_unsat_core(output) -> list | None:
         return None
 
 
-def fuzz(harness: str, args: HalmosConfig, dump_filename: str):
+def fuzz(harness: str, args: HalmosConfig, dump_dirname, dump_filename: str):
     with open(dump_filename, "w") as f:
         f.write(harness)
 
@@ -942,7 +942,7 @@ def fuzz(harness: str, args: HalmosConfig, dump_filename: str):
         print("  Checking with external fuzzer")
         print(f"    {args.fuzzer_command} {dump_filename} >{dump_filename}.out")
 
-    cmd = args.fuzzer_command.split() + [dump_filename]
+    cmd = args.fuzzer_command.split() + [dump_filename, f"-artifact_prefix={dump_dirname}/"]
     try:
         result = subprocess.run(
             cmd, capture_output=True, text=True, timeout=args.fuzzer_timeout
@@ -1085,7 +1085,7 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
         res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
 
     if res == sat or res == unknown:
-        res_fuzz = fuzz(fn_args.fuzzing, args, f"{dump_dirname}/{idx+1}.py")
+        res_fuzz = fuzz(fn_args.fuzzing, args, dump_dirname, f"{dump_dirname}/{idx+1}.py")
         if args.verbose >= 1:
             print(f"  Fuzzing {res_fuzz}")
 
