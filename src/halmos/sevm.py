@@ -696,9 +696,9 @@ class Path:
     solver: Solver
     num_scopes: int
     # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
-    conditions: dict  # cond -> bool (true if explicit branching conditions)
+    conditions: dict[BitVecRef, ConditionData]
     concretization: Concretization
-    pending: dict
+    pending: dict[BitVecRef, ConditionData]
 
     var_set: set
 
@@ -732,9 +732,8 @@ class Path:
         result += "        idx = [0]\n"
         result += "".join([f"        {var} = mk_int(data, idx)\n" for var in self.var_set])
         result += "".join([
-            f"        {self.conditions[cond].pyexpr}\n"
-            for cond in self.conditions
-            if self.conditions[cond].pyexpr
+            f"        {pyexpr}\n"
+            for pyexpr in (self.to_pyexpr(cond, cond_data.info) for cond, cond_data in self.conditions.items()) if pyexpr
         ])
         result += "    except Skip:\n"
         result += "        return\n"
@@ -892,7 +891,8 @@ class Path:
             return
 
         self.solver.add(cond)
-        self.conditions[cond] = ConditionData(info, self.to_pyexpr(cond, info))
+        #self.conditions[cond] = ConditionData(info, self.to_pyexpr(cond, info))
+        self.conditions[cond] = ConditionData(info, None)
         self.concretization.process_cond(cond)
 
     def extend(self, conds):

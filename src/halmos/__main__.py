@@ -966,6 +966,7 @@ def fuzz(harness: str, args: HalmosConfig, dump_dirname: str, dump_filename: str
     except subprocess.TimeoutExpired:
         return unknown, None, None
 
+
 def solve(
     query: SMTQuery, args: HalmosConfig, dump_filename: str | None = None
 ) -> tuple[CheckSatResult, PotentialModel | None, list | None]:
@@ -1081,17 +1082,20 @@ def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
 
     res, model, unsat_core = solve(sexpr, args, dump_filename)
 
-    if res == sat and not model.is_valid:
+    invalid_sat = res == sat and not model.is_valid
+
+    if args.prove and invalid_sat:
         if args.verbose >= 1:
             print("  Checking again with refinement")
 
         refined_filename = dump_filename.replace(".smt2", ".refined.smt2")
         res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
 
-    if res == sat or res == unknown:
-        res_fuzz = fuzz(fn_args.fuzzing, args, dump_dirname, f"{dump_dirname}/{idx+1}.py")
+    if not args.prove and (invalid_sat or res == unknown):
         if args.verbose >= 1:
-            print(f"  Fuzzing {res_fuzz}")
+            print("  Checking again with fuzzing")
+
+        res, model, unsat_core = fuzz(fn_args.fuzzing, args, dump_dirname, f"{dump_dirname}/{idx+1}.py")
 
     return package_result(model, idx, res, unsat_core, args)
 

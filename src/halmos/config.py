@@ -279,6 +279,11 @@ class Config:
         global_default=False,
     )
 
+    prove: bool = arg(
+        help="enable proving mode",
+        global_default=False,
+    )
+
     ### Debugging options
 
     verbose: int = arg(
