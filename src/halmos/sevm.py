@@ -54,7 +54,7 @@ from z3 import (
     unsat,
 )
 from z3.z3util import is_expr_var
-from z3.z3consts import Z3_OP_EQ, Z3_OP_CONCAT
+from z3.z3consts import Z3_OP_EQ, Z3_OP_CONCAT, Z3_OP_BADD, Z3_OP_BSUB, Z3_OP_BMUL
 
 from .fuzzing import fuzzing_stub
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
@@ -726,23 +726,25 @@ class Path:
         self.concretization.process_dyn_params(dyn_params)
 
     def to_fuzzing(self) -> str:
+        pyexprs = [self.to_pyexpr(cond, cond_data.info) for cond, cond_data in self.conditions.items()]
+        input_vars = sorted([str(var) for var in self.var_set if not re.search(r"^(storage_|balance_)", str(var))])
+        init_dict_vars = sorted([str(var) for var in self.var_set if re.search(r"^(storage_.+|balance)_00$", str(var))])
+
         result = fuzzing_stub
         result += "def TestOneInput(data):\n"
         result += "    try:\n"
         result += "        idx = [0]\n"
-        result += "".join([f"        {var} = mk_int(data, idx)\n" for var in self.var_set])
-        result += "".join([
-            f"        {pyexpr}\n"
-            for pyexpr in (self.to_pyexpr(cond, cond_data.info) for cond, cond_data in self.conditions.items()) if pyexpr
-        ])
+        result += "".join([f"        {var} = dict()\n" for var in init_dict_vars])
+        result += "".join([f"        {var} = mk_int(data, idx)\n" for var in input_vars])
+        result += "".join([f"        {pyexpr}\n" for pyexpr in pyexprs if pyexpr])
         result += "    except Skip:\n"
         result += "        return\n"
         result += "    print('\\n>>>>>>>>>>>>>>>>')\n"
-        result += "".join([f"    print('{var} =', {var})\n" for var in self.var_set])
+        result += "".join([f"    print('{var} =', {var})\n" for var in input_vars])
         result += "    print('<<<<<<<<<<<<<<<<')\n"
         result += "    raise RuntimeError('Assertion Violated!')\n"
         # https://llvm.org/docs/LibFuzzer.html#options
-        result += f"atheris.Setup(sys.argv + ['-max_len={len(self.var_set)*32}', '-len_control=0'], TestOneInput)\n"
+        result += f"atheris.Setup(sys.argv + ['-max_len={len(input_vars)*32}', '-len_control=0'], TestOneInput)\n"
         result += "atheris.Fuzz()\n"
         return result
 
@@ -782,6 +784,10 @@ class Path:
             if kind == Z3_OP_CONCAT:
                 sizes = ",".join([str(arg.size()) for arg in term.children()])
                 return f"CONCAT({sizes})"
+
+            if kind in [Z3_OP_BADD, Z3_OP_BSUB, Z3_OP_BMUL]:
+                sizes = ",".join([str(arg.size()) for arg in term.children()])
+                return f"{decl.name().upper()}({sizes})"
 
             return decl.name().upper()
 

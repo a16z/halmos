@@ -425,6 +425,13 @@ class Config:
         group=solver,
     )
 
+    solver_timeout_quickcheck: int = arg(
+        help="set timeout (in milliseconds) for quickly checking assertion violation conditions; 0 means no timeout",
+        global_default=1_000,
+        metavar="TIMEOUT",
+        group=solver,
+    )
+
     solver_max_memory: int = arg(
         help="set memory limit (in megabytes) for the solver; 0 means no limit",
         global_default=0,

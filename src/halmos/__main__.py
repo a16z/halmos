@@ -189,9 +189,13 @@ def mk_this() -> Address:
 
 def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, assertion=False):
     timeout = (
-        args.solver_timeout_assertion if assertion else args.solver_timeout_branching
+        solver_timeout_assertion(args) if assertion else args.solver_timeout_branching
     )
     return create_solver(logic, ctx, timeout, args.solver_max_memory)
+
+
+def solver_timeout_assertion(args: HalmosConfig) -> int:
+    return args.solver_timeout_assertion if args.prove else args.solver_timeout_quickcheck
 
 
 def rendered_initcode(context: CallContext) -> str:
@@ -1007,7 +1011,7 @@ def solve(
         # solver_timeout_assertion == 0 means no timeout,
         # which translates to timeout_seconds=None for subprocess.run
         timeout_seconds = None
-        if timeout_millis := args.solver_timeout_assertion:
+        if timeout_millis := solver_timeout_assertion(args):
             timeout_seconds = timeout_millis / 1000
 
         cmd = args.solver_command.split() + [dump_filename]
