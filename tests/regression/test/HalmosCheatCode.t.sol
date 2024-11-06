@@ -138,6 +138,13 @@ contract HalmosCheatCodeTest is SymTest, Test {
         // symbolic storage is not allowed for a nonexistent account
         svm.enableSymbolicStorage(address(0xdeadbeef)); // HalmosException
     }
+
+    /// @custom:halmos --array-lengths name=1
+    function check_extract_string_argument_fail(string memory name) public {
+        uint x = svm.createUint256(name);
+        console.log(x);
+        assert(true);
+    }
 }
 
 /// @custom:halmos --default-bytes-lengths 0,65

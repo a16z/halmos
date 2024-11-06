@@ -30,7 +30,7 @@ from .calldata import (
     get_abi,
     mk_calldata,
 )
-from .exceptions import FailCheatcode, HalmosException, InfeasiblePath
+from .exceptions import FailCheatcode, HalmosException, InfeasiblePath, NotConcreteError
 from .mapper import BuildOut
 from .utils import (
     Address,
@@ -74,6 +74,9 @@ f_sign_s = Function("f_sign_s", BitVecSort256, BitVecSort256, BitVecSort256)
 
 
 def name_of(x: str) -> str:
+    if not isinstance(x, str):
+        raise NotConcreteError(f"expected concrete string but got: {x}")
+
     return re.sub(r"\s+", "_", x)
 
 
