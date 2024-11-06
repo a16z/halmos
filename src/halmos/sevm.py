@@ -448,14 +448,14 @@ class State:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
     def mloc(self, subst: dict = None) -> int:
-        loc: int = int_of(self.pop(), subst, "symbolic memory offset")
+        loc: int = int_of(self.pop(), "symbolic memory offset", subst)
         if loc > MAX_MEMORY_SIZE:
             raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
         return loc
 
     def ret(self, subst: dict = None) -> ByteVec:
         loc: int = self.mloc(subst)
-        size: int = int_of(self.pop(), subst, "symbolic return data size")
+        size: int = int_of(self.pop(), "symbolic return data size", subst)
 
         returndata_slice = self.memory.slice(loc, loc + size)
         return returndata_slice
@@ -1276,7 +1276,7 @@ class Exec:  # an execution path
         return self.st.ret(self.path.concretization.substitution)
 
     def int_of(self, x: Any, err: str = None) -> int:
-        return int_of(x, self.path.concretization.substitution, err)
+        return int_of(x, err, self.path.concretization.substitution)
 
 
 class Storage:

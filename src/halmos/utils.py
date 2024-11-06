@@ -351,7 +351,7 @@ def unbox_int(x: Any) -> Any:
     return x
 
 
-def int_of(x: Any, subst: dict = None, err: str = None) -> int:
+def int_of(x: Any, err: str = None, subst: dict = None) -> int:
     """
     Converts int-like objects to int or raises NotConcreteError
     """
