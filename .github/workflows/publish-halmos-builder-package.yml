@@ -4,6 +4,10 @@ name: Push halmos-builder package
 on:
   # only trigger manually, this is independent from halmos releases
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Push solvers package"]
+    types:
+      - completed
   push:
     paths:
       - packages/halmos-builder/**/*
@@ -15,6 +19,8 @@ env:
 jobs:
   # This pushes the image to GitHub Packages.
   push:
+    # if triggered by a workflow_run, only run if the previous workflow succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
     runs-on: ubuntu-latest
     permissions:
       packages: write

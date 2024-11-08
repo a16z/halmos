@@ -3,6 +3,10 @@ name: Push halmos package
 
 on:
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Push halmos-builder package"]
+    types:
+      - completed
   push:
     paths:
       - packages/halmos/**/*
@@ -11,13 +15,14 @@ on:
       # push when we release a new tagged version
       - 'v*'
 
-
 env:
   IMAGE_NAME: halmos
 
 jobs:
   # This pushes the image to GitHub Packages.
   push:
+    # if triggered by a workflow_run, only run if the previous workflow succeeded
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -40,7 +45,7 @@ jobs:
         run: docker build . --file packages/halmos/Dockerfile --tag $IMAGE_NAME --label "runnumber=${GITHUB_RUN_ID}"
 
       - name: Print halmos version
-        run: docker run $IMAGE_NAME --version
+        run: docker run $IMAGE_NAME halmos --version
 
       - name: Push image
         run: |
