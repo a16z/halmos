@@ -26,14 +26,6 @@ jobs:
           - "examples/tokens/ERC721"
 
     steps:
-      # TODO: remove this step once halmos-builder package is public
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -44,8 +36,8 @@ jobs:
           docker build -t halmos-image . --file packages/halmos/Dockerfile
 
       - name: Print halmos version
-        run: docker run halmos-image --version
+        run: docker run halmos-image halmos --version
 
       - name: Run pytest
         run: |
-          docker run -v .:/workspace --entrypoint pytest halmos-image -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 3 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}' -s --log-cli-level=
+          docker run -v .:/workspace halmos-image pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-timeout-assertion 0 --solver-threads 3 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}' -s --log-cli-level=

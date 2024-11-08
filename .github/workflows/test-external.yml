@@ -72,14 +72,6 @@ jobs:
             profile: "halmos"
 
     steps:
-      # TODO: remove this step once halmos-builder package is public
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Checkout halmos
         uses: actions/checkout@v4
         with:
@@ -89,11 +81,19 @@ jobs:
       - name: Build image
         run: docker build -t halmos-image . --file packages/halmos/Dockerfile
 
+      - name: Run foundryup
+        run: |
+          # run foundryup in halmos-image, save the result as a new image
+          docker run --name halmos-image-foundryup halmos-image foundryup
+
+          # commit the result back to halmos-image
+          docker commit halmos-image-foundryup halmos-image
+
       - name: Install Vyper
         if: ${{ matrix.project.dir == 'snekmate' }}
         run: |
-          docker run --name halmos-vyper --entrypoint uv halmos-image pip install git+https://github.com/vyperlang/vyper@master
-          docker commit --change 'ENTRYPOINT ["halmos"]' halmos-vyper halmos-image
+          docker run --name halmos-image-vyper halmos-image uv pip install git+https://github.com/vyperlang/vyper@master
+          docker commit halmos-image-vyper halmos-image
 
       - name: Checkout external repo
         uses: actions/checkout@v4
@@ -103,11 +103,14 @@ jobs:
           ref: ${{ matrix.project.branch }}
           submodules: recursive
 
+      - name: Print forge version
+        run: docker run halmos-image forge --version
+
       - name: Print halmos version
-        run: docker run halmos-image --version
+        run: docker run halmos-image halmos --version
 
       - name: Test external repo
-        run: docker run -e FOUNDRY_PROFILE -v .:/workspace halmos-image ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 3 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
+        run: docker run -e FOUNDRY_PROFILE -v .:/workspace halmos-image halmos ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 --solver-threads 3 --solver-command yices-smt2 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
         working-directory: ${{ matrix.project.dir }}
         env:
           FOUNDRY_PROFILE: ${{ matrix.project.profile }}

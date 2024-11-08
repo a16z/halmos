@@ -18,14 +18,6 @@ jobs:
         - testname: "tests/ffi"
 
     steps:
-      # TODO: remove this step once halmos-builder package is public
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -35,7 +27,7 @@ jobs:
           docker build -t halmos-image . --file packages/halmos/Dockerfile
 
       - name: Print halmos version
-        run: docker run halmos-image --version
+        run: docker run halmos-image halmos --version
 
       - name: Run pytest
-        run: docker run -v .:/workspace --entrypoint pytest halmos-image -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="--ffi -v -st --solver-timeout-assertion 0"
+        run: docker run -v .:/workspace halmos-image pytest -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="--ffi -v -st --solver-timeout-assertion 0"

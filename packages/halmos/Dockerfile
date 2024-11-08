@@ -12,4 +12,4 @@ RUN --mount=type=bind,source=../..,target=/src,readonly=false \
     uv pip install --no-cache -r /src/requirements-dev.txt
 
 WORKDIR /workspace
-ENTRYPOINT ["halmos"]
+CMD ["halmos"]

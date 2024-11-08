@@ -35,21 +35,20 @@ done
 
 ## Available solvers
 
-| Solver | Version | URL | Notes
-| ------ | ------- | --- | ----- |
-| Bitwuzla | 0.5.0-dev-main@50ce452 | [bitwuzla/bitwuzla](https://github.com/bitwuzla/bitwuzla) | Built from source
-| Boolector | 3.2.3 | [boolector/boolector](https://github.com/boolector/boolector) | Built from source
-| CVC5 | 1.1.2 | [cvc5/cvc5](https://github.com/cvc5/cvc5) | Installed from Github release binaries
-| STP | 2.3.3 | [stp/stp](https://github.com/stp/stp) | Provides a great Dockerfile that shows how to do a static build. We just copy the binary from the `msoos/stp` image since releases aren't too frequent. |
-| Yices | 2.6.4 | [SRI-CSL/yices2](https://github.com/SRI-CSL/yices2) | Installed from Github release binaries
-| Z3 | 4.13.1 | [Z3Prover/z3](https://github.com/Z3Prover/z3) | Includes a [Dockerfile](https://github.com/Z3Prover/z3/blob/master/docker/ubuntu-20-04.Dockerfile) and a package but no `latest` tag |
-
+```
+bitwuzla: 0.6.0-dev-main@5b2d83f
+boolector: 3.2.4
+cvc5: 1.1.2
+stp: 2.3.3
+yices: 2.6.4
+z3: 4.13.3
+```
 
 ## Contributing
 
-Everyone is welcome to contribute new solvers or new versions to the image via pull requests. If a solver is competitive at [SMT-COMP](https://smt-comp.github.io), it would be great to have it included in the image. 
+Everyone is welcome to contribute new solvers or new versions to the image via pull requests. If a solver is competitive at [SMT-COMP](https://smt-comp.github.io), it would be great to have it included in the image.
 
-When possible, we prefer release binaries from an official source like the Github releases for the project to minimize the time it takes to build the image. If you're unsure about a particular solver or how to integrate it, consider reaching out on the [Halmos Dev Chat](https://t.me/+4UhzHduai3MzZmUx). 
+When possible, we prefer release binaries from an official source like the Github releases for the project to minimize the time it takes to build the image. If you're unsure about a particular solver or how to integrate it, consider reaching out on the [Halmos Dev Chat](https://t.me/+4UhzHduai3MzZmUx).
 
 Before opening the pull request, please test your changes by verifying:
 
