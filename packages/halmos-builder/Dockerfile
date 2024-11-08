@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     curl \
     python3-venv \
     build-essential \
+    clang \
     python3.12-dev \
     && rm -rf /var/lib/apt/lists/*
 
