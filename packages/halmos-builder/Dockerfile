@@ -5,18 +5,20 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     python3 \
     python3-pip \
     wget \
+    curl \
     python3-venv \
     build-essential \
     python3.12-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Foundry
-COPY --from=ghcr.io/foundry-rs/foundry:latest \
-    /usr/local/bin/forge \
-    /usr/local/bin/cast \
-    /usr/local/bin/
+# Create necessary directories for foundry
+RUN mkdir -p /root/.foundry/bin /root/.foundry/share/man/man1
 
-# Install uv
-ADD --chmod=755 https://astral.sh/uv/install.sh /install.sh
-RUN /install.sh && rm /install.sh
-ENV PATH="/root/.cargo/bin:${PATH}"
+# Add foundry binaries to PATH
+ENV PATH="/root/.foundry/bin:${PATH}"
+
+# Download and run foundryup
+RUN curl -sSf -L https://raw.githubusercontent.com/foundry-rs/foundry/master/foundryup/foundryup \
+    -o /root/.foundry/bin/foundryup && \
+    chmod +x /root/.foundry/bin/foundryup && \
+    foundryup
