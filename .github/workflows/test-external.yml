@@ -89,11 +89,19 @@ jobs:
       - name: Build image
         run: docker build -t halmos-image . --file packages/halmos/Dockerfile
 
+      - name: Run foundryup
+        run: |
+          # run foundryup in halmos-image, save the result as a new image
+          docker run --name halmos-image-foundryup halmos-image foundryup
+
+          # commit the result back to halmos-image
+          docker commit halmos-image-foundryup halmos-image
+
       - name: Install Vyper
         if: ${{ matrix.project.dir == 'snekmate' }}
         run: |
-          docker run --name halmos-vyper --entrypoint uv halmos-image pip install git+https://github.com/vyperlang/vyper@master
-          docker commit --change 'ENTRYPOINT ["halmos"]' halmos-vyper halmos-image
+          docker run --name halmos-image-vyper uv pip install git+https://github.com/vyperlang/vyper@master
+          docker commit halmos-image-vyper halmos-image
 
       - name: Checkout external repo
         uses: actions/checkout@v4
@@ -102,6 +110,9 @@ jobs:
           path: ${{ matrix.project.dir }}
           ref: ${{ matrix.project.branch }}
           submodules: recursive
+
+      - name: Print forge version
+        run: docker run halmos-image forge --version
 
       - name: Print halmos version
         run: docker run halmos-image --version
