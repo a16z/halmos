@@ -1,4 +1,4 @@
-FROM ubuntu:24.04 as builder
+FROM ubuntu:24.04 AS builder
 
 # Install necessary packages
 RUN apt-get update && apt-get install --no-install-recommends -y \
@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     g++ zlib1g-dev libboost-all-dev flex bison
 
 # Install Z3
-COPY --from=ghcr.io/z3prover/z3:ubuntu-20.04-bare-z3-sha-770c51a /usr/bin/z3 /usr/local/bin/z3
+COPY --from=ghcr.io/z3prover/z3:ubuntu-20.04-bare-z3-20240922 /usr/bin/z3 /usr/local/bin/z3
 
 # Install STP
 COPY --from=msoos/stp /usr/local/bin/stp /usr/local/bin/stp
@@ -79,6 +79,14 @@ COPY --from=builder \
     /usr/local/bin/boolector \
     /usr/local/bin/
 
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Install jsi
+RUN uv tool install just-solve-it
+
+# make installed tools available
+ENV PATH=/root/.local/bin:$PATH
 
 # Set the default command for the container
 WORKDIR /workspace
