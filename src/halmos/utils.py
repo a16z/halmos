@@ -109,6 +109,14 @@ def f_sha3_name(bitsize: int) -> str:
     return f"f_sha3_{bitsize}"
 
 
+def f_inv_sha3_name(bitsize: int) -> str:
+    return f"f_inv_sha3_{bitsize}"
+
+
+# TODO: explore the impact of using a smaller bitsize for the range sort
+f_inv_sha3_size = Function("f_inv_sha3_size", BitVecSort256, BitVecSort256)
+
+
 f_sha3_0_name = f_sha3_name(0)
 f_sha3_256_name = f_sha3_name(256)
 f_sha3_512_name = f_sha3_name(512)

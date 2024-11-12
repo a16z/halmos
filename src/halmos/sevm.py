@@ -31,7 +31,6 @@ from z3 import (
     Extract,
     Function,
     If,
-    Implies,
     LShR,
     Or,
     Select,
@@ -98,6 +97,8 @@ from .utils import (
     debug,
     extract_bytes,
     f_ecrecover,
+    f_inv_sha3_name,
+    f_inv_sha3_size,
     f_sha3_256_name,
     f_sha3_512_name,
     f_sha3_empty,
@@ -1184,22 +1185,30 @@ class Exec:  # an execution path
         if sha3_expr in self.sha3s:
             return
 
-        # we expect sha3_expr to be `sha3_<input-bitsize>(input_expr)`
-        sha3_decl_name = sha3_expr.decl().name()
+        # add a local axiom for hash injectivity
+        #
+        # an injectivity axiom for f_sha3_[size](data) can be formulated as:
+        # - there exists f_inv_sha3 such that: f_inv_sha3(f_sha3_[size](data)) == (data, size)
+        #
+        # to avoid using a tuple as the return data type, the above can be re-formulated using seperate functions such that:
+        # - f_inv_sha3_data(f_sha3_[size](data)) == data
+        # - f_inv_sha3_size(f_sha3_[size](data)) == size
+        #
+        # this approach results in O(n) constraints, where each constraint is independent from other hashes.
 
-        for prev_sha3_expr in self.sha3s:
-            if prev_sha3_expr.decl().name() == sha3_decl_name:
-                # inputs have the same size: assume different inputs
-                # lead to different outputs
-                self.path.append(
-                    Implies(
-                        sha3_expr.arg(0) != prev_sha3_expr.arg(0),
-                        sha3_expr != prev_sha3_expr,
-                    )
-                )
-            else:
-                # inputs have different sizes: assume the outputs are different
-                self.path.append(sha3_expr != prev_sha3_expr)
+        if eq(sha3_expr, f_sha3_empty):
+            self.path.append(f_inv_sha3_size(sha3_expr) == ZERO)
+
+        else:
+            # sha3_expr is expected to be in the format: `sha3_<input_size>(input_data)`
+            input_data = sha3_expr.arg(0)
+            input_size = input_data.size()
+
+            f_inv_name = f_inv_sha3_name(input_size)
+            f_inv_sha3 = Function(f_inv_name, BitVecSort256, BitVecSorts[input_size])
+            self.path.append(f_inv_sha3(sha3_expr) == input_data)
+
+            self.path.append(f_inv_sha3_size(sha3_expr) == con(input_size))
 
         self.sha3s[sha3_expr] = len(self.sha3s)
 
