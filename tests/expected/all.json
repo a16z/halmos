@@ -2298,6 +2298,15 @@
         ],
         "test/Sha3.t.sol:Sha3Test": [
             {
+                "name": "check_address_collision_pass(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_concrete_keccak_does_not_split_paths()",
                 "exitcode": 0,
                 "num_models": 0,
@@ -2353,6 +2362,33 @@
             },
             {
                 "name": "check_only_empty_bytes_matches_empty_hash(bytes)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_uint128_collision_fail(uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_uint160_collision_pass(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_uint256_collision(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,

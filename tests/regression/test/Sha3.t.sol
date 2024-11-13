@@ -83,4 +83,31 @@ contract Sha3Test is Test, SymTest {
     function _assert_neq(bytes memory data1, bytes memory data2) internal {
         assert(keccak256(data1) != keccak256(data2));
     }
+
+    function check_uint256_collision(uint256 x, uint256 y) public {
+        vm.assume(x != y);
+        assertNotEq(keccak256(abi.encode(x)), keccak256(abi.encode(y)));
+    }
+
+    // we assume that the lower 160-bit parts do not collide
+    // see: https://github.com/a16z/halmos/issues/347
+    function check_address_collision_pass(uint256 x, uint256 y) public {
+        vm.assume(x != y);
+        assertNotEq(to_address(x), to_address(y)); // pass
+    }
+
+    function to_address(uint256 x) internal pure returns (address) {
+        return address(uint160(uint256(keccak256(abi.encode(x)))));
+    }
+
+    function check_uint160_collision_pass(uint256 x, uint256 y) public {
+        vm.assume(x != y);
+        assertNotEq(uint160(uint256(keccak256(abi.encode(x)))), uint160(uint256(keccak256(abi.encode(y))))); // pass
+    }
+
+    // we don't rule out potential collision in the part lower than 160-bit
+    function check_uint128_collision_fail(uint256 x, uint256 y) public {
+        vm.assume(x != y);
+        assertNotEq(uint128(uint256(keccak256(abi.encode(x)))), uint128(uint256(keccak256(abi.encode(y))))); // fail
+    }
 }
