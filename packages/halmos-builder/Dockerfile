@@ -23,3 +23,7 @@ RUN curl -sSf -L https://raw.githubusercontent.com/foundry-rs/foundry/master/fou
     -o /root/.foundry/bin/foundryup && \
     chmod +x /root/.foundry/bin/foundryup && \
     foundryup
+
+# Set a nicer prompt
+ENV IMAGE_NAME=halmos-builder
+RUN echo 'PS1="($IMAGE_NAME) \[\033[1;32m\]\u@\h \[\033[1;35m\]\w \$\[\033[0m\] "' >> /root/.bashrc
