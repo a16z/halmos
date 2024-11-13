@@ -127,7 +127,7 @@ contract FoundryTest is Test {
 
 
 contract NotEtchFriendly {
-    address owner;
+    address public owner;
 
     constructor() {
         owner = msg.sender;
@@ -166,5 +166,9 @@ contract TestNotEtchFriendly is Test {
         vm.store(address(42), 0, bytes32(uint256(uint160(address(this)))));
 
         target.beepBoop();
+    }
+
+    function check_etch_then_load() external {
+        assertEq(target.owner(), address(0));
     }
 }
