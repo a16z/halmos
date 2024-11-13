@@ -1196,8 +1196,11 @@ class Exec:  # an execution path
         #
         # this approach results in O(n) constraints, where each constraint is independent from other hashes.
 
+        # injectivity is assumed for the lower 160-bit part, which is used for ethereum addresses
+        sha3_expr_core = Extract(159, 0, sha3_expr)
+
         if eq(sha3_expr, f_sha3_empty):
-            self.path.append(f_inv_sha3_size(sha3_expr) == ZERO)
+            self.path.append(f_inv_sha3_size(sha3_expr_core) == ZERO)
 
         else:
             # sha3_expr is expected to be in the format: `sha3_<input_size>(input_data)`
@@ -1205,10 +1208,10 @@ class Exec:  # an execution path
             input_size = input_data.size()
 
             f_inv_name = f_inv_sha3_name(input_size)
-            f_inv_sha3 = Function(f_inv_name, BitVecSort256, BitVecSorts[input_size])
-            self.path.append(f_inv_sha3(sha3_expr) == input_data)
+            f_inv_sha3 = Function(f_inv_name, BitVecSort160, BitVecSorts[input_size])
+            self.path.append(f_inv_sha3(sha3_expr_core) == input_data)
 
-            self.path.append(f_inv_sha3_size(sha3_expr) == con(input_size))
+            self.path.append(f_inv_sha3_size(sha3_expr_core) == con(input_size))
 
         self.sha3s[sha3_expr] = len(self.sha3s)
 
