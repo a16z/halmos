@@ -90,8 +90,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 # Install jsi
 RUN uv tool install just-solve-it
 
-# make installed tools available
+# Make installed uv tools available
 ENV PATH=/root/.local/bin:$PATH
+
+# Set a nicer prompt
+ENV IMAGE_NAME=solvers
+RUN echo 'PS1="($IMAGE_NAME) \[\033[1;32m\]\u@\h \[\033[1;35m\]\w \$\[\033[0m\] "' >> /root/.bashrc
 
 # Set the default command for the container
 WORKDIR /workspace

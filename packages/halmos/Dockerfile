@@ -11,5 +11,9 @@ RUN --mount=type=bind,source=../..,target=/src,readonly=false \
     uv pip install --no-cache /src && \
     uv pip install --no-cache -r /src/requirements-dev.txt
 
+# Set a nicer prompt
+ENV IMAGE_NAME=halmos
+RUN echo 'PS1="($IMAGE_NAME) \[\033[1;32m\]\u@\h \[\033[1;35m\]\w \$\[\033[0m\] "' >> /root/.bashrc
+
 WORKDIR /workspace
 CMD ["halmos"]
