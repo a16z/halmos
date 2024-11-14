@@ -123,6 +123,16 @@ contract FoundryTest is Test {
     //     vm.etch(who, code);
     //     assertEq(code, who.code);
     // }
+
+    function check_assertEqCall(uint256 a, uint256 b) public {
+        assertEqCall(
+            address(this), abi.encodeCall(this._add, (a, b)), abi.encodeCall(this._add, (a, b))
+        );
+    }
+
+    function _add(uint256 a, uint256 b) public pure returns (uint256 c) {
+        c = a + b;
+    }
 }
 
 
