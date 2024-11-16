@@ -2165,14 +2165,30 @@ class SEVM:
             # modexp
             elif eq(to, con_addr(5)):
                 exit_code = con(1)
-                modulus_size = ex.int_of(extract_bytes(arg, 64, 32))
+
+                # lengths in bytes
+                base_len = ex.int_of(arg.get_word(0))
+                exponent_len = ex.int_of(arg.get_word(32))
+                modulus_len = ex.int_of(arg.get_word(64))
+                input_len = base_len + exponent_len + modulus_len
+
+                # The rest of the input is discarded.
+                # Whenever the input is too short,
+                # the missing bytes are considered to be zero.
+                modexp_input = arg.slice(96, 96 + input_len)
+
+                # lengths in bits
+                input_bitsize = input_len * 8
+                modulus_bitsize = modulus_len * 8
+
                 f_modexp = Function(
-                    f"f_modexp_{arg_size}_{modulus_size}",
-                    BitVecSorts[arg_size],
-                    BitVecSorts[modulus_size],
+                    f"f_modexp_{input_bitsize}_{modulus_bitsize}",
+                    BitVecSorts[input_bitsize],
+                    BitVecSorts[modulus_bitsize],
                 )
+
                 # TODO: empty returndata in error
-                ret = ByteVec(f_modexp(arg))
+                ret = ByteVec(f_modexp(modexp_input.unwrap()))
 
             # ecadd
             elif eq(to, con_addr(6)):
