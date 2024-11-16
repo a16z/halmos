@@ -187,7 +187,9 @@ def mk_this() -> Address:
     return con_addr(FOUNDRY_TEST)
 
 
-def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, timeout=None, max_memory=None):
+def mk_solver(
+    args: HalmosConfig, logic="QF_AUFBV", ctx=None, timeout=None, max_memory=None
+):
     # NOTE: both timeout and max_memory may be 0, which needs to be passed as is
     if timeout is None:
         timeout = args.solver_timeout_branching
@@ -715,7 +717,9 @@ def run(
 
         elif ex.context.is_stuck():
             # ignore infeasible exceptions
-            res, _, _ = solve(ex.path.to_smt2(args), args, timeout=args.solver_timeout_exception)
+            res, _, _ = solve(
+                ex.path.to_smt2(args), args, timeout=args.solver_timeout_exception
+            )
             if res == unsat:
                 continue
 
@@ -939,7 +943,10 @@ def parse_unsat_core(output) -> list | None:
 
 
 def solve(
-    query: SMTQuery, args: HalmosConfig, dump_filename: str | None = None, timeout: int | None = None
+    query: SMTQuery,
+    args: HalmosConfig,
+    dump_filename: str | None = None,
+    timeout: int | None = None,
 ) -> tuple[CheckSatResult, PotentialModel | None, list | None]:
     if timeout is None:  # timeout may be 0
         timeout = args.solver_timeout_assertion
