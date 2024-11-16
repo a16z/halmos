@@ -420,6 +420,13 @@ class Config:
         group=solver,
     )
 
+    solver_timeout_exception: int = arg(
+        help="set timeout (in milliseconds) for solving runtime exception conditions; 0 means no timeout",
+        global_default=1_000,
+        metavar="TIMEOUT",
+        group=solver,
+    )
+
     solver_max_memory: int = arg(
         help="set memory limit (in megabytes) for the solver; 0 means no limit",
         global_default=0,

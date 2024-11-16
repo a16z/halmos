@@ -187,11 +187,13 @@ def mk_this() -> Address:
     return con_addr(FOUNDRY_TEST)
 
 
-def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, assertion=False):
-    timeout = (
-        args.solver_timeout_assertion if assertion else args.solver_timeout_branching
-    )
-    return create_solver(logic, ctx, timeout, args.solver_max_memory)
+def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None, timeout=None, max_memory=None):
+    # NOTE: both timeout and max_memory may be 0, which needs to be passed as is
+    if timeout is None:
+        timeout = args.solver_timeout_branching
+    if max_memory is None:
+        max_memory = args.solver_max_memory
+    return create_solver(logic, ctx, timeout, max_memory)
 
 
 def rendered_initcode(context: CallContext) -> str:
@@ -712,6 +714,11 @@ def run(
             future_models.append(future_model)
 
         elif ex.context.is_stuck():
+            # ignore infeasible exceptions
+            res, _, _ = solve(ex.path.to_smt2(args), args, timeout=args.solver_timeout_exception)
+            if res == unsat:
+                continue
+
             stuck.append((idx, ex, ex.context.get_stuck_reason()))
             if args.print_blocked_states:
                 traces[idx] = f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
@@ -932,8 +939,11 @@ def parse_unsat_core(output) -> list | None:
 
 
 def solve(
-    query: SMTQuery, args: HalmosConfig, dump_filename: str | None = None
+    query: SMTQuery, args: HalmosConfig, dump_filename: str | None = None, timeout: int | None = None
 ) -> tuple[CheckSatResult, PotentialModel | None, list | None]:
+    if timeout is None:  # timeout may be 0
+        timeout = args.solver_timeout_assertion
+
     if args.dump_smt_queries or args.solver_command:
         if not dump_filename:
             dump_filename = f"/tmp/{uuid.uuid4().hex}.smt2"
@@ -968,11 +978,9 @@ def solve(
             print("  Checking with external solver process")
             print(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
 
-        # solver_timeout_assertion == 0 means no timeout,
+        # timeout == 0 means no timeout,
         # which translates to timeout_seconds=None for subprocess.run
-        timeout_seconds = None
-        if timeout_millis := args.solver_timeout_assertion:
-            timeout_seconds = timeout_millis / 1000
+        timeout_seconds = timeout / 1000 if timeout else None
 
         cmd = args.solver_command.split() + [dump_filename]
         try:
@@ -999,7 +1007,7 @@ def solve(
 
     else:
         ctx = Context()
-        solver = mk_solver(args, ctx=ctx, assertion=True)
+        solver = mk_solver(args, ctx=ctx, timeout=timeout)
         solver.from_string(query.smtlib)
         if args.cache_solver:
             solver.set(unsat_core=True)
