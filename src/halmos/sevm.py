@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import reduce
+from timeit import default_timer as timer
 from typing import (
     Any,
     ForwardRef,
@@ -1655,6 +1656,10 @@ class Worklist:
     def __init__(self):
         self.stack = []
 
+        # pulse data
+        self.completed_paths = 0
+        self.start_time = timer()
+
     def push(self, ex: Exec, step: int):
         self.stack.append(WorklistItem(ex, step))
 
@@ -2061,6 +2066,7 @@ class SEVM:
                 if subcall.is_stuck():
                     # internal errors abort the current path,
                     # so we don't need to add it to the worklist
+                    stack.completed_paths += 1
                     yield new_ex
                     return
 
@@ -2402,6 +2408,7 @@ class SEVM:
 
             if subcall.is_stuck():
                 # internal errors abort the current path,
+                stack.completed_paths += 1
                 yield new_ex
                 return
 
@@ -2637,6 +2644,7 @@ class SEVM:
         def finalize(ex: Exec):
             # if it's at the top-level, there is no callback; yield the current execution state
             if ex.callback is None:
+                stack.completed_paths += 1
                 yield ex
 
             # otherwise, execute the callback to return to the parent execution context
@@ -2650,6 +2658,13 @@ class SEVM:
                 ex: Exec = item.ex
                 prev_step_id: int = item.step
                 step_id += 1
+
+                if self.options.pulse and step_id % (2**13) == 0:
+                    elapsed = timer() - stack.start_time
+                    speed = step_id / elapsed
+                    print(
+                        f"pulse: {step_id} ops ({speed:.2f} ops/s) | completed paths: {stack.completed_paths} | outstanding paths: {len(stack)}"
+                    )
 
                 if not ex.path.is_activated():
                     ex.path.activate()
@@ -3121,6 +3136,7 @@ class SEVM:
                 if not ex.is_halted():
                     # return data shouldn't be None, as it is considered being stuck
                     ex.halt(data=ByteVec(), error=err)
+                stack.completed_paths += 1
                 yield ex  # early exit; do not call finalize()
                 continue
 
