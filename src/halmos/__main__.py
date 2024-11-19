@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass
 from enum import Enum
 from importlib import metadata
 
+from rich.status import Status
 from z3 import (
     Z3_OP_CONCAT,
     BitVec,
@@ -733,14 +734,21 @@ def run(
             f"# of potential paths involving assertion violations: {len(future_models)} / {len(result_exs)}  (--solver-threads {args.solver_threads})"
         )
 
+    status = Status("solving:")
+    status.start()
+    while True:
+        if args.early_exit and len(counterexamples) > 0:
+            break
+        done = sum(fm.done() for fm in future_models)
+        total = len(future_models)
+        if done == total:
+            break
+        status.update(f"solving: {done} / {total}")
+        time.sleep(1)
+    status.stop()
+
     if args.early_exit:
-        while not (
-            len(counterexamples) > 0 or all([fm.done() for fm in future_models])
-        ):
-            time.sleep(1)
-
         thread_pool.shutdown(wait=False, cancel_futures=True)
-
     else:
         thread_pool.shutdown(wait=True)
 
