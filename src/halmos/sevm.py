@@ -5,6 +5,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import reduce
 from timeit import default_timer as timer
 from typing import (
@@ -2669,8 +2670,12 @@ class SEVM:
                 if step_id % PULSE_INTERVAL == 0:
                     elapsed = timer() - stack.start_time
                     speed = step_id / elapsed
+
+                    # hh:mm:ss
+                    elapsed_fmt = str(timedelta(seconds=elapsed)).split(".")[0]
+
                     status.update(
-                        f"pulse: {step_id} ops ({speed:.2f} ops/s) | "
+                        f"pulse: [{elapsed_fmt}] {step_id} ops ({speed:.2f} ops/s) | "
                         f"completed paths: {stack.completed_paths} | outstanding paths: {len(stack)}"
                     )
 
