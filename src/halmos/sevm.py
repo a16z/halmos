@@ -2638,10 +2638,8 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
-        status = Status("pulse:")
-        status.start()
-        yield from self._run(ex0, status)
-        status.stop()
+        with Status("pulse:") as status:
+            yield from self._run(ex0, status)
 
     def _run(self, ex0: Exec, status: Status) -> Iterator[Exec]:
         step_id: int = 0
