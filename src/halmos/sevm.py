@@ -15,6 +15,7 @@ from typing import (
 )
 
 from eth_hash.auto import keccak
+from rich.status import Status
 from z3 import (
     UGE,
     UGT,
@@ -2637,6 +2638,12 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
+        status = Status("pulse:")
+        status.start()
+        yield from self._run(ex0, status)
+        status.stop()
+
+    def _run(self, ex0: Exec, status: Status) -> Iterator[Exec]:
         step_id: int = 0
         stack: Worklist = Worklist()
         stack.push(ex0, 0)
@@ -2659,10 +2666,10 @@ class SEVM:
                 prev_step_id: int = item.step
                 step_id += 1
 
-                if self.options.pulse and step_id % (2**13) == 0:
+                if step_id % (2**13) == 0:
                     elapsed = timer() - stack.start_time
                     speed = step_id / elapsed
-                    print(
+                    status.update(
                         f"pulse: {step_id} ops ({speed:.2f} ops/s) | completed paths: {stack.completed_paths} | outstanding paths: {len(stack)}"
                     )
 

@@ -289,12 +289,6 @@ class Config:
         countable=True,
     )
 
-    pulse: bool = arg(
-        help="show progress",
-        global_default=False,
-        group=debugging,
-    )
-
     statistics: bool = arg(
         help="print statistics",
         global_default=False,
