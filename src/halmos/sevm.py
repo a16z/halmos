@@ -146,6 +146,7 @@ EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
 
 # TODO: make this configurable
 MAX_MEMORY_SIZE = 2**20
+PULSE_INTERVAL = 2**13
 
 FOUNDRY_CALLER = 0x1804C8AB1F12E6BBF3894D4083F33E07309D1F38
 FOUNDRY_ORIGIN = FOUNDRY_CALLER
@@ -2664,11 +2665,13 @@ class SEVM:
                 prev_step_id: int = item.step
                 step_id += 1
 
-                if step_id % (2**13) == 0:
+                # display progress
+                if step_id % PULSE_INTERVAL == 0:
                     elapsed = timer() - stack.start_time
                     speed = step_id / elapsed
                     status.update(
-                        f"pulse: {step_id} ops ({speed:.2f} ops/s) | completed paths: {stack.completed_paths} | outstanding paths: {len(stack)}"
+                        f"pulse: {step_id} ops ({speed:.2f} ops/s) | "
+                        f"completed paths: {stack.completed_paths} | outstanding paths: {len(stack)}"
                     )
 
                 if not ex.path.is_activated():

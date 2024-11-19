@@ -734,6 +734,7 @@ def run(
             f"# of potential paths involving assertion violations: {len(future_models)} / {len(result_exs)}  (--solver-threads {args.solver_threads})"
         )
 
+    # display assertion solving progress
     with Status("solving:") as status:
         while True:
             if args.early_exit and len(counterexamples) > 0:
