@@ -735,16 +735,17 @@ def run(
         )
 
     # display assertion solving progress
-    with Status("solving:") as status:
-        while True:
-            if args.early_exit and len(counterexamples) > 0:
-                break
-            done = sum(fm.done() for fm in future_models)
-            total = len(future_models)
-            if done == total:
-                break
-            status.update(f"solving: {done} / {total}")
-            time.sleep(1)
+    if not args.no_pulse or args.early_exit:
+        with Status("solving:") as status:
+            while True:
+                if args.early_exit and len(counterexamples) > 0:
+                    break
+                done = sum(fm.done() for fm in future_models)
+                total = len(future_models)
+                if done == total:
+                    break
+                status.update(f"solving: {done} / {total}")
+                time.sleep(1)
 
     if args.early_exit:
         thread_pool.shutdown(wait=False, cancel_futures=True)

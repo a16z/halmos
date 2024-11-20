@@ -2667,7 +2667,7 @@ class SEVM:
                 step_id += 1
 
                 # display progress
-                if step_id % PULSE_INTERVAL == 0:
+                if not self.options.no_pulse and step_id % PULSE_INTERVAL == 0:
                     elapsed = timer() - stack.start_time
                     speed = step_id / elapsed
 
