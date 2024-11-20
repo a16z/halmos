@@ -97,7 +97,6 @@ from .utils import (
     con_addr,
     concat,
     create_solver,
-    debug,
     extract_bytes,
     f_ecrecover,
     f_inv_sha3_name,
@@ -130,6 +129,8 @@ from .utils import (
 from .warnings import (
     INTERNAL_ERROR,
     LIBRARY_PLACEHOLDER,
+    debug,
+    debug_once,
     warn_code,
 )
 
@@ -1923,14 +1924,12 @@ class SEVM:
         if target in ex.code:
             return target
 
-        if self.options.debug:
-            debug(
-                f"Address {hexify(target)} not in: [{', '.join([hexify(addr) for addr in ex.code])}]"
-            )
+        debug_once(
+            f"Address {hexify(target)} not in: [{', '.join([hexify(addr) for addr in ex.code])}]"
+        )
 
         if is_bv_value(target):
-            if self.options.debug:
-                debug(f"Empty address: {hexify(target)}")
+            debug_once(f"Empty address: {hexify(target)}")
             return None
 
         if target in ex.alias:
@@ -1943,16 +1942,14 @@ class SEVM:
                 continue
             alias_cond = target == addr
             if ex.check(alias_cond) != unsat:
-                if self.options.debug:
-                    debug(
-                        f"Potential address alias: {hexify(addr)} for {hexify(target)}"
-                    )
+                debug_once(
+                    f"Potential address alias: {hexify(addr)} for {hexify(target)}"
+                )
                 potential_aliases.append((addr, alias_cond))
 
         emptyness_cond = And([target != addr for addr in ex.code])
         if ex.check(emptyness_cond) != unsat:
-            if self.options.debug:
-                debug(f"Potential empty address: {hexify(target)}")
+            debug_once(f"Potential empty address: {hexify(target)}")
             potential_aliases.append((None, emptyness_cond))
 
         if not potential_aliases:

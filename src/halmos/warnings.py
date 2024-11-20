@@ -1,10 +1,41 @@
 import logging
 from dataclasses import dataclass
 
+from rich.logging import RichHandler
+
 from .utils import color_warn
 
+
+class UniqueLoggingFilter(logging.Filter):
+    def __init__(self):
+        self.records = set()
+
+    def filter(self, record):
+        if record.msg in self.records:
+            return False
+        self.records.add(record.msg)
+        return True
+
+
+logging.basicConfig(
+    format="%(message)s",
+    handlers=[RichHandler(level=logging.NOTSET, show_time=False, show_level=False)],
+)
+
 logger = logging.getLogger("halmos")
-logging.basicConfig()
+
+# logger with filtering out duplicate log messages
+logger_unique = logging.getLogger("halmos.unique")
+logger_unique.addFilter(UniqueLoggingFilter())
+
+
+def debug(text: str) -> None:
+    logger.debug(text)
+
+
+def debug_once(text: str) -> None:
+    logger_unique.debug(text)
+
 
 WARNINGS_BASE_URL = "https://github.com/a16z/halmos/wiki/warnings"
 

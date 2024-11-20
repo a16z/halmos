@@ -605,10 +605,6 @@ def info(text: str) -> None:
     print(color_info(text))
 
 
-def debug(text: str) -> None:
-    print(color_debug(text))
-
-
 def indent_text(text: str, n: int = 4) -> str:
     return "\n".join(" " * n + line for line in text.splitlines())
 

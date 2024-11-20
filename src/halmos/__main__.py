@@ -3,6 +3,7 @@
 import gc
 import io
 import json
+import logging
 import os
 import re
 import signal
@@ -77,7 +78,6 @@ from .utils import (
     con,
     create_solver,
     cyan,
-    debug,
     error,
     green,
     hexify,
@@ -95,6 +95,9 @@ from .warnings import (
     LOOP_BOUND,
     PARSING_ERROR,
     REVERT_ALL,
+    debug,
+    logger,
+    logger_unique,
     warn_code,
 )
 
@@ -1350,6 +1353,10 @@ def _main(_args=None) -> MainResult:
 
     if args.disable_gc:
         gc.disable()
+
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
+        logger_unique.setLevel(logging.DEBUG)
 
     #
     # compile
