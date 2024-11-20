@@ -959,7 +959,8 @@ def solve(
             )
 
         with open(dump_filename, "w") as f:
-            debug(f"Writing SMT query to {dump_filename}")
+            if args.verbose >= 1:
+                debug(f"Writing SMT query to {dump_filename}")
             if args.cache_solver:
                 f.write("(set-option :produce-unsat-cores true)\n")
             f.write("(set-logic QF_AUFBV)\n")
@@ -972,8 +973,9 @@ def solve(
                 f.write("(get-unsat-core)\n")
 
     if args.solver_command:
-        debug("  Checking with external solver process")
-        debug(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
+        if args.verbose >= 1:
+            debug("  Checking with external solver process")
+            debug(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
 
         # solver_timeout_assertion == 0 means no timeout,
         # which translates to timeout_seconds=None for subprocess.run
@@ -991,7 +993,8 @@ def solve(
             with open(f"{dump_filename}.out", "w") as f:
                 f.write(res_str)
 
-            debug(f"    {res_str_head}")
+            if args.verbose >= 1:
+                debug(f"    {res_str_head}")
 
             if res_str_head == "unsat":
                 unsat_core = parse_unsat_core(res_str) if args.cache_solver else None

@@ -2490,11 +2490,12 @@ class SEVM:
             follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
-                debug(f"\nloop id: {jid}")
-                debug(f"loop condition: {cond}")
-                debug(f"calldata: {ex.calldata()}")
-                debug("path condition:")
-                debug(ex.path)
+                debug(
+                    f"\nloop id: {jid}\n"
+                    f"loop condition: {cond}\n"
+                    f"calldata: {ex.calldata()}\n"
+                    f"path condition:\n{ex.path}\n"
+                )
         else:
             # for constant-bounded loops
             follow_true = potential_true
@@ -2603,7 +2604,7 @@ class SEVM:
                 loaded = concrete_loaded
 
             elif loaded in ex.path.concretization.candidates:
-                debug(
+                debug_once(
                     f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}"
                 )
 
