@@ -2490,12 +2490,11 @@ class SEVM:
             follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
-                if self.options.debug:
-                    debug(f"\nloop id: {jid}")
-                    debug(f"loop condition: {cond}")
-                    debug(f"calldata: {ex.calldata()}")
-                    debug("path condition:")
-                    debug(ex.path)
+                debug(f"\nloop id: {jid}")
+                debug(f"loop condition: {cond}")
+                debug(f"calldata: {ex.calldata()}")
+                debug("path condition:")
+                debug(ex.path)
         else:
             # for constant-bounded loops
             follow_true = potential_true
@@ -2604,10 +2603,9 @@ class SEVM:
                 loaded = concrete_loaded
 
             elif loaded in ex.path.concretization.candidates:
-                if self.options.debug:
-                    debug(
-                        f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}"
-                    )
+                debug(
+                    f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}"
+                )
 
                 for candidate in ex.path.concretization.candidates[loaded]:
                     new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
@@ -3074,11 +3072,10 @@ class SEVM:
                                 )
                             )
                     else:
-                        if self.options.debug:
-                            warn(
-                                f"Warning: the use of symbolic BYTE indexing may potentially "
-                                f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
-                            )
+                        debug_once(
+                            f"Warning: the use of symbolic BYTE indexing may potentially "
+                            f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
+                        )
                         ex.st.push(self.sym_byte_of(idx, w))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
@@ -3136,9 +3133,7 @@ class SEVM:
                 continue
 
             except HalmosException as err:
-                if self.options.debug:
-                    print(err)
-
+                debug(err)
                 ex.halt(data=None, error=err)
                 yield from finalize(ex)
                 continue

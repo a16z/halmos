@@ -489,8 +489,7 @@ def setup(
             raise HalmosException(f"No successful path found in {setup_sig}")
 
         if len(setup_exs) > 1:
-            if args.debug:
-                print("\n".join(map(str, setup_exs)))
+            debug("\n".join(map(str, setup_exs)))
 
             raise HalmosException(f"Multiple paths were found in {setup_sig}")
 
@@ -504,8 +503,7 @@ def setup(
                 LOOP_BOUND,
                 f"{setup_sig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
             )
-            if args.debug:
-                print("\n".join(jumpid_str(x) for x in sevm.logs.bounded_loops))
+            debug("\n".join(jumpid_str(x) for x in sevm.logs.bounded_loops))
 
     if args.statistics:
         print(setup_timer.report())
@@ -797,8 +795,7 @@ def run(
             LOOP_BOUND,
             f"{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
         )
-        if args.debug:
-            print("\n".join(jumpid_str(x) for x in logs.bounded_loops))
+        debug("\n".join(jumpid_str(x) for x in logs.bounded_loops))
 
     # print post-states
     if args.print_states:
@@ -896,8 +893,7 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
         try:
             test_config = with_devdoc(args, funsig, run_args.contract_json)
             solver = mk_solver(test_config)
-            if test_config.debug:
-                debug(f"{test_config.formatted_layers()}")
+            debug(f"{test_config.formatted_layers()}")
             test_result = run(setup_ex, run_args.abi, fun_info, test_config, solver)
         except Exception as err:
             print(f"{color_error('[ERROR]')} {funsig}")
@@ -963,8 +959,7 @@ def solve(
             )
 
         with open(dump_filename, "w") as f:
-            if args.debug:
-                print(f"Writing SMT query to {dump_filename}")
+            debug(f"Writing SMT query to {dump_filename}")
             if args.cache_solver:
                 f.write("(set-option :produce-unsat-cores true)\n")
             f.write("(set-logic QF_AUFBV)\n")
@@ -977,9 +972,8 @@ def solve(
                 f.write("(get-unsat-core)\n")
 
     if args.solver_command:
-        if args.debug:
-            print("  Checking with external solver process")
-            print(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
+        debug("  Checking with external solver process")
+        debug(f"    {args.solver_command} {dump_filename} >{dump_filename}.out")
 
         # solver_timeout_assertion == 0 means no timeout,
         # which translates to timeout_seconds=None for subprocess.run
@@ -997,8 +991,7 @@ def solve(
             with open(f"{dump_filename}.out", "w") as f:
                 f.write(res_str)
 
-            if args.debug:
-                print(f"    {res_str_head}")
+            debug(f"    {res_str_head}")
 
             if res_str_head == "unsat":
                 unsat_core = parse_unsat_core(res_str) if args.cache_solver else None
@@ -1192,8 +1185,7 @@ def parse_build_out(args: HalmosConfig) -> dict:
                 # - defines only free functions
                 # - ...
                 if contract_type is None:
-                    if args.debug:
-                        debug(f"Skipped {json_filename}, no contract definition found")
+                    debug(f"Skipped {json_filename}, no contract definition found")
                     continue
 
                 compiler_version = json_out["metadata"]["compiler"]["version"]
@@ -1233,12 +1225,11 @@ def parse_symbols(args: HalmosConfig, contract_map: dict, contract_name: str) ->
         Mapper().parse_ast(json_out["ast"])
 
     except Exception:
-        if args.debug:
-            debug(f"error parsing symbols for contract {contract_name}")
-            debug(traceback.format_exc())
-        else:
-            # we parse symbols as best effort, don't propagate exceptions
-            pass
+        debug(f"error parsing symbols for contract {contract_name}")
+        debug(traceback.format_exc())
+
+        # we parse symbols as best effort, don't propagate exceptions
+        pass
 
 
 def parse_devdoc(funsig: str, contract_json: dict) -> str | None:
@@ -1374,8 +1365,7 @@ def _main(_args=None) -> MainResult:
     ]
 
     # run forge without capturing stdout/stderr
-    if args.debug:
-        debug(f"Running {' '.join(build_cmd)}")
+    debug(f"Running {' '.join(build_cmd)}")
 
     build_exitcode = subprocess.run(build_cmd).returncode
 
@@ -1407,16 +1397,14 @@ def _main(_args=None) -> MainResult:
         result = MainResult(exitcode, test_results_map)
 
         if args.json_output:
-            if args.debug:
-                debug(f"Writing output to {args.json_output}")
+            debug(f"Writing output to {args.json_output}")
             with open(args.json_output, "w") as json_file:
                 json.dump(asdict(result), json_file, indent=4)
 
         return result
 
     def on_signal(signum, frame):
-        if args.debug:
-            debug(f"Signal {signum} received")
+        debug(f"Signal {signum} received")
         exitcode = 128 + signum
         on_exit(exitcode)
         sys.exit(exitcode)
