@@ -124,13 +124,13 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
-    warn,
 )
 from .warnings import (
     INTERNAL_ERROR,
     LIBRARY_PLACEHOLDER,
     debug,
     debug_once,
+    warn,
     warn_code,
 )
 

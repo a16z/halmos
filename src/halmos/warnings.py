@@ -3,7 +3,37 @@ from dataclasses import dataclass
 
 from rich.logging import RichHandler
 
-from .utils import color_warn
+#
+# Basic logging
+#
+
+logging.basicConfig(
+    format="%(message)s",
+    handlers=[RichHandler(level=logging.NOTSET, show_time=False)],
+)
+
+logger = logging.getLogger("halmos")
+
+
+def debug(text: str) -> None:
+    logger.debug(text)
+
+
+def info(text: str) -> None:
+    logger.info(text)
+
+
+def warn(text: str) -> None:
+    logger.warning(text)
+
+
+def error(text: str) -> None:
+    logger.error(text)
+
+
+#
+# Logging with filtering out duplicate log messages
+#
 
 
 class UniqueLoggingFilter(logging.Filter):
@@ -17,25 +47,17 @@ class UniqueLoggingFilter(logging.Filter):
         return True
 
 
-logging.basicConfig(
-    format="%(message)s",
-    handlers=[RichHandler(level=logging.NOTSET, show_time=False, show_level=False)],
-)
-
-logger = logging.getLogger("halmos")
-
-# logger with filtering out duplicate log messages
 logger_unique = logging.getLogger("halmos.unique")
 logger_unique.addFilter(UniqueLoggingFilter())
-
-
-def debug(text: str) -> None:
-    logger.debug(text)
 
 
 def debug_once(text: str) -> None:
     logger_unique.debug(text)
 
+
+#
+# Warnings with error code
+#
 
 WARNINGS_BASE_URL = "https://github.com/a16z/halmos/wiki/warnings"
 
@@ -59,4 +81,4 @@ LOOP_BOUND = ErrorCode("loop-bound")
 
 
 def warn_code(error_code: ErrorCode, msg: str):
-    logger.warning(f"{color_warn(msg)}\n(see {error_code.url()})")
+    logger.warning(f"{msg}\n(see {error_code.url()})")

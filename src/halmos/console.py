@@ -7,7 +7,6 @@ from .utils import (
     extract_funsig,
     extract_string_argument,
     hexify,
-    info,
     int_of,
     magenta,
     render_address,
@@ -15,6 +14,9 @@ from .utils import (
     render_bytes,
     render_int,
     render_uint,
+)
+from .warnings import (
+    info,
     warn,
 )
 

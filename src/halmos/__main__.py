@@ -78,14 +78,12 @@ from .utils import (
     con,
     create_solver,
     cyan,
-    error,
     green,
     hexify,
     indent_text,
     red,
     stringify,
     unbox_int,
-    warn,
     yellow,
 )
 from .warnings import (
@@ -96,8 +94,10 @@ from .warnings import (
     PARSING_ERROR,
     REVERT_ALL,
     debug,
+    error,
     logger,
     logger_unique,
+    warn,
     warn_code,
 )
 

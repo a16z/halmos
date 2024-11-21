@@ -13,8 +13,8 @@ from z3 import (
     is_bv,
 )
 
-from halmos.exceptions import HalmosException
-from halmos.utils import (
+from .exceptions import HalmosException
+from .utils import (
     bytes_to_bv_value,
     extract_bytes,
     extract_bytes32_array_argument,
