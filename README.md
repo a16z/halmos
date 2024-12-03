@@ -23,39 +23,58 @@ Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
 
 ## Installation
 
-```sh
-pip install halmos
-```
-
-Or, if you want to try out the nightly build version:
+### ⭐ Using `uv` (recommended for most users)
 
 ```sh
-pip install git+https://github.com/a16z/halmos
-```
+# install uv if you don't have it already
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-Alternatively, you can download the Docker image that contains halmos and its dependencies:
-
-```sh
-docker pull .:/workspace ghcr.io/a16z/halmos:0.1.14
-```
-
-And finally, if you want to install halmos into an isolated virtual environment (so you don't have to deal with dependency issues), you can install it with [uv](https://docs.astral.sh/uv/getting-started/installation/):
-
-```
-curl -LsSf https://astral.sh/uv/install.sh | sh # install UV (see docs for other install methods)
+# install the latest version of halmos for the current user and add it to PATH
 uv tool install halmos
+
+# or, install the development version from the repository
+# uv tool install git+https://github.com/a16z/halmos
+
+# after installing, you can update halmos to the latest version with:
+uv tool upgrade halmos
+```
+
+### Using `docker`
+
+You can download a pre-built Docker image that contains python, halmos, its dependencies, foundry, solvers, etc.:
+
+```sh
+docker pull ghcr.io/a16z/halmos:latest
+```
+
+### Using `pip` (for advanced users)
+
+Note: this is not recommended because of the extra work required to manage the python version and the virtual environment. But if you know what you are doing, and need the extra control, you can do it like this:
+
+```sh
+# make sure you have a suitable python version installed, e.g.:
+python3.12 --version
+
+# create and activate a virtual environment with an explicit python version
+python3.12 -m venv .venv && source .venv/bin/activate
+
+# install the latest version of halmos
+pip install halmos
+
+# or, install the development version from the repository
+pip install git+https://github.com/a16z/halmos
 ```
 
 ## Usage
 
-```
+```sh
 cd /path/to/src
 halmos
 ```
 
 For more details:
 
-```
+```sh
 halmos --help
 ```
 
@@ -65,14 +84,14 @@ Alternatively, you can run the latest halmos Docker image available at [ghcr.io/
 cd /path/to/src
 
 # mount '.' under /workspace in the container
-docker run -v .:/workspace ghcr.io/a16z/halmos:0.1.14
+docker run -v .:/workspace ghcr.io/a16z/halmos:latest
 ```
 
-## Examples
+## Getting Started
 
 Refer to the [getting started guide](docs/getting-started.md) and the [examples](examples/README.md) directory.
 
-## Contributing
+## Contributing / Developing
 
 Refer to the [contributing guidelines](CONTRIBUTING.md), and explore the list of issues labeled ["good first issue" or "help wanted."][issues]
 

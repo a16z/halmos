@@ -8,34 +8,11 @@ Symbolic tests looks similar to fuzz tests, but there are certain differences th
 
 ## 0. Install Halmos
 
-Halmos is available as a [Python package][Halmos Package], and can be installed using `pip`:
+If you haven't installed Halmos yet, please refer to the [installation guide](../README.md#installation) or quickly install it with:
+
+```sh
+uv tool install halmos
 ```
-pip install halmos
-```
-
-[Halmos Package]: <https://pypi.org/project/halmos/>
-
-**Tips:**
-
-- If you want to try out the nightly build version, you can install it from the Github repository:
-  ```
-  pip install git+https://github.com/a16z/halmos
-  ```
-
-- If you're not familiar with managing Python packages, we recommend using `venv`. Create a virtual environment and install Halmos within it:
-  ```
-  python3 -m venv <venv-dir>
-  source <venv-dir>/bin/activate
-  pip install halmos
-  ```
-  You can activate or deactivate the virtual environment before or after using Halmos:
-  ```
-  # to activate:
-  source <venv-dir>/bin/activate
-
-  # to deactivate:
-  deactivate
-  ```
 
 ## 1. Write setUp()
 
