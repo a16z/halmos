@@ -15,9 +15,11 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from dataclasses import asdict, dataclass
+from datetime import timedelta
 from enum import Enum
 from importlib import metadata
 
+from rich.status import Status
 from z3 import (
     Z3_OP_CONCAT,
     BitVec,
@@ -733,14 +735,22 @@ def run(
             f"# of potential paths involving assertion violations: {len(future_models)} / {len(result_exs)}  (--solver-threads {args.solver_threads})"
         )
 
+    # display assertion solving progress
+    if not args.no_status or args.early_exit:
+        with Status("") as status:
+            while True:
+                if args.early_exit and len(counterexamples) > 0:
+                    break
+                done = sum(fm.done() for fm in future_models)
+                total = len(future_models)
+                if done == total:
+                    break
+                elapsed = timedelta(seconds=int(timer.elapsed()))
+                status.update(f"[{elapsed}] solving queries: {done} / {total}")
+                time.sleep(0.1)
+
     if args.early_exit:
-        while not (
-            len(counterexamples) > 0 or all([fm.done() for fm in future_models])
-        ):
-            time.sleep(1)
-
         thread_pool.shutdown(wait=False, cancel_futures=True)
-
     else:
         thread_pool.shutdown(wait=True)
 
