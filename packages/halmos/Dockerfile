@@ -16,9 +16,10 @@ ENV PATH="/halmos/bin:$PATH" \
     UV_LINK_MODE=copy
 
 # Install halmos, assuming it is checked out in the current host directory
+# --locked is used to avoid updating uv.lock, and instead fails if the lockfile is out of date
 RUN --mount=type=bind,source=../..,target=/src,readonly=false \
     cd /src && \
-    uv sync --frozen --extra dev --no-editable
+    uv sync --locked --extra dev --no-editable
 
 # Set a nicer prompt
 ENV IMAGE_NAME=halmos
