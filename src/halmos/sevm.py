@@ -5,7 +5,9 @@ from collections import defaultdict
 from collections.abc import Callable, Iterator
 from copy import deepcopy
 from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import reduce
+from timeit import default_timer as timer
 from typing import (
     Any,
     ForwardRef,
@@ -14,6 +16,7 @@ from typing import (
 )
 
 from eth_hash.auto import keccak
+from rich.status import Status
 from z3 import (
     UGE,
     UGT,
@@ -144,6 +147,7 @@ EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
 
 # TODO: make this configurable
 MAX_MEMORY_SIZE = 2**20
+PULSE_INTERVAL = 2**13
 
 FOUNDRY_CALLER = 0x1804C8AB1F12E6BBF3894D4083F33E07309D1F38
 FOUNDRY_ORIGIN = FOUNDRY_CALLER
@@ -1655,6 +1659,10 @@ class Worklist:
     def __init__(self):
         self.stack = []
 
+        # status data
+        self.completed_paths = 0
+        self.start_time = timer()
+
     def push(self, ex: Exec, step: int):
         self.stack.append(WorklistItem(ex, step))
 
@@ -2061,6 +2069,7 @@ class SEVM:
                 if subcall.is_stuck():
                     # internal errors abort the current path,
                     # so we don't need to add it to the worklist
+                    stack.completed_paths += 1
                     yield new_ex
                     return
 
@@ -2402,6 +2411,7 @@ class SEVM:
 
             if subcall.is_stuck():
                 # internal errors abort the current path,
+                stack.completed_paths += 1
                 yield new_ex
                 return
 
@@ -2630,6 +2640,10 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
+        with Status("") as status:
+            yield from self._run(ex0, status)
+
+    def _run(self, ex0: Exec, status: Status) -> Iterator[Exec]:
         step_id: int = 0
         stack: Worklist = Worklist()
         stack.push(ex0, 0)
@@ -2637,6 +2651,7 @@ class SEVM:
         def finalize(ex: Exec):
             # if it's at the top-level, there is no callback; yield the current execution state
             if ex.callback is None:
+                stack.completed_paths += 1
                 yield ex
 
             # otherwise, execute the callback to return to the parent execution context
@@ -2650,6 +2665,20 @@ class SEVM:
                 ex: Exec = item.ex
                 prev_step_id: int = item.step
                 step_id += 1
+
+                # display progress
+                if not self.options.no_status and step_id % PULSE_INTERVAL == 0:
+                    elapsed = timer() - stack.start_time
+                    speed = step_id / elapsed
+
+                    # hh:mm:ss
+                    elapsed_fmt = timedelta(seconds=int(elapsed))
+
+                    status.update(
+                        f"[{elapsed_fmt}] {speed:.0f} ops/s"
+                        f" | completed paths: {stack.completed_paths}"
+                        f" | outstanding paths: {len(stack)}"
+                    )
 
                 if not ex.path.is_activated():
                     ex.path.activate()
@@ -3121,6 +3150,7 @@ class SEVM:
                 if not ex.is_halted():
                     # return data shouldn't be None, as it is considered being stuck
                     ex.halt(data=ByteVec(), error=err)
+                stack.completed_paths += 1
                 yield ex  # early exit; do not call finalize()
                 continue
 

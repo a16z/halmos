@@ -296,6 +296,12 @@ class Config:
         short="st",
     )
 
+    no_status: bool = arg(
+        help="disable progress display",
+        global_default=False,
+        group=debugging,
+    )
+
     debug: bool = arg(
         help="run in debug mode",
         global_default=False,
