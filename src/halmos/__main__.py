@@ -745,7 +745,7 @@ def run(
                 if done == total:
                     break
                 status.update(f"solving: {done} / {total}")
-                time.sleep(1)
+                time.sleep(0.1)
 
     if args.early_exit:
         thread_pool.shutdown(wait=False, cancel_futures=True)
