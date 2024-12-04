@@ -15,11 +15,13 @@ ENV PATH="/halmos/bin:$PATH" \
     UV_PYTHON_DOWNLOADS=never \
     UV_LINK_MODE=copy
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 # Install halmos, assuming it is checked out in the current host directory
-# --locked is used to avoid updating uv.lock, and instead fails if the lockfile is out of date
+# we don't specify --frozen or --locked because we don't check in uv.lock
 RUN --mount=type=bind,source=../..,target=/src,readonly=false \
     cd /src && \
-    uv sync --locked --extra dev --no-editable
+    uv sync --extra dev --no-editable
 
 # Set a nicer prompt
 ENV IMAGE_NAME=halmos

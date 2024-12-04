@@ -24,3 +24,10 @@ out/
 
 # VS Code
 .vscode/
+
+# https://docs.astral.sh/uv/concepts/projects/layout/#the-lockfile
+# we go against the recommended best practice and don't add it to source control:
+# - adds too much noise
+# - adds friction to CI
+# (at the cost of reproducible builds)
+uv.lock
