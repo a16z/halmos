@@ -1,3 +1,0 @@
-black
-pre-commit
-pytest
