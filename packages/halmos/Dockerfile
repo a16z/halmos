@@ -15,8 +15,6 @@ ENV PATH="/halmos/bin:$PATH" \
     UV_PYTHON_DOWNLOADS=never \
     UV_LINK_MODE=copy
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
 # Install halmos, assuming it is checked out in the current host directory
 # we don't specify --frozen or --locked because we don't check in uv.lock
 RUN --mount=type=bind,source=../..,target=/src,readonly=false \
