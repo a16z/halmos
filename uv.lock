@@ -53,7 +53,7 @@ wheels = [
 
 [[package]]
 name = "halmos"
-version = "0.2.2.dev3+g86c2553.d20241203"
+version = "0.2.2.dev5+gb9cf162.d20241204"
 source = { editable = "." }
 dependencies = [
     { name = "eth-hash", extra = ["pysha3"] },
