@@ -2675,8 +2675,9 @@ class SEVM:
                     elapsed_fmt = str(timedelta(seconds=int(elapsed)))
 
                     status.update(
-                        f"pulse: [{elapsed_fmt}] {step_id} ops ({speed:.2f} ops/s) | "
-                        f"completed paths: {stack.completed_paths} | outstanding paths: {len(stack)}"
+                        f"[{elapsed_fmt}] {speed:.0f} ops/s"
+                        f" | completed paths: {stack.completed_paths}"
+                        f" | outstanding paths: {len(stack)}"
                     )
 
                 if not ex.path.is_activated():
