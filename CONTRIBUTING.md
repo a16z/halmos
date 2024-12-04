@@ -66,10 +66,7 @@ Alternatively, you can manage the python version and the virtual environment man
 python3.12 -m venv .venv && source .venv/bin/activate
 
 # install halmos and its runtime dependencies in editable mode
-python -m pip install -e .
-
-# install the dev dependencies
-python -m pip install -r requirements-dev.txt
+python -m pip install -e ".[dev]"
 
 # install and run the pre-commit hooks
 pre-commit install
