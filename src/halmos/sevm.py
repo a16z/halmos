@@ -1659,7 +1659,7 @@ class Worklist:
     def __init__(self):
         self.stack = []
 
-        # pulse data
+        # status data
         self.completed_paths = 0
         self.start_time = timer()
 
@@ -2640,7 +2640,7 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
-        with Status("pulse:") as status:
+        with Status("") as status:
             yield from self._run(ex0, status)
 
     def _run(self, ex0: Exec, status: Status) -> Iterator[Exec]:
@@ -2667,12 +2667,12 @@ class SEVM:
                 step_id += 1
 
                 # display progress
-                if not self.options.no_pulse and step_id % PULSE_INTERVAL == 0:
+                if not self.options.no_status and step_id % PULSE_INTERVAL == 0:
                     elapsed = timer() - stack.start_time
                     speed = step_id / elapsed
 
                     # hh:mm:ss
-                    elapsed_fmt = str(timedelta(seconds=int(elapsed)))
+                    elapsed_fmt = timedelta(seconds=int(elapsed))
 
                     status.update(
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"

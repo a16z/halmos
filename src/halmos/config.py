@@ -296,7 +296,7 @@ class Config:
         short="st",
     )
 
-    no_pulse: bool = arg(
+    no_status: bool = arg(
         help="disable progress display",
         global_default=False,
         group=debugging,
