@@ -2672,7 +2672,7 @@ class SEVM:
                     speed = step_id / elapsed
 
                     # hh:mm:ss
-                    elapsed_fmt = str(timedelta(seconds=elapsed)).split(".")[0]
+                    elapsed_fmt = str(timedelta(seconds=int(elapsed)))
 
                     status.update(
                         f"pulse: [{elapsed_fmt}] {step_id} ops ({speed:.2f} ops/s) | "
