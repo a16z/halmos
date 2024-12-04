@@ -26,7 +26,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["macos-latest", "ubuntu-latest", "windows-latest"]
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
         storage-layout: ["solidity", "generic"]
         cache-solver: ["", "--cache-solver"]
 
