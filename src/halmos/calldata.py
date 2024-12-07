@@ -141,7 +141,7 @@ class Calldata:
                 else self.args.default_bytes_lengths  # bytes or string
             )
             debug_once(
-                f"Warning: no size provided for {name}; default value {sizes} will be used."
+                f"no size provided for {name}; default value {sizes} will be used."
             )
 
         size_var = BitVec(f"p_{name}_length_{uid()}_{self.new_symbol_id():>02}", 256)
