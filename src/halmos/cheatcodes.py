@@ -31,6 +31,7 @@ from .calldata import (
     mk_calldata,
 )
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath, NotConcreteError
+from .logs import debug
 from .mapper import BuildOut
 from .utils import (
     Address,
@@ -59,7 +60,6 @@ from .utils import (
     uint160,
     uint256,
 )
-from .logs import debug
 
 # f_vmaddr(key) -> address
 f_vmaddr = Function("f_vmaddr", BitVecSort256, BitVecSort160)

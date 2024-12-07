@@ -12,8 +12,8 @@ from z3 import (
 
 from .bytevec import ByteVec
 from .config import Config as HalmosConfig
-from .utils import con, uid
 from .logs import debug_once
+from .utils import con, uid
 
 
 @dataclass(frozen=True)

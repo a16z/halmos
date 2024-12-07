@@ -44,6 +44,20 @@ from .calldata import FunctionInfo, get_abi, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
 from .exceptions import HalmosException
+from .logs import (
+    COUNTEREXAMPLE_INVALID,
+    COUNTEREXAMPLE_UNKNOWN,
+    INTERNAL_ERROR,
+    LOOP_BOUND,
+    PARSING_ERROR,
+    REVERT_ALL,
+    debug,
+    error,
+    logger,
+    logger_unique,
+    warn,
+    warn_code,
+)
 from .mapper import BuildOut, DeployAddressMapper, Mapper
 from .sevm import (
     EMPTY_BALANCE,
@@ -85,20 +99,6 @@ from .utils import (
     stringify,
     unbox_int,
     yellow,
-)
-from .logs import (
-    COUNTEREXAMPLE_INVALID,
-    COUNTEREXAMPLE_UNKNOWN,
-    INTERNAL_ERROR,
-    LOOP_BOUND,
-    PARSING_ERROR,
-    REVERT_ALL,
-    debug,
-    error,
-    logger,
-    logger_unique,
-    warn,
-    warn_code,
 )
 
 StrModel = dict[str, str]

@@ -75,6 +75,14 @@ from .exceptions import (
     StackUnderflowError,
     WriteInStaticContext,
 )
+from .logs import (
+    INTERNAL_ERROR,
+    LIBRARY_PLACEHOLDER,
+    debug,
+    debug_once,
+    warn,
+    warn_code,
+)
 from .utils import (
     EVM,
     Address,
@@ -124,14 +132,6 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
-)
-from .logs import (
-    INTERNAL_ERROR,
-    LIBRARY_PLACEHOLDER,
-    debug,
-    debug_once,
-    warn,
-    warn_code,
 )
 
 Steps = dict[int, dict[str, Any]]  # execution tree
