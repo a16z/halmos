@@ -1,6 +1,6 @@
 # How to write symbolic tests with Halmos
 
-Symbolic tests looks similar to fuzz tests, but there are certain differences that need to be understood. This guide will walk you through the process of writing symbolic tests, highlighting the differences compared to fuzz tests. It is intended for those who are already familiar with [Dapptools]-/[Foundry]-style fuzz tests. If you haven't experienced fuzz tests before, please refer to the [Foundry document][Foundry Fuzz Testing] to grasp the basic concepts.
+Symbolic tests look similar to fuzz tests, but there are certain differences that need to be understood. This guide will walk you through the process of writing symbolic tests, highlighting the differences compared to fuzz tests. It is intended for those who are already familiar with [Dapptools]-/[Foundry]-style fuzz tests. If you haven't experienced fuzz tests before, please refer to the [Foundry document][Foundry Fuzz Testing] to grasp the basic concepts.
 
 [Dapptools]: <https://dapp.tools/>
 [Foundry]: <https://book.getfoundry.sh/>
