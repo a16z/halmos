@@ -12,6 +12,7 @@ from z3 import (
 
 from .bytevec import ByteVec
 from .config import Config as HalmosConfig
+from .logs import debug_once
 from .utils import con, uid
 
 
@@ -139,10 +140,9 @@ class Calldata:
                 if isinstance(typ, DynamicArrayType)
                 else self.args.default_bytes_lengths  # bytes or string
             )
-            if self.args.debug:
-                print(
-                    f"Warning: no size provided for {name}; default value {sizes} will be used."
-                )
+            debug_once(
+                f"no size provided for {name}; default value {sizes} will be used."
+            )
 
         size_var = BitVec(f"p_{name}_length_{uid()}_{self.new_symbol_id():>02}", 256)
 

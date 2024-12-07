@@ -6,6 +6,7 @@ from typing import Any, ForwardRef
 from sortedcontainers import SortedDict
 from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
 
+from .logs import warn
 from .utils import (
     Byte,
     Word,
@@ -16,7 +17,6 @@ from .utils import (
     extract_bytes,
     try_bv_value_to_bytes,
     unbox_int,
-    warn,
 )
 
 UnwrappedBytes = bytes | Byte

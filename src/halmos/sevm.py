@@ -75,6 +75,14 @@ from .exceptions import (
     StackUnderflowError,
     WriteInStaticContext,
 )
+from .logs import (
+    INTERNAL_ERROR,
+    LIBRARY_PLACEHOLDER,
+    debug,
+    debug_once,
+    warn,
+    warn_code,
+)
 from .utils import (
     EVM,
     Address,
@@ -97,7 +105,6 @@ from .utils import (
     con_addr,
     concat,
     create_solver,
-    debug,
     extract_bytes,
     f_ecrecover,
     f_inv_sha3_name,
@@ -125,12 +132,6 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
-    warn,
-)
-from .warnings import (
-    INTERNAL_ERROR,
-    LIBRARY_PLACEHOLDER,
-    warn_code,
 )
 
 Steps = dict[int, dict[str, Any]]  # execution tree
@@ -1923,14 +1924,12 @@ class SEVM:
         if target in ex.code:
             return target
 
-        if self.options.debug:
-            debug(
-                f"Address {hexify(target)} not in: [{', '.join([hexify(addr) for addr in ex.code])}]"
-            )
+        debug_once(
+            f"Address {hexify(target)} not in: [{', '.join([hexify(addr) for addr in ex.code])}]"
+        )
 
         if is_bv_value(target):
-            if self.options.debug:
-                debug(f"Empty address: {hexify(target)}")
+            debug_once(f"Empty address: {hexify(target)}")
             return None
 
         if target in ex.alias:
@@ -1943,16 +1942,14 @@ class SEVM:
                 continue
             alias_cond = target == addr
             if ex.check(alias_cond) != unsat:
-                if self.options.debug:
-                    debug(
-                        f"Potential address alias: {hexify(addr)} for {hexify(target)}"
-                    )
+                debug_once(
+                    f"Potential address alias: {hexify(addr)} for {hexify(target)}"
+                )
                 potential_aliases.append((addr, alias_cond))
 
         emptyness_cond = And([target != addr for addr in ex.code])
         if ex.check(emptyness_cond) != unsat:
-            if self.options.debug:
-                debug(f"Potential empty address: {hexify(target)}")
+            debug_once(f"Potential empty address: {hexify(target)}")
             potential_aliases.append((None, emptyness_cond))
 
         if not potential_aliases:
@@ -2493,12 +2490,12 @@ class SEVM:
             follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
-                if self.options.debug:
-                    debug(f"\nloop id: {jid}")
-                    debug(f"loop condition: {cond}")
-                    debug(f"calldata: {ex.calldata()}")
-                    debug("path condition:")
-                    debug(ex.path)
+                debug(
+                    f"\nloop id: {jid}\n"
+                    f"loop condition: {cond}\n"
+                    f"calldata: {ex.calldata()}\n"
+                    f"path condition:\n{ex.path}\n"
+                )
         else:
             # for constant-bounded loops
             follow_true = potential_true
@@ -2607,10 +2604,9 @@ class SEVM:
                 loaded = concrete_loaded
 
             elif loaded in ex.path.concretization.candidates:
-                if self.options.debug:
-                    debug(
-                        f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}"
-                    )
+                debug_once(
+                    f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}"
+                )
 
                 for candidate in ex.path.concretization.candidates[loaded]:
                     new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
@@ -3077,11 +3073,10 @@ class SEVM:
                                 )
                             )
                     else:
-                        if self.options.debug:
-                            warn(
-                                f"Warning: the use of symbolic BYTE indexing may potentially "
-                                f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
-                            )
+                        debug_once(
+                            f"Warning: the use of symbolic BYTE indexing may potentially "
+                            f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
+                        )
                         ex.st.push(self.sym_byte_of(idx, w))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
@@ -3139,9 +3134,7 @@ class SEVM:
                 continue
 
             except HalmosException as err:
-                if self.options.debug:
-                    print(err)
-
+                debug(err)
                 ex.halt(data=None, error=err)
                 yield from finalize(ex)
                 continue

@@ -31,6 +31,7 @@ from .calldata import (
     mk_calldata,
 )
 from .exceptions import FailCheatcode, HalmosException, InfeasiblePath, NotConcreteError
+from .logs import debug
 from .mapper import BuildOut
 from .utils import (
     Address,
@@ -740,9 +741,7 @@ class hevm_cheat_code:
 
             cmd = extract_string_array_argument(arg, 0)
 
-            debug = sevm.options.debug
-            verbose = sevm.options.verbose
-            if debug or verbose:
+            if sevm.options.debug or sevm.options.verbose:
                 print(f"[vm.ffi] {cmd}")
 
             process = Popen(cmd, stdout=PIPE, stderr=PIPE)
@@ -754,8 +753,7 @@ class hevm_cheat_code:
 
             out_str = stdout.decode("utf-8").strip()
 
-            if debug:
-                print(f"[vm.ffi] {cmd}, stdout: {green(out_str)}")
+            debug(f"[vm.ffi] {cmd}, stdout: {green(out_str)}")
 
             if decode_hex(out_str) is not None:
                 # encode hex strings as is for compatibility with foundry's ffi

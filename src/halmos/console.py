@@ -1,5 +1,9 @@
 from z3 import BitVec, BitVecRef
 
+from .logs import (
+    info,
+    warn,
+)
 from .utils import (
     con_addr,
     extract_bytes,
@@ -7,7 +11,6 @@ from .utils import (
     extract_funsig,
     extract_string_argument,
     hexify,
-    info,
     int_of,
     magenta,
     render_address,
@@ -15,7 +18,6 @@ from .utils import (
     render_bytes,
     render_int,
     render_uint,
-    warn,
 )
 
 

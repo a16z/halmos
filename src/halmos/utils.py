@@ -36,8 +36,9 @@ from z3 import (
     substitute,
 )
 
-from halmos.exceptions import HalmosException, NotConcreteError
-from halmos.mapper import Mapper
+from .exceptions import HalmosException, NotConcreteError
+from .logs import warn
+from .mapper import Mapper
 
 # order of the secp256k1 curve
 secp256k1n = (
@@ -591,22 +592,6 @@ color_debug = magenta
 color_info = cyan
 color_warn = yellow
 color_error = red
-
-
-def error(text: str) -> None:
-    print(color_error(text))
-
-
-def warn(text: str) -> None:
-    print(color_warn(text))
-
-
-def info(text: str) -> None:
-    print(color_info(text))
-
-
-def debug(text: str) -> None:
-    print(color_debug(text))
 
 
 def indent_text(text: str, n: int = 4) -> str:
