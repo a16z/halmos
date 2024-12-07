@@ -38,7 +38,7 @@ from z3 import (
 
 from .exceptions import HalmosException, NotConcreteError
 from .mapper import Mapper
-from .warnings import warn
+from .logs import warn
 
 # order of the secp256k1 curve
 secp256k1n = (

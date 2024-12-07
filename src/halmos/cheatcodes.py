@@ -59,7 +59,7 @@ from .utils import (
     uint160,
     uint256,
 )
-from .warnings import debug
+from .logs import debug
 
 # f_vmaddr(key) -> address
 f_vmaddr = Function("f_vmaddr", BitVecSort256, BitVecSort160)

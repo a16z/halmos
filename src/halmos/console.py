@@ -15,7 +15,7 @@ from .utils import (
     render_int,
     render_uint,
 )
-from .warnings import (
+from .logs import (
     info,
     warn,
 )

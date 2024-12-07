@@ -17,7 +17,7 @@ from .utils import (
     try_bv_value_to_bytes,
     unbox_int,
 )
-from .warnings import warn
+from .logs import warn
 
 UnwrappedBytes = bytes | Byte
 WrappedBytes = ForwardRef("Chunk") | ForwardRef("ByteVec")

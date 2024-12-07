@@ -86,7 +86,7 @@ from .utils import (
     unbox_int,
     yellow,
 )
-from .warnings import (
+from .logs import (
     COUNTEREXAMPLE_INVALID,
     COUNTEREXAMPLE_UNKNOWN,
     INTERNAL_ERROR,

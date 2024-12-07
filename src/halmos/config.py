@@ -10,7 +10,7 @@ from typing import Any
 
 import toml
 
-from .warnings import warn
+from .logs import warn
 
 # common strings
 internal = "internal"

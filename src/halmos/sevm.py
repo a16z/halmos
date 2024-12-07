@@ -125,7 +125,7 @@ from .utils import (
     uint256,
     unbox_int,
 )
-from .warnings import (
+from .logs import (
     INTERNAL_ERROR,
     LIBRARY_PLACEHOLDER,
     debug,
