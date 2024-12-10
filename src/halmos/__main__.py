@@ -1352,6 +1352,11 @@ def _main(_args=None) -> MainResult:
         logger.setLevel(logging.DEBUG)
         logger_unique.setLevel(logging.DEBUG)
 
+    if args.trace_memory:
+        import halmos.memtrace as memtrace
+
+        memtrace.MemTracer.get().start()
+
     #
     # compile
     #

@@ -394,6 +394,12 @@ class Config:
         group=debugging,
     )
 
+    trace_memory: bool = arg(
+        help="trace memory allocations and deallocations",
+        global_default=False,
+        group=debugging,
+    )
+
     ### Build options
 
     forge_build_out: str = arg(
@@ -787,7 +793,7 @@ def main():
             continue
 
         name = field_info.name.replace("_", "-")
-        if name in ["config", "root", "version"]:
+        if name in ["config", "root", "version", "trace_memory"]:
             # skip fields that don't make sense in a config file
             continue
 
