@@ -230,6 +230,19 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
     return ByteVec()  # empty return data
 
 
+def snapshot_storage(ex, arg, sevm, stack, step_id):
+    account = uint160(arg.get_word(4))
+    account_alias = sevm.resolve_address_alias(
+        ex, account, stack, step_id, allow_branching=False
+    )
+
+    if account_alias is None:
+        error_msg = f"snapshotStorage() is not allowed for a nonexistent account: {hexify(account)}"
+        raise HalmosException(error_msg)
+
+    return ByteVec(uint256(ex.storage[account_alias].cnt))
+
+
 def create_calldata_contract(ex, arg, sevm, stack, step_id):
     contract_name = name_of(extract_string_argument(arg, 0))
     return create_calldata_generic(ex, sevm, contract_name)
@@ -447,6 +460,7 @@ class halmos_cheat_code:
         0x3B0FA01B: create_address,  # createAddress(string)
         0x6E0BB659: create_bool,  # createBool(string)
         0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
+        0x5DBB8438: snapshot_storage,  # snapshotStorage(address)
         0xBE92D5A2: create_calldata_contract,  # createCalldata(string)
         0xDEEF391B: create_calldata_contract_bool,  # createCalldata(string,bool)
         0x88298B32: create_calldata_file_contract,  # createCalldata(string,string)
