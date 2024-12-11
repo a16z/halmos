@@ -642,17 +642,21 @@ def run(
     stuck = []
 
     thread_pool = ThreadPoolExecutor(max_workers=args.solver_threads)
-    result_exs = []
     future_models = []
     counterexamples = []
     unsat_cores = []
-    traces = {}
+    traces: dict[int, str] = {}
+    exec_cache: dict[int, Exec] = {}
 
     def future_callback(future_model):
         m = future_model.result()
         models.append(m)
 
         model, index, result = m.model, m.index, m.result
+
+        # retrieve cached exec and clear the cache entry
+        exec = exec_cache.pop(index, None)
+
         if result == unsat:
             if m.unsat_core:
                 unsat_cores.append(m.unsat_core)
@@ -672,20 +676,25 @@ def run(
         else:
             warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
 
-        if args.print_failed_states:
-            print(f"# {idx+1}")
-            print(result_exs[index])
-
         if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
             print(
-                f"Trace #{idx+1}:"
+                f"Trace #{index + 1}:"
                 if args.verbose == VERBOSITY_TRACE_PATHS
                 else "Trace:"
             )
             print(traces[index], end="")
 
+        if args.print_failed_states:
+            print(f"# {index + 1}")
+            print(exec)
+
+    # initialize with default value in case we don't enter the loop body
+    idx = -1
+
     for idx, ex in enumerate(exs):
-        result_exs.append(ex)
+        # cache exec in case we need to print it later
+        if args.print_failed_states:
+            exec_cache[idx] = ex
 
         if args.verbose >= VERBOSITY_TRACE_PATHS:
             print(f"Path #{idx+1}:")
@@ -725,15 +734,21 @@ def run(
                 print(ex)
             normal += 1
 
+        # print post-states
+        if args.print_states:
+            print(f"# {idx+1}")
+            print(ex)
+
         # 0 width is unlimited
-        if args.width and len(result_exs) >= args.width:
+        if args.width and idx >= args.width:
             break
 
+    num_execs = idx + 1
     timer.create_subtimer("models")
 
-    if len(future_models) > 0 and args.verbose >= 1:
+    if future_models and args.verbose >= 1:
         print(
-            f"# of potential paths involving assertion violations: {len(future_models)} / {len(result_exs)}  (--solver-threads {args.solver_threads})"
+            f"# of potential paths involving assertion violations: {len(future_models)} / {num_execs}  (--solver-threads {args.solver_threads})"
         )
 
     # display assertion solving progress
@@ -781,7 +796,7 @@ def run(
 
     # print result
     print(
-        f"{passfail} {funsig} (paths: {len(result_exs)}, {time_info}, bounds: [{', '.join([str(x) for x in dyn_params])}])"
+        f"{passfail} {funsig} (paths: {num_execs}, {time_info}, bounds: [{', '.join([str(x) for x in dyn_params])}])"
     )
 
     for idx, _, err in stuck:
@@ -797,12 +812,6 @@ def run(
         )
         debug("\n".join(jumpid_str(x) for x in logs.bounded_loops))
 
-    # print post-states
-    if args.print_states:
-        for idx, ex in enumerate(result_exs):
-            print(f"# {idx+1} / {len(result_exs)}")
-            print(ex)
-
     # log steps
     if args.log:
         with open(args.log, "w") as json_file:
@@ -817,7 +826,7 @@ def run(
             exitcode,
             len(counterexamples),
             counterexamples,
-            (len(result_exs), normal, len(stuck)),
+            (num_execs, normal, len(stuck)),
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
         )
