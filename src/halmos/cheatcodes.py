@@ -240,7 +240,7 @@ def snapshot_storage(ex, arg, sevm, stack, step_id):
         error_msg = f"snapshotStorage() is not allowed for a nonexistent account: {hexify(account)}"
         raise HalmosException(error_msg)
 
-    return ByteVec(uint256(ex.storage[account_alias].cnt))
+    return ByteVec(int.to_bytes(ex.storage[account_alias].cnt, length=32))
 
 
 def create_calldata_contract(ex, arg, sevm, stack, step_id):
