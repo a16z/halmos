@@ -56,7 +56,7 @@ contract SimpleStateTest is SymTest, Test {
             (success,) = address(target).call(svm.createCalldata("SimpleState", true)); // including view functions
             vm.assume(success);
             uint nid = svm.snapshotStorage(address(target));
-            vm.assume(nid > id); // ignore if no state changes
+            vm.assume(nid != id); // ignore if no state changes
             id = nid;
         }
 
