@@ -832,18 +832,20 @@ class Path:
 @dataclass
 class StorageData:
     symbolic: bool = False
-    mapping: dict = field(default_factory=dict)
     cnt: int = 0
 
+    # for internal use only; should not be modified directly from outside, except during initialization.
+    _mapping: dict = field(default_factory=dict)
+
     def __getitem__(self, key) -> ArrayRef | BitVecRef:
-        return self.mapping[key]
+        return self._mapping[key]
 
     def __setitem__(self, key, value) -> None:
-        self.mapping[key] = value
+        self._mapping[key] = value
         self.cnt += 1
 
     def __contains__(self, key) -> bool:
-        return key in self.mapping
+        return key in self._mapping
 
 
 class Exec:  # an execution path
@@ -1314,7 +1316,7 @@ class Storage:
 class SolidityStorage(Storage):
     @classmethod
     def mk_storagedata(cls) -> StorageData:
-        return StorageData(mapping=defaultdict(lambda: defaultdict(dict)))
+        return StorageData(_mapping=defaultdict(lambda: defaultdict(dict)))
 
     @classmethod
     def empty(cls, addr: BitVecRef, slot: int, keys: tuple) -> ArrayRef:
