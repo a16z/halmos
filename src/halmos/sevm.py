@@ -833,6 +833,7 @@ class Path:
 class StorageData:
     def __init__(self):
         self.symbolic = False
+        self._mapping = {}
 
     def __getitem__(self, key) -> ArrayRef | BitVecRef:
         return self._mapping[key]
@@ -846,35 +847,20 @@ class StorageData:
     def digest(self) -> bytes:
         """
         Computes the SHA3-256 hash of the storage mapping.
+
+        The hash input is constructed by serializing each key-value pair into a byte sequence.
+        Keys are encoded as 256-bit integers for GenericStorage, or as arrays of 256-bit integers for SolidityStorage.
+        Values, being Z3 objects, are encoded using their unique identifiers (get_id()) as 256-bit integers.
+        For simplicity, all numbers are represented as 256-bit integers, regardless of their actual size.
         """
-        pass
-
-
-class SolidityStorageData(StorageData):
-    def __init__(self):
-        StorageData.__init__(self)
-        self._mapping = defaultdict(lambda: defaultdict(dict))
-
-    def digest(self) -> bytes:
-        m = hashlib.sha3_256()
-        for keys, val in self._mapping.items():
-            # NOTE: 256-bit size is used, as the first key (slot) can be 256-bit.
-            for key in keys:
-                m.update(int.to_bytes(key, length=32))
-            m.update(int.to_bytes(val.get_id(), length=32))
-        return m.digest()
-
-
-class GenericStorageData(StorageData):
-    def __init__(self):
-        StorageData.__init__(self)
-        self._mapping = {}
-
-    def digest(self) -> bytes:
         m = hashlib.sha3_256()
         for key, val in self._mapping.items():
-            # NOTE: 256-bit size is used for consistency with SolidityStorageData
-            m.update(int.to_bytes(key, length=32))
+            if isinstance(key, int):  # GenericStorage
+                m.update(int.to_bytes(key, length=32))
+            else:  # SolidityStorage
+                for _k in key:
+                    # The first key (slot) is of size 256 bits
+                    m.update(int.to_bytes(_k, length=32))
             m.update(int.to_bytes(val.get_id(), length=32))
         return m.digest()
 
@@ -1347,7 +1333,7 @@ class Storage:
 class SolidityStorage(Storage):
     @classmethod
     def mk_storagedata(cls) -> StorageData:
-        return SolidityStorageData()
+        return StorageData()
 
     @classmethod
     def empty(cls, addr: BitVecRef, slot: int, keys: tuple) -> ArrayRef:
@@ -1518,7 +1504,7 @@ class SolidityStorage(Storage):
 class GenericStorage(Storage):
     @classmethod
     def mk_storagedata(cls) -> StorageData:
-        return GenericStorageData()
+        return StorageData()
 
     @classmethod
     def empty(cls, addr: BitVecRef, loc: BitVecRef) -> ArrayRef:
