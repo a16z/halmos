@@ -14,6 +14,7 @@ contract C {
     }
 }
 
+/// @custom:halmos --storage-layout solidity
 contract SnapshotTest is SymTest, Test {
     C c;
 
@@ -21,7 +22,6 @@ contract SnapshotTest is SymTest, Test {
         c = new C();
     }
 
-    /// @custom:halmos --storage-layout solidity
     function check_snapshot() public {
         uint storage0 = svm.snapshotStorage(address(c));
         uint state0 = vm.snapshotState();
