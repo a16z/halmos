@@ -453,7 +453,7 @@ def setup(
                 print(f"{setup_sig} trace #{idx+1}:")
                 render_trace(setup_ex.context)
 
-            if not setup_ex.context.output.error:
+            if not (err := setup_ex.context.output.error):
                 setup_exs_no_error.append((setup_ex, setup_ex.path.to_smt2(args)))
 
             else:
@@ -461,7 +461,7 @@ def setup(
                 if opcode not in [EVM.REVERT, EVM.INVALID]:
                     warn_code(
                         INTERNAL_ERROR,
-                        f"Warning: {setup_sig} execution encountered an issue at {mnemonic(opcode)}: {error}",
+                        f"in {setup_sig}, executing {mnemonic(opcode)} failed with: {err}",
                     )
 
                 # only render the trace if we didn't already do it
@@ -887,7 +887,7 @@ def run_sequential(run_args: RunArgs) -> list[TestResult]:
             setup_solver,
         )
     except Exception as err:
-        error(f"Error: {setup_info.sig} failed: {type(err).__name__}: {err}")
+        error(f"{setup_info.sig} failed: {type(err).__name__}: {err}")
         if args.debug:
             traceback.print_exc()
         # reset any remaining solver states from the default context
@@ -1500,7 +1500,7 @@ def _main(_args=None) -> MainResult:
 
     if total_found == 0:
         error(
-            "Error: No tests with"
+            "No tests with"
             + f" --match-contract '{contract_regex(args)}'"
             + f" --match-test '{test_regex(args)}'"
         )

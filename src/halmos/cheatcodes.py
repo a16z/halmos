@@ -602,7 +602,9 @@ class hevm_cheat_code:
             sender = uint160(arg.get_word(4))
             result = ex.context.prank.prank(sender)
             if not result:
-                raise HalmosException("You have an active prank already.")
+                raise HalmosException(
+                    "can not call vm.prank(address) with an active prank"
+                )
             return ret
 
         # vm.prank(address sender, address origin)
@@ -611,7 +613,9 @@ class hevm_cheat_code:
             origin = uint160(arg.get_word(36))
             result = ex.context.prank.prank(sender, origin)
             if not result:
-                raise HalmosException("You have an active prank already.")
+                raise HalmosException(
+                    "can not call vm.prank(address, address) with an active prank"
+                )
             return ret
 
         # vm.startPrank(address)
@@ -619,7 +623,9 @@ class hevm_cheat_code:
             address = uint160(arg.get_word(4))
             result = ex.context.prank.startPrank(address)
             if not result:
-                raise HalmosException("You have an active prank already.")
+                raise HalmosException(
+                    "can not call vm.startPrank(address) with an active prank"
+                )
             return ret
 
         # vm.startPrank(address sender, address origin)
@@ -628,7 +634,9 @@ class hevm_cheat_code:
             origin = uint160(arg.get_word(36))
             result = ex.context.prank.startPrank(sender, origin)
             if not result:
-                raise HalmosException("You have an active prank already.")
+                raise HalmosException(
+                    "can not call vm.startPrank(address, address) with an active prank"
+                )
             return ret
 
         # vm.stopPrank()
