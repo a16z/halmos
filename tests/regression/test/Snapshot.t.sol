@@ -21,6 +21,7 @@ contract SnapshotTest is SymTest, Test {
         c = new C();
     }
 
+    /// @custom:halmos --storage-layout solidity
     function check_snapshot() public {
         uint storage0 = svm.snapshotStorage(address(c));
         uint state0 = vm.snapshotState();
@@ -45,6 +46,7 @@ contract SnapshotTest is SymTest, Test {
         console.log(storage2);
         console.log(state2);
 
+        // NOTE: failed with the generic storage layout, as the whole storage is an smt array
         assertEq(storage1, storage2);
         assertEq(state1, state2);
 
@@ -65,6 +67,7 @@ contract SnapshotTest is SymTest, Test {
         console.log(storage4);
         console.log(state4);
 
+        // NOTE: failed with the generic storage layout, as the whole storage is an smt array
         assertEq(storage2, storage4);
         assertEq(state2, state4);
     }

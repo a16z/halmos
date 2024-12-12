@@ -856,9 +856,9 @@ class SolidityStorageData(StorageData):
         self._mapping = defaultdict(lambda: defaultdict(dict))
 
     def digest(self) -> bytes:
-        # NOTE: 256-bit size is used, as the first key (slot) can be 256-bit.
         m = hashlib.sha3_256()
         for keys, val in self._mapping.items():
+            # NOTE: 256-bit size is used, as the first key (slot) can be 256-bit.
             for key in keys:
                 m.update(int.to_bytes(key, length=32))
             m.update(int.to_bytes(val.get_id(), length=32))
@@ -871,9 +871,9 @@ class GenericStorageData(StorageData):
         self._mapping = {}
 
     def digest(self) -> bytes:
-        # NOTE: 256-bit size is used for consistency with SolidityStorageData
         m = hashlib.sha3_256()
         for key, val in self._mapping.items():
+            # NOTE: 256-bit size is used for consistency with SolidityStorageData
             m.update(int.to_bytes(key, length=32))
             m.update(int.to_bytes(val.get_id(), length=32))
         return m.digest()
