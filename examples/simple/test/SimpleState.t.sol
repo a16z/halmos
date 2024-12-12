@@ -33,7 +33,7 @@ contract SimpleStateTest is SymTest, Test {
         target = new SimpleState();
     }
 
-    function check_buggy() public {
+    function check_buggy_excluding_view() public {
         bool success;
 
         // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
@@ -45,19 +45,41 @@ contract SimpleStateTest is SymTest, Test {
         assertFalse(target.buggy());
     }
 
-    function check_buggy_with_snapshot() public {
+    function check_buggy_with_storage_snapshot() public {
         bool success;
 
         // take the initial storage snapshot
-        uint id = svm.snapshotStorage(address(target));
+        uint prev = svm.snapshotStorage(address(target));
 
         // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
         for (uint i = 0; i < 10; i++) {
             (success,) = address(target).call(svm.createCalldata("SimpleState", true)); // including view functions
             vm.assume(success);
-            uint nid = svm.snapshotStorage(address(target));
-            vm.assume(nid != id); // ignore if no state changes
-            id = nid;
+
+            // ignore if no storage changes
+            uint curr = svm.snapshotStorage(address(target));
+            vm.assume(curr != prev);
+            prev = curr;
+        }
+
+        assertFalse(target.buggy());
+    }
+
+    function check_buggy_with_state_snapshot() public {
+        bool success;
+
+        // take the initial state snapshot
+        uint prev = vm.snapshotState();
+
+        // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
+        for (uint i = 0; i < 10; i++) {
+            (success,) = address(target).call(svm.createCalldata("SimpleState", true)); // including view functions
+            vm.assume(success);
+
+            // ignore if no state changes
+            uint curr = vm.snapshotState();
+            vm.assume(curr != prev);
+            prev = curr;
         }
 
         assertFalse(target.buggy());

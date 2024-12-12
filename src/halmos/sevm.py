@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import hashlib
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterator
@@ -829,23 +830,53 @@ class Path:
         self.extend(path.conditions.keys())
 
 
-@dataclass
 class StorageData:
-    symbolic: bool = False
-    cnt: int = 0
-
-    # for internal use only; should not be modified directly from outside, except during initialization.
-    _mapping: dict = field(default_factory=dict)
+    def __init__(self):
+        self.symbolic = False
 
     def __getitem__(self, key) -> ArrayRef | BitVecRef:
         return self._mapping[key]
 
     def __setitem__(self, key, value) -> None:
         self._mapping[key] = value
-        self.cnt += 1
 
     def __contains__(self, key) -> bool:
         return key in self._mapping
+
+    def digest(self) -> bytes:
+        """
+        Computes the SHA3-256 hash of the storage mapping.
+        """
+        pass
+
+
+class SolidityStorageData(StorageData):
+    def __init__(self):
+        StorageData.__init__(self)
+        self._mapping = defaultdict(lambda: defaultdict(dict))
+
+    def digest(self) -> bytes:
+        # NOTE: 256-bit size is used, as the first key (slot) can be 256-bit.
+        m = hashlib.sha3_256()
+        for keys, val in self._mapping.items():
+            for key in keys:
+                m.update(int.to_bytes(key, length=32))
+            m.update(int.to_bytes(val.get_id(), length=32))
+        return m.digest()
+
+
+class GenericStorageData(StorageData):
+    def __init__(self):
+        StorageData.__init__(self)
+        self._mapping = {}
+
+    def digest(self) -> bytes:
+        # NOTE: 256-bit size is used for consistency with SolidityStorageData
+        m = hashlib.sha3_256()
+        for key, val in self._mapping.items():
+            m.update(int.to_bytes(key, length=32))
+            m.update(int.to_bytes(val.get_id(), length=32))
+        return m.digest()
 
 
 class Exec:  # an execution path
@@ -1316,7 +1347,7 @@ class Storage:
 class SolidityStorage(Storage):
     @classmethod
     def mk_storagedata(cls) -> StorageData:
-        return StorageData(_mapping=defaultdict(lambda: defaultdict(dict)))
+        return SolidityStorageData()
 
     @classmethod
     def empty(cls, addr: BitVecRef, slot: int, keys: tuple) -> ArrayRef:
@@ -1487,7 +1518,7 @@ class SolidityStorage(Storage):
 class GenericStorage(Storage):
     @classmethod
     def mk_storagedata(cls) -> StorageData:
-        return StorageData()
+        return GenericStorageData()
 
     @classmethod
     def empty(cls, addr: BitVecRef, loc: BitVecRef) -> ArrayRef:

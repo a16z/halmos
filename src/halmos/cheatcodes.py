@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -240,7 +241,33 @@ def snapshot_storage(ex, arg, sevm, stack, step_id):
         error_msg = f"snapshotStorage() is not allowed for a nonexistent account: {hexify(account)}"
         raise HalmosException(error_msg)
 
-    return ByteVec(int.to_bytes(ex.storage[account_alias].cnt, length=32))
+    return ByteVec(ex.storage[account_alias].digest())
+
+
+def snapshot_state(ex, arg, sevm, stack, step_id):
+    """
+    Generates a snapshot ID by hashing the current state (code, storage, and balance).
+    """
+    m = hashlib.sha3_256()
+
+    # code
+    # note: iteration order is guaranteed to be the insertion order
+    for addr, code in ex.code.items():
+        addr = addr if isinstance(addr, int) else addr.as_long()
+        m.update(int.to_bytes(addr, length=32))
+        # simply the object address is used, as code remains unchanged after deployment
+        m.update(int.to_bytes(id(code), length=32))
+
+    # storage
+    for addr, storage in ex.storage.items():
+        addr = addr if isinstance(addr, int) else addr.as_long()
+        m.update(int.to_bytes(addr, length=32))
+        m.update(storage.digest())
+
+    # balance
+    m.update(int.to_bytes(ex.balance.get_id(), length=32))
+
+    return ByteVec(m.digest())
 
 
 def create_calldata_contract(ex, arg, sevm, stack, step_id):
@@ -461,6 +488,7 @@ class halmos_cheat_code:
         0x6E0BB659: create_bool,  # createBool(string)
         0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
         0x5DBB8438: snapshot_storage,  # snapshotStorage(address)
+        0x9CD23835: snapshot_state,  # snapshotState()
         0xBE92D5A2: create_calldata_contract,  # createCalldata(string)
         0xDEEF391B: create_calldata_contract_bool,  # createCalldata(string,bool)
         0x88298B32: create_calldata_file_contract,  # createCalldata(string,string)
@@ -563,6 +591,9 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("getBlockNumber()"))
     get_block_number_sig: int = 0x42CBB15C
+
+    # snapshotState()
+    snapshot_state_sig: int = 0x9CD23835
 
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack, step_id) -> ByteVec | None:
@@ -857,6 +888,10 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.get_block_number_sig:
             ret.append(uint256(ex.block.number))
             return ret
+
+        # vm.snapshotState() return (uint256)
+        elif funsig == hevm_cheat_code.snapshot_state_sig:
+            return snapshot_state(ex, arg, sevm, stack, step_id)
 
         else:
             # TODO: support other cheat codes

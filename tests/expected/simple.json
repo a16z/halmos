@@ -227,7 +227,7 @@
         ],
         "test/SimpleState.t.sol:SimpleStateTest": [
             {
-                "name": "check_buggy()",
+                "name": "check_buggy_excluding_view()",
                 "exitcode": 1,
                 "num_models": 1,
                 "models": null,
@@ -236,7 +236,16 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_buggy_with_snapshot()",
+                "name": "check_buggy_with_state_snapshot()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_buggy_with_storage_snapshot()",
                 "exitcode": 1,
                 "num_models": 1,
                 "models": null,
