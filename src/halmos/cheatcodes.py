@@ -253,15 +253,13 @@ def snapshot_state(ex, arg, sevm, stack, step_id):
     # code
     # note: iteration order is guaranteed to be the insertion order
     for addr, code in ex.code.items():
-        addr = addr if isinstance(addr, int) else addr.as_long()
-        m.update(int.to_bytes(addr, length=32))
+        m.update(int.to_bytes(int_of(addr), length=32))
         # simply the object address is used, as code remains unchanged after deployment
         m.update(int.to_bytes(id(code), length=32))
 
     # storage
     for addr, storage in ex.storage.items():
-        addr = addr if isinstance(addr, int) else addr.as_long()
-        m.update(int.to_bytes(addr, length=32))
+        m.update(int.to_bytes(int_of(addr), length=32))
         m.update(storage.digest())
 
     # balance
