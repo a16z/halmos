@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import hashlib
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterator
@@ -16,6 +15,7 @@ from typing import (
     TypeVar,
 )
 
+import xxhash
 from eth_hash.auto import keccak
 from rich.status import Status
 from z3 import (
@@ -846,14 +846,14 @@ class StorageData:
 
     def digest(self) -> bytes:
         """
-        Computes the SHA3-256 hash of the storage mapping.
+        Computes the xxh3_128 hash of the storage mapping.
 
         The hash input is constructed by serializing each key-value pair into a byte sequence.
         Keys are encoded as 256-bit integers for GenericStorage, or as arrays of 256-bit integers for SolidityStorage.
         Values, being Z3 objects, are encoded using their unique identifiers (get_id()) as 256-bit integers.
         For simplicity, all numbers are represented as 256-bit integers, regardless of their actual size.
         """
-        m = hashlib.sha3_256()
+        m = xxhash.xxh3_128()
         for key, val in self._mapping.items():
             if isinstance(key, int):  # GenericStorage
                 m.update(int.to_bytes(key, length=32))

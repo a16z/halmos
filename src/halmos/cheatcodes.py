@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import hashlib
 import json
 import re
 from dataclasses import dataclass
 from subprocess import PIPE, Popen
 
+from xxhash import xxh3_64, xxh3_64_digest, xxh3_128
 from z3 import (
     ULT,
     And,
@@ -241,31 +241,37 @@ def snapshot_storage(ex, arg, sevm, stack, step_id):
         error_msg = f"snapshotStorage() is not allowed for a nonexistent account: {hexify(account)}"
         raise HalmosException(error_msg)
 
-    return ByteVec(ex.storage[account_alias].digest())
+    zero_pad = b"\x00" * 16
+    return ByteVec(zero_pad + ex.storage[account_alias].digest())
 
 
 def snapshot_state(ex, arg, sevm, stack, step_id):
     """
-    Generates a snapshot ID by hashing the current state (code, storage, and balance).
+    Generates a snapshot ID by hashing the current state (balance, code, and storage).
+
+    The snapshot ID is constructed by concatenating three hashes of: balance (64 bits), code (64 bits), and storage (128 bits).
+    This design ensures that the lower 128 bits of both storage and state snapshot IDs correspond to storage hashes.
     """
-    m = hashlib.sha3_256()
+    # balance
+    balance_hash = xxh3_64_digest(int.to_bytes(ex.balance.get_id(), length=32))
 
     # code
+    m = xxh3_64()
     # note: iteration order is guaranteed to be the insertion order
     for addr, code in ex.code.items():
         m.update(int.to_bytes(int_of(addr), length=32))
         # simply the object address is used, as code remains unchanged after deployment
         m.update(int.to_bytes(id(code), length=32))
+    code_hash = m.digest()
 
     # storage
+    m = xxh3_128()
     for addr, storage in ex.storage.items():
         m.update(int.to_bytes(int_of(addr), length=32))
         m.update(storage.digest())
+    storage_hash = m.digest()
 
-    # balance
-    m.update(int.to_bytes(ex.balance.get_id(), length=32))
-
-    return ByteVec(m.digest())
+    return ByteVec(balance_hash + code_hash + storage_hash)
 
 
 def create_calldata_contract(ex, arg, sevm, stack, step_id):
