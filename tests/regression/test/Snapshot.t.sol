@@ -22,6 +22,8 @@ contract SnapshotTest is SymTest, Test {
         c = new C();
     }
 
+    // NOTE: In halmos, the state snapshot ID is constructed by concatenating three hashes of: balance (64 bits), code (64 bits), and storage (128 bits).
+
     function check_snapshot() public {
         uint storage0 = svm.snapshotStorage(address(c));
         uint state0 = vm.snapshotState();
@@ -38,6 +40,7 @@ contract SnapshotTest is SymTest, Test {
         // NOTE: two storages are semantically equal, but not structually equal
         // assertEq(storage0, storage1);
         // assertEq(state0, state1);
+        assertEq(bytes16(bytes32(state0)), bytes16(bytes32(state1))); // no changes to balance & code
 
         c.set(0);
 
@@ -59,6 +62,8 @@ contract SnapshotTest is SymTest, Test {
 
         assertNotEq(storage2, storage3);
         assertNotEq(state2, state3);
+        assertNotEq(uint128(state2), uint128(state3)); // storage
+        assertEq(bytes16(bytes32(state2)), bytes16(bytes32(state3))); // no changes to balance & code
 
         c.set(0);
 
@@ -84,6 +89,8 @@ contract SnapshotTest is SymTest, Test {
         console.log(state1);
 
         assertNotEq(state0, state1);
+        assertNotEq(bytes8(bytes32(state0)), bytes8(bytes32(state1))); // balance
+        assertEq(uint192(state0), uint192(state1)); // no changes to code & storage
 
         payable(c).transfer(0);
 
@@ -113,6 +120,9 @@ contract SnapshotTest is SymTest, Test {
         console.log(storage1_c);
 
         assertNotEq(state0, state1);
+        assertNotEq(uint128(state0), uint128(state1)); // storage
+        assertEq(bytes16(bytes32(state0)), bytes16(bytes32(state1))); // no changes to balance & code
+
         assertNotEq(storage0, storage1); // global variable updated
         assertEq(storage0_c, storage1_c); // existing account preserved
     }
@@ -121,12 +131,14 @@ contract SnapshotTest is SymTest, Test {
         uint state0 = vm.snapshotState();
         console.log(state0);
 
-        C tmp = new C();
+        /* C tmp = */ new C();
 
         uint state1 = vm.snapshotState();
         console.log(state1);
 
         assertNotEq(state0, state1); // new account in state1
+        assertNotEq(uint192(state0), uint192(state1)); // code & storage
+        assertEq(bytes8(bytes32(state0)), bytes8(bytes32(state1))); // no changes to balance
     }
 
     function check_balance_snapshot() public {
@@ -142,5 +154,6 @@ contract SnapshotTest is SymTest, Test {
 
         // NOTE: symbolic balance mappings are not structurally equal
         // assertEq(state0, state1);
+        assertEq(uint192(state0), uint192(state1)); // no changes to code & storage
     }
 }
