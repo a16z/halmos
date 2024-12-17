@@ -15,6 +15,7 @@ from typing import (
     TypeVar,
 )
 
+import xxhash
 from eth_hash.auto import keccak
 from rich.status import Status
 from z3 import (
@@ -829,10 +830,39 @@ class Path:
         self.extend(path.conditions.keys())
 
 
-@dataclass
 class StorageData:
-    symbolic: bool = False
-    mapping: dict = field(default_factory=dict)
+    def __init__(self):
+        self.symbolic = False
+        self._mapping = {}
+
+    def __getitem__(self, key) -> ArrayRef | BitVecRef:
+        return self._mapping[key]
+
+    def __setitem__(self, key, value) -> None:
+        self._mapping[key] = value
+
+    def __contains__(self, key) -> bool:
+        return key in self._mapping
+
+    def digest(self) -> bytes:
+        """
+        Computes the xxh3_128 hash of the storage mapping.
+
+        The hash input is constructed by serializing each key-value pair into a byte sequence.
+        Keys are encoded as 256-bit integers for GenericStorage, or as arrays of 256-bit integers for SolidityStorage.
+        Values, being Z3 objects, are encoded using their unique identifiers (get_id()) as 256-bit integers.
+        For simplicity, all numbers are represented as 256-bit integers, regardless of their actual size.
+        """
+        m = xxhash.xxh3_128()
+        for key, val in self._mapping.items():
+            if isinstance(key, int):  # GenericStorage
+                m.update(int.to_bytes(key, length=32))
+            else:  # SolidityStorage
+                for _k in key:
+                    # The first key (slot) is of size 256 bits
+                    m.update(int.to_bytes(_k, length=32))
+            m.update(int.to_bytes(val.get_id(), length=32))
+        return m.digest()
 
 
 class Exec:  # an execution path
@@ -1303,7 +1333,7 @@ class Storage:
 class SolidityStorage(Storage):
     @classmethod
     def mk_storagedata(cls) -> StorageData:
-        return StorageData(mapping=defaultdict(lambda: defaultdict(dict)))
+        return StorageData()
 
     @classmethod
     def empty(cls, addr: BitVecRef, slot: int, keys: tuple) -> ArrayRef:
@@ -1327,26 +1357,25 @@ class SolidityStorage(Storage):
         """
         assert_address(addr)
 
-        storage_data = ex.storage[addr]
-        mapping = storage_data.mapping[slot][num_keys]
+        storage = ex.storage[addr]
 
-        if size_keys in mapping:
+        if (slot, num_keys, size_keys) in storage:
             return
 
         if size_keys > 0:
             # do not use z3 const array `K(BitVecSort(size_keys), ZERO)` when not ex.symbolic
             # instead use normal smt array, and generate emptyness axiom; see load()
-            mapping[size_keys] = cls.empty(addr, slot, keys)
+            storage[slot, num_keys, size_keys] = cls.empty(addr, slot, keys)
             return
 
         # size_keys == 0
-        mapping[size_keys] = (
+        storage[slot, num_keys, size_keys] = (
             BitVec(
                 # note: uuid is excluded to be deterministic
                 f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
                 BitVecSort256,
             )
-            if storage_data.symbolic
+            if storage.symbolic
             else ZERO
         )
 
@@ -1356,13 +1385,13 @@ class SolidityStorage(Storage):
 
         cls.init(ex, addr, slot, keys, num_keys, size_keys)
 
-        storage_data = ex.storage[addr]
-        mapping = storage_data.mapping[slot][num_keys]
+        storage = ex.storage[addr]
+        storage_chunk = storage[slot, num_keys, size_keys]
 
         if num_keys == 0:
-            return mapping[size_keys]
+            return storage_chunk
 
-        symbolic = storage_data.symbolic
+        symbolic = storage.symbolic
         concat_keys = concat(keys)
 
         if not symbolic:
@@ -1370,7 +1399,7 @@ class SolidityStorage(Storage):
             default_value = Select(cls.empty(addr, slot, keys), concat_keys)
             ex.path.append(default_value == ZERO)
 
-        return ex.select(mapping[size_keys], concat_keys, ex.storages, symbolic)
+        return ex.select(storage_chunk, concat_keys, ex.storages, symbolic)
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
@@ -1378,11 +1407,10 @@ class SolidityStorage(Storage):
 
         cls.init(ex, addr, slot, keys, num_keys, size_keys)
 
-        storage_data = ex.storage[addr]
-        mapping = storage_data.mapping[slot][num_keys]
+        storage = ex.storage[addr]
 
         if num_keys == 0:
-            mapping[size_keys] = val
+            storage[slot, num_keys, size_keys] = val
             return
 
         new_storage_var = Array(
@@ -1390,10 +1418,10 @@ class SolidityStorage(Storage):
             BitVecSorts[size_keys],
             BitVecSort256,
         )
-        new_storage = Store(mapping[size_keys], concat(keys), val)
+        new_storage = Store(storage[slot, num_keys, size_keys], concat(keys), val)
         ex.path.append(new_storage_var == new_storage)
 
-        mapping[size_keys] = new_storage_var
+        storage[slot, num_keys, size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
@@ -1497,10 +1525,10 @@ class GenericStorage(Storage):
         """
         assert_address(addr)
 
-        mapping = ex.storage[addr].mapping
+        storage = ex.storage[addr]
 
-        if size_keys not in mapping:
-            mapping[size_keys] = cls.empty(addr, loc)
+        if size_keys not in storage:
+            storage[size_keys] = cls.empty(addr, loc)
 
     @classmethod
     def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
@@ -1509,16 +1537,15 @@ class GenericStorage(Storage):
 
         cls.init(ex, addr, loc, size_keys)
 
-        storage_data = ex.storage[addr]
-        mapping = storage_data.mapping
-        symbolic = storage_data.symbolic
+        storage = ex.storage[addr]
+        symbolic = storage.symbolic
 
         if not symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
             default_value = Select(cls.empty(addr, loc), loc)
             ex.path.append(default_value == ZERO)
 
-        return ex.select(mapping[size_keys], loc, ex.storages, symbolic)
+        return ex.select(storage[size_keys], loc, ex.storages, symbolic)
 
     @classmethod
     def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
@@ -1527,17 +1554,17 @@ class GenericStorage(Storage):
 
         cls.init(ex, addr, loc, size_keys)
 
-        mapping = ex.storage[addr].mapping
+        storage = ex.storage[addr]
 
         new_storage_var = Array(
             f"storage_{id_str(addr)}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
-        new_storage = Store(mapping[size_keys], loc, val)
+        new_storage = Store(storage[size_keys], loc, val)
         ex.path.append(new_storage_var == new_storage)
 
-        mapping[size_keys] = new_storage_var
+        storage[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
