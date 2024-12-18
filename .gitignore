@@ -31,3 +31,6 @@ out/
 # - adds friction to CI
 # (at the cost of reproducible builds)
 uv.lock
+
+# https://docs.astral.sh/uv/concepts/projects/layout/#the-build-directory
+build/
