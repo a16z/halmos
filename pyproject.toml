@@ -27,7 +27,8 @@ dependencies = [
     "z3-solver==4.12.6.0",
     "eth_hash[pysha3]>=0.7.0",
     "rich>=13.9.4",
-    "xxhash>=3.5.0"
+    "xxhash>=3.5.0",
+    "psutil>=6.1.0",
 ]
 dynamic = ["version"]
 
