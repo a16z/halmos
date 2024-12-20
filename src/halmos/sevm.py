@@ -57,7 +57,7 @@ from z3 import (
 from z3.z3util import is_expr_var
 
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
-from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
+from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code, create_calldata_generic
 from .config import Config as HalmosConfig
 from .console import console
 from .exceptions import (
@@ -134,6 +134,7 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
+    extract_bytes_argument,
 )
 
 Steps = dict[int, dict[str, Any]]  # execution tree
@@ -2995,6 +2996,65 @@ class SEVM:
                 ]:
                     to = uint160(ex.st.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack, step_id)
+
+                    if to_alias is not None:
+                        _contract_name = ex.code[to_alias]._contract_name
+                        _filename = ex.code[to_alias]._filename
+                        print(_contract_name)
+                        print(_filename)
+
+                        arg_idx = 3 if opcode in [EVM.STATICCALL, EVM.DELEGATECALL] else 4
+                        arg_loc: int = ex.int_of(ex.st.peek(arg_idx), "symbolic memory offset")
+                        arg_size: int = ex.int_of(ex.st.peek(arg_idx + 1), "symbolic CALL input data size")
+                        if not arg_size >= 0:
+                            raise ValueError(arg_size)
+                        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
+                        if len(arg) >= 4:
+                            selector = arg[0:4].unwrap()
+                            if isinstance(selector, bytes) or is_bv_value(selector):
+                                pass
+                                # print(arg.unwrap().hex())
+                            elif str(selector).startswith("fallback_selector_"):
+                                pass
+                            else:
+                                _calldata_lst = create_calldata_generic(ex, self, _contract_name, _filename)
+
+                                last_idx = len(_calldata_lst) - 1
+                                for _idx, _calldata in enumerate(_calldata_lst):
+                                    _calldata = _calldata[64:]  # remove tuple encoding prefix
+                                    if len(_calldata) < 4:
+                                        continue
+                                    print(_calldata)
+
+                                    new_ex = (
+                                        self.create_branch(ex, BoolVal(True), ex.pc)
+                                        if _idx < last_idx
+                                        else ex
+                                    )
+
+                                    if len(_calldata) <= arg_size:
+                                        new_ex.st.memory.set_slice(arg_loc, arg_loc + len(_calldata), _calldata)
+                                        arg_chunk = arg[:len(_calldata)].unwrap()
+                                        calldata_chunk = _calldata.unwrap()
+
+                                    else:  # len(_calldata) > arg_size:
+                                        new_ex.st.memory.set_slice(arg_loc, arg_loc + arg_size, _calldata[:arg_size])
+                                        arg_chunk = arg.unwrap()
+                                        calldata_chunk = _calldata[:arg_size].unwrap()
+
+                                    arg_chunk = bytes_to_bv_value(arg_chunk) if isinstance(arg_chunk, bytes) else arg_chunk
+                                    calldata_chunk = bytes_to_bv_value(calldata_chunk) if isinstance(calldata_chunk, bytes) else calldata_chunk
+                                    new_ex.path.append(arg_chunk == calldata_chunk)
+
+                                    if _idx < last_idx:
+                                        stack.push(new_ex, step_id)
+
+                    # read arg from memory
+                    # if it's not calldata generated, then generate calldata, and overwrite memory with it
+                    # and add path condition for equality between two
+                    # if existing arg size is larger, then only the first part is compared
+                    # if it's smaller, then only the first part of generated calldata is compared
+                    # create branch for each calldata generated
 
                     self.call(ex, opcode, to_alias, stack, step_id)
                     continue
