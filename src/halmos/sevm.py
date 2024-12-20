@@ -84,6 +84,7 @@ from .logs import (
     warn,
     warn_code,
 )
+from .mapper import BuildOut
 from .utils import (
     EVM,
     Address,
@@ -498,7 +499,12 @@ class Contract:
     _next_pc: dict[int, int]
     _jumpdests: tuple[set] | None
 
-    def __init__(self, code: ByteVec | None = None) -> None:
+    contract_name: str | None
+    filename: str | None
+
+    def __init__(
+        self, code: ByteVec | None = None, contract_name=None, filename=None
+    ) -> None:
         if not isinstance(code, ByteVec):
             code = ByteVec(code)
 
@@ -516,6 +522,9 @@ class Contract:
         self._insn = dict()
         self._next_pc = dict()
         self._jumpdests = None
+
+        self.contract_name = contract_name
+        self.filename = filename
 
     def __deepcopy__(self, memo):
         # the class is essentially immutable (the only mutable fields are caches)
@@ -2440,8 +2449,14 @@ class SEVM:
                 return
 
             elif subcall.output.error is None:
+                deployed_bytecode = subcall.output.data
+
+                # retrieve contract name
+                (contract_name, filename) = BuildOut().get_by_code(deployed_bytecode)
+
                 # new contract code, will revert if data is None
-                new_ex.set_code(new_addr, Contract(subcall.output.data))
+                new_code = Contract(deployed_bytecode, contract_name, filename)
+                new_ex.set_code(new_addr, new_code)
 
                 # push new address to stack
                 new_ex.st.push(uint256(new_addr))

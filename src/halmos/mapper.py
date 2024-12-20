@@ -1,8 +1,9 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any, ForwardRef, Optional
 
 from .exceptions import HalmosException
+from .logs import warn
 
 SELECTOR_FIELDS = {
     "VariableDeclaration": "functionSelector",
@@ -83,6 +84,7 @@ class BuildOut(metaclass=SingletonMeta):
     def __init__(self):
         self._build_out_map: dict = None
         self._build_out_map_reverse: dict = None
+        self._build_out_map_code: dict = None
 
     def set_build_out(self, build_out_map: dict):
         if self._build_out_map is build_out_map:
@@ -90,13 +92,114 @@ class BuildOut(metaclass=SingletonMeta):
 
         self._build_out_map = build_out_map
         self._build_out_map_reverse = None
+        self._build_out_map_code = None
 
     def create_build_out_map_reverse(self):
         # create reverse mapping
         self._build_out_map_reverse = defaultdict(dict)
         for filename, file_map in self._build_out_map.items():
-            for contract_name, contract_map in file_map.items():
+            for contract_name, (contract_map, _, _) in file_map.items():
                 self._build_out_map_reverse[contract_name][filename] = contract_map
+
+    def get_placeholders(self, deployed):
+        """
+        Extracts a list of placeholders from the deployedBytecode json entry.
+
+        Each placeholder is represented as a tuple of the starting and ending indices.
+        These placeholders are used to mark positions for immutables or library addresses within the bytecode.
+
+        The list of placeholders is sorted based on their starting index.
+
+        The method ensures that:
+        - There are no overlapping placeholders.
+        - The ending index of the last placeholder does not exceed the length of the bytecode.
+        """
+        placeholders = []
+
+        for links in deployed.get("immutableReferences", {}).values():
+            for link in links:
+                start = link["start"]
+                end = start + link["length"]
+                placeholders.append((start, end))
+
+        for libs in deployed.get("linkReferences", {}).values():
+            for links in libs.values():
+                for link in links:
+                    start = link["start"]
+                    end = start + link["length"]
+                    placeholders.append((start, end))
+
+        placeholders = sorted(placeholders, key=lambda x: x[0])
+
+        # sanity check
+        last = 0
+        for start, end in placeholders:
+            if not (last <= start and start < end):
+                raise ValueError("invalid placeholders")
+            last = end
+        if last > len(deployed["object"][2:]) // 2:
+            raise ValueError("invalid placeholders")
+
+        return placeholders
+
+    def create_build_out_map_code(self):
+        """
+        Creates a mapping between deployed bytecode and contract names.
+
+        This mapping utilizes deployed bytecode because it retains its original length,
+        unlike creation bytecode which can be expanded by constructor arguments.
+
+        Since compile-time bytecode may contain placeholders for immutables or library addresses,
+        the actual deployed bytecode can differ from its compile-time code.
+        To accommodate this, the mapping is constructed from bytecode size to a list of tuples containing bytecode and contract name.
+        When querying this mapping, it first retrieves a list of tuples based on their size,
+        and then iterates through the list, comparing each bytecode.
+        """
+        self._build_out_map_code = defaultdict(list)
+
+        for filename, file_map in self._build_out_map.items():
+            for contract_name, (contract_map, _, _) in file_map.items():
+                deployed = contract_map["deployedBytecode"]
+                hexcode = deployed["object"][2:]  # drop '0x' prefix
+                if not hexcode:
+                    continue
+
+                size = len(hexcode) // 2  # byte length
+                placeholders = self.get_placeholders(deployed)
+                code_data = (hexcode, placeholders, contract_name, filename)
+                self._build_out_map_code[size].append(code_data)
+
+    def get_by_code(self, bytecode: ForwardRef("ByteVec")) -> tuple:
+        """
+        Return the contract name and file name of the given deployed bytecode.
+        """
+        if not self._build_out_map_code:
+            self.create_build_out_map_code()
+
+        # compares the deployed bytecode with the compile-time hexcode, excluding placeholders from the comparison
+        def eq_except_placeholders(hexcode: str, placeholders):
+            last = 0
+            for start, end in placeholders:
+                if not eq_bytes(bytecode[last:start], hexcode[2 * last : 2 * start]):
+                    return False
+                last = end
+            return eq_bytes(bytecode[last:], hexcode[2 * last :])
+
+        def eq_bytes(bytecode: ForwardRef("ByteVec"), hexcode: str):
+            bytecode = bytecode.unwrap()
+            if not isinstance(bytecode, bytes):
+                # non-concrete bytecode chunk cannot be equal to hexcode
+                return False
+            # bytes.fromhex() should not fail, because the given hexcode chunk does not contain placeholder characters
+            return bytecode == bytes.fromhex(hexcode)
+
+        for code_data in self._build_out_map_code[len(bytecode)]:
+            hexcode, placeholders, contract_name, filename = code_data
+            if eq_except_placeholders(hexcode, placeholders):
+                return (contract_name, filename)
+
+        warn(f"unknown deployed bytecode: {bytecode}")
+        return (None, None)
 
     def get_by_name(self, contract_name: str, filename: str = None) -> dict:
         """
