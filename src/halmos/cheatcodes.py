@@ -330,7 +330,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     The contract is identified by its contract name and optional filename.
     TODO: provide variants that require only the contract address.
     """
-    contract_json = BuildOut().get_by_name(contract_name, filename)[0]
+    contract_json = BuildOut().get_by_name(contract_name, filename)
 
     abi = get_abi(contract_json)
     methodIdentifiers = contract_json["methodIdentifiers"]
