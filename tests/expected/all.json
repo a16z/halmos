@@ -242,6 +242,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Bytes.t.sol:BytesTest": [
+            {
+                "name": "check_C()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Call.t.sol:CallTest": [
             {
                 "name": "check_call(uint256,uint256)",
