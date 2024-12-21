@@ -3,6 +3,19 @@ from dataclasses import dataclass
 
 from halmos.logs import logger
 
+
+@dataclass
+class ModelVariable:
+    full_name: str
+    variable_name: str
+    solidity_type: str
+    smt_type: str
+    size_bits: int
+    value: int
+
+
+ModelVariables = dict[str, ModelVariable]
+
 # Regular expression for capturing halmos variables
 halmos_pattern = re.compile(
     r"""
@@ -18,21 +31,6 @@ halmos_pattern = re.compile(
     """,
     re.VERBOSE,
 )
-
-
-@dataclass
-class ModelVariable:
-    full_name: str
-    variable_name: str
-    solidity_type: str
-    smt_type: str
-    size_bits: int
-    value: int
-
-
-def parse_file(file_path: str) -> dict:
-    with open(file_path) as file:
-        return parse_string(file.read())
 
 
 def parse_const_value(value: str) -> int:
@@ -51,7 +49,7 @@ def parse_const_value(value: str) -> int:
     raise ValueError(f"unknown value format: {value}")
 
 
-def parse_match(match: re.Match) -> ModelVariable:
+def _parse_match(match: re.Match) -> ModelVariable:
     full_name = match.group(1).strip()
     smt_type = f"{match.group(2)} {match.group(3)}"
     size_bits = int(match.group(3))
@@ -72,7 +70,12 @@ def parse_match(match: re.Match) -> ModelVariable:
     )
 
 
-def parse_string(smtlib_str: str) -> dict[str, ModelVariable]:
+def parse_string(smtlib_str: str) -> ModelVariables:
+    """Expects a whole smtlib model output file, as produced by a solver
+    in response to a `(check-sat)` + `(get-model)` command.
+
+    Extracts halmos variables and returns them grouped by their full name"""
+
     model_variables: dict[str, ModelVariable] = {}
 
     # use a regex to find all the variables
@@ -83,10 +86,15 @@ def parse_string(smtlib_str: str) -> dict[str, ModelVariable]:
 
     for match in halmos_pattern.finditer(smtlib_str):
         try:
-            variable = parse_match(match)
+            variable = _parse_match(match)
             model_variables[variable.full_name] = variable
         except Exception as e:
             logger.error(f"error parsing smtlib string '{match.string.strip()}': {e}")
             raise e
 
     return model_variables
+
+
+def parse_file(file_path: str) -> ModelVariables:
+    with open(file_path) as file:
+        return parse_string(file.read())

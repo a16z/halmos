@@ -21,7 +21,6 @@ from importlib import metadata
 from z3 import (
     BitVec,
     CheckSatResult,
-    ModelRef,
     Solver,
     sat,
     set_option,
@@ -74,6 +73,7 @@ from .sevm import (
     jumpid_str,
     mnemonic,
 )
+from .smtlib import ModelVariables, parse_string
 from .traces import render_trace, rendered_trace
 from .utils import (
     NamedTimer,
@@ -89,9 +89,6 @@ from .utils import (
     unbox_int,
     yellow,
 )
-
-StrModel = dict[str, str]
-AnyModel = StrModel | str
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -112,25 +109,26 @@ VERBOSITY_TRACE_CONSTRUCTOR = 5
 
 @dataclass
 class PotentialModel:
-    model: AnyModel
-    is_valid: bool
-
-    def __init__(self, model: ModelRef | str, args: HalmosConfig) -> None:
-        # convert model into string to avoid pickling errors for z3 (ctypes) objects containing pointers
-        self.model = (
-            to_str_model(model, args.print_full_model)
-            if isinstance(model, ModelRef)
-            else model
-        )
-        self.is_valid = is_model_valid(model)
+    model: ModelVariables | str | None
 
     def __str__(self) -> str:
         # expected to be a filename
         if isinstance(self.model, str):
             return f"see {self.model}"
 
-        formatted = [f"\n    {decl} = {val}" for decl, val in self.model.items()]
+        formatted = []
+        for v in self.model.values():
+            stringified = stringify(v.full_name, v.value)
+            formatted.append(f"\n    {v.full_name} = {stringified}")
         return "".join(sorted(formatted)) if formatted else "∅"
+
+    @property
+    def is_valid(self) -> bool:
+        if self.model is None:
+            return False
+
+        needs_refinement = any(name.startswith("f_evm_") for name in self.model)
+        return not needs_refinement
 
 
 @dataclass(frozen=True)
@@ -527,6 +525,7 @@ def setup(ctx: FunctionContext) -> Exec:
             setup_exs.append(setup_exs_no_error[0][0])
         case _:
             for setup_ex, query in setup_exs_no_error:
+                # XXX fix with new interface
                 res, _, _ = solve(query, args)
                 if res != unsat:
                     setup_exs.append(setup_ex)
@@ -690,7 +689,13 @@ def run_test(ctx: FunctionContext) -> TestResult:
                     print("  Already proven unsat")
                 continue
 
-            solve(path_ctx)
+            try:
+                solve(path_ctx)
+            except RuntimeError:
+                # XXX use more specific exception
+                # XXX notify sevm that we're done
+                # if the thread pool is shut down, here
+                break
 
             # XXX handle refinement
             # XXX handle timeout
@@ -735,6 +740,8 @@ def run_test(ctx: FunctionContext) -> TestResult:
     #
     # display assertion solving progress
     #
+
+    # XXX clashes with the exploration progress status
 
     if not args.no_status or args.early_exit:
         while True:
@@ -994,7 +1001,7 @@ def solver_callback(future: PopenFuture):
             unsat_core = parse_unsat_core(stdout) if args.cache_solver else None
             solver_output = SolverOutput(unsat, path_id, unsat_core=unsat_core)
         case "sat":
-            model = PotentialModel(f"{smt2_filename}.out", args)
+            model = PotentialModel(parse_string(stdout))
             solver_output = SolverOutput(sat, path_id, model=model)
         case _:
             solver_output = SolverOutput(unknown, path_id)
@@ -1054,55 +1061,6 @@ def refine(query: SMTQuery) -> SMTQuery:
     )
 
     return SMTQuery(smtlib, query.assertions)
-
-
-# def package_result(
-#     model: PotentialModel | None,
-#     idx: int,
-#     result: CheckSatResult,
-#     unsat_core: list | None,
-#     args: HalmosConfig,
-# ) -> ModelWithContext:
-#     if result == unsat:
-#         if args.verbose >= 1:
-#             print(f"  Invalid path; ignored (path id: {idx+1})")
-#         return ModelWithContext(None, idx, result, unsat_core)
-
-#     if result == sat:
-#         if args.verbose >= 1:
-#             print(f"  Valid path; counterexample generated (path id: {idx+1})")
-#         return ModelWithContext(model, idx, result, None)
-
-#     else:
-#         if args.verbose >= 1:
-#             print(f"  Timeout (path id: {idx+1})")
-#         return ModelWithContext(None, idx, result, None)
-
-
-def is_model_valid(model: ModelRef | str) -> bool:
-    # TODO: evaluate the path condition against the given model after excluding f_evm_* symbols,
-    #       since the f_evm_* symbols may still appear in valid models.
-
-    # model is a filename, containing solver output
-    if isinstance(model, str):
-        with open(model) as f:
-            for line in f:
-                if "f_evm_" in line:
-                    return False
-        return True
-
-    # z3 model object
-    else:
-        return all(not str(decl).startswith("f_evm_") for decl in model)
-
-
-def to_str_model(model: ModelRef, print_full_model: bool) -> StrModel:
-    def select(var):
-        name = str(var)
-        return name.startswith("p_") or name.startswith("halmos_")
-
-    select_model = filter(select, model) if not print_full_model else model
-    return {str(decl): stringify(str(decl), model[decl]) for decl in select_model}
 
 
 def get_contract_type(
