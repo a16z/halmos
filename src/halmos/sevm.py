@@ -2998,10 +2998,10 @@ class SEVM:
                     to_alias = self.resolve_address_alias(ex, to, stack, step_id)
 
                     if to_alias is not None:
-                        _contract_name = ex.code[to_alias]._contract_name
-                        _filename = ex.code[to_alias]._filename
-                        print(_contract_name)
-                        print(_filename)
+                        _contract_name = ex.code[to_alias].contract_name
+                        _filename = ex.code[to_alias].filename
+#                       print(_contract_name)
+#                       print(_filename)
 
                         arg_idx = 3 if opcode in [EVM.STATICCALL, EVM.DELEGATECALL] else 4
                         arg_loc: int = ex.int_of(ex.st.peek(arg_idx), "symbolic memory offset")
@@ -3009,6 +3009,7 @@ class SEVM:
                         if not arg_size >= 0:
                             raise ValueError(arg_size)
                         arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
+
                         if len(arg) >= 4:
                             selector = arg[0:4].unwrap()
                             if isinstance(selector, bytes) or is_bv_value(selector):
