@@ -135,6 +135,7 @@ from .utils import (
     uint256,
     unbox_int,
     extract_bytes_argument,
+    wrap,
 )
 
 Steps = dict[int, dict[str, Any]]  # execution tree
@@ -2007,6 +2008,81 @@ class SEVM:
         ex.alias[target] = addr
         return addr
 
+    def refine_calldata(
+        self,
+        ex: Exec,
+        opcode: int,
+        to_alias: Address,
+        arg_size,
+        arg,
+        stack: list[tuple[Exec, int]],
+        step_id: int,
+    ):
+        if to_alias is None:
+            return
+
+        arg_pos = 4 if opcode in [EVM.CALL, EVM.CALLCODE] else 3
+        arg_loc = ex.int_of(ex.st.peek(arg_pos), "symbolic memory offset")
+        arg_size = ex.int_of(ex.st.peek(arg_pos + 1), "symbolic CALL input data size")
+        if not arg_size >= 0:
+            raise ValueError(arg_size)
+        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
+
+        print(hexify(to_alias), arg)
+        print()
+
+        if len(arg) < 4:
+            return
+
+        selector = arg[0:4].unwrap()
+
+        if isinstance(selector, bytes) or is_bv_value(selector) or str(selector).startswith("fallback_selector_"):
+            return
+
+        code = ex.code[to_alias]
+        contract_name = code.contract_name
+        filename = code.filename
+
+        calldata_lst = create_calldata_generic(ex, self, contract_name, filename, include_view=True)
+
+        print(ex.path.concretization)
+        print()
+
+        last_idx = len(calldata_lst) - 1
+        for idx, calldata in enumerate(calldata_lst):
+            calldata = calldata[64:]  # remove tuple encoding prefix
+            calldata_size = len(calldata)
+
+            if calldata_size < 4:
+                continue
+
+            print(idx, calldata)
+            print()
+
+            new_ex = (
+                self.create_branch(ex, BoolVal(True), ex.pc)
+                if idx < last_idx
+                else ex
+            )
+
+            if calldata_size <= arg_size:
+                new_ex.st.memory.set_slice(arg_loc, arg_loc + calldata_size, calldata)
+                arg_chunk = arg[:calldata_size].unwrap()
+                calldata_chunk = calldata.unwrap()
+
+            else:  # calldata_size > arg_size:
+                new_ex.st.memory.set_slice(arg_loc, arg_loc + arg_size, calldata[:arg_size])
+                arg_chunk = arg.unwrap()
+                calldata_chunk = calldata[:arg_size].unwrap()
+
+            new_ex.path.append(wrap(arg_chunk) == wrap(calldata_chunk))
+
+            print(new_ex.st.memory.slice(arg_loc, arg_loc + arg_size))
+            print()
+
+            if idx < last_idx:
+                stack.push(new_ex, step_id)
+
     def transfer_value(
         self,
         ex: Exec,
@@ -2038,6 +2114,8 @@ class SEVM:
         ex: Exec,
         op: int,
         to_alias: Address,
+        arg_size: int,
+        arg,
         stack: list[tuple[Exec, int]],
         step_id: int,
     ) -> None:
@@ -2049,8 +2127,10 @@ class SEVM:
         to = uint160(ex.st.pop())
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-        arg_loc: int = ex.mloc()
-        arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
+#       arg_loc: int = ex.mloc()
+#       arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
+        ex.mloc()
+        ex.st.pop()
 
         ret_loc: int = ex.mloc()
         ret_size: int = ex.int_of(ex.st.pop(), "symbolic CALL return data size")
@@ -2062,7 +2142,10 @@ class SEVM:
             raise ValueError(ret_size)
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
-        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
+#       arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
+
+        print("xxx", arg)
+        print()
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
@@ -2313,7 +2396,8 @@ class SEVM:
                             caller=pranked_caller,
                             origin=pranked_origin,
                             value=fund,
-                            data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
+#                           data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
+                            data=arg,
                             call_scheme=op,
                         ),
                         output=CallOutput(
@@ -2997,65 +3081,7 @@ class SEVM:
                     to = uint160(ex.st.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack, step_id)
 
-                    if to_alias is not None:
-                        _contract_name = ex.code[to_alias].contract_name
-                        _filename = ex.code[to_alias].filename
-#                       print(_contract_name)
-#                       print(_filename)
-
-                        arg_idx = 3 if opcode in [EVM.STATICCALL, EVM.DELEGATECALL] else 4
-                        arg_loc: int = ex.int_of(ex.st.peek(arg_idx), "symbolic memory offset")
-                        arg_size: int = ex.int_of(ex.st.peek(arg_idx + 1), "symbolic CALL input data size")
-                        if not arg_size >= 0:
-                            raise ValueError(arg_size)
-                        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
-
-                        if len(arg) >= 4:
-                            selector = arg[0:4].unwrap()
-                            if isinstance(selector, bytes) or is_bv_value(selector):
-                                pass
-                                # print(arg.unwrap().hex())
-                            elif str(selector).startswith("fallback_selector_"):
-                                pass
-                            else:
-                                _calldata_lst = create_calldata_generic(ex, self, _contract_name, _filename)
-
-                                last_idx = len(_calldata_lst) - 1
-                                for _idx, _calldata in enumerate(_calldata_lst):
-                                    _calldata = _calldata[64:]  # remove tuple encoding prefix
-                                    if len(_calldata) < 4:
-                                        continue
-                                    print(_calldata)
-
-                                    new_ex = (
-                                        self.create_branch(ex, BoolVal(True), ex.pc)
-                                        if _idx < last_idx
-                                        else ex
-                                    )
-
-                                    if len(_calldata) <= arg_size:
-                                        new_ex.st.memory.set_slice(arg_loc, arg_loc + len(_calldata), _calldata)
-                                        arg_chunk = arg[:len(_calldata)].unwrap()
-                                        calldata_chunk = _calldata.unwrap()
-
-                                    else:  # len(_calldata) > arg_size:
-                                        new_ex.st.memory.set_slice(arg_loc, arg_loc + arg_size, _calldata[:arg_size])
-                                        arg_chunk = arg.unwrap()
-                                        calldata_chunk = _calldata[:arg_size].unwrap()
-
-                                    arg_chunk = bytes_to_bv_value(arg_chunk) if isinstance(arg_chunk, bytes) else arg_chunk
-                                    calldata_chunk = bytes_to_bv_value(calldata_chunk) if isinstance(calldata_chunk, bytes) else calldata_chunk
-                                    new_ex.path.append(arg_chunk == calldata_chunk)
-
-                                    if _idx < last_idx:
-                                        stack.push(new_ex, step_id)
-
-                    # read arg from memory
-                    # if it's not calldata generated, then generate calldata, and overwrite memory with it
-                    # and add path condition for equality between two
-                    # if existing arg size is larger, then only the first part is compared
-                    # if it's smaller, then only the first part of generated calldata is compared
-                    # create branch for each calldata generated
+                    self.refine_calldata(ex, opcode, to_alias, arg_size, arg, stack, step_id)
 
                     self.call(ex, opcode, to_alias, stack, step_id)
                     continue
