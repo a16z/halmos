@@ -33,7 +33,7 @@ contract BytesTest is SymTest, Test {
     }
 
     function check_C() public {
-        (, bytes memory retdata) = address(c).call(svm.createBytes(1024, "data"));
+        (, bytes memory retdata) = address(c).call(svm.createBytes(2048, "data"));
 //        (, bytes memory retdata) = address(c).call(svm.createCalldata("Bytes.t.sol", "C"));
 //        console.log(uint(keccak256(retdata)));
     }

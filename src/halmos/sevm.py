@@ -2013,8 +2013,6 @@ class SEVM:
         ex: Exec,
         opcode: int,
         to_alias: Address,
-        arg_size,
-        arg,
         stack: list[tuple[Exec, int]],
         step_id: int,
     ):
@@ -2028,8 +2026,8 @@ class SEVM:
             raise ValueError(arg_size)
         arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
-        print(hexify(to_alias), arg)
-        print()
+#       print(hexify(to_alias), arg)
+#       print()
 
         if len(arg) < 4:
             return
@@ -2045,8 +2043,7 @@ class SEVM:
 
         calldata_lst = create_calldata_generic(ex, self, contract_name, filename, include_view=True)
 
-        print(ex.path.concretization)
-        print()
+#       print(ex.path.concretization)
 
         last_idx = len(calldata_lst) - 1
         for idx, calldata in enumerate(calldata_lst):
@@ -2056,8 +2053,8 @@ class SEVM:
             if calldata_size < 4:
                 continue
 
-            print(idx, calldata)
-            print()
+#           print(idx, calldata)
+#           print()
 
             new_ex = (
                 self.create_branch(ex, BoolVal(True), ex.pc)
@@ -2077,8 +2074,8 @@ class SEVM:
 
             new_ex.path.append(wrap(arg_chunk) == wrap(calldata_chunk))
 
-            print(new_ex.st.memory.slice(arg_loc, arg_loc + arg_size))
-            print()
+#           print(new_ex.st.memory.slice(arg_loc, arg_loc + arg_size))
+#           print()
 
             if idx < last_idx:
                 stack.push(new_ex, step_id)
@@ -2114,8 +2111,6 @@ class SEVM:
         ex: Exec,
         op: int,
         to_alias: Address,
-        arg_size: int,
-        arg,
         stack: list[tuple[Exec, int]],
         step_id: int,
     ) -> None:
@@ -2127,10 +2122,8 @@ class SEVM:
         to = uint160(ex.st.pop())
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-#       arg_loc: int = ex.mloc()
-#       arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
-        ex.mloc()
-        ex.st.pop()
+        arg_loc: int = ex.mloc()
+        arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
 
         ret_loc: int = ex.mloc()
         ret_size: int = ex.int_of(ex.st.pop(), "symbolic CALL return data size")
@@ -2142,10 +2135,10 @@ class SEVM:
             raise ValueError(ret_size)
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
-#       arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
+        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
-        print("xxx", arg)
-        print()
+#       print("xxx", arg)
+#       print()
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
@@ -2396,8 +2389,7 @@ class SEVM:
                             caller=pranked_caller,
                             origin=pranked_origin,
                             value=fund,
-#                           data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
-                            data=arg,
+                            data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
                             call_scheme=op,
                         ),
                         output=CallOutput(
@@ -3081,7 +3073,7 @@ class SEVM:
                     to = uint160(ex.st.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack, step_id)
 
-                    self.refine_calldata(ex, opcode, to_alias, arg_size, arg, stack, step_id)
+                    self.refine_calldata(ex, opcode, to_alias, stack, step_id)
 
                     self.call(ex, opcode, to_alias, stack, step_id)
                     continue
