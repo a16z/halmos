@@ -20,6 +20,7 @@ from datetime import timedelta
 from enum import Enum
 from importlib import metadata
 
+import rich
 from rich.status import Status
 from z3 import (
     Z3_OP_CONCAT,
@@ -753,6 +754,9 @@ def run(
 
     # display assertion solving progress
     if not args.no_status or args.early_exit:
+        # creating a new live display would fail if the previous one was still active
+        rich.get_console().clear_live()
+
         with Status("") as status:
             while True:
                 if args.early_exit and len(counterexamples) > 0:
