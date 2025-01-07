@@ -18,8 +18,8 @@ You can read more in our post: "_[Symbolic testing with Halmos: Leveraging exist
 
 Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
 
-[post]: <https://a16zcrypto.com/symbolic-testing-with-halmos-leveraging-existing-tests-for-formal-verification/>
-[chat]: <https://t.me/+4UhzHduai3MzZmUx>
+[post]: https://a16zcrypto.com/symbolic-testing-with-halmos-leveraging-existing-tests-for-formal-verification/
+[chat]: https://t.me/+4UhzHduai3MzZmUx
 
 ## Installation
 
@@ -78,7 +78,7 @@ For more details:
 halmos --help
 ```
 
-Alternatively, you can run the latest halmos Docker image available at [ghcr.io/a16z/halmos](ghcr.io/a16z/halmos):
+Alternatively, you can run the latest halmos Docker image available at [ghcr.io/a16z/halmos](https://ghcr.io/a16z/halmos):
 
 ```sh
 cd /path/to/src
@@ -95,7 +95,7 @@ Refer to the [getting started guide](docs/getting-started.md) and the [examples]
 
 Refer to the [contributing guidelines](CONTRIBUTING.md), and explore the list of issues labeled ["good first issue" or "help wanted."][issues]
 
-[issues]: <https://github.com/a16z/halmos/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22%2C%22help+wanted%22>
+[issues]: https://github.com/a16z/halmos/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22%2C%22help+wanted%22
 
 ## Disclaimer
 
