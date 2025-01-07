@@ -423,7 +423,7 @@ def setup(
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
-    sevm = SEVM(args)
+    sevm = SEVM(args, setup_info)
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs, solver)
 
     setup_timer.create_subtimer("run")
@@ -586,7 +586,7 @@ def run(
     # calldata
     #
 
-    sevm = SEVM(args)
+    sevm = SEVM(args, fun_info)
     path = Path(solver)
     path.extend_path(setup_ex.path)
 
@@ -742,6 +742,9 @@ def run(
 
         # 0 width is unlimited
         if args.width and idx >= args.width:
+            warn(
+                f"{funsig}: paths have not been fully explored due to: --width {args.width}"
+            )
             break
 
     num_execs = idx + 1

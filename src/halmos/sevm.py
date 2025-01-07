@@ -57,6 +57,7 @@ from z3 import (
 from z3.z3util import is_expr_var
 
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
+from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
 from .console import console
@@ -1703,12 +1704,14 @@ class Worklist:
 
 class SEVM:
     options: HalmosConfig
+    fun_info: FunctionInfo
     storage_model: type[SomeStorage]
     logs: HalmosLogs
     steps: Steps
 
-    def __init__(self, options: HalmosConfig) -> None:
+    def __init__(self, options: HalmosConfig, fun_info: FunctionInfo) -> None:
         self.options = options
+        self.fun_info = fun_info
         self.logs = HalmosLogs()
         self.steps: Steps = {}
 
@@ -2718,6 +2721,10 @@ class SEVM:
                 opcode = insn.opcode
 
                 if (max_depth := self.options.depth) and step_id > max_depth:
+                    warn(
+                        f"{self.fun_info.sig}: paths have not been fully explored due to: --depth {max_depth}",
+                        allow_duplicate=False,
+                    )
                     continue
 
                 # TODO: clean up

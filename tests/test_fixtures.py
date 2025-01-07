@@ -12,7 +12,7 @@ def args():
 
 @pytest.fixture
 def sevm(args):
-    return SEVM(args)
+    return SEVM(args, None)
 
 
 @pytest.fixture
