@@ -457,8 +457,9 @@ class State:
     def swap(self, n: int) -> None:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
-    def mloc(self, subst: dict = None) -> int:
-        loc: int = int_of(self.pop(), "symbolic memory offset", subst)
+    def mloc(self, subst: dict = None, item = None) -> int:
+        item = self.pop() if item is None else item
+        loc: int = int_of(item, "symbolic memory offset", subst)
         if loc > MAX_MEMORY_SIZE:
             raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
         return loc
@@ -724,7 +725,7 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-#               if self.conditions[cond] and not is_true(cond)
+                if self.conditions[cond] and not is_true(cond)
             ]
         )
 
@@ -834,23 +835,9 @@ class Path:
             return
 
         self.solver.add(cond)
-#       self.solver.assert_and_track(cond, str(cond.get_id()))
 
         self.conditions[cond] = branching
         self.concretization.process_cond(cond)
-
-#       print("- append")
-#       import traceback
-#       traceback.print_stack()
-
-#       print("assertions:")
-#       for xxx in self.solver.assertions():
-#           print(xxx)
-#       print()
-#       print("conditions:")
-#       for xxx in self.conditions:
-#           print(xxx)
-#       print()
 
     def extend(self, conds, branching=False):
         for cond in conds:
@@ -1347,8 +1334,8 @@ class Exec:  # an execution path
 
         return (creation_hexcode, deployed_hexcode)
 
-    def mloc(self) -> int:
-        return self.st.mloc(self.path.concretization.substitution)
+    def mloc(self, item = None) -> int:
+        return self.st.mloc(self.path.concretization.substitution, item)
 
     def ret(self) -> ByteVec:
         return self.st.ret(self.path.concretization.substitution)
@@ -2036,30 +2023,29 @@ class SEVM:
         stack: list[tuple[Exec, int]],
         step_id: int,
     ):
-        if to_alias is None:
-            return
-
         if ex.path.pending_calldata:
-            return
+            arg = ex.path.pending_calldata
+            ex.path.pending_calldata = None
+            return arg
 
         arg_pos = 4 if opcode in [EVM.CALL, EVM.CALLCODE] else 3
-        arg_loc = ex.int_of(ex.st.peek(arg_pos), "symbolic memory offset")
+        arg_loc = ex.mloc(ex.st.peek(arg_pos))
         arg_size = ex.int_of(ex.st.peek(arg_pos + 1), "symbolic CALL input data size")
         if not arg_size >= 0:
             raise ValueError(arg_size)
         arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
-#       print(hexify(to_alias), arg)
-#       print()
+        if to_alias is None:
+            return arg
 
         if len(arg) < 4:
-            return
+            return arg
 
         selector = arg[0:4].unwrap()
 
+        # TODO: check if calldata can be decoded. even if selector is concrete, remaining calldata may not be decodable.
         if isinstance(selector, bytes) or is_bv_value(selector) or str(selector).startswith("fallback_selector_"):
-#           print("* no refinement", arg)
-            return
+            return arg
 
         code = ex.code[to_alias]
         contract_name = code.contract_name
@@ -2067,48 +2053,36 @@ class SEVM:
 
         calldata_lst = create_calldata_generic(ex, self, contract_name, filename, include_view=True)
 
-#       print(ex.path.concretization)
-
         last_idx = len(calldata_lst) - 1
         for idx, calldata in enumerate(calldata_lst):
-            calldata = calldata[64:]  # remove tuple encoding prefix
+            calldata = calldata[64:]  # remove prefix for encoding tuple
             calldata_size = len(calldata)
 
             if calldata_size < 4:
                 continue
 
-#           print(idx, calldata)
-#           print()
-
             if calldata_size <= arg_size:
-#               new_ex.st.memory.set_slice(arg_loc, arg_loc + calldata_size, calldata)
                 arg_chunk = arg[:calldata_size].unwrap()
                 calldata_chunk = calldata.unwrap()
 
             else:  # calldata_size > arg_size:
-#               new_ex.st.memory.set_slice(arg_loc, arg_loc + arg_size, calldata[:arg_size])
                 arg_chunk = arg.unwrap()
                 calldata_chunk = calldata[:arg_size].unwrap()
 
-#           new_ex.path.append(wrap(arg_chunk) == wrap(calldata_chunk))
-
             new_ex = (
-#               self.create_branch(ex, BoolVal(True), ex.pc)
                 self.create_branch(ex, wrap(arg_chunk) == wrap(calldata_chunk), ex.pc)
                 if idx < last_idx
                 else ex
             )
 
-            if new_ex.path.pending_calldata:
-                raise ValueError("non empty pending calldata", new_ex.path.pending_calldata)
-#           print("- pending calldata", calldata)
             new_ex.path.pending_calldata = calldata
-
-#           print(new_ex.st.memory.slice(arg_loc, arg_loc + arg_size))
-#           print()
 
             if idx < last_idx:
                 stack.push(new_ex, step_id)
+
+        arg = ex.path.pending_calldata
+        ex.path.pending_calldata = None
+        return arg
 
     def transfer_value(
         self,
@@ -2141,6 +2115,7 @@ class SEVM:
         ex: Exec,
         op: int,
         to_alias: Address,
+        arg: ByteVec,
         stack: list[tuple[Exec, int]],
         step_id: int,
     ) -> None:
@@ -2152,29 +2127,17 @@ class SEVM:
         to = uint160(ex.st.pop())
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-        arg_loc: int = ex.mloc()
-        arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
+        ex.st.pop()  # arg_loc
+        ex.st.pop()  # arg_size
+        arg_size = len(arg)
 
         ret_loc: int = ex.mloc()
         ret_size: int = ex.int_of(ex.st.pop(), "symbolic CALL return data size")
-
-        if not arg_size >= 0:
-            raise ValueError(arg_size)
 
         if not ret_size >= 0:
             raise ValueError(ret_size)
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
-        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
-
-#       print("- call pending calldata", ex.path.pending_calldata)
-        if ex.path.pending_calldata:
-            arg = ex.path.pending_calldata
-            arg_size = len(arg)
-            ex.path.pending_calldata = None
-
-#       print("xxx", ex.context.depth, arg)
-#       print()
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
@@ -2425,7 +2388,6 @@ class SEVM:
                             caller=pranked_caller,
                             origin=pranked_origin,
                             value=fund,
-#                           data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
                             data=arg,
                             call_scheme=op,
                         ),
@@ -3127,10 +3089,9 @@ class SEVM:
                     to = uint160(ex.st.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack, step_id)
 
-#                   print("-- call", hexify(to_alias))
-                    self.refine_calldata(ex, opcode, to_alias, stack, step_id)
+                    arg = self.refine_calldata(ex, opcode, to_alias, stack, step_id)
 
-                    self.call(ex, opcode, to_alias, stack, step_id)
+                    self.call(ex, opcode, to_alias, arg, stack, step_id)
                     continue
 
                 elif opcode == EVM.SHA3:
