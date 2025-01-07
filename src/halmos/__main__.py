@@ -606,7 +606,7 @@ def run(
 
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
-    sevm.status.start()
+    sevm.status_start()
 
     exs = sevm.run(
         Exec(

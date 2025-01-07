@@ -15,6 +15,7 @@ from typing import (
     TypeVar,
 )
 
+import rich
 import xxhash
 from eth_hash.auto import keccak
 from rich.status import Status
@@ -1717,6 +1718,11 @@ class SEVM:
         # init storage model
         is_generic = self.options.storage_layout == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
+
+    def status_start(self) -> None:
+        # clear any remaining live display before starting a new instance
+        rich.get_console().clear_live()
+        self.status.start()
 
     def div_xy_y(self, w1: Word, w2: Word) -> Word:
         # return the number of bits required to represent the given value. default = 256
