@@ -743,7 +743,7 @@ def run(
         # 0 width is unlimited
         if args.width and idx >= args.width:
             warn(
-                f"{funsig}: paths have not been fully explored due to: --width {args.width}"
+                f"{funsig}: incomplete execution due to the specified limit: --width {args.width}"
             )
             break
 

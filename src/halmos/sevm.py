@@ -2722,7 +2722,7 @@ class SEVM:
 
                 if (max_depth := self.options.depth) and step_id > max_depth:
                     warn(
-                        f"{self.fun_info.sig}: paths have not been fully explored due to: --depth {max_depth}",
+                        f"{self.fun_info.sig}: incomplete execution due to the specified limit: --depth {max_depth}",
                         allow_duplicate=False,
                     )
                     continue
