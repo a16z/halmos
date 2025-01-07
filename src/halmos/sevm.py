@@ -2608,20 +2608,6 @@ class SEVM:
         potential_true: bool = ex.check(cond_true) != unsat
         potential_false: bool = ex.check(cond_false) != unsat
 
-#       if not potential_true and not potential_false:
-#           print("####")
-#           print("####")
-#           print("infeasible", cond_true, cond_false)
-#           print("####")
-#           print("####")
-#           print(ex.path.solver.check())
-#           print(ex)
-#           print()
-#           print(ex.path.solver.unsat_core())
-#           for xxx in ex.path.solver.assertions():
-#               print(hexify(str(xxx)))
-#           print()
-
         # note: both may be false if the previous path condition was considered unknown but turns out to be unsat later
 
         follow_true = False
@@ -2784,9 +2770,6 @@ class SEVM:
         stack.push(ex0, 0)
 
         def finalize(ex: Exec):
-#           print("fanalize", ex)
-#           print()
-
             # if it's at the top-level, there is no callback; yield the current execution state
             if ex.callback is None:
                 stack.completed_paths += 1
