@@ -20,8 +20,6 @@ from datetime import timedelta
 from enum import Enum
 from importlib import metadata
 
-import rich
-from rich.status import Status
 from z3 import (
     Z3_OP_CONCAT,
     BitVec,
