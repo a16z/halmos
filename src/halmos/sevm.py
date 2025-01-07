@@ -706,6 +706,7 @@ class Path:
     conditions: dict  # cond -> bool (true if explicit branching conditions)
     concretization: Concretization
     pending: list
+    pending_calldata: ByteVec | None
 
     def __init__(self, solver: Solver):
         self.solver = solver
@@ -713,6 +714,7 @@ class Path:
         self.conditions = {}
         self.concretization = Concretization()
         self.pending = []
+        self.pending_calldata = None
 
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
@@ -722,7 +724,7 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-                if self.conditions[cond] and not is_true(cond)
+#               if self.conditions[cond] and not is_true(cond)
             ]
         )
 
@@ -799,6 +801,9 @@ class Path:
         # store the branching condition aside until the new path is activated.
         path.pending.append(cond)
 
+        if self.pending_calldata:
+            path.pending_calldata = self.pending_calldata.copy()
+
         return path
 
     def is_activated(self) -> bool:
@@ -829,8 +834,23 @@ class Path:
             return
 
         self.solver.add(cond)
+#       self.solver.assert_and_track(cond, str(cond.get_id()))
+
         self.conditions[cond] = branching
         self.concretization.process_cond(cond)
+
+#       print("- append")
+#       import traceback
+#       traceback.print_stack()
+
+#       print("assertions:")
+#       for xxx in self.solver.assertions():
+#           print(xxx)
+#       print()
+#       print("conditions:")
+#       for xxx in self.conditions:
+#           print(xxx)
+#       print()
 
     def extend(self, conds, branching=False):
         for cond in conds:
@@ -2019,6 +2039,9 @@ class SEVM:
         if to_alias is None:
             return
 
+        if ex.path.pending_calldata:
+            return
+
         arg_pos = 4 if opcode in [EVM.CALL, EVM.CALLCODE] else 3
         arg_loc = ex.int_of(ex.st.peek(arg_pos), "symbolic memory offset")
         arg_size = ex.int_of(ex.st.peek(arg_pos + 1), "symbolic CALL input data size")
@@ -2035,6 +2058,7 @@ class SEVM:
         selector = arg[0:4].unwrap()
 
         if isinstance(selector, bytes) or is_bv_value(selector) or str(selector).startswith("fallback_selector_"):
+#           print("* no refinement", arg)
             return
 
         code = ex.code[to_alias]
@@ -2056,23 +2080,29 @@ class SEVM:
 #           print(idx, calldata)
 #           print()
 
-            new_ex = (
-                self.create_branch(ex, BoolVal(True), ex.pc)
-                if idx < last_idx
-                else ex
-            )
-
             if calldata_size <= arg_size:
-                new_ex.st.memory.set_slice(arg_loc, arg_loc + calldata_size, calldata)
+#               new_ex.st.memory.set_slice(arg_loc, arg_loc + calldata_size, calldata)
                 arg_chunk = arg[:calldata_size].unwrap()
                 calldata_chunk = calldata.unwrap()
 
             else:  # calldata_size > arg_size:
-                new_ex.st.memory.set_slice(arg_loc, arg_loc + arg_size, calldata[:arg_size])
+#               new_ex.st.memory.set_slice(arg_loc, arg_loc + arg_size, calldata[:arg_size])
                 arg_chunk = arg.unwrap()
                 calldata_chunk = calldata[:arg_size].unwrap()
 
-            new_ex.path.append(wrap(arg_chunk) == wrap(calldata_chunk))
+#           new_ex.path.append(wrap(arg_chunk) == wrap(calldata_chunk))
+
+            new_ex = (
+#               self.create_branch(ex, BoolVal(True), ex.pc)
+                self.create_branch(ex, wrap(arg_chunk) == wrap(calldata_chunk), ex.pc)
+                if idx < last_idx
+                else ex
+            )
+
+            if new_ex.path.pending_calldata:
+                raise ValueError("non empty pending calldata", new_ex.path.pending_calldata)
+#           print("- pending calldata", calldata)
+            new_ex.path.pending_calldata = calldata
 
 #           print(new_ex.st.memory.slice(arg_loc, arg_loc + arg_size))
 #           print()
@@ -2137,7 +2167,13 @@ class SEVM:
         pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
-#       print("xxx", arg)
+#       print("- call pending calldata", ex.path.pending_calldata)
+        if ex.path.pending_calldata:
+            arg = ex.path.pending_calldata
+            arg_size = len(arg)
+            ex.path.pending_calldata = None
+
+#       print("xxx", ex.context.depth, arg)
 #       print()
 
         def send_callvalue(condition=None) -> None:
@@ -2389,7 +2425,8 @@ class SEVM:
                             caller=pranked_caller,
                             origin=pranked_origin,
                             value=fund,
-                            data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
+#                           data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
+                            data=arg,
                             call_scheme=op,
                         ),
                         output=CallOutput(
@@ -2598,6 +2635,20 @@ class SEVM:
         potential_true: bool = ex.check(cond_true) != unsat
         potential_false: bool = ex.check(cond_false) != unsat
 
+#       if not potential_true and not potential_false:
+#           print("####")
+#           print("####")
+#           print("infeasible", cond_true, cond_false)
+#           print("####")
+#           print("####")
+#           print(ex.path.solver.check())
+#           print(ex)
+#           print()
+#           print(ex.path.solver.unsat_core())
+#           for xxx in ex.path.solver.assertions():
+#               print(hexify(str(xxx)))
+#           print()
+
         # note: both may be false if the previous path condition was considered unknown but turns out to be unsat later
 
         follow_true = False
@@ -2764,6 +2815,9 @@ class SEVM:
         stack.push(ex0, 0)
 
         def finalize(ex: Exec):
+#           print("fanalize", ex)
+#           print()
+
             # if it's at the top-level, there is no callback; yield the current execution state
             if ex.callback is None:
                 stack.completed_paths += 1
@@ -3073,6 +3127,7 @@ class SEVM:
                     to = uint160(ex.st.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack, step_id)
 
+#                   print("-- call", hexify(to_alias))
                     self.refine_calldata(ex, opcode, to_alias, stack, step_id)
 
                     self.call(ex, opcode, to_alias, stack, step_id)
