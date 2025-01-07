@@ -1,6 +1,7 @@
 import pytest
 
 from halmos.__main__ import mk_solver
+from halmos.calldata import FunctionInfo
 from halmos.config import default_config
 from halmos.sevm import SEVM
 
@@ -11,8 +12,13 @@ def args():
 
 
 @pytest.fixture
-def sevm(args):
-    return SEVM(args)
+def fun_info():
+    return FunctionInfo("test", "test()", "f8a8fd6d")
+
+
+@pytest.fixture
+def sevm(args, fun_info):
+    return SEVM(args, fun_info)
 
 
 @pytest.fixture

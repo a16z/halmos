@@ -20,8 +20,6 @@ from datetime import timedelta
 from enum import Enum
 from importlib import metadata
 
-import rich
-from rich.status import Status
 from z3 import (
     Z3_OP_CONCAT,
     BitVec,
@@ -423,7 +421,7 @@ def setup(
     setup_timer = NamedTimer("setup")
     setup_timer.create_subtimer("decode")
 
-    sevm = SEVM(args)
+    sevm = SEVM(args, setup_info)
     setup_ex = deploy_test(creation_hexcode, deployed_hexcode, sevm, args, libs, solver)
 
     setup_timer.create_subtimer("run")
@@ -586,7 +584,7 @@ def run(
     # calldata
     #
 
-    sevm = SEVM(args)
+    sevm = SEVM(args, fun_info)
     path = Path(solver)
     path.extend_path(setup_ex.path)
 
@@ -608,6 +606,7 @@ def run(
 
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
+    sevm.status_start()
 
     exs = sevm.run(
         Exec(
@@ -742,6 +741,9 @@ def run(
 
         # 0 width is unlimited
         if args.width and idx >= args.width:
+            warn(
+                f"{funsig}: incomplete execution due to the specified limit: --width {args.width}"
+            )
             break
 
     num_execs = idx + 1
@@ -754,20 +756,16 @@ def run(
 
     # display assertion solving progress
     if not args.no_status or args.early_exit:
-        # creating a new live display would fail if the previous one was still active
-        rich.get_console().clear_live()
-
-        with Status("") as status:
-            while True:
-                if args.early_exit and len(counterexamples) > 0:
-                    break
-                done = sum(fm.done() for fm in future_models)
-                total = len(future_models)
-                if done == total:
-                    break
-                elapsed = timedelta(seconds=int(timer.elapsed()))
-                status.update(f"[{elapsed}] solving queries: {done} / {total}")
-                time.sleep(0.1)
+        while True:
+            if args.early_exit and len(counterexamples) > 0:
+                break
+            done = sum(fm.done() for fm in future_models)
+            total = len(future_models)
+            if done == total:
+                break
+            elapsed = timedelta(seconds=int(timer.elapsed()))
+            sevm.status.update(f"[{elapsed}] solving queries: {done} / {total}")
+            time.sleep(0.1)
 
     if args.early_exit:
         thread_pool.shutdown(wait=False, cancel_futures=True)
@@ -795,6 +793,7 @@ def run(
         passfail = green("[PASS]")
         exitcode = Exitcode.PASS.value
 
+    sevm.status.stop()
     timer.stop()
     time_info = timer.report(include_subtimers=args.statistics)
 
