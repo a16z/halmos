@@ -1706,11 +1706,13 @@ class SEVM:
     storage_model: type[SomeStorage]
     logs: HalmosLogs
     steps: Steps
+    status: Status
 
     def __init__(self, options: HalmosConfig) -> None:
         self.options = options
         self.logs = HalmosLogs()
         self.steps: Steps = {}
+        self.status: Status = Status("")
 
         # init storage model
         is_generic = self.options.storage_layout == "generic"
@@ -2663,10 +2665,6 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
-        with Status("") as status:
-            yield from self._run(ex0, status)
-
-    def _run(self, ex0: Exec, status: Status) -> Iterator[Exec]:
         step_id: int = 0
         stack: Worklist = Worklist()
         stack.push(ex0, 0)
@@ -2697,7 +2695,7 @@ class SEVM:
                     # hh:mm:ss
                     elapsed_fmt = timedelta(seconds=int(elapsed))
 
-                    status.update(
+                    self.status.update(
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"
                         f" | completed paths: {stack.completed_paths}"
                         f" | outstanding paths: {len(stack)}"

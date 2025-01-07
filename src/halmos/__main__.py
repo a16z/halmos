@@ -608,6 +608,7 @@ def run(
 
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
+    sevm.status.start()
 
     exs = sevm.run(
         Exec(
@@ -754,20 +755,16 @@ def run(
 
     # display assertion solving progress
     if not args.no_status or args.early_exit:
-        # creating a new live display would fail if the previous one was still active
-        rich.get_console().clear_live()
-
-        with Status("") as status:
-            while True:
-                if args.early_exit and len(counterexamples) > 0:
-                    break
-                done = sum(fm.done() for fm in future_models)
-                total = len(future_models)
-                if done == total:
-                    break
-                elapsed = timedelta(seconds=int(timer.elapsed()))
-                status.update(f"[{elapsed}] solving queries: {done} / {total}")
-                time.sleep(0.1)
+        while True:
+            if args.early_exit and len(counterexamples) > 0:
+                break
+            done = sum(fm.done() for fm in future_models)
+            total = len(future_models)
+            if done == total:
+                break
+            elapsed = timedelta(seconds=int(timer.elapsed()))
+            sevm.status.update(f"[{elapsed}] solving queries: {done} / {total}")
+            time.sleep(0.1)
 
     if args.early_exit:
         thread_pool.shutdown(wait=False, cancel_futures=True)
@@ -795,6 +792,7 @@ def run(
         passfail = green("[PASS]")
         exitcode = Exitcode.PASS.value
 
+    sevm.status.stop()
     timer.stop()
     time_info = timer.report(include_subtimers=args.statistics)
 
