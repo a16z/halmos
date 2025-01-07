@@ -15,22 +15,6 @@ logging.basicConfig(
 logger = logging.getLogger("halmos")
 
 
-def debug(text: str) -> None:
-    logger.debug(text)
-
-
-def info(text: str) -> None:
-    logger.info(text)
-
-
-def warn(text: str) -> None:
-    logger.warning(text)
-
-
-def error(text: str) -> None:
-    logger.error(text)
-
-
 #
 # Logging with filtering out duplicate log messages
 #
@@ -51,8 +35,28 @@ logger_unique = logging.getLogger("halmos.unique")
 logger_unique.addFilter(UniqueLoggingFilter())
 
 
+def logger_for(allow_duplicate=True) -> logging.Logger:
+    return logger if allow_duplicate else logger_unique
+
+
+def debug(text: str, allow_duplicate=True) -> None:
+    logger_for(allow_duplicate).debug(text)
+
+
+def info(text: str, allow_duplicate=True) -> None:
+    logger_for(allow_duplicate).info(text)
+
+
+def warn(text: str, allow_duplicate=True) -> None:
+    logger_for(allow_duplicate).warning(text)
+
+
+def error(text: str, allow_duplicate=True) -> None:
+    logger_for(allow_duplicate).error(text)
+
+
 def debug_once(text: str) -> None:
-    logger_unique.debug(text)
+    debug(text, allow_duplicate=False)
 
 
 #
@@ -80,5 +84,5 @@ REVERT_ALL = ErrorCode("revert-all")
 LOOP_BOUND = ErrorCode("loop-bound")
 
 
-def warn_code(error_code: ErrorCode, msg: str):
-    logger.warning(f"{msg}\n(see {error_code.url()})")
+def warn_code(error_code: ErrorCode, msg: str, allow_duplicate=True):
+    logger_for(allow_duplicate).warning(f"{msg}\n(see {error_code.url()})")
