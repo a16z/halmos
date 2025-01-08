@@ -321,7 +321,9 @@ def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
     return result
 
 
-def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False, max_size=None):
+def create_calldata_generic(
+    ex, sevm, contract_name, filename=None, include_view=False, max_size=None
+):
     """
     Generate arbitrary symbolic calldata for the given contract.
 

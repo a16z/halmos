@@ -82,7 +82,7 @@ class ByteSize:
     concrete: int
     symbolic: tuple[int, int]  # (a, b): ax + b
 
-    def __init__(self, concrete : int, symbolic : tuple[int, int] = None) -> None:
+    def __init__(self, concrete: int, symbolic: tuple[int, int] = None) -> None:
         self.concrete = concrete
         self.symbolic = symbolic if symbolic else (0, concrete)
 
@@ -99,7 +99,10 @@ class ByteSize:
         if isinstance(other, ByteSize):
             return ByteSize(
                 self.concrete + other.concrete,
-                (self.symbolic[0] + other.symbolic[0], self.symbolic[1] + other.symbolic[1]),
+                (
+                    self.symbolic[0] + other.symbolic[0],
+                    self.symbolic[1] + other.symbolic[1],
+                ),
             )
 
         raise ValueError(other)
@@ -179,7 +182,8 @@ class Calldata:
         size_var = BitVec(f"p_{name}_length_{uid()}_{self.new_symbol_id():>02}", 256)
 
         if self.max_bytes_size and not isinstance(typ, DynamicArrayType):
-            sizes = list(dict.fromkeys(min(self.max_bytes_size, size) for size in sizes))
+            sizes = (min(self.max_bytes_size, size) for size in sizes)
+            sizes = list(dict.fromkeys(sizes))  # remove potential duplicates
 
         self.dyn_params.append(DynamicParam(name, sizes, size_var, typ))
 
@@ -269,7 +273,8 @@ class Calldata:
                     else []  # empty bytes/string
                 )
                 # generalized encoding for multiple sizes
-                return EncodingResult([size_var] + data, ByteSize(32 + size_pad_right, (1, 32)), False)
+                result_size = ByteSize(32 + size_pad_right, (1, 32))
+                return EncodingResult([size_var] + data, result_size, False)
 
             # uintN, intN, address, bool, bytesN
             else:
@@ -366,7 +371,8 @@ def mk_calldata(
     new_symbol_id: Callable = None,
     max_size: int = None,
 ) -> tuple[ByteVec, list[DynamicParam]]:
-    calldata, size, dyn_params = Calldata(args, new_symbol_id).create(abi, fun_info)
+    calldata_factory = Calldata(args, new_symbol_id)
+    calldata, size, dyn_params = calldata_factory.create(abi, fun_info)
 
     if max_size and len(calldata) > max_size:
         (a, b) = size.symbolic
@@ -374,6 +380,7 @@ def mk_calldata(
         max_bytes_size = max(0, max_size - b) // a
         # floor to a multiple of 32
         max_bytes_size = max_bytes_size // 32 * 32
-        calldata, _, dyn_params = Calldata(args, new_symbol_id, max_bytes_size).create(abi, fun_info)
+        calldata_factory = Calldata(args, new_symbol_id, max_bytes_size)
+        calldata, _, dyn_params = calldata_factory.create(abi, fun_info)
 
     return calldata, dyn_params

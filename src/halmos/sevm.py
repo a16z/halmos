@@ -59,7 +59,12 @@ from z3.z3util import is_expr_var
 
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
 from .calldata import FunctionInfo
-from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code, create_calldata_generic
+from .cheatcodes import (
+    Prank,
+    create_calldata_generic,
+    halmos_cheat_code,
+    hevm_cheat_code,
+)
 from .config import Config as HalmosConfig
 from .console import console
 from .exceptions import (
@@ -136,7 +141,6 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
-    extract_bytes_argument,
     wrap,
 )
 
@@ -459,7 +463,7 @@ class State:
     def swap(self, n: int) -> None:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
-    def mloc(self, subst: dict = None, item = None) -> int:
+    def mloc(self, subst: dict = None, item=None) -> int:
         item = self.pop() if item is None else item
         loc: int = int_of(item, "symbolic memory offset", subst)
         if loc > MAX_MEMORY_SIZE:
@@ -1331,7 +1335,7 @@ class Exec:  # an execution path
 
         return (creation_hexcode, deployed_hexcode)
 
-    def mloc(self, item = None) -> int:
+    def mloc(self, item=None) -> int:
         return self.st.mloc(self.path.concretization.substitution, item)
 
     def ret(self) -> ByteVec:
@@ -2045,7 +2049,11 @@ class SEVM:
         selector = arg[0:4].unwrap()
 
         # TODO: check if calldata can be decoded. even if selector is concrete, remaining calldata may not be decodable.
-        if isinstance(selector, bytes) or is_bv_value(selector) or str(selector).startswith("fallback_selector_"):
+        if (
+            isinstance(selector, bytes)
+            or is_bv_value(selector)
+            or str(selector).startswith("fallback_selector_")
+        ):
             return arg
 
         code = ex.code[to_alias]
@@ -2055,7 +2063,9 @@ class SEVM:
         if not contract_name:
             return arg
 
-        calldata_lst = create_calldata_generic(ex, self, contract_name, filename, include_view=True, max_size=arg_size)
+        calldata_lst = create_calldata_generic(
+            ex, self, contract_name, filename, include_view=True, max_size=arg_size
+        )
 
         last_idx = len(calldata_lst) - 1
         for idx, calldata in enumerate(calldata_lst):
@@ -2074,18 +2084,18 @@ class SEVM:
                 )
 
             arg_chunk = arg[:calldata_size] if calldata_size < arg_size else arg
-            calldata_chunk = calldata[:arg_size].unwrap() if arg_size < calldata_size else calldata
+            calldata_chunk = (
+                calldata[:arg_size] if arg_size < calldata_size else calldata
+            )
+            refinement_cond = wrap(arg_chunk.unwrap()) == wrap(calldata_chunk.unwrap())
 
             new_ex = (
-                self.create_branch(ex, wrap(arg_chunk.unwrap()) == wrap(calldata_chunk.unwrap()), ex.pc)
-                if idx < last_idx
-                else ex
+                self.create_branch(ex, refinement_cond, ex.pc) if idx < last_idx else ex
             )
 
-            if calldata_size <= arg_size:
-                new_ex.st.memory.set_slice(arg_loc, arg_loc + calldata_size, calldata)
-            else:
-                new_ex.st.memory.set_slice(arg_loc, arg_loc + arg_size, calldata[:arg_size])
+            new_ex.st.memory.set_slice(
+                arg_loc, arg_loc + min(arg_size, calldata_size), calldata_chunk
+            )
 
             if idx < last_idx:
                 stack.push(new_ex, step_id)
