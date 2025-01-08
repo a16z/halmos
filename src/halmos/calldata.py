@@ -199,6 +199,7 @@ class Calldata:
         # function selector
         calldata = ByteVec()
         calldata.append(bytes.fromhex(fun_info.selector))
+        selector_size = len(calldata)
 
         # list of parameter types
         fun_abi = abi[fun_info.sig]
@@ -206,9 +207,7 @@ class Calldata:
 
         # no parameters
         if not tuple_type.items:
-            return calldata, self.dyn_params, ByteSize(0)
-
-        starting_size = len(calldata)
+            return calldata, ByteSize(selector_size), self.dyn_params
 
         # ABI encoded symbolic calldata for parameters
         encoded = self.encode("", tuple_type)
@@ -216,11 +215,11 @@ class Calldata:
             calldata.append(data)
 
         # sanity check
-        calldata_size = len(calldata) - starting_size
-        if calldata_size != encoded.size.concrete:
+        calldata_size = selector_size + encoded.size
+        if len(calldata) != calldata_size.concrete:
             raise ValueError(encoded)
 
-        return calldata, self.dyn_params, encoded.size
+        return calldata, calldata_size, self.dyn_params
 
     def encode(self, name: str, typ: Type) -> EncodingResult:
         """Create symbolic ABI encoded calldata
@@ -367,12 +366,14 @@ def mk_calldata(
     new_symbol_id: Callable = None,
     max_size: int = None,
 ) -> tuple[ByteVec, list[DynamicParam]]:
-    calldata, dyn_params, size = Calldata(args, new_symbol_id).create(abi, fun_info)
+    calldata, size, dyn_params = Calldata(args, new_symbol_id).create(abi, fun_info)
 
     if max_size and len(calldata) > max_size:
         (a, b) = size.symbolic
-        max_bytes_size = max(0, max_size - 4 - b) // a
-        # TODO: handle max_bytes_size is negative
-        calldata, dyn_params, _ = Calldata(args, new_symbol_id, max_bytes_size).create(abi, fun_info)
+        # NOTE: `max_size - b` can be negative. in that case, the final calldata may be larger than max_size
+        max_bytes_size = max(0, max_size - b) // a
+        # floor to a multiple of 32
+        max_bytes_size = max_bytes_size // 32 * 32
+        calldata, _, dyn_params = Calldata(args, new_symbol_id, max_bytes_size).create(abi, fun_info)
 
     return calldata, dyn_params

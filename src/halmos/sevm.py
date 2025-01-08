@@ -2052,6 +2052,9 @@ class SEVM:
         contract_name = code.contract_name
         filename = code.filename
 
+        if not contract_name:
+            return arg
+
         calldata_lst = create_calldata_generic(ex, self, contract_name, filename, include_view=True, max_size=arg_size)
 
         last_idx = len(calldata_lst) - 1
@@ -2060,18 +2063,21 @@ class SEVM:
             calldata_size = len(calldata)
 
             if calldata_size < 4:
+                if idx > 0:
+                    raise ValueError(idx)
                 continue
 
-            if calldata_size <= arg_size:
-                arg_chunk = arg[:calldata_size].unwrap()
-                calldata_chunk = calldata.unwrap()
+            if calldata_size > arg_size:
+                warn(
+                    f"{self.fun_info.sig}: the given calldata size {arg_size} is not large enough, where minimum size needed: {calldata_size}\n- given calldata: {arg}\n- minimum calldata: {calldata}",
+                    allow_duplicate=False,
+                )
 
-            else:  # calldata_size > arg_size:
-                arg_chunk = arg.unwrap()
-                calldata_chunk = calldata[:arg_size].unwrap()
+            arg_chunk = arg[:calldata_size] if calldata_size < arg_size else arg
+            calldata_chunk = calldata[:arg_size].unwrap() if arg_size < calldata_size else calldata
 
             new_ex = (
-                self.create_branch(ex, wrap(arg_chunk) == wrap(calldata_chunk), ex.pc)
+                self.create_branch(ex, wrap(arg_chunk.unwrap()) == wrap(calldata_chunk.unwrap()), ex.pc)
                 if idx < last_idx
                 else ex
             )
