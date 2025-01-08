@@ -78,10 +78,40 @@ def parse_tuple_type(var: str, items: list[dict]) -> Type:
     return TupleType(var, parsed_items)
 
 
+class Size:
+    concrete: int
+    symbolic: tuple[int, int]  # (a, b): ax + b
+
+    def __init__(self, concrete : int, symbolic : tuple[int, int] = None) -> None:
+        self.concrete = concrete
+        self.symbolic = symbolic if symbolic else (0, concrete)
+
+    def __repr__(self) -> str:
+        return f"[concrete: {self.concrete}, symbolic: {self.symbolic}]"
+
+    def __add__(self, other) -> "Size":
+        if isinstance(other, int):
+            return Size(
+                self.concrete + other,
+                (self.symbolic[0], self.symbolic[1] + other),
+            )
+
+        if isinstance(other, Size):
+            return Size(
+                self.concrete + other.concrete,
+                (self.symbolic[0] + other.symbolic[0], self.symbolic[1] + other.symbolic[1]),
+            )
+
+        raise ValueError(other)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+
 @dataclass(frozen=True)
 class EncodingResult:
     data: list[BitVecRef]
-    size: int  # number of bytes
+    size: Size  # number of bytes
     static: bool  # static vs dynamic type
 
 
@@ -182,7 +212,7 @@ class Calldata:
 
         # sanity check
         calldata_size = len(calldata) - starting_size
-        if calldata_size != encoded.size:
+        if calldata_size != encoded.size.concrete:
             raise ValueError(encoded)
 
         return calldata, self.dyn_params
@@ -235,11 +265,11 @@ class Calldata:
                     else []  # empty bytes/string
                 )
                 # generalized encoding for multiple sizes
-                return EncodingResult([size_var] + data, 32 + size_pad_right, False)
+                return EncodingResult([size_var] + data, Size(32 + size_pad_right, (1, 32)), False)
 
             # uintN, intN, address, bool, bytesN
             else:
-                return EncodingResult([BitVec(new_symbol, 256)], 32, True)
+                return EncodingResult([BitVec(new_symbol, 256)], Size(32), True)
 
         raise ValueError(typ)
 
@@ -260,7 +290,7 @@ class Calldata:
 
         # compute total head size
         def head_size(x):
-            return x.size if x.static else 32
+            return x.size if x.static else Size(32)
 
         total_head_size = reduce(lambda s, x: s + head_size(x), items, 0)
 
@@ -271,7 +301,7 @@ class Calldata:
             if item.static:
                 heads.extend(item.data)
             else:
-                heads.append(con(total_size))
+                heads.append(con(total_size.concrete))
                 tails.extend(item.data)
                 total_size += item.size
 
