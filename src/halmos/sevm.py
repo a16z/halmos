@@ -2062,7 +2062,7 @@ class SEVM:
         contract_name = code.contract_name
         filename = code.filename
 
-        calldata_lst = create_calldata_generic(ex, self, contract_name, filename, include_view=True)
+        calldata_lst = create_calldata_generic(ex, self, contract_name, filename, include_view=True, max_size=arg_size)
 
         last_idx = len(calldata_lst) - 1
         for idx, calldata in enumerate(calldata_lst):

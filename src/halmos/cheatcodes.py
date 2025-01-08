@@ -321,7 +321,7 @@ def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
     return result
 
 
-def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False):
+def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False, max_size=None):
     """
     Generate arbitrary symbolic calldata for the given contract.
 
@@ -344,7 +344,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     fallback_selector = BitVec(
         f"fallback_selector_{uid()}_{ex.new_symbol_id():>02}", 4 * 8
     )
-    fallback_input_length = 1024  # TODO: configurable
+    fallback_input_length = max_size - 4 if max_size else 1024  # TODO: configurable
     fallback_input = BitVec(
         f"fallback_input_{uid()}_{ex.new_symbol_id():>02}", fallback_input_length * 8
     )
@@ -368,6 +368,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
             funinfo,
             sevm.options,
             new_symbol_id=ex.new_symbol_id,
+            max_size=max_size,
         )
         # TODO: this may accumulate dynamic size candidates from multiple calldata into a single path object,
         # which is not optimal, as unnecessary size candidates will need to be copied during path branching for each calldata.

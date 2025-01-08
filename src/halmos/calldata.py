@@ -150,10 +150,12 @@ class Calldata:
         self,
         args: HalmosConfig,
         new_symbol_id: Callable | None,
+        max_bytes_size: int | None = None,
     ) -> None:
         self.args = args
         self.dyn_params = []
         self.new_symbol_id = new_symbol_id if new_symbol_id else lambda: ""
+        self.max_bytes_size = max_bytes_size
 
     def get_dyn_sizes(self, name: str, typ: Type) -> tuple[list[int], BitVecRef]:
         """
@@ -175,6 +177,9 @@ class Calldata:
             )
 
         size_var = BitVec(f"p_{name}_length_{uid()}_{self.new_symbol_id():>02}", 256)
+
+        if self.max_bytes_size:
+            sizes = list(dict.fromkeys(min(self.max_bytes_size, size) for size in sizes))
 
         self.dyn_params.append(DynamicParam(name, sizes, size_var, typ))
 
@@ -201,7 +206,7 @@ class Calldata:
 
         # no parameters
         if not tuple_type.items:
-            return calldata, self.dyn_params
+            return calldata, self.dyn_params, Size(0)
 
         starting_size = len(calldata)
 
@@ -215,7 +220,7 @@ class Calldata:
         if calldata_size != encoded.size.concrete:
             raise ValueError(encoded)
 
-        return calldata, self.dyn_params
+        return calldata, self.dyn_params, encoded.size
 
     def encode(self, name: str, typ: Type) -> EncodingResult:
         """Create symbolic ABI encoded calldata
@@ -360,5 +365,13 @@ def mk_calldata(
     fun_info: FunctionInfo,
     args: HalmosConfig,
     new_symbol_id: Callable = None,
+    max_size: int = None,
 ) -> tuple[ByteVec, list[DynamicParam]]:
-    return Calldata(args, new_symbol_id).create(abi, fun_info)
+    calldata, dyn_params, size = Calldata(args, new_symbol_id).create(abi, fun_info)
+
+    if max_size and len(calldata) > max_size:
+        (a, b) = size.symbolic
+        max_bytes_size = (max_size - 4 - b) // a
+        calldata, dyn_params, _ = Calldata(args, new_symbol_id, max_bytes_size).create(abi, fun_info)
+
+    return calldata, dyn_params
