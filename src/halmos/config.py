@@ -441,7 +441,7 @@ class Config:
 
     solver_command: str = arg(
         help="use the given command when invoking the solver",
-        global_default=None,
+        global_default="z3",
         metavar="COMMAND",
         group=solver,
     )
