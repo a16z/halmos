@@ -2079,7 +2079,9 @@ class SEVM:
 
             if calldata_size > arg_size:
                 warn(
-                    f"{self.fun_info.sig}: the given calldata size {arg_size} is not large enough, where minimum size needed: {calldata_size}\n- given calldata: {arg}\n- minimum calldata: {calldata}",
+                    f"{self.fun_info.sig}: the given calldata size is insufficient:\n"
+                    f"- given calldata ({arg_size} bytes): {arg}\n"
+                    f"- required calldata ({calldata_size} bytes): {calldata}",
                     allow_duplicate=False,
                 )
 
