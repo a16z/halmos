@@ -709,7 +709,6 @@ class Path:
     conditions: dict  # cond -> bool (true if explicit branching conditions)
     concretization: Concretization
     pending: list
-    pending_calldata: ByteVec | None
 
     def __init__(self, solver: Solver):
         self.solver = solver
@@ -717,7 +716,6 @@ class Path:
         self.conditions = {}
         self.concretization = Concretization()
         self.pending = []
-        self.pending_calldata = None
 
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
@@ -803,9 +801,6 @@ class Path:
 
         # store the branching condition aside until the new path is activated.
         path.pending.append(cond)
-
-        if self.pending_calldata:
-            path.pending_calldata = self.pending_calldata.copy()
 
         return path
 
@@ -2034,11 +2029,6 @@ class SEVM:
         stack: list[tuple[Exec, int]],
         step_id: int,
     ):
-        if ex.path.pending_calldata:
-            arg = ex.path.pending_calldata
-            ex.path.pending_calldata = None
-            return arg
-
         arg_pos = 4 if opcode in [EVM.CALL, EVM.CALLCODE] else 3
         arg_loc = ex.mloc(ex.st.peek(arg_pos))
         arg_size = ex.int_of(ex.st.peek(arg_pos + 1), "symbolic CALL input data size")
@@ -2086,14 +2076,15 @@ class SEVM:
                 else ex
             )
 
-            new_ex.path.pending_calldata = calldata
+            if calldata_size <= arg_size:
+                new_ex.st.memory.set_slice(arg_loc, arg_loc + calldata_size, calldata)
+            else:
+                new_ex.st.memory.set_slice(arg_loc, arg_loc + arg_size, calldata[:arg_size])
 
             if idx < last_idx:
                 stack.push(new_ex, step_id)
 
-        arg = ex.path.pending_calldata
-        ex.path.pending_calldata = None
-        return arg
+        return ex.st.memory.slice(arg_loc, arg_loc + arg_size)
 
     def transfer_value(
         self,

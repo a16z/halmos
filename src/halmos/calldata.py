@@ -78,7 +78,7 @@ def parse_tuple_type(var: str, items: list[dict]) -> Type:
     return TupleType(var, parsed_items)
 
 
-class Size:
+class ByteSize:
     concrete: int
     symbolic: tuple[int, int]  # (a, b): ax + b
 
@@ -89,15 +89,15 @@ class Size:
     def __repr__(self) -> str:
         return f"[concrete: {self.concrete}, symbolic: {self.symbolic}]"
 
-    def __add__(self, other) -> "Size":
+    def __add__(self, other) -> "ByteSize":
         if isinstance(other, int):
-            return Size(
+            return ByteSize(
                 self.concrete + other,
                 (self.symbolic[0], self.symbolic[1] + other),
             )
 
-        if isinstance(other, Size):
-            return Size(
+        if isinstance(other, ByteSize):
+            return ByteSize(
                 self.concrete + other.concrete,
                 (self.symbolic[0] + other.symbolic[0], self.symbolic[1] + other.symbolic[1]),
             )
@@ -111,7 +111,7 @@ class Size:
 @dataclass(frozen=True)
 class EncodingResult:
     data: list[BitVecRef]
-    size: Size  # number of bytes
+    size: ByteSize  # number of bytes
     static: bool  # static vs dynamic type
 
 
@@ -178,7 +178,7 @@ class Calldata:
 
         size_var = BitVec(f"p_{name}_length_{uid()}_{self.new_symbol_id():>02}", 256)
 
-        if self.max_bytes_size:
+        if self.max_bytes_size and not isinstance(typ, DynamicArrayType):
             sizes = list(dict.fromkeys(min(self.max_bytes_size, size) for size in sizes))
 
         self.dyn_params.append(DynamicParam(name, sizes, size_var, typ))
@@ -206,7 +206,7 @@ class Calldata:
 
         # no parameters
         if not tuple_type.items:
-            return calldata, self.dyn_params, Size(0)
+            return calldata, self.dyn_params, ByteSize(0)
 
         starting_size = len(calldata)
 
@@ -270,11 +270,11 @@ class Calldata:
                     else []  # empty bytes/string
                 )
                 # generalized encoding for multiple sizes
-                return EncodingResult([size_var] + data, Size(32 + size_pad_right, (1, 32)), False)
+                return EncodingResult([size_var] + data, ByteSize(32 + size_pad_right, (1, 32)), False)
 
             # uintN, intN, address, bool, bytesN
             else:
-                return EncodingResult([BitVec(new_symbol, 256)], Size(32), True)
+                return EncodingResult([BitVec(new_symbol, 256)], ByteSize(32), True)
 
         raise ValueError(typ)
 
@@ -295,7 +295,7 @@ class Calldata:
 
         # compute total head size
         def head_size(x):
-            return x.size if x.static else Size(32)
+            return x.size if x.static else ByteSize(32)
 
         total_head_size = reduce(lambda s, x: s + head_size(x), items, 0)
 
@@ -371,7 +371,8 @@ def mk_calldata(
 
     if max_size and len(calldata) > max_size:
         (a, b) = size.symbolic
-        max_bytes_size = (max_size - 4 - b) // a
+        max_bytes_size = max(0, max_size - 4 - b) // a
+        # TODO: handle max_bytes_size is negative
         calldata, dyn_params, _ = Calldata(args, new_symbol_id, max_bytes_size).create(abi, fun_info)
 
     return calldata, dyn_params
