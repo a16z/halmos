@@ -10,7 +10,6 @@ from halmos.calldata import FunctionInfo
 from halmos.config import Config as HalmosConfig
 from halmos.constants import VERBOSITY_TRACE_COUNTEREXAMPLE, VERBOSITY_TRACE_PATHS
 from halmos.logs import (
-    COUNTEREXAMPLE_INVALID,
     COUNTEREXAMPLE_UNKNOWN,
     debug,
     error,
@@ -19,7 +18,7 @@ from halmos.logs import (
 )
 from halmos.processes import PopenExecutor, PopenFuture, TimeoutExpired
 from halmos.sevm import Exec, SMTQuery
-from halmos.utils import con, red, stringify
+from halmos.utils import con, stringify
 
 
 @dataclass
@@ -468,16 +467,13 @@ def solve_end_to_end(ctx: PathContext) -> None:
         return
 
     if model.is_valid:
-        print(red(f"Counterexample: {model}"))
-
         fun_ctx.valid_counterexamples.append(model)
 
         # we have a valid counterexample, so we are eligible for early exit
         if args.early_exit:
+            debug(f"Shutting down {fun_ctx.info.name}'s solver executor")
             fun_ctx.solver_executor.shutdown(wait=False)
     else:
-        warn_str = f"Counterexample (potentially invalid): {model}"
-        warn_code(COUNTEREXAMPLE_INVALID, warn_str)
         fun_ctx.invalid_counterexamples.append(model)
 
 

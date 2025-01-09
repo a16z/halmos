@@ -66,8 +66,6 @@ class PopenFuture(concurrent.futures.Future):
         if not self.is_running():
             return
 
-        self.process.terminate()
-
         # use psutil to kill the entire process tree (including children)
         try:
             parent_process = psutil.Process(self.process.pid)
@@ -78,8 +76,9 @@ class PopenFuture(concurrent.futures.Future):
             for process in processes:
                 process.terminate()
 
-            # give them some time to terminate
-            time.sleep(0.5)
+            # termination grace period
+            with contextlib.suppress(TimeoutExpired):
+                parent_process.wait(timeout=0.5)
 
             # after grace period, force kill
             for process in processes:
@@ -161,9 +160,12 @@ class PopenExecutor(concurrent.futures.Executor):
 
         # if asked for immediate shutdown we cancel everything
         else:
-            with self._lock:
-                for future in self._futures:
-                    future.cancel()
+            with self._lock, concurrent.futures.ThreadPoolExecutor() as executor:
+                # kick off all cancellations in parallel
+                cancel_tasks = [executor.submit(f.cancel) for f in self._futures]
+
+                # wait for them to finish
+                concurrent.futures.wait(cancel_tasks)
 
     def map(self, fn, *iterables, timeout=None, chunksize=1):
         raise NotImplementedError()
