@@ -374,7 +374,7 @@ def mk_calldata(
     calldata_factory = Calldata(args, new_symbol_id)
     calldata, size, dyn_params = calldata_factory.create(abi, fun_info)
 
-    if max_size and len(calldata) > max_size:
+    if max_size and len(calldata) > max_size and size.symbolic[0] > 0:
         (a, b) = size.symbolic
         # NOTE: `max_size - b` can be negative. in that case, the final calldata may exceed max_size
         max_bytes_size = max(0, max_size - b) // a
