@@ -78,10 +78,43 @@ def parse_tuple_type(var: str, items: list[dict]) -> Type:
     return TupleType(var, parsed_items)
 
 
+class ByteSize:
+    concrete: int
+    symbolic: tuple[int, int]  # (a, b): ax + b
+
+    def __init__(self, concrete: int, symbolic: tuple[int, int] = None) -> None:
+        self.concrete = concrete
+        self.symbolic = symbolic if symbolic else (0, concrete)
+
+    def __repr__(self) -> str:
+        return f"[concrete: {self.concrete}, symbolic: {self.symbolic}]"
+
+    def __add__(self, other) -> "ByteSize":
+        if isinstance(other, int):
+            return ByteSize(
+                self.concrete + other,
+                (self.symbolic[0], self.symbolic[1] + other),
+            )
+
+        if isinstance(other, ByteSize):
+            return ByteSize(
+                self.concrete + other.concrete,
+                (
+                    self.symbolic[0] + other.symbolic[0],
+                    self.symbolic[1] + other.symbolic[1],
+                ),
+            )
+
+        raise ValueError(other)
+
+    def __radd__(self, other):
+        return self.__add__(other)
+
+
 @dataclass(frozen=True)
 class EncodingResult:
     data: list[BitVecRef]
-    size: int  # number of bytes
+    size: ByteSize  # number of bytes
     static: bool  # static vs dynamic type
 
 
@@ -120,10 +153,12 @@ class Calldata:
         self,
         args: HalmosConfig,
         new_symbol_id: Callable | None,
+        max_bytes_size: int | None = None,
     ) -> None:
         self.args = args
         self.dyn_params = []
         self.new_symbol_id = new_symbol_id if new_symbol_id else lambda: ""
+        self.max_bytes_size = max_bytes_size
 
     def get_dyn_sizes(self, name: str, typ: Type) -> tuple[list[int], BitVecRef]:
         """
@@ -146,6 +181,10 @@ class Calldata:
 
         size_var = BitVec(f"p_{name}_length_{uid()}_{self.new_symbol_id():>02}", 256)
 
+        if self.max_bytes_size and not isinstance(typ, DynamicArrayType):
+            sizes = (min(self.max_bytes_size, size) for size in sizes)
+            sizes = list(dict.fromkeys(sizes))  # remove potential duplicates
+
         self.dyn_params.append(DynamicParam(name, sizes, size_var, typ))
 
         return (sizes, size_var)
@@ -164,6 +203,7 @@ class Calldata:
         # function selector
         calldata = ByteVec()
         calldata.append(bytes.fromhex(fun_info.selector))
+        selector_size = len(calldata)
 
         # list of parameter types
         fun_abi = abi[fun_info.sig]
@@ -171,9 +211,7 @@ class Calldata:
 
         # no parameters
         if not tuple_type.items:
-            return calldata, self.dyn_params
-
-        starting_size = len(calldata)
+            return calldata, ByteSize(selector_size), self.dyn_params
 
         # ABI encoded symbolic calldata for parameters
         encoded = self.encode("", tuple_type)
@@ -181,11 +219,11 @@ class Calldata:
             calldata.append(data)
 
         # sanity check
-        calldata_size = len(calldata) - starting_size
-        if calldata_size != encoded.size:
+        calldata_size = selector_size + encoded.size
+        if len(calldata) != calldata_size.concrete:
             raise ValueError(encoded)
 
-        return calldata, self.dyn_params
+        return calldata, calldata_size, self.dyn_params
 
     def encode(self, name: str, typ: Type) -> EncodingResult:
         """Create symbolic ABI encoded calldata
@@ -235,11 +273,12 @@ class Calldata:
                     else []  # empty bytes/string
                 )
                 # generalized encoding for multiple sizes
-                return EncodingResult([size_var] + data, 32 + size_pad_right, False)
+                result_size = ByteSize(32 + size_pad_right, (1, 32))
+                return EncodingResult([size_var] + data, result_size, False)
 
             # uintN, intN, address, bool, bytesN
             else:
-                return EncodingResult([BitVec(new_symbol, 256)], 32, True)
+                return EncodingResult([BitVec(new_symbol, 256)], ByteSize(32), True)
 
         raise ValueError(typ)
 
@@ -260,7 +299,7 @@ class Calldata:
 
         # compute total head size
         def head_size(x):
-            return x.size if x.static else 32
+            return x.size if x.static else ByteSize(32)
 
         total_head_size = reduce(lambda s, x: s + head_size(x), items, 0)
 
@@ -271,7 +310,7 @@ class Calldata:
             if item.static:
                 heads.extend(item.data)
             else:
-                heads.append(con(total_size))
+                heads.append(con(total_size.concrete))
                 tails.extend(item.data)
                 total_size += item.size
 
@@ -330,5 +369,18 @@ def mk_calldata(
     fun_info: FunctionInfo,
     args: HalmosConfig,
     new_symbol_id: Callable = None,
+    max_size: int = None,
 ) -> tuple[ByteVec, list[DynamicParam]]:
-    return Calldata(args, new_symbol_id).create(abi, fun_info)
+    calldata_factory = Calldata(args, new_symbol_id)
+    calldata, size, dyn_params = calldata_factory.create(abi, fun_info)
+
+    if max_size and len(calldata) > max_size and size.symbolic[0] > 0:
+        (a, b) = size.symbolic
+        # NOTE: `max_size - b` can be negative. in that case, the final calldata may exceed max_size
+        max_bytes_size = max(0, max_size - b) // a
+        # round down to the nearest multiple of 32 to avoid zero padding
+        max_bytes_size = max_bytes_size // 32 * 32
+        calldata_factory = Calldata(args, new_symbol_id, max_bytes_size)
+        calldata, _, dyn_params = calldata_factory.create(abi, fun_info)
+
+    return calldata, dyn_params
