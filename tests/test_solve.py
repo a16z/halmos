@@ -1,4 +1,4 @@
-from halmos.smtlib import ModelVariable, parse_string
+from halmos.solve import ModelVariable, parse_model_str
 
 
 def test_smtlib_z3_bv_output():
@@ -7,7 +7,7 @@ def test_smtlib_z3_bv_output():
         (define-fun {full_name} () (_ BitVec 256)
         #x0000000000000000000000000000000000000000000000000000000000000000)
     """
-    model = parse_string(smtlib_str)
+    model = parse_model_str(smtlib_str)
 
     assert model[full_name] == ModelVariable(
         full_name=full_name,
@@ -30,7 +30,7 @@ def test_smtlib_yices_binary_output():
         (_ BitVec 256)
         #b1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)
     """
-    model = parse_string(smtlib_str)
+    model = parse_model_str(smtlib_str)
     assert model[full_name] == ModelVariable(
         full_name=full_name,
         variable_name="z",
@@ -47,7 +47,7 @@ def test_smtlib_yices_decimal_output():
     smtlib_str = f"""
         (define-fun {full_name} () (_ BitVec 256) (_ bv{val} 256))
     """
-    model = parse_string(smtlib_str)
+    model = parse_model_str(smtlib_str)
     assert model[full_name] == ModelVariable(
         full_name=full_name,
         variable_name="z",
@@ -76,7 +76,7 @@ def test_smtlib_stp_output():
         ( define-fun |{full_name}| () (_ BitVec 8) #x04 )
         )
     """
-    model = parse_string(smtlib_str)
+    model = parse_model_str(smtlib_str)
     assert model[full_name] == ModelVariable(
         full_name=full_name,
         variable_name="x",
