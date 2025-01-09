@@ -342,11 +342,11 @@ def setup(ctx: FunctionContext) -> Exec:
 
     setup_exs: list[Exec] = []
 
-    match len(setup_exs_no_error):
-        case 0:
+    match setup_exs_no_error:
+        case []:
             pass
-        case 1:
-            setup_exs.append(setup_exs_no_error[0][0])
+        case [path_ctx]:
+            setup_exs.append(path_ctx.ex)
         case _:
             for path_ctx in setup_exs_no_error:
                 solver_output = solve_low_level(path_ctx)
