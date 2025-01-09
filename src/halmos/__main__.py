@@ -484,17 +484,14 @@ def setup(ctx: FunctionContext) -> Exec:
     )
 
     setup_exs_all = sevm.run(setup_ex)
-    setup_exs_no_error = []
+    setup_exs_no_error: list[PathContext] = []
 
-    for idx, setup_ex in enumerate(setup_exs_all):
+    for path_id, setup_ex in enumerate(setup_exs_all):
         if args.verbose >= VERBOSITY_TRACE_SETUP:
-            print(f"{setup_sig} trace #{idx+1}:")
+            print(f"{setup_sig} trace #{path_id}:")
             render_trace(setup_ex.context)
 
-        if not (err := setup_ex.context.output.error):
-            setup_exs_no_error.append((setup_ex, setup_ex.path.to_smt2(args)))
-
-        else:
+        if err := setup_ex.context.output.error:
             opcode = setup_ex.current_opcode()
             if opcode not in [EVM.REVERT, EVM.INVALID]:
                 warn_code(
@@ -507,7 +504,16 @@ def setup(ctx: FunctionContext) -> Exec:
                 print(f"{setup_sig} trace:")
                 render_trace(setup_ex.context)
 
-    setup_exs = []
+        else:
+            path_ctx = PathContext(
+                path_id=path_id,
+                ex=setup_ex,
+                query=setup_ex.path.to_smt2(args),
+                fun_ctx=ctx,
+            )
+            setup_exs_no_error.append(path_ctx)
+
+    setup_exs: list[Exec] = []
 
     match len(setup_exs_no_error):
         case 0:
@@ -515,10 +521,10 @@ def setup(ctx: FunctionContext) -> Exec:
         case 1:
             setup_exs.append(setup_exs_no_error[0][0])
         case _:
-            for setup_ex, query in setup_exs_no_error:
-                solver_output = solve_low_level(query, args)
+            for path_ctx in setup_exs_no_error:
+                solver_output = solve_low_level(path_ctx)
                 if solver_output.result != unsat:
-                    setup_exs.append(setup_ex)
+                    setup_exs.append(path_ctx.ex)
                     if len(setup_exs) > 1:
                         break
 
