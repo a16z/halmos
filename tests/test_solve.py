@@ -1,8 +1,16 @@
+import pytest
+
 from halmos.solve import ModelVariable, parse_model_str
 
 
-def test_smtlib_z3_bv_output():
-    full_name = "halmos_y_uint256_043cfd7_01"
+@pytest.mark.parametrize(
+    "full_name",
+    [
+        "halmos_y_uint256_043cfd7_01",
+        "p_y_uint256_043cfd7_01",
+    ],
+)
+def test_smtlib_z3_bv_output(full_name):
     smtlib_str = f"""
         (define-fun {full_name} () (_ BitVec 256)
         #x0000000000000000000000000000000000000000000000000000000000000000)
@@ -21,8 +29,14 @@ def test_smtlib_z3_bv_output():
 
 # note that yices only produces output like this with --smt2-model-format
 # otherwise we get something like (= x #b00000100)
-def test_smtlib_yices_binary_output():
-    full_name = "halmos_z_uint256_cabf047_02"
+@pytest.mark.parametrize(
+    "full_name",
+    [
+        "halmos_z_uint256_cabf047_02",
+        "p_z_uint256_cabf047_02",
+    ],
+)
+def test_smtlib_yices_binary_output(full_name):
     smtlib_str = f"""
     (define-fun
         {full_name}
@@ -41,8 +55,14 @@ def test_smtlib_yices_binary_output():
     )
 
 
-def test_smtlib_yices_decimal_output():
-    full_name = "halmos_z_uint256_11ce021_08"
+@pytest.mark.parametrize(
+    "full_name",
+    [
+        "halmos_z_uint256_11ce021_08",
+        "p_z_uint256_11ce021_08",
+    ],
+)
+def test_smtlib_yices_decimal_output(full_name):
     val = 57896044618658097711785492504343953926634992332820282019728792003956564819968
     smtlib_str = f"""
         (define-fun {full_name} () (_ BitVec 256) (_ bv{val} 256))
@@ -58,9 +78,14 @@ def test_smtlib_yices_decimal_output():
     )
 
 
-def test_smtlib_stp_output():
-    full_name = "halmos_x_uint8_043cfd7_01"
-
+@pytest.mark.parametrize(
+    "full_name",
+    [
+        "halmos_x_uint8_043cfd7_01",
+        "p_x_uint8_043cfd7_01",
+    ],
+)
+def test_smtlib_stp_output(full_name):
     # we should tolerate:
     # - the extra (model) command
     # - duplicate variable names

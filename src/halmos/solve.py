@@ -37,14 +37,14 @@ ModelVariables = dict[str, ModelVariable]
 # Regular expression for capturing halmos variables
 halmos_var_pattern = re.compile(
     r"""
-    \(\s*define-fun\s+           # Match "(define-fun"
-    \|?(halmos_[^ |]+)\|?\s+     # Capture the full variable name, optionally wrapped in "|"
-    \(\)\s+\(_\s+([^ ]+)\s+      # Capture the SMTLIB type (e.g., "BitVec 256")
-    (\d+)\)\s+                   # Capture the bit-width or type argument
-    (                            # Group for the value
-        \#b[01]+                 # Binary value (e.g., "#b1010")
-        |\#x[0-9a-fA-F]+         # Hexadecimal value (e.g., "#xFF")
-        |\(_\s+bv\d+\s+\d+\)     # Decimal value (e.g., "(_ bv42 256)")
+    \(\s*define-fun\s+               # Match "(define-fun"
+    \|?((?:halmos_|p_)[^ |]+)\|?\s+  # Capture either halmos_* or p_*, optionally wrapped in "|"
+    \(\)\s+\(_\s+([^ ]+)\s+          # Capture the SMTLIB type (e.g., "BitVec 256")
+    (\d+)\)\s+                       # Capture the bit-width or type argument
+    (                                # Group for the value
+        \#b[01]+                     # Binary value (e.g., "#b1010")
+        |\#x[0-9a-fA-F]+             # Hexadecimal value (e.g., "#xFF")
+        |\(_\s+bv\d+\s+\d+\)         # Decimal value (e.g., "(_ bv42 256)")
     )
     """,
     re.VERBOSE,
