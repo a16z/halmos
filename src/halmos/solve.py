@@ -17,7 +17,12 @@ from halmos.logs import (
     warn,
     warn_code,
 )
-from halmos.processes import PopenExecutor, PopenFuture, TimeoutExpired
+from halmos.processes import (
+    ExecutorRegistry,
+    PopenExecutor,
+    PopenFuture,
+    TimeoutExpired,
+)
 from halmos.sevm import Exec, SMTQuery
 from halmos.utils import con, red, stringify
 
@@ -145,6 +150,9 @@ class FunctionContext:
             thread_name_prefix=f"{self.info.name}-",
         )
         object.__setattr__(self, "thread_pool", thread_pool)
+
+        # register the solver executor to be shutdown on exit
+        ExecutorRegistry().register(self.solver_executor)
 
 
 @dataclass(frozen=True)

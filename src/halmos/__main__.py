@@ -53,6 +53,7 @@ from .logs import (
     warn_code,
 )
 from .mapper import BuildOut, DeployAddressMapper
+from .processes import ExecutorRegistry
 from .sevm import (
     EMPTY_BALANCE,
     EVM,
@@ -821,6 +822,8 @@ def _main(_args=None) -> MainResult:
     #
 
     def on_exit(exitcode: int) -> MainResult:
+        ExecutorRegistry().shutdown_all()
+
         result = MainResult(exitcode, test_results_map)
 
         if args.json_output:

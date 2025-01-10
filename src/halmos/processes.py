@@ -3,9 +3,29 @@ import contextlib
 import subprocess
 import threading
 import time
+import weakref
 from subprocess import PIPE, Popen, TimeoutExpired
 
 import psutil
+
+
+class ExecutorRegistry:
+    _instance = None
+
+    # Singleton pattern
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._executors = weakref.WeakSet()
+        return cls._instance
+
+    def register(self, executor):
+        self._executors.add(executor)
+
+    def shutdown_all(self):
+        print("Shutting down all executors")
+        for ex in list(self._executors):
+            ex.shutdown(wait=False)
 
 
 class PopenFuture(concurrent.futures.Future):
