@@ -336,13 +336,18 @@ def test_opcode_stack(hexcode, stack_in, stack_out, sevm: SEVM, solver, storage)
     assert output_ex.st.stack == list(reversed(stack_out))
 
 
-def test_stack_underflow_pop(sevm: SEVM, solver, storage):
-    # check that we get an exception when popping from an empty stack
-    ex = mk_ex(o(EVM.POP), sevm, solver, storage, caller, this)
-
-    exs: list[Exec] = list(sevm.run(ex))
-
-    [output_ex] = exs
+@pytest.mark.parametrize(
+    "opcode",
+    [
+        EVM.POP,
+        *range(EVM.DUP1, EVM.DUP16 + 1),
+        *range(EVM.SWAP1, EVM.SWAP16 + 1),
+    ],
+)
+def test_stack_underflow(sevm: SEVM, solver, storage, opcode):
+    """Test that operations on empty stack raise StackUnderflowError"""
+    ex = mk_ex(o(opcode), sevm, solver, storage, caller, this)
+    [output_ex] = list(sevm.run(ex))
     assert isinstance(output_ex.context.output.error, StackUnderflowError)
 
 
