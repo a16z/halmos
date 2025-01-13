@@ -101,7 +101,7 @@ def test_decode_mixed_bytecode():
     )
 
     disassembly = " ".join([str(insn) for insn in insns])
-    assert disassembly == "PUSH20 x PUSH0 MSTORE PUSH1 0x14 PUSH1 0x0c RETURN"
+    assert disassembly == "PUSH20 x() PUSH0 MSTORE PUSH1 0x14 PUSH1 0x0c RETURN"
 
     # jump destination scanning
     assert contract.valid_jump_destinations() == set()
@@ -141,7 +141,7 @@ def test_decode_hex():
 def test_decode():
     code = Contract(Concat(BitVecVal(EVM.PUSH32, 8), BitVec("x", 256)))
     assert len(code) == 33
-    assert str(code.decode_instruction(0)) == "PUSH32 x"
+    assert str(code.decode_instruction(0)) == "PUSH32 x()"
     assert str(code.decode_instruction(33)) == "STOP"
 
     code = Contract(BitVec("x", 256))
@@ -150,7 +150,7 @@ def test_decode():
 
     code = Contract(Concat(BitVecVal(EVM.PUSH3, 8), BitVec("x", 16)))
     assert (
-        str(code.decode_instruction(0)) == "PUSH3 Concat(x, 0x00)"
+        str(code.decode_instruction(0)) == "PUSH3 Concat(x(), 0x00)"
     )  # 'PUSH3 ERROR x (1 bytes missed)'
 
 
