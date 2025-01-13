@@ -2639,7 +2639,7 @@ class SEVM:
         )
         return new_ex
 
-    def refine_calldata(self, ex: Exec):
+    def mk_shadow_calldata(self, ex: Exec):
         calldata = ex.calldata()
 
         if hasattr(calldata, "shadow_calldata"):
@@ -2648,82 +2648,102 @@ class SEVM:
         if len(calldata) < 4:
             return
 
-        selector_term = calldata[0:4].unwrap()
+        selector = calldata[0:4].unwrap()
 
-        selector = ex.path.concretization.substitution.get(selector_term) if is_bv(selector_term) else selector_term
+        selector = selector if is_concrete(selector) else ex.path.concretization.substitution.get(selector, selector)
 
-        if selector is None:
-            if not str(selector_term).startswith("fallback_selector_"):
-                warn(
-                    f"{self.fun_info.sig}: xxx: couldn't concretize the selector: {selector_term}\n"
-#                   f"{ex.path.concretization.substitution}"
+        if not is_concrete(selector):
+            if not str(selector).startswith("fallback_selector_"):
+                debug_once(
+                    f"{self.fun_info.sig}: couldn't concretize the selector: {hexify(selector)}"
                 )
-#               print(ex)
             return
 
-#       print("selector", hexify(selector_term), hexify(selector))
-
-        selector = int_of(selector, f"{self.fun_info.sig}: xxx: symbolic selector: {selector}")
+        selector = int_of(selector, f"{self.fun_info.sig}: symbolic selector: {selector}")
 
         contract_name = ex.pgm.contract_name
         filename = ex.pgm.filename
 
         if not contract_name:
             if not eq(ex.this(), con_addr(FOUNDRY_TEST)):
-                warn(
-                    f"{self.fun_info.sig}: xxx: couldn't find contract name for: {hexify(selector)}\n"
+                debug_once(
+                    f"{self.fun_info.sig}: couldn't find the contract name for: {hexify(selector)}"
                 )
-#               print(ex)
             return
 
         contract_json = BuildOut().get_by_name(contract_name, filename)
         abi = get_abi(contract_json)
-        methodIdentifiers = contract_json["methodIdentifiers"]
+        method_identifiers = contract_json["methodIdentifiers"]
 
-        def get_funsig(funselector):
-            selector_dict = contract_json.get("selector_dict")
+        def get_funsig(fun_selector):
+            method_identifiers_inv = contract_json.get("methodIdentifiersInv")
 
-            if selector_dict is None:
-                selector_dict = {
-                    _funselector: _funsig
-                    for _funsig, _funselector in methodIdentifiers.items()
+            if method_identifiers_inv is None:
+                method_identifiers_inv = {
+                    funselector: funsig
+                    for funsig, funselector in method_identifiers.items()
                 }
-                contract_json["selector_dict"] = selector_dict
+                contract_json["methodIdentifiersInv"] = method_identifiers_inv
 
-            return selector_dict.get(funselector)
+            return method_identifiers_inv.get(fun_selector)
 
-        funselector = f"{selector:08x}"
-        funsig = get_funsig(funselector)
+        fun_selector = f"{selector:08x}"
+        fun_sig = get_funsig(fun_selector)
 
-        if not funsig:
+        if not fun_sig:
             # it's possible for proxy delegate: e.g., see ProxyTest, ERC1967Proxy
-            warn(
-                f"{self.fun_info.sig}: xxx: couldn't find funsig: {hexify(selector)} in {filename}:{contract_name}\n"
-                f"{methodIdentifiers}"
+            debug_once(
+                f"{self.fun_info.sig}: couldn't find funsig: {hexify(selector)} in {filename}:{contract_name}\n"
+                f"{method_identifiers}"
             )
             return
 
-        funname = funsig.split("(")[0]
-        funinfo = FunctionInfo(funname, funsig, funselector)
+        fun_name = fun_sig.split("(")[0]
+        fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
 
-        shadow_calldata, dyn_params = mk_calldata(
+        shadow_calldata, shadow_dyn_params = mk_calldata(
             abi,
-            funinfo,
+            fun_info,
             self.options,
             new_symbol_id=ex.new_symbol_id,
             max_size=len(calldata),
         )
 
-#       print(shadow_calldata, dyn_params)
-
         calldata.shadow_calldata = shadow_calldata
         calldata.shadow_dyn_params = {
             d.size_symbol: d.size_choices
-            for d in dyn_params
+            for d in shadow_dyn_params
         }
 
-#       print(hasattr(calldata, "shadow_calldata"))
+    def try_concretize(self, ex, calldata, offset, loaded):
+        if is_concrete(loaded):
+            return loaded
 
+        if is_expr_var(loaded):
+            result = ex.path.concretization.substitution.get(loaded)
+            if result is not None:  # could be zero
+                return result
+
+            if (result := ex.path.concretization.candidates.get(loaded)):
+                return result
+
+        self.mk_shadow_calldata(ex)
+
+        if not hasattr(calldata, "shadow_calldata"):
+            return loaded
+
+        shadow_calldata = calldata.shadow_calldata
+
+        shadow_loaded = shadow_calldata.get_word(offset)
+
+        if is_concrete(shadow_loaded):
+            ex.path.append(loaded == shadow_loaded)
+            return shadow_loaded
+
+        if (result := calldata.shadow_dyn_params.get(shadow_loaded)):
+            return result
+
+        return loaded
 
     def calldataload(
         self,
@@ -2743,63 +2763,20 @@ class SEVM:
         calldata = ex.calldata()
         loaded = calldata.get_word(offset)
 
-#       print("calldataload", calldata, offset, hexify(loaded))
-#       print(ex)
+        result = self.try_concretize(ex, calldata, offset, loaded)
 
-        if is_expr_var(loaded):
-            concrete_loaded = ex.path.concretization.substitution.get(loaded)
+        if not isinstance(result, list):
+            ex.st.push(result)
+            ex.advance_pc()
+            stack.push(ex, step_id)
+            return
 
-            if concrete_loaded is not None:  # could be zero
-                loaded = concrete_loaded
-
-            elif loaded in ex.path.concretization.candidates:
-                debug_once(
-                    f"Concretize: {loaded} over {ex.path.concretization.candidates[loaded]}"
-                )
-
-                for candidate in ex.path.concretization.candidates[loaded]:
-                    new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
-                    new_ex.st.push(candidate)
-                    new_ex.advance_pc()
-                    stack.push(new_ex, step_id)
-                return
-
-        if not is_concrete(loaded):
-
-#           print("refine")
-
-            def get_shadow():
-                self.refine_calldata(ex)
-
-                if not hasattr(calldata, "shadow_calldata"):
-                    return None, None
-
-                shadow_calldata = calldata.shadow_calldata
-#               print(shadow_calldata)
-                shadow_loaded = shadow_calldata.get_word(offset)
-
-                return shadow_loaded, calldata.shadow_dyn_params.get(shadow_loaded)
-
-            shadow_loaded, shadow_loaded_candidates = get_shadow()
-
-#           print(shadow_loaded, shadow_loaded_candidates)
-
-            if shadow_loaded is not None:
-                if is_concrete(shadow_loaded):
-                    ex.path.append(loaded == shadow_loaded)
-                    loaded = shadow_loaded
-
-                if shadow_loaded_candidates is not None:
-                    for candidate in shadow_loaded_candidates:
-                        new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
-                        new_ex.st.push(candidate)
-                        new_ex.advance_pc()
-                        stack.push(new_ex, step_id)
-                    return
-
-        ex.st.push(loaded)
-        ex.advance_pc()
-        stack.push(ex, step_id)
+        debug_once(f"Concretize: {loaded} over {result}")
+        for candidate in result:
+            new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
+            new_ex.st.push(candidate)
+            new_ex.advance_pc()
+            stack.push(new_ex, step_id)
 
     def sym_byte_of(self, idx: BitVecRef, w: BitVecRef) -> BitVecRef:
         """generate symbolic BYTE opcode result using 32 nested ite"""
@@ -2992,9 +2969,6 @@ class SEVM:
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
 
                 elif opcode == EVM.CALLDATALOAD:
-#                   if not eq(ex.st.peek(), ZERO):
-#                       self.refine_calldata(ex)
-
                     self.calldataload(ex, stack, step_id)
                     continue
 
@@ -3201,8 +3175,6 @@ class SEVM:
                         ex.st.memory.set_slice(loc, end_loc, data)
 
                 elif opcode == EVM.CALLDATACOPY:
-#                   self.refine_calldata(ex)
-
                     loc: int = ex.mloc()
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
