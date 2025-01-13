@@ -2650,7 +2650,11 @@ class SEVM:
 
         selector = calldata[0:4].unwrap()
 
-        selector = selector if is_concrete(selector) else ex.path.concretization.substitution.get(selector, selector)
+        selector = (
+            selector
+            if is_concrete(selector)
+            else ex.path.concretization.substitution.get(selector, selector)
+        )
 
         if not is_concrete(selector):
             if not str(selector).startswith("fallback_selector_"):
@@ -2659,7 +2663,7 @@ class SEVM:
                 )
             return
 
-        selector = int_of(selector, f"{self.fun_info.sig}: symbolic selector: {selector}")
+        selector = int_of(selector, f"symbolic selector: {selector}")
 
         contract_name = ex.pgm.contract_name
         filename = ex.pgm.filename
@@ -2711,8 +2715,7 @@ class SEVM:
 
         calldata.shadow_calldata = shadow_calldata
         calldata.shadow_dyn_params = {
-            d.size_symbol: d.size_choices
-            for d in shadow_dyn_params
+            d.size_symbol: d.size_choices for d in shadow_dyn_params
         }
 
     def try_concretize(self, ex, calldata, offset, loaded):
@@ -2724,7 +2727,7 @@ class SEVM:
             if result is not None:  # could be zero
                 return result
 
-            if (result := ex.path.concretization.candidates.get(loaded)):
+            if result := ex.path.concretization.candidates.get(loaded):
                 return result
 
         self.mk_shadow_calldata(ex)
@@ -2740,7 +2743,7 @@ class SEVM:
             ex.path.append(loaded == shadow_loaded)
             return shadow_loaded
 
-        if (result := calldata.shadow_dyn_params.get(shadow_loaded)):
+        if result := calldata.shadow_dyn_params.get(shadow_loaded):
             return result
 
         return loaded
