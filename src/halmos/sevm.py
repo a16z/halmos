@@ -452,9 +452,15 @@ class State:
         return self.stack[-n]
 
     def dup(self, n: int) -> None:
+        if len(self.stack) < n:
+            raise StackUnderflowError()
+
         self.stack.append(self.stack[-n])
 
     def swap(self, n: int) -> None:
+        if len(self.stack) < n + 1:
+            raise StackUnderflowError()
+
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
     def mloc(self, subst: dict = None) -> int:
