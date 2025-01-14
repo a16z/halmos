@@ -476,7 +476,7 @@ class State:
                 f"memory access with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
             )
 
-        return self.memory.slice(start=loc, end=loc + size)
+        return self.memory.slice(start=loc, stop=loc + size)
 
     def ret(self, subst: dict = None) -> ByteVec:
         loc: int = self.mloc(subst)
