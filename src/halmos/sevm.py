@@ -2639,7 +2639,7 @@ class SEVM:
         )
         return new_ex
 
-    def mk_shadow_calldata(self, ex: Exec):
+    def mk_shadow_calldata(self, ex: Exec) -> None:
         calldata = ex.calldata()
 
         if hasattr(calldata, "shadow_calldata"):
@@ -2718,7 +2718,13 @@ class SEVM:
             d.size_symbol: d.size_choices for d in shadow_dyn_params
         }
 
-    def try_concretize(self, ex, calldata, offset, loaded):
+    def try_concretize(
+        self,
+        ex: Exec,
+        calldata: ByteVec,
+        offset: int,
+        loaded: Word,
+    ) -> Word:
         if is_concrete(loaded):
             return loaded
 
