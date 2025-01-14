@@ -469,12 +469,20 @@ class State:
             raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
         return loc
 
+    def mslice(self, loc: int, size: int) -> ByteVec:
+        """Wraps access to memory with a size check."""
+        if loc + size > MAX_MEMORY_SIZE:
+            raise OutOfGasError(
+                f"memory access with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
+            )
+
+        return self.memory.slice(start=loc, end=loc + size)
+
     def ret(self, subst: dict = None) -> ByteVec:
         loc: int = self.mloc(subst)
         size: int = int_of(self.pop(), "symbolic return data size", subst)
 
-        returndata_slice = self.memory.slice(loc, loc + size)
-        return returndata_slice
+        return self.mslice(loc, size)
 
 
 class Block:
@@ -1163,7 +1171,7 @@ class Exec:  # an execution path
     def sha3(self) -> None:
         loc: int = self.mloc()
         size: int = self.int_of(self.st.pop(), "symbolic SHA3 data size")
-        data = self.st.memory.slice(loc, loc + size).unwrap() if size else b""
+        data = self.st.mslice(loc, size).unwrap() if size else b""
         sha3_image = self.sha3_data(data)
         self.st.push(sha3_image)
 
@@ -2078,7 +2086,7 @@ class SEVM:
             raise ValueError(ret_size)
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
-        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
+        arg = ex.st.mslice(arg_loc, arg_size)
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
@@ -2135,7 +2143,7 @@ class SEVM:
                     returndata_slice = subcall.output.data.slice(0, effective_ret_size)
                     end_loc = ret_loc + effective_ret_size
                     if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
+                        raise OutOfGasError("returned data exceeds MAX_MEMORY_SIZE")
 
                     new_ex.st.memory.set_slice(ret_loc, end_loc, returndata_slice)
 
@@ -2329,7 +2337,7 @@ class SEVM:
                             caller=pranked_caller,
                             origin=pranked_origin,
                             value=fund,
-                            data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
+                            data=new_ex.st.mslice(arg_loc, arg_size),
                             call_scheme=op,
                         ),
                         output=CallOutput(
@@ -2380,7 +2388,7 @@ class SEVM:
         pranked_caller, pranked_origin = ex.resolve_prank(con_addr(0))
 
         # contract creation code
-        create_hexcode = ex.st.memory.slice(loc, loc + size)
+        create_hexcode = ex.st.mslice(loc, size)
         create_code = Contract(create_hexcode)
 
         # new account address
@@ -2923,7 +2931,9 @@ class SEVM:
                     if size > 0:
                         end_loc = loc + size
                         if end_loc > MAX_MEMORY_SIZE:
-                            raise HalmosException("EXTCODECOPY > MAX_MEMORY_SIZE")
+                            raise OutOfGasError(
+                                f"EXTCODECOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
+                            )
 
                         if account_alias is None:
                             warn(
@@ -3065,7 +3075,9 @@ class SEVM:
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("RETURNDATACOPY > MAX_MEMORY_SIZE")
+                        raise HalmosException(
+                            f"RETURNDATACOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
+                        )
 
                     if size > 0:
                         if offset + size > ex.returndatasize():
@@ -3081,7 +3093,9 @@ class SEVM:
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("CALLDATACOPY > MAX_MEMORY_SIZE")
+                        raise OutOfGasError(
+                            f"CALLDATACOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
+                        )
 
                     if size > 0:
                         data: ByteVec = ex.calldata().slice(offset, offset + size)
@@ -3095,7 +3109,9 @@ class SEVM:
                     end_loc = loc + size
 
                     if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("CODECOPY > MAX_MEMORY_SIZE")
+                        raise OutOfGasError(
+                            f"CODECOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
+                        )
 
                     if size > 0:
                         codeslice: ByteVec = ex.pgm.slice(offset, offset + size)
@@ -3106,15 +3122,9 @@ class SEVM:
                     src_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
                     size = ex.int_of(ex.st.pop(), "symbolic MCOPY size")
 
-                    if size > 0:
-                        src_end_loc = src_offset + size
-                        dst_end_loc = dest_offset + size
-
-                        if max(src_end_loc, dst_end_loc) > MAX_MEMORY_SIZE:
-                            raise HalmosException("MCOPY > MAX_MEMORY_SIZE")
-
-                        data = ex.st.memory.slice(src_offset, src_end_loc)
-                        ex.st.memory.set_slice(dest_offset, dst_end_loc, data)
+                    if size:
+                        data = ex.st.mslice(src_offset, size)
+                        ex.st.memory.set_slice(dest_offset, dest_offset + size, data)
 
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()
@@ -3146,7 +3156,7 @@ class SEVM:
                     loc: int = ex.mloc()
                     size: int = ex.int_of(ex.st.pop(), "symbolic LOG data size")
                     topics = list(ex.st.pop() for _ in range(num_topics))
-                    data = ex.st.memory.slice(loc, loc + size)
+                    data = ex.st.mslice(loc, size)
                     ex.emit_log(EventLog(ex.this(), topics, data))
 
                 elif opcode == EVM.PUSH0:
