@@ -31,6 +31,7 @@ from z3 import (
     is_bool,
     is_bv,
     is_bv_value,
+    is_const,
     is_not,
     simplify,
     substitute,
@@ -454,7 +455,12 @@ def hexify(x, contract_name: str = None):
             f"0x{x.as_long():0{num_bytes * 2}x}", contract_name
         )
     elif is_app(x):
-        return f"{str(x.decl())}({', '.join(map(partial(hexify, contract_name=contract_name), x.children()))})"
+        params_and_children = (
+            f"({', '.join(map(partial(hexify, contract_name=contract_name), x.params() + x.children()))})"
+            if not is_const(x)
+            else ""
+        )
+        return f"{str(x.decl())}{params_and_children}"
     else:
         return hexify(str(x), contract_name)
 
