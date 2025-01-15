@@ -470,13 +470,23 @@ class State:
         return loc
 
     def mslice(self, loc: int, size: int) -> ByteVec:
-        """Wraps access to memory with a size check."""
+        """Wraps a memory slice read with a size check."""
         if loc + size > MAX_MEMORY_SIZE:
             raise OutOfGasError(
                 f"memory access with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
             )
 
         return self.memory.slice(start=loc, stop=loc + size)
+
+    def set_mslice(self, loc: int, data: ByteVec) -> None:
+        """Wraps a memory slice write with a size check."""
+        size = len(data)
+        if loc + size > MAX_MEMORY_SIZE:
+            raise OutOfGasError(
+                f"memory write with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
+            )
+
+        self.memory.set_slice(start=loc, stop=loc + size, value=data)
 
     def ret(self, subst: dict = None) -> ByteVec:
         loc: int = self.mloc(subst)
@@ -3072,27 +3082,22 @@ class SEVM:
                     loc: int = ex.mloc()
                     offset = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
-                    end_loc = loc + size
-
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException(
-                            f"RETURNDATACOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
-                        )
 
                     if size > 0:
+                        # no need to check for a huge size because reading out of bounds reverts
                         if offset + size > ex.returndatasize():
                             raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
 
                         data: ByteVec = ex.returndata().slice(offset, offset + size)
-                        ex.st.memory.set_slice(loc, end_loc, data)
+                        ex.st.set_mslice(loc, data)
 
                 elif opcode == EVM.CALLDATACOPY:
                     loc: int = ex.mloc()
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
-                    end_loc = loc + size
 
-                    if end_loc > MAX_MEMORY_SIZE:
+                    # avoid reading a huge calldata slice
+                    if size > MAX_MEMORY_SIZE:
                         raise OutOfGasError(
                             f"CALLDATACOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
                         )
@@ -3100,31 +3105,31 @@ class SEVM:
                     if size > 0:
                         data: ByteVec = ex.calldata().slice(offset, offset + size)
                         data = data.concretize(ex.path.concretization.substitution)
-                        ex.st.memory.set_slice(loc, end_loc, data)
+                        ex.st.set_mslice(loc, data)
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.mloc()
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
-                    end_loc = loc + size
 
-                    if end_loc > MAX_MEMORY_SIZE:
+                    # avoid reading a huge code slice
+                    if size > MAX_MEMORY_SIZE:
                         raise OutOfGasError(
                             f"CODECOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
                         )
 
                     if size > 0:
                         codeslice: ByteVec = ex.pgm.slice(offset, offset + size)
-                        ex.st.memory.set_slice(loc, loc + size, codeslice)
+                        ex.st.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.MCOPY:
-                    dest_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY destOffset")
+                    dst_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY dstOffset")
                     src_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
                     size = ex.int_of(ex.st.pop(), "symbolic MCOPY size")
 
                     if size:
                         data = ex.st.mslice(src_offset, size)
-                        ex.st.memory.set_slice(dest_offset, dest_offset + size, data)
+                        ex.st.set_mslice(dst_offset, data)
 
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()
