@@ -182,8 +182,11 @@ class FunctionContext:
     # list of solver outputs for this function
     _solver_outputs: list["SolverOutput"] = field(default_factory=list)
 
-    # list of counterexamples for this function
-    counterexamples: list[PotentialModel] = field(default_factory=list)
+    # list of valid counterexamples for this function
+    valid_counterexamples: list[PotentialModel] = field(default_factory=list)
+
+    # list of potentially invalid counterexamples for this function
+    invalid_counterexamples: list[PotentialModel] = field(default_factory=list)
 
     # list of unsat cores for this function
     unsat_cores: list[list] = field(default_factory=list)
@@ -201,6 +204,53 @@ class FunctionContext:
 
     def add_solver_output(self, solver_output: "SolverOutput"):
         self._solver_outputs.append(solver_output)
+        args = self.args
+        path_id = solver_output.path_id
+        model, result = solver_output.model, solver_output.result
+
+        # retrieve cached exec and clear the cache entry
+        exec = self.exec_cache.pop(path_id, None)
+
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            id_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
+            print(f"Trace{id_str}:")
+            print(self.traces[path_id], end="")
+
+        if args.print_failed_states:
+            print(f"# {path_id}")
+            print(exec)
+
+        if self.thread_pool.is_shutdown():
+            # if the thread pool is in the process of shutting down,
+            # we want to stop processing remaining models/timeouts/errors, etc.
+            return
+
+        if result == unsat:
+            if solver_output.unsat_core:
+                self.unsat_cores.append(solver_output.unsat_core)
+            return
+
+        self.add_model(model, result)
+
+    def add_model(self, model: PotentialModel | None, result: CheckSatResult):
+        """Triage a new model, potentially adding it to the counterexamples list"""
+
+        # model could be an empty dict here, so compare to None explicitly
+        if model is None:
+            warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
+            return
+
+        if model.is_valid:
+            print(red(f"Counterexample: {model}"))
+            self.valid_counterexamples.append(model)
+
+            # we have a valid counterexample, so we are eligible for early exit
+            if self.args.early_exit:
+                self.thread_pool.shutdown(wait=False)
+        else:
+            warn_str = f"Counterexample (potentially invalid): {model}"
+            warn_code(COUNTEREXAMPLE_INVALID, warn_str)
+            self.invalid_counterexamples.append(model)
 
     @property
     def solver_outputs(self):
@@ -682,10 +732,13 @@ def run_test(ctx: FunctionContext) -> TestResult:
             f" (--solver-threads {args.solver_threads})"
         )
 
+    #
     # display assertion solving progress
+    #
+
     if not args.no_status or args.early_exit:
         while True:
-            if args.early_exit and len(ctx.counterexamples) > 0:
+            if args.early_exit and ctx.valid_counterexamples:
                 break
             done = sum(fm.done() for fm in ctx.thread_pool.futures)
             total = potential
@@ -695,10 +748,14 @@ def run_test(ctx: FunctionContext) -> TestResult:
             sevm.status.update(f"[{elapsed}] solving queries: {done} / {total}")
             time.sleep(0.1)
 
-    if args.early_exit:
-        ctx.thread_pool.shutdown(wait=False, cancel_futures=True)
-    else:
-        ctx.thread_pool.shutdown(wait=True)
+    ctx.thread_pool.shutdown(wait=True)
+
+    timer.stop()
+    time_info = timer.report(include_subtimers=args.statistics)
+
+    #
+    # print test result
+    #
 
     counter = Counter(str(m.result) for m in ctx.solver_outputs)
     if counter["sat"] > 0:
@@ -752,14 +809,15 @@ def run_test(ctx: FunctionContext) -> TestResult:
             json.dump(steps, json_file)
 
     # return test result
+    num_cexes = len(ctx.valid_counterexamples) + len(ctx.invalid_counterexamples)
     if args.minimal_json_output:
-        return TestResult(funsig, exitcode, len(ctx.counterexamples))
+        return TestResult(funsig, exitcode, num_cexes)
     else:
         return TestResult(
             funsig,
             exitcode,
-            len(ctx.counterexamples),
-            ctx.counterexamples,
+            num_cexes,
+            ctx.valid_counterexamples + ctx.invalid_counterexamples,
             (num_execs, normal, len(stuck)),
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
@@ -943,40 +1001,6 @@ def solver_callback(future: PopenFuture):
 
     fun_ctx = path_ctx.fun_ctx
     fun_ctx.add_solver_output(solver_output)
-
-    model, result = solver_output.model, solver_output.result
-
-    # retrieve cached exec and clear the cache entry
-    exec = fun_ctx.exec_cache.pop(path_id, None)
-
-    if result == unsat:
-        if solver_output.unsat_core:
-            fun_ctx.unsat_cores.append(solver_output.unsat_core)
-        return
-
-    # model could be an empty dict here
-    if model is not None:
-        if model.is_valid:
-            print(red(f"Counterexample: {model}"))
-            fun_ctx.counterexamples.append(model)
-        else:
-            warn_code(
-                COUNTEREXAMPLE_INVALID,
-                f"Counterexample (potentially invalid): {model}",
-            )
-            fun_ctx.counterexamples.append(model)
-    else:
-        warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
-
-    if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-        print(
-            f"Trace #{path_id}:" if args.verbose == VERBOSITY_TRACE_PATHS else "Trace:"
-        )
-        print(fun_ctx.traces[path_id], end="")
-
-    if args.print_failed_states:
-        print(f"# {path_id}")
-        print(exec)
 
 
 def solve(ctx: PathContext):

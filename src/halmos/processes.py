@@ -139,6 +139,9 @@ class PopenExecutor(concurrent.futures.Executor):
             future.start()
             return future
 
+    def is_shutdown(self) -> bool:
+        return self._shutdown.is_set()
+
     def shutdown(self, wait=True, cancel_futures=False):
         # TODO: support max_workers / pending futures
 
