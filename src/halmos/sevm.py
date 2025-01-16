@@ -472,14 +472,17 @@ class State:
 
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
-    def mloc(self, subst: dict = None) -> int:
+    def mloc(self, subst: dict = None, check_size: bool = True) -> int:
         loc: int = int_of(self.pop(), "symbolic memory offset", subst)
-        if loc > MAX_MEMORY_SIZE:
+        if check_size and loc > MAX_MEMORY_SIZE:
             raise OutOfGasError(f"memory {loc=} > MAX_MEMORY_SIZE")
         return loc
 
     def mslice(self, loc: int, size: int) -> ByteVec:
         """Wraps a memory slice read with a size check."""
+        if not size:
+            return ByteVec()
+
         if loc + size > MAX_MEMORY_SIZE:
             raise OutOfGasError(
                 f"memory access with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
@@ -490,6 +493,10 @@ class State:
     def set_mslice(self, loc: int, data: ByteVec) -> None:
         """Wraps a memory slice write with a size check."""
         size = len(data)
+
+        if not size:
+            return
+
         if loc + size > MAX_MEMORY_SIZE:
             raise OutOfGasError(
                 f"memory write with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
@@ -1196,7 +1203,7 @@ class Exec:  # an execution path
         self.balances[new_balance_var] = new_balance
 
     def sha3(self) -> None:
-        loc: int = self.int_of(self.st.pop(), "symbolic SHA3 data loc")
+        loc: int = self.mloc(check_size=False)
         size: int = self.int_of(self.st.pop(), "symbolic SHA3 data size")
         data = self.st.mslice(loc, size).unwrap() if size else b""
         sha3_image = self.sha3_data(data)
@@ -1368,8 +1375,10 @@ class Exec:  # an execution path
 
         return (creation_hexcode, deployed_hexcode)
 
-    def mloc(self) -> int:
-        return self.st.mloc(self.path.concretization.substitution)
+    def mloc(self, check_size: bool = True) -> int:
+        return self.st.mloc(
+            self.path.concretization.substitution, check_size=check_size
+        )
 
     def ret(self) -> ByteVec:
         return self.st.ret(self.path.concretization.substitution)
@@ -2100,10 +2109,10 @@ class SEVM:
         to = uint160(ex.st.pop())
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-        arg_loc: int = ex.mloc()
+        arg_loc: int = ex.mloc(check_size=False)
         arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
 
-        ret_loc: int = ex.mloc()
+        ret_loc: int = ex.mloc(check_size=False)
         ret_size: int = ex.int_of(ex.st.pop(), "symbolic CALL return data size")
 
         if not arg_size >= 0:
@@ -3049,16 +3058,16 @@ class SEVM:
                     ex.st.pop()
 
                 elif opcode == EVM.MLOAD:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=True)
                     ex.st.push(ex.st.memory.get_word(loc))
 
                 elif opcode == EVM.MSTORE:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=True)
                     val: Word = ex.st.pop()
                     ex.st.memory.set_word(loc, uint256(val))
 
                 elif opcode == EVM.MSTORE8:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=True)
                     val: Word = ex.st.pop()
                     ex.st.memory.set_byte(loc, uint8(val))
 
@@ -3081,7 +3090,7 @@ class SEVM:
                     ex.st.push(ex.returndatasize())
 
                 elif opcode == EVM.RETURNDATACOPY:
-                    loc: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY loc")
+                    loc: int = ex.mloc(check_size=False)
                     offset = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
 
@@ -3094,7 +3103,7 @@ class SEVM:
                         ex.st.set_mslice(loc, data)
 
                 elif opcode == EVM.CALLDATACOPY:
-                    loc: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY loc")
+                    loc: int = ex.mloc(check_size=False)
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
 
@@ -3104,7 +3113,7 @@ class SEVM:
                         ex.st.set_mslice(loc, data)
 
                 elif opcode == EVM.CODECOPY:
-                    loc: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY loc")
+                    loc: int = ex.mloc(check_size=False)
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
 

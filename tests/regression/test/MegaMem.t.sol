@@ -57,6 +57,12 @@ contract MegaMemTest is Test, SymTest {
         return val;
     }
 
+    fallback(bytes calldata) external returns (bytes memory) {
+        // just here to make sure we can call this contract with the null selector
+        // without reverting (and with some actual return data)
+        return new bytes(32);
+    }
+
     function new_bytes(uint256 len) public pure returns (bytes memory) {
         return new bytes(len);
     }
@@ -197,11 +203,15 @@ contract MegaMemTest is Test, SymTest {
         }
     }
 
-    function check_megaMem_call_in_ptr_reverts() external {
-        try this.call_op({in_ptr: BIG_PTR, in_len: 32, out_ptr: 0, out_len: 32}) {
-            assert(false);
+    function check_megaMem_call_in_ptr_reverts(bool coinflip) external {
+        uint256 in_len = coinflip ? 1 : 0;
+
+        try this.call_op({in_ptr: BIG_PTR, in_len: in_len, out_ptr: 0, out_len: 32}) {
+            // ok if in_len == 0
+            assertEq(in_len, 0);
         } catch {
-            // success
+            // reverts if in_len > 0
+            assertGt(in_len, 0);
         }
     }
 
@@ -213,11 +223,15 @@ contract MegaMemTest is Test, SymTest {
         }
     }
 
-    function check_megaMem_call_out_ptr_reverts() external {
-        try this.call_op({in_ptr: 0, in_len: 32, out_ptr: BIG_PTR, out_len: 32}) {
-            assert(false);
+    function check_megaMem_call_out_ptr_reverts(bool coinflip) external {
+        uint256 out_len = coinflip ? 1 : 0;
+
+        try this.call_op({in_ptr: 0, in_len: 32, out_ptr: BIG_PTR, out_len: out_len}) {
+            // ok if out_len == 0
+            assertEq(out_len, 0);
         } catch {
-            // success
+            // reverts if out_len > 0
+            assertGt(out_len, 0);
         }
     }
 
