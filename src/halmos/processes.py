@@ -115,10 +115,12 @@ class PopenExecutor(concurrent.futures.Executor):
     The explicit goal is to support killing running subprocesses.
     """
 
-    def __init__(self):
+    def __init__(self, max_workers: int = 1):
         self._futures: list[PopenFuture] = list()
         self._shutdown = threading.Event()
         self._lock = threading.Lock()
+
+        # TODO: support max_workers
 
     def submit(self, command: list[str]):
         if self._shutdown.is_set():
@@ -130,7 +132,9 @@ class PopenExecutor(concurrent.futures.Executor):
             future.start()
             return future
 
-    def shutdown(self, wait=True):
+    def shutdown(self, wait=True, cancel_futures=False):
+        # TODO: support max_workers
+
         self._shutdown.set()
 
         # we have no concept of pending futures,
