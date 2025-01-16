@@ -483,12 +483,11 @@ class State:
         if not size:
             return ByteVec()
 
-        if loc + size > MAX_MEMORY_SIZE:
-            raise OutOfGasError(
-                f"memory access with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
-            )
+        stop = loc + size
+        if stop > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"memory read {loc=} {size=} > MAX_MEMORY_SIZE")
 
-        return self.memory.slice(start=loc, stop=loc + size)
+        return self.memory.slice(start=loc, stop=stop)
 
     def set_mslice(self, loc: int, data: ByteVec) -> None:
         """Wraps a memory slice write with a size check."""
@@ -497,12 +496,11 @@ class State:
         if not size:
             return
 
-        if loc + size > MAX_MEMORY_SIZE:
-            raise OutOfGasError(
-                f"memory write with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
-            )
+        stop = loc + size
+        if stop > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"memory write {loc=} {size=} > MAX_MEMORY_SIZE")
 
-        self.memory.set_slice(start=loc, stop=loc + size, value=data)
+        self.memory.set_slice(start=loc, stop=stop, value=data)
 
     def ret(self, subst: dict = None) -> ByteVec:
         loc: int = self.mloc(subst)
