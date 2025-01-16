@@ -202,27 +202,6 @@ def insn_len(opcode: int) -> int:
     return 1 + (opcode - EVM.PUSH0) * (EVM.PUSH1 <= opcode <= EVM.PUSH32)
 
 
-class Instruction:
-    opcode: int
-    pc: int = -1
-    operand: ByteVec | None = None
-
-    def __init__(self, opcode, pc=-1, operand=None) -> None:
-        self.opcode = opcode
-        self.pc = pc
-        self.operand = operand
-
-    def __str__(self) -> str:
-        operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
-        return f"{mnemonic(self.opcode)}{operand_str}"
-
-    def __repr__(self) -> str:
-        return f"Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})"
-
-    def __len__(self) -> int:
-        return insn_len(self.opcode)
-
-
 def id_str(x: Any) -> str:
     return hexify(x).replace(" ", "")
 
@@ -296,6 +275,63 @@ def normalize(expr: Any) -> Any:
     return expr
 
 
+def copy_returndata_to_memory(
+    returndata: ByteVec, ret_loc: int, ret_size: int, ex: ForwardRef("Exec")
+) -> None:
+    """
+    Copy the return data from an external call to the memory of the caller.
+
+    Args:
+        returndata: the return data from the external call
+        ret_loc: the location in the memory of the caller to write the return data to
+                 (specified by the *CALL instruction)
+        ret_size: the size of the return data to write to memory
+                  (specified by the *CALL instruction)
+        ex: the execution context of the caller
+
+    Note that if the return data is smaller than the requested size,
+    only the actual size of the return data is written to memory and the
+    rest of the memory is not modified.
+    """
+
+    actual_ret_size = len(returndata)
+    effective_ret_size = min(ret_size, actual_ret_size)
+
+    if not effective_ret_size:
+        return
+
+    # fast path: if the requested ret_size is the actual size of the return data,
+    # we can skip the slice (copy) operation and directly write the return data to memory
+    data = (
+        returndata.slice(0, effective_ret_size)
+        if effective_ret_size < actual_ret_size
+        else returndata
+    )
+
+    ex.st.set_mslice(ret_loc, data)
+
+
+class Instruction:
+    opcode: int
+    pc: int = -1
+    operand: ByteVec | None = None
+
+    def __init__(self, opcode, pc=-1, operand=None) -> None:
+        self.opcode = opcode
+        self.pc = pc
+        self.operand = operand
+
+    def __str__(self) -> str:
+        operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
+        return f"{mnemonic(self.opcode)}{operand_str}"
+
+    def __repr__(self) -> str:
+        return f"Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})"
+
+    def __len__(self) -> int:
+        return insn_len(self.opcode)
+
+
 @dataclass(frozen=True)
 class EventLog:
     """
@@ -323,6 +359,13 @@ class Message:
 
     def is_create(self) -> bool:
         return self.call_scheme in (EVM.CREATE, EVM.CREATE2)
+
+    def calldata_slice(self, start: int, size: int) -> ByteVec:
+        """Wrapper around calldata access with a size check."""
+        if size > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"calldata read {start=} {size=} > MAX_MEMORY_SIZE")
+
+        return self.data.slice(start=start, stop=start + size)
 
 
 @dataclass
@@ -463,18 +506,41 @@ class State:
 
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
-    def mloc(self, subst: dict = None) -> int:
+    def mloc(self, subst: dict = None, check_size: bool = True) -> int:
         loc: int = int_of(self.pop(), "symbolic memory offset", subst)
-        if loc > MAX_MEMORY_SIZE:
-            raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
+        if check_size and loc > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"memory {loc=} > MAX_MEMORY_SIZE")
         return loc
+
+    def mslice(self, loc: int, size: int) -> ByteVec:
+        """Wraps a memory slice read with a size check."""
+        if not size:
+            return ByteVec()
+
+        stop = loc + size
+        if stop > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"memory read {loc=} {size=} > MAX_MEMORY_SIZE")
+
+        return self.memory.slice(start=loc, stop=stop)
+
+    def set_mslice(self, loc: int, data: ByteVec) -> None:
+        """Wraps a memory slice write with a size check."""
+        size = len(data)
+
+        if not size:
+            return
+
+        stop = loc + size
+        if stop > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"memory write {loc=} {size=} > MAX_MEMORY_SIZE")
+
+        self.memory.set_slice(start=loc, stop=stop, value=data)
 
     def ret(self, subst: dict = None) -> ByteVec:
         loc: int = self.mloc(subst)
         size: int = int_of(self.pop(), "symbolic return data size", subst)
 
-        returndata_slice = self.memory.slice(loc, loc + size)
-        return returndata_slice
+        return self.mslice(loc, size)
 
 
 class Block:
@@ -618,7 +684,13 @@ class Contract:
         self.decode_instruction(pc)
         return self._next_pc[pc]
 
-    def slice(self, start, stop) -> ByteVec:
+    def slice(self, start, size) -> ByteVec:
+        # large start is allowed, but we must check the size
+        if size > MAX_MEMORY_SIZE:
+            raise OutOfGasError(f"code read {start=} {size=} > MAX_MEMORY_SIZE")
+
+        stop = start + size
+
         # fast path for offsets in the concrete prefix
         if self._fastcode and stop < len(self._fastcode):
             return ByteVec(self._fastcode[start:stop])
@@ -1161,9 +1233,9 @@ class Exec:  # an execution path
         self.balances[new_balance_var] = new_balance
 
     def sha3(self) -> None:
-        loc: int = self.mloc()
+        loc: int = self.mloc(check_size=False)
         size: int = self.int_of(self.st.pop(), "symbolic SHA3 data size")
-        data = self.st.memory.slice(loc, loc + size).unwrap() if size else b""
+        data = self.st.mslice(loc, size).unwrap() if size else b""
         sha3_image = self.sha3_data(data)
         self.st.push(sha3_image)
 
@@ -1333,8 +1405,10 @@ class Exec:  # an execution path
 
         return (creation_hexcode, deployed_hexcode)
 
-    def mloc(self) -> int:
-        return self.st.mloc(self.path.concretization.substitution)
+    def mloc(self, check_size: bool = True) -> int:
+        return self.st.mloc(
+            self.path.concretization.substitution, check_size=check_size
+        )
 
     def ret(self) -> ByteVec:
         return self.st.ret(self.path.concretization.substitution)
@@ -2065,10 +2139,10 @@ class SEVM:
         to = uint160(ex.st.pop())
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
-        arg_loc: int = ex.mloc()
+        arg_loc: int = ex.mloc(check_size=False)
         arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
 
-        ret_loc: int = ex.mloc()
+        ret_loc: int = ex.mloc(check_size=False)
         ret_size: int = ex.int_of(ex.st.pop(), "symbolic CALL return data size")
 
         if not arg_size >= 0:
@@ -2078,7 +2152,7 @@ class SEVM:
             raise ValueError(ret_size)
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
-        arg = ex.st.memory.slice(arg_loc, arg_loc + arg_size)
+        arg = ex.st.mslice(arg_loc, arg_size)
 
         def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
@@ -2129,15 +2203,8 @@ class SEVM:
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
 
-                # set return data (in memory)
-                effective_ret_size = min(ret_size, new_ex.returndatasize())
-                if effective_ret_size > 0:
-                    returndata_slice = subcall.output.data.slice(0, effective_ret_size)
-                    end_loc = ret_loc + effective_ret_size
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
-
-                    new_ex.st.memory.set_slice(ret_loc, end_loc, returndata_slice)
+                returndata = subcall.output.data
+                copy_returndata_to_memory(returndata, ret_loc, ret_size, new_ex)
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
@@ -2302,24 +2369,16 @@ class SEVM:
 
             last_idx = len(ret_lst) - 1
             for idx, ret_ in enumerate(ret_lst):
+                if not isinstance(ret_, ByteVec):
+                    raise HalmosException(f"Invalid return value: {ret_}")
+
                 new_ex = (
                     self.create_branch(ex, BoolVal(True), ex.pc)
                     if idx < last_idx
                     else ex
                 )
 
-                # TODO: refactor this return memory setting to be shared with call_known()
-                # store return value
-                effective_ret_size = min(ret_size, len(ret_))
-                if effective_ret_size > 0:
-                    end_loc = ret_loc + effective_ret_size
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
-
-                    new_ex.st.memory.set_slice(ret_loc, end_loc, ret_)
-
-                if not isinstance(ret_, ByteVec):
-                    raise HalmosException(f"Invalid return value: {ret_}")
+                copy_returndata_to_memory(ret_, ret_loc, ret_size, new_ex)
 
                 new_ex.context.trace.append(
                     CallContext(
@@ -2329,7 +2388,7 @@ class SEVM:
                             caller=pranked_caller,
                             origin=pranked_origin,
                             value=fund,
-                            data=new_ex.st.memory.slice(arg_loc, arg_loc + arg_size),
+                            data=new_ex.st.mslice(arg_loc, arg_size),
                             call_scheme=op,
                         ),
                         output=CallOutput(
@@ -2380,7 +2439,7 @@ class SEVM:
         pranked_caller, pranked_origin = ex.resolve_prank(con_addr(0))
 
         # contract creation code
-        create_hexcode = ex.st.memory.slice(loc, loc + size)
+        create_hexcode = ex.st.mslice(loc, size)
         create_code = Contract(create_hexcode)
 
         # new account address
@@ -2920,11 +2979,7 @@ class SEVM:
                     offset: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
 
-                    if size > 0:
-                        end_loc = loc + size
-                        if end_loc > MAX_MEMORY_SIZE:
-                            raise HalmosException("EXTCODECOPY > MAX_MEMORY_SIZE")
-
+                    if size:
                         if account_alias is None:
                             warn(
                                 f"EXTCODECOPY: unknown address {hexify(account)} "
@@ -2932,10 +2987,8 @@ class SEVM:
                             )
 
                         account_code: Contract = ex.code.get(account_alias) or ByteVec()
-                        codeslice: ByteVec = account_code._code.slice(
-                            offset, offset + size
-                        )
-                        ex.st.memory.set_slice(loc, end_loc, codeslice)
+                        codeslice: ByteVec = account_code.slice(offset, size)
+                        ex.st.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.EXTCODEHASH:
                     account = uint160(ex.st.peek())
@@ -3027,16 +3080,16 @@ class SEVM:
                     ex.st.pop()
 
                 elif opcode == EVM.MLOAD:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=True)
                     ex.st.push(ex.st.memory.get_word(loc))
 
                 elif opcode == EVM.MSTORE:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=True)
                     val: Word = ex.st.pop()
                     ex.st.memory.set_word(loc, uint256(val))
 
                 elif opcode == EVM.MSTORE8:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=True)
                     val: Word = ex.st.pop()
                     ex.st.memory.set_byte(loc, uint8(val))
 
@@ -3059,62 +3112,45 @@ class SEVM:
                     ex.st.push(ex.returndatasize())
 
                 elif opcode == EVM.RETURNDATACOPY:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=False)
                     offset = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
-                    end_loc = loc + size
 
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("RETURNDATACOPY > MAX_MEMORY_SIZE")
-
-                    if size > 0:
+                    if size:
+                        # no need to check for a huge size because reading out of bounds reverts
                         if offset + size > ex.returndatasize():
                             raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
 
                         data: ByteVec = ex.returndata().slice(offset, offset + size)
-                        ex.st.memory.set_slice(loc, end_loc, data)
+                        ex.st.set_mslice(loc, data)
 
                 elif opcode == EVM.CALLDATACOPY:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=False)
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
-                    end_loc = loc + size
 
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("CALLDATACOPY > MAX_MEMORY_SIZE")
-
-                    if size > 0:
-                        data: ByteVec = ex.calldata().slice(offset, offset + size)
+                    if size:
+                        data: ByteVec = ex.message().calldata_slice(offset, size)
                         data = data.concretize(ex.path.concretization.substitution)
-                        ex.st.memory.set_slice(loc, end_loc, data)
+                        ex.st.set_mslice(loc, data)
 
                 elif opcode == EVM.CODECOPY:
-                    loc: int = ex.mloc()
+                    loc: int = ex.mloc(check_size=False)
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
-                    end_loc = loc + size
 
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("CODECOPY > MAX_MEMORY_SIZE")
-
-                    if size > 0:
-                        codeslice: ByteVec = ex.pgm.slice(offset, offset + size)
-                        ex.st.memory.set_slice(loc, loc + size, codeslice)
+                    if size:
+                        codeslice: ByteVec = ex.pgm.slice(offset, size)
+                        ex.st.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.MCOPY:
-                    dest_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY destOffset")
+                    dst_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY dstOffset")
                     src_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
                     size = ex.int_of(ex.st.pop(), "symbolic MCOPY size")
 
-                    if size > 0:
-                        src_end_loc = src_offset + size
-                        dst_end_loc = dest_offset + size
-
-                        if max(src_end_loc, dst_end_loc) > MAX_MEMORY_SIZE:
-                            raise HalmosException("MCOPY > MAX_MEMORY_SIZE")
-
-                        data = ex.st.memory.slice(src_offset, src_end_loc)
-                        ex.st.memory.set_slice(dest_offset, dst_end_loc, data)
+                    if size:
+                        data = ex.st.mslice(src_offset, size)
+                        ex.st.set_mslice(dst_offset, data)
 
                 elif opcode == EVM.BYTE:
                     idx = ex.st.pop()
@@ -3146,7 +3182,7 @@ class SEVM:
                     loc: int = ex.mloc()
                     size: int = ex.int_of(ex.st.pop(), "symbolic LOG data size")
                     topics = list(ex.st.pop() for _ in range(num_topics))
-                    data = ex.st.memory.slice(loc, loc + size)
+                    data = ex.st.mslice(loc, size)
                     ex.emit_log(EventLog(ex.this(), topics, data))
 
                 elif opcode == EVM.PUSH0:
