@@ -14,7 +14,9 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 /// - a problematic path with large memory indices or sizes
 /// and we just check that the problematic path does not lead to a failed test
 contract MegaMemTest is Test, SymTest {
-    uint256 MEGA_SIZE = 10 ** 32;
+    uint256 BIG = 10 ** 32;
+    uint256 BIG_PTR = BIG;
+    uint256 BIG_LEN = BIG;
 
     function setUp() public {
         // blank
@@ -22,7 +24,44 @@ contract MegaMemTest is Test, SymTest {
 
     /// HELPERS
 
-    function _call(uint256 in_ptr, uint256 in_len, uint256 out_ptr, uint256 out_len) internal {
+    modifier writes_to_memory(uint256 ptr, uint256 val) {
+        // setup: write a cookie to memory and verify it
+        uint256 cookie = type(uint256).max;
+        mstore(ptr, cookie);
+        assertEq(mload(ptr), cookie);
+
+        _;
+
+        assertEq(mload(ptr), val);
+    }
+
+    /// @dev makes sure that
+    modifier has_return_data(uint256 ptr, uint256 val) {
+        // setup: write a cookie to memory and verify it
+        uint256 cookie = type(uint256).max;
+        mstore(0, cookie);
+        assertEq(mload(0), cookie);
+
+        // make a call that populates returndata[0:32] with `val`
+        this.dummy(val);
+
+        // verify that we can copy the return data and read the expected value
+        returndatacopy(ptr, 0, 32);
+        assertEq(mload(ptr), val);
+
+        _;
+    }
+
+    /// @dev just return some data, so that returndatacopy can be tested
+    function dummy(uint256 val) public pure returns (uint256) {
+        return val;
+    }
+
+    function new_bytes(uint256 len) public pure returns (bytes memory) {
+        return new bytes(len);
+    }
+
+    function call_op(uint256 in_ptr, uint256 in_len, uint256 out_ptr, uint256 out_len) public {
         address addr = address(this);
         uint256 value = 0;
         bool success;
@@ -31,68 +70,76 @@ contract MegaMemTest is Test, SymTest {
         }
     }
 
-    function _keccak256(uint256 ptr, uint256 len) internal pure {
+    function keccak256_op(uint256 ptr, uint256 len) public pure {
         assembly {
             let hash := keccak256(ptr, len)
         }
     }
 
-    function _mcopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) internal pure {
+    function mcopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) public pure {
         assembly {
             mcopy(dst_ptr, src_ptr, src_len)
         }
     }
 
-    function _return(uint256 ptr, uint256 len) internal pure {
+    function return_op(uint256 ptr, uint256 len) public pure {
         assembly {
             return(ptr, len)
         }
     }
 
-    function _revert(uint256 ptr, uint256 len) internal pure {
+    function revert_op(uint256 ptr, uint256 len) public pure {
         assembly {
             revert(ptr, len)
         }
     }
 
-    function _log0(uint256 ptr, uint256 len) internal {
+    function log0(uint256 ptr, uint256 len) public {
         assembly {
             log0(ptr, len)
         }
     }
 
-    function _returndatacopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) internal pure {
+    function returndatacopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) public pure {
         assembly {
             returndatacopy(dst_ptr, src_ptr, src_len)
         }
     }
 
-    function _calldatacopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) internal pure {
+    function calldatacopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) public pure {
         assembly {
             calldatacopy(dst_ptr, src_ptr, src_len)
         }
     }
 
-    function _codecopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) internal pure {
+    function calldataload(uint256 src_ptr) public pure returns (uint256) {
+        uint256 val;
+        assembly {
+            val := calldataload(src_ptr)
+        }
+        return val;
+    }
+
+    function codecopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) public pure {
         assembly {
             codecopy(dst_ptr, src_ptr, src_len)
         }
     }
 
-    function _extcodecopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) internal view {
+    function extcodecopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) public view {
         assembly {
             extcodecopy(address(), dst_ptr, src_ptr, src_len)
         }
     }
 
-    function _create(uint256 src_ptr, uint256 src_len) internal {
+    function create(uint256 src_ptr, uint256 src_len) public {
         uint256 value = 0;
         assembly {
             let addr := create(value, src_ptr, src_len)
         }
     }
 
-    function _create2(uint256 src_ptr, uint256 src_len) internal {
+    function create2(uint256 src_ptr, uint256 src_len) public {
         uint256 value = 0;
         uint256 salt = 0;
         assembly {
@@ -100,182 +147,310 @@ contract MegaMemTest is Test, SymTest {
         }
     }
 
-    /// @dev just return some data, so that returndatacopy can be tested
-    function dummy() public pure returns(uint256) {
-        return 42;
+    function mload(uint256 src_ptr) public view returns (uint256) {
+        uint256 x;
+        assembly {
+            x := mload(src_ptr)
+        }
+        return x;
     }
 
-    /// @dev public wrapper for revert, so that we can call it and check the return value
-    function just_revert(uint256 ptr, uint256 len) public pure {
-        _revert(ptr, len);
+    function mstore(uint256 dst_ptr, uint256 val) public pure {
+        assembly {
+            mstore(dst_ptr, val)
+        }
+    }
+
+    function mstore8(uint256 dst_ptr, uint256 val) public pure {
+        assembly {
+            mstore8(dst_ptr, val)
+        }
     }
 
     /// TESTS
 
-    function check_megaMem_new_bytes(bool coinflip) external view returns (bytes memory) {
-        return new bytes(coinflip ? MEGA_SIZE : 32);
-    }
-
-    function check_megaMem_keccak256_ptr(bool coinflip) external view {
-        _keccak256({ptr: coinflip ? MEGA_SIZE : 0, len: 32});
-    }
-
-    function check_megaMem_keccak256_len(bool coinflip) external view {
-        _keccak256({ptr: 0, len: coinflip ? MEGA_SIZE : 32});
-    }
-
-    function check_megaMem_call_in_ptr(bool coinflip) external {
-        _call({in_ptr: coinflip ? MEGA_SIZE : 0, in_len: 32, out_ptr: 0, out_len: 32});
-    }
-
-    function check_megaMem_call_in_len(bool coinflip) external {
-        _call({in_ptr: 0, in_len: coinflip ? MEGA_SIZE : 32, out_ptr: 0, out_len: 32});
-    }
-
-    function check_megaMem_call_out_ptr(bool coinflip) external {
-        _call({in_ptr: 0, in_len: 32, out_ptr: coinflip ? MEGA_SIZE : 0, out_len: 32});
-    }
-
-    function check_megaMem_call_out_len(bool coinflip) external {
-        _call({in_ptr: 0, in_len: 32, out_ptr: 0, out_len: coinflip ? MEGA_SIZE : 32});
-    }
-
-    function check_megaMem_mcopy_dst_ptr(bool coinflip) external view {
-        _mcopy({dst_ptr: coinflip ? MEGA_SIZE : 0, src_ptr: 0, src_len: 1});
-    }
-
-    function check_megaMem_mcopy_src_ptr(bool coinflip) external view {
-        _mcopy({dst_ptr: 0, src_ptr: coinflip ? MEGA_SIZE : 0, src_len: 1});
-    }
-
-    function check_megaMem_mcopy_src_len(bool coinflip) external view {
-        _mcopy({dst_ptr: 0, src_ptr: 0, src_len: coinflip ? MEGA_SIZE : 1});
-    }
-
-    function check_megaMem_return_ptr(bool coinflip) external view returns (bytes memory) {
-        _return({ptr: coinflip ? MEGA_SIZE : 0, len: 32});
-    }
-
-    function check_megaMem_return_len(bool coinflip) external view returns (bytes memory) {
-        _return({ptr: 0, len: coinflip ? MEGA_SIZE : 32});
-    }
-
-    function check_megaMem_log0_ptr(bool coinflip) external {
-        _log0({ptr: coinflip ? MEGA_SIZE : 0, len: 32});
-    }
-
-    function check_megaMem_log0_len(bool coinflip) external {
-        _log0({ptr: 0, len: coinflip ? MEGA_SIZE : 32});
-    }
-
-    function check_megaMem_mstore(bool coinflip) external view {
-        uint256 loc = coinflip ? MEGA_SIZE : 0;
-        assembly {
-            mstore(loc, 42)
-        }
-    }
-
-    function check_megaMem_mstore8(bool coinflip) external view {
-        uint256 loc = coinflip ? MEGA_SIZE : 0;
-        assembly {
-            mstore8(loc, 42)
-        }
-    }
-
-    function check_megaMem_mload(bool coinflip) external view {
-        uint256 loc = coinflip ? MEGA_SIZE : 0;
-        assembly {
-            let x := mload(loc)
-        }
-    }
-
-    function check_megaMem_returndatacopy_dst_ptr(bool coinflip) external view {
-        MegaMemTest(address(this)).dummy();
-        _returndatacopy({dst_ptr: coinflip ? MEGA_SIZE : 0, src_ptr: 0, src_len: 32});
-    }
-
-    function check_megaMem_returndatacopy_src_ptr(bool coinflip) external view {
-        MegaMemTest(address(this)).dummy();
-        _returndatacopy({dst_ptr: 0, src_ptr: coinflip ? MEGA_SIZE : 0, src_len: 32});
-    }
-
-    function check_megaMem_returndatacopy_src_len(bool coinflip) external view {
-        MegaMemTest(address(this)).dummy();
-        _returndatacopy({dst_ptr: 0, src_ptr: 0, src_len: coinflip ? MEGA_SIZE : 32});
-    }
-
-    function check_megaMem_revert_ptr(bool coinflip) external view {
-        try this.just_revert({ptr: coinflip ? MEGA_SIZE : 0, len: 32}) {
+    function check_megaMem_new_bytes_reverts() external view {
+        try this.new_bytes(BIG_LEN) {
             assert(false);
         } catch {
             // success
         }
     }
 
-    function check_megaMem_revert_len(bool coinflip) external view {
-        try this.just_revert({ptr: 0, len: coinflip ? MEGA_SIZE : 32}) {
+    function check_megaMem_keccak256_ptr_reverts() external view {
+        try this.keccak256_op(BIG_PTR, 32) {
             assert(false);
         } catch {
             // success
         }
     }
 
-    function check_megaMem_calldatacopy_dst_ptr(bool coinflip) external view {
-        _calldatacopy({dst_ptr: coinflip ? MEGA_SIZE : 0, src_ptr: 0, src_len: 32});
-    }
-
-    function check_megaMem_calldatacopy_src_ptr(bool coinflip) external view {
-        _calldatacopy({dst_ptr: 0, src_ptr: coinflip ? MEGA_SIZE : 0, src_len: 32});
-    }
-
-    function check_megaMem_calldatacopy_src_len(bool coinflip) external view {
-        _calldatacopy({dst_ptr: 0, src_ptr: 0, src_len: coinflip ? MEGA_SIZE : 32});
-    }
-
-    function check_megaMem_calldataload(bool coinflip) external view {
-        uint256 loc = coinflip ? MEGA_SIZE : 0;
-        assembly {
-            let x := calldataload(loc)
+    function check_megaMem_keccak256_len_reverts() external view {
+        try this.keccak256_op(0, BIG_LEN) {
+            assert(false);
+        } catch {
+            // success
         }
     }
 
-    function check_megaMem_codecopy_dst_ptr(bool coinflip) external view {
-        _codecopy({dst_ptr: coinflip ? MEGA_SIZE : 0, src_ptr: 0, src_len: 32});
+    function check_megaMem_call_in_ptr_reverts() external {
+        try this.call_op({in_ptr: BIG_PTR, in_len: 32, out_ptr: 0, out_len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
-    function check_megaMem_codecopy_src_ptr(bool coinflip) external view {
-        _codecopy({dst_ptr: 0, src_ptr: coinflip ? MEGA_SIZE : 0, src_len: 32});
+    function check_megaMem_call_in_len_reverts() external {
+        try this.call_op({in_ptr: 0, in_len: BIG_LEN, out_ptr: 0, out_len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
-    function check_megaMem_codecopy_src_len(bool coinflip) external view {
-        _codecopy({dst_ptr: 0, src_ptr: 0, src_len: coinflip ? MEGA_SIZE : 32});
+    function check_megaMem_call_out_ptr_reverts() external {
+        try this.call_op({in_ptr: 0, in_len: 32, out_ptr: BIG_PTR, out_len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
-    function check_megaMem_extcodecopy_dst_ptr(bool coinflip) external view {
-        _extcodecopy({dst_ptr: coinflip ? MEGA_SIZE : 0, src_ptr: 0, src_len: 32});
+    /// @dev only the effective length is copied, not a big requested length
+    function check_megaMem_call_out_len_ok() external {
+        call_op({in_ptr: 0, in_len: 32, out_ptr: 0, out_len: BIG_LEN});
     }
 
-    function check_megaMem_extcodecopy_src_ptr(bool coinflip) external view {
-        _extcodecopy({dst_ptr: 0, src_ptr: coinflip ? MEGA_SIZE : 0, src_len: 32});
+    function check_megaMem_mcopy_dst_ptr_reverts() external view {
+        try this.mcopy({dst_ptr: BIG_PTR, src_ptr: 0, src_len: 1}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
-    function check_megaMem_extcodecopy_src_len(bool coinflip) external view {
-        _extcodecopy({dst_ptr: 0, src_ptr: 0, src_len: coinflip ? MEGA_SIZE : 32});
+    function check_megaMem_mcopy_src_ptr_reverts() external view {
+        try this.mcopy({dst_ptr: 0, src_ptr: BIG_PTR, src_len: 1}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
-    function check_megaMem_create_src_ptr(bool coinflip) external {
-        _create({src_ptr: coinflip ? MEGA_SIZE : 0, src_len: 32});
+    function check_megaMem_mcopy_src_len_reverts() external view {
+        try this.mcopy({dst_ptr: 0, src_ptr: 0, src_len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
-    function check_megaMem_create_src_len(bool coinflip) external {
-        _create({src_ptr: 0, src_len: coinflip ? MEGA_SIZE : 32});
+    function check_megaMem_return_ptr_reverts() external view {
+        try this.return_op({ptr: BIG_PTR, len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
-    function check_megaMem_create2_src_ptr(bool coinflip) external {
-        _create2({src_ptr: coinflip ? MEGA_SIZE : 0, src_len: 32});
+    function check_megaMem_return_len_reverts() external view {
+        try this.return_op({ptr: 0, len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
-    function check_megaMem_create2_src_len(bool coinflip) external {
-        _create2({src_ptr: 0, src_len: coinflip ? MEGA_SIZE : 32});
+    function check_megaMem_log0_ptr_reverts() external {
+        try this.log0({ptr: BIG_PTR, len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_log0_len_reverts() external {
+        try this.log0({ptr: 0, len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_mstore_dst_ptr_reverts() external view {
+        try this.mstore({dst_ptr: BIG_PTR, val: 42}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_mstore8_dst_ptr_reverts() external view {
+        try this.mstore8({dst_ptr: BIG_PTR, val: 42}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_mload_src_ptr_reverts() external view {
+        try this.mload(BIG_PTR) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_returndatacopy_dst_ptr_reverts(bool coinflip) external view has_return_data(0, 42) {
+        uint256 src_len = coinflip ? 0 : 1;
+
+        try this.returndatacopy({dst_ptr: BIG_PTR, src_ptr: 0, src_len: src_len}) {
+            // ok if src_len == 0
+            assertEq(src_len, 0);
+        } catch {
+            // reverts if src_len > 0
+            assertGt(src_len, 0);
+        }
+    }
+
+    function check_megaMem_returndatacopy_src_ptr_reverts() external view has_return_data(0, 42) {
+        try this.returndatacopy({dst_ptr: 0, src_ptr: BIG_PTR, src_len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_returndatacopy_src_len_reverts() external view has_return_data(0, 42) {
+        try this.returndatacopy({dst_ptr: 0, src_ptr: 0, src_len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_revert_ptr_reverts() external view {
+        try this.revert_op({ptr: BIG_PTR, len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_revert_len_reverts() external view {
+        try this.revert_op({ptr: 0, len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_calldatacopy_dst_ptr_reverts(bool coinflip) external view {
+        uint256 src_len = coinflip ? 0 : 1;
+
+        try this.calldatacopy({dst_ptr: BIG_PTR, src_ptr: 0, src_len: src_len}) {
+            // ok if src_len == 0
+            assertEq(src_len, 0);
+        } catch {
+            // reverts if src_len > 0
+            assertGt(src_len, 0);
+        }
+    }
+
+    function check_megaMem_calldatacopy_src_len_reverts() external view {
+        try this.calldatacopy({dst_ptr: 0, src_ptr: 0, src_len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_calldatacopy_src_ptr_ok() external view writes_to_memory(0, 0) {
+        calldatacopy({dst_ptr: 0, src_ptr: BIG_PTR, src_len: 32});
+    }
+
+    function check_megaMem_calldataload_ok() external view {
+        assertEq(calldataload(BIG_PTR), 0);
+    }
+
+    function check_megaMem_codecopy_dst_ptr_reverts(bool coinflip) external view {
+        uint256 src_len = coinflip ? 0 : 1;
+
+        try this.codecopy({dst_ptr: BIG_PTR, src_ptr: 0, src_len: src_len}) {
+            // ok if src_len == 0
+            assertEq(src_len, 0);
+        } catch {
+            // reverts if src_len > 0
+            assertGt(src_len, 0);
+        }
+    }
+
+    function check_megaMem_codecopy_src_len_reverts() external view {
+        try this.codecopy({dst_ptr: 0, src_ptr: 0, src_len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_codecopy_src_ptr_ok() external view writes_to_memory(0, 0) {
+        codecopy({dst_ptr: 0, src_ptr: BIG_PTR, src_len: 32});
+    }
+
+    function check_megaMem_extcodecopy_dst_ptr_reverts(bool coinflip) external view {
+        uint256 src_len = coinflip ? 0 : 1;
+
+        try this.extcodecopy({dst_ptr: BIG_PTR, src_ptr: 0, src_len: src_len}) {
+            // ok if src_len == 0
+            assertEq(src_len, 0);
+        } catch {
+            // reverts if src_len > 0
+            assertGt(src_len, 0);
+        }
+    }
+
+    function check_megaMem_extcodecopy_src_len_reverts() external view {
+        try this.extcodecopy({dst_ptr: 0, src_ptr: 0, src_len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_extcodecopy_src_ptr_ok() external view writes_to_memory(0, 0) {
+        extcodecopy({dst_ptr: 0, src_ptr: BIG_PTR, src_len: 32});
+    }
+
+    function check_megaMem_create_src_ptr_reverts() external {
+        try this.create({src_ptr: BIG_PTR, src_len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_create_src_len_reverts() external {
+        try this.create({src_ptr: 0, src_len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_create2_src_ptr_reverts() external {
+        try this.create2({src_ptr: BIG_PTR, src_len: 32}) {
+            assert(false);
+        } catch {
+            // success
+        }
+    }
+
+    function check_megaMem_create2_src_len_reverts() external {
+        try this.create2({src_ptr: 0, src_len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 }

@@ -324,6 +324,15 @@ class Message:
     def is_create(self) -> bool:
         return self.call_scheme in (EVM.CREATE, EVM.CREATE2)
 
+    def calldata_slice(self, start: int, size: int) -> ByteVec:
+        """Wrapper around calldata access with a size check."""
+        if size > MAX_MEMORY_SIZE:
+            raise OutOfGasError(
+                f"calldata slice with {start=} {size=} exceeds MAX_MEMORY_SIZE"
+            )
+
+        return self.data.slice(start=start, stop=start + size)
+
 
 @dataclass
 class CallOutput:
@@ -466,7 +475,7 @@ class State:
     def mloc(self, subst: dict = None) -> int:
         loc: int = int_of(self.pop(), "symbolic memory offset", subst)
         if loc > MAX_MEMORY_SIZE:
-            raise OutOfGasError(f"MLOAD {loc} > MAX_MEMORY_SIZE")
+            raise OutOfGasError(f"memory {loc=} > MAX_MEMORY_SIZE")
         return loc
 
     def mslice(self, loc: int, size: int) -> ByteVec:
@@ -636,7 +645,15 @@ class Contract:
         self.decode_instruction(pc)
         return self._next_pc[pc]
 
-    def slice(self, start, stop) -> ByteVec:
+    def slice(self, start, size) -> ByteVec:
+        # large start is allowed, but we must check the size
+        if size > MAX_MEMORY_SIZE:
+            raise OutOfGasError(
+                f"code slice with {start=} {size=} exceeds MAX_MEMORY_SIZE"
+            )
+
+        stop = start + size
+
         # fast path for offsets in the concrete prefix
         if self._fastcode and stop < len(self._fastcode):
             return ByteVec(self._fastcode[start:stop])
@@ -2147,15 +2164,11 @@ class SEVM:
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
 
-                # set return data (in memory)
+                # copy return data to memory
                 effective_ret_size = min(ret_size, new_ex.returndatasize())
                 if effective_ret_size > 0:
                     returndata_slice = subcall.output.data.slice(0, effective_ret_size)
-                    end_loc = ret_loc + effective_ret_size
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise OutOfGasError("returned data exceeds MAX_MEMORY_SIZE")
-
-                    new_ex.st.memory.set_slice(ret_loc, end_loc, returndata_slice)
+                    new_ex.st.set_mslice(ret_loc, returndata_slice)
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
@@ -2320,6 +2333,9 @@ class SEVM:
 
             last_idx = len(ret_lst) - 1
             for idx, ret_ in enumerate(ret_lst):
+                if not isinstance(ret_, ByteVec):
+                    raise HalmosException(f"Invalid return value: {ret_}")
+
                 new_ex = (
                     self.create_branch(ex, BoolVal(True), ex.pc)
                     if idx < last_idx
@@ -2327,17 +2343,11 @@ class SEVM:
                 )
 
                 # TODO: refactor this return memory setting to be shared with call_known()
-                # store return value
+                # copy return data to memory
                 effective_ret_size = min(ret_size, len(ret_))
                 if effective_ret_size > 0:
-                    end_loc = ret_loc + effective_ret_size
-                    if end_loc > MAX_MEMORY_SIZE:
-                        raise HalmosException("returned data exceeds MAX_MEMORY_SIZE")
-
-                    new_ex.st.memory.set_slice(ret_loc, end_loc, ret_)
-
-                if not isinstance(ret_, ByteVec):
-                    raise HalmosException(f"Invalid return value: {ret_}")
+                    data = ret_.slice(0, effective_ret_size)
+                    new_ex.st.set_mslice(ret_loc, data)
 
                 new_ex.context.trace.append(
                     CallContext(
@@ -2938,13 +2948,7 @@ class SEVM:
                     offset: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
 
-                    if size > 0:
-                        end_loc = loc + size
-                        if end_loc > MAX_MEMORY_SIZE:
-                            raise OutOfGasError(
-                                f"EXTCODECOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
-                            )
-
+                    if size:
                         if account_alias is None:
                             warn(
                                 f"EXTCODECOPY: unknown address {hexify(account)} "
@@ -2952,10 +2956,8 @@ class SEVM:
                             )
 
                         account_code: Contract = ex.code.get(account_alias) or ByteVec()
-                        codeslice: ByteVec = account_code._code.slice(
-                            offset, offset + size
-                        )
-                        ex.st.memory.set_slice(loc, end_loc, codeslice)
+                        codeslice: ByteVec = account_code.slice(offset, size)
+                        ex.st.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.EXTCODEHASH:
                     account = uint160(ex.st.peek())
@@ -3079,11 +3081,11 @@ class SEVM:
                     ex.st.push(ex.returndatasize())
 
                 elif opcode == EVM.RETURNDATACOPY:
-                    loc: int = ex.mloc()
+                    loc: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY loc")
                     offset = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
 
-                    if size > 0:
+                    if size:
                         # no need to check for a huge size because reading out of bounds reverts
                         if offset + size > ex.returndatasize():
                             raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
@@ -3092,34 +3094,22 @@ class SEVM:
                         ex.st.set_mslice(loc, data)
 
                 elif opcode == EVM.CALLDATACOPY:
-                    loc: int = ex.mloc()
+                    loc: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY loc")
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
 
-                    # avoid reading a huge calldata slice
-                    if size > MAX_MEMORY_SIZE:
-                        raise OutOfGasError(
-                            f"CALLDATACOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
-                        )
-
-                    if size > 0:
-                        data: ByteVec = ex.calldata().slice(offset, offset + size)
+                    if size:
+                        data: ByteVec = ex.message().calldata_slice(offset, size)
                         data = data.concretize(ex.path.concretization.substitution)
                         ex.st.set_mslice(loc, data)
 
                 elif opcode == EVM.CODECOPY:
-                    loc: int = ex.mloc()
+                    loc: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY loc")
                     offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
                     size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
 
-                    # avoid reading a huge code slice
-                    if size > MAX_MEMORY_SIZE:
-                        raise OutOfGasError(
-                            f"CODECOPY with {loc=} {size=} exceeds MAX_MEMORY_SIZE"
-                        )
-
-                    if size > 0:
-                        codeslice: ByteVec = ex.pgm.slice(offset, offset + size)
+                    if size:
+                        codeslice: ByteVec = ex.pgm.slice(offset, size)
                         ex.st.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.MCOPY:
