@@ -202,27 +202,6 @@ def insn_len(opcode: int) -> int:
     return 1 + (opcode - EVM.PUSH0) * (EVM.PUSH1 <= opcode <= EVM.PUSH32)
 
 
-class Instruction:
-    opcode: int
-    pc: int = -1
-    operand: ByteVec | None = None
-
-    def __init__(self, opcode, pc=-1, operand=None) -> None:
-        self.opcode = opcode
-        self.pc = pc
-        self.operand = operand
-
-    def __str__(self) -> str:
-        operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
-        return f"{mnemonic(self.opcode)}{operand_str}"
-
-    def __repr__(self) -> str:
-        return f"Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})"
-
-    def __len__(self) -> int:
-        return insn_len(self.opcode)
-
-
 def id_str(x: Any) -> str:
     return hexify(x).replace(" ", "")
 
@@ -294,6 +273,63 @@ def normalize(expr: Any) -> Any:
         return concat(new_args)
 
     return expr
+
+
+def copy_returndata_to_memory(
+    returndata: ByteVec, ret_loc: int, ret_size: int, ex: ForwardRef("Exec")
+) -> None:
+    """
+    Copy the return data from an external call to the memory of the caller.
+
+    Args:
+        returndata: the return data from the external call
+        ret_loc: the location in the memory of the caller to write the return data to
+                 (specified by the *CALL instruction)
+        ret_size: the size of the return data to write to memory
+                  (specified by the *CALL instruction)
+        ex: the execution context of the caller
+
+    Note that if the return data is smaller than the requested size,
+    only the actual size of the return data is written to memory and the
+    rest of the memory is not modified.
+    """
+
+    actual_ret_size = len(returndata)
+    effective_ret_size = min(ret_size, actual_ret_size)
+
+    if not effective_ret_size:
+        return
+
+    # fast path: if the requested ret_size is the actual size of the return data,
+    # we can skip the slice (copy) operation and directly write the return data to memory
+    data = (
+        returndata.slice(0, effective_ret_size)
+        if effective_ret_size < actual_ret_size
+        else returndata
+    )
+
+    ex.st.set_mslice(ret_loc, data)
+
+
+class Instruction:
+    opcode: int
+    pc: int = -1
+    operand: ByteVec | None = None
+
+    def __init__(self, opcode, pc=-1, operand=None) -> None:
+        self.opcode = opcode
+        self.pc = pc
+        self.operand = operand
+
+    def __str__(self) -> str:
+        operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
+        return f"{mnemonic(self.opcode)}{operand_str}"
+
+    def __repr__(self) -> str:
+        return f"Instruction({mnemonic(self.opcode)}, pc={self.pc}, operand={repr(self.operand)})"
+
+    def __len__(self) -> int:
+        return insn_len(self.opcode)
 
 
 @dataclass(frozen=True)
@@ -2171,18 +2207,8 @@ class SEVM:
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
 
-                # copy return data to memory
-                actual_ret_size = new_ex.returndatasize()
-                effective_ret_size = min(ret_size, actual_ret_size)
-                if effective_ret_size > 0:
-                    # fast path: if the requested ret size is the actual size of the return data,
-                    # we can skip the slice (copy) operation and directly write the return data to memory
-                    ret_data = (
-                        subcall.output.data.slice(0, effective_ret_size)
-                        if effective_ret_size < actual_ret_size
-                        else subcall.output.data
-                    )
-                    new_ex.st.set_mslice(ret_loc, ret_data)
+                returndata = subcall.output.data
+                copy_returndata_to_memory(returndata, ret_loc, ret_size, new_ex)
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
@@ -2356,12 +2382,7 @@ class SEVM:
                     else ex
                 )
 
-                # TODO: refactor this return memory setting to be shared with call_known()
-                # copy return data to memory
-                effective_ret_size = min(ret_size, len(ret_))
-                if effective_ret_size > 0:
-                    data = ret_.slice(0, effective_ret_size)
-                    new_ex.st.set_mslice(ret_loc, data)
+                copy_returndata_to_memory(ret_, ret_loc, ret_size, new_ex)
 
                 new_ex.context.trace.append(
                     CallContext(
