@@ -2172,10 +2172,17 @@ class SEVM:
                 new_ex.jumpis = deepcopy(ex.jumpis)
 
                 # copy return data to memory
-                effective_ret_size = min(ret_size, new_ex.returndatasize())
+                actual_ret_size = new_ex.returndatasize()
+                effective_ret_size = min(ret_size, actual_ret_size)
                 if effective_ret_size > 0:
-                    returndata_slice = subcall.output.data.slice(0, effective_ret_size)
-                    new_ex.st.set_mslice(ret_loc, returndata_slice)
+                    # fast path: if the requested ret size is the actual size of the return data,
+                    # we can skip the slice (copy) operation and directly write the return data to memory
+                    ret_data = (
+                        subcall.output.data.slice(0, effective_ret_size)
+                        if effective_ret_size < actual_ret_size
+                        else subcall.output.data
+                    )
+                    new_ex.st.set_mslice(ret_loc, ret_data)
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
