@@ -177,11 +177,15 @@ contract MegaMemTest is Test, SymTest {
         }
     }
 
-    function check_megaMem_keccak256_ptr_reverts() external view {
-        try this.keccak256_op(BIG_PTR, 32) {
-            assert(false);
+    function check_megaMem_keccak256_ptr_reverts(bool coinflip) external view {
+        uint256 src_len = coinflip ? 0 : 1;
+
+        try this.keccak256_op(BIG_PTR, src_len) {
+            // ok if src_len == 0
+            assertEq(src_len, 0);
         } catch {
-            // success
+            // reverts if src_len > 0
+            assertGt(src_len, 0);
         }
     }
 

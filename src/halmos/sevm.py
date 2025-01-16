@@ -1196,7 +1196,7 @@ class Exec:  # an execution path
         self.balances[new_balance_var] = new_balance
 
     def sha3(self) -> None:
-        loc: int = self.mloc()
+        loc: int = self.int_of(self.st.pop(), "symbolic SHA3 data loc")
         size: int = self.int_of(self.st.pop(), "symbolic SHA3 data size")
         data = self.st.mslice(loc, size).unwrap() if size else b""
         sha3_image = self.sha3_data(data)
