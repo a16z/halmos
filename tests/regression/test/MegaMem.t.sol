@@ -76,10 +76,13 @@ contract MegaMemTest is Test, SymTest {
         }
     }
 
-    function keccak256_op(uint256 ptr, uint256 len) public pure {
+
+    function keccak256_op(uint256 ptr, uint256 len) public pure returns (bytes32) {
+        bytes32 hash;
         assembly {
-            let hash := keccak256(ptr, len)
+            hash := keccak256(ptr, len)
         }
+        return hash;
     }
 
     function mcopy(uint256 dst_ptr, uint256 src_ptr, uint256 src_len) public pure {

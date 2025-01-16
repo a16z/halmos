@@ -5,6 +5,8 @@ libs = ['../lib', 'lib']
 
 evm_version = 'cancun'
 
+optimizer = true
+
 force = false
 # compile options used by halmos (to prevent unnecessary recompilation when running forge test and halmos together)
 extra_output = ["storageLayout", "metadata"]
