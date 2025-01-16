@@ -16,9 +16,10 @@ class PopenFuture(concurrent.futures.Future):
     returncode: int | None
     start_time: float | None
     end_time: float | None
+    metadata: dict | None
     _exception: Exception | None
 
-    def __init__(self, cmd: list[str]):
+    def __init__(self, cmd: list[str], metadata: dict | None = None):
         super().__init__()
         self.cmd = cmd
         self.process = None
@@ -27,6 +28,7 @@ class PopenFuture(concurrent.futures.Future):
         self.returncode = None
         self.start_time = None
         self.end_time = None
+        self.metadata = metadata
         self._exception = None
 
     def start(self):
@@ -122,18 +124,23 @@ class PopenExecutor(concurrent.futures.Executor):
 
         # TODO: support max_workers
 
-    def submit(self, command: list[str]):
+    @property
+    def futures(self):
+        return self._futures
+
+    def submit(self, future: PopenFuture):
+        """Accepts an unstarted PopenFuture and schedules it for execution."""
+
         if self._shutdown.is_set():
             raise RuntimeError("Cannot submit to a shutdown executor.")
 
-        future = PopenFuture(command)
         with self._lock:
             self._futures.append(future)
             future.start()
             return future
 
     def shutdown(self, wait=True, cancel_futures=False):
-        # TODO: support max_workers
+        # TODO: support max_workers / pending futures
 
         self._shutdown.set()
 
@@ -162,18 +169,8 @@ class PopenExecutor(concurrent.futures.Executor):
 
 
 def main():
-    # example usage
-
     with PopenExecutor() as executor:
-        # Submit multiple commands
-        commands = [
-            "sleep 1",
-            "sleep 10",
-            "echo hello",
-        ]
-
-        futures = [executor.submit(command.split()) for command in commands]
-
+        # example usage
         def done_callback(future: PopenFuture):
             stdout, stderr, exitcode = future.result()
             cmd = " ".join(future.cmd)
@@ -187,8 +184,18 @@ def main():
             )
             executor.shutdown(wait=False)
 
+        # Submit multiple commands
+        commands = [
+            "sleep 1",
+            "sleep 10",
+            "echo hello",
+        ]
+
+        futures = [PopenFuture(command.split()) for command in commands]
+
         for future in futures:
             future.add_done_callback(done_callback)
+            executor.submit(future)
 
         # exiting the context manager will shutdown the executor with wait=True
         # so no new futures can be submitted

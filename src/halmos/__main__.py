@@ -176,13 +176,38 @@ class FunctionContext:
     # dump directory for this function (generated in __post_init__)
     dump_dirname: str = field(init=False)
 
+    # path-specific queries are submitted to this function-specific executor
+    thread_pool: PopenExecutor = field(default_factory=PopenExecutor)
+
+    # list of solver outputs for this function
+    _solver_outputs: list["SolverOutput"] = field(default_factory=list)
+
+    # list of counterexamples for this function
+    counterexamples: list[PotentialModel] = field(default_factory=list)
+
+    # list of unsat cores for this function
+    unsat_cores: list[list] = field(default_factory=list)
+
+    # map from path id to trace
+    traces: dict[int, str] = field(default_factory=dict)
+
+    # map from path id to execution
+    exec_cache: dict[int, Exec] = field(default_factory=dict)
+
     def __post_init__(self):
         object.__setattr__(
             self, "dump_dirname", f"/tmp/{self.info.name}-{uuid.uuid4().hex}"
         )
 
+    def add_solver_output(self, solver_output: "SolverOutput"):
+        self._solver_outputs.append(solver_output)
 
-@dataclass
+    @property
+    def solver_outputs(self):
+        return self._solver_outputs
+
+
+@dataclass(frozen=True)
 class PathContext:
     # id of this path
     path_id: int
@@ -205,14 +230,20 @@ class PathContext:
         )
 
 
-# XXX remove ModelWithContext
 @dataclass(frozen=True)
-class ModelWithContext:
-    # can be a filename containing the model or a dict with variable assignments
-    model: PotentialModel | None
-    index: int
+class SolverOutput:
+    # solver result
     result: CheckSatResult
-    unsat_core: list | None
+
+    # we don't backlink to the parent path context to avoid extra
+    # references to Exec objects past the lifetime of the path
+    path_id: int
+
+    # solver model
+    model: PotentialModel | None = None
+
+    # optional unsat core
+    unsat_core: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -220,17 +251,10 @@ class TestResult:
     name: str  # test function name
     exitcode: int
     num_models: int = None
-    models: list[ModelWithContext] = None
+    models: list[SolverOutput] = None
     num_paths: tuple[int, int, int] = None  # number of paths: [total, success, blocked]
     time: tuple[int, int, int] = None  # time: [total, paths, models]
     num_bounded_loops: int = None  # number of incomplete loops
-
-
-@dataclass(frozen=True)
-class SolverOutput:
-    result: CheckSatResult
-    model: PotentialModel | None = None
-    unsat_core: list[str] | None = None
 
 
 class Exitcode(Enum):
@@ -322,7 +346,7 @@ def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None):
     )
 
 
-def deploy_test(ctx: ContractContext, sevm: SEVM) -> Exec:
+def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
     this = mk_this()
     message = Message(
         target=this,
@@ -344,8 +368,9 @@ def deploy_test(ctx: ContractContext, sevm: SEVM) -> Exec:
     )
 
     # deploy libraries and resolve library placeholders in hexcode
+    contract_ctx = ctx.contract_ctx
     (creation_hexcode, _) = ex.resolve_libs(
-        ctx.creation_hexcode, ctx.deployed_hexcode, ctx.libs
+        contract_ctx.creation_hexcode, contract_ctx.deployed_hexcode, contract_ctx.libs
     )
 
     # test contract creation bytecode
@@ -404,7 +429,7 @@ def setup(ctx: FunctionContext) -> Exec:
     setup_timer.create_subtimer("run")
 
     # TODO: dyn_params may need to be passed to mk_calldata in run()
-    calldata, dyn_params = mk_calldata(ctx.abi, setup_info, args)
+    calldata, dyn_params = mk_calldata(ctx.contract_ctx.abi, setup_info, args)
     setup_ex.path.process_dyn_params(dyn_params)
 
     parent_message = setup_ex.message()
@@ -514,7 +539,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path = Path(ctx.solver)
     path.extend_path(setup_ex.path)
 
-    cd, dyn_params = mk_calldata(ctx.abi, fun_info, args)
+    cd, dyn_params = mk_calldata(ctx.contract_ctx.abi, fun_info, args)
     path.process_dyn_params(dyn_params)
 
     message = Message(
@@ -560,60 +585,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
         )
     )
 
-    (logs, steps) = (sevm.logs, sevm.steps)
-
     normal = 0
     potential = 0
-    models: list[ModelWithContext] = []
     stuck = []
-
-    thread_pool = PopenExecutor(max_workers=args.solver_threads)
-    futures = []
-    counterexamples = []
-    unsat_cores: list[list] = []
-    traces: dict[int, str] = {}
-    exec_cache: dict[int, Exec] = {}
-
-    def future_callback(future: PopenFuture):
-        # XXX stdout, stderr, exitcode
-        m = future.result()
-        models.append(m)
-
-        model, index, result = m.model, m.index, m.result
-
-        # retrieve cached exec and clear the cache entry
-        exec = exec_cache.pop(index, None)
-
-        if result == unsat:
-            if m.unsat_core:
-                unsat_cores.append(m.unsat_core)
-            return
-
-        # model could be an empty dict here
-        if model is not None:
-            if model.is_valid:
-                print(red(f"Counterexample: {model}"))
-                counterexamples.append(model)
-            else:
-                warn_code(
-                    COUNTEREXAMPLE_INVALID,
-                    f"Counterexample (potentially invalid): {model}",
-                )
-                counterexamples.append(model)
-        else:
-            warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
-
-        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-            print(
-                f"Trace #{index + 1}:"
-                if args.verbose == VERBOSITY_TRACE_PATHS
-                else "Trace:"
-            )
-            print(traces[index], end="")
-
-        if args.print_failed_states:
-            print(f"# {index + 1}")
-            print(exec)
 
     #
     # consume the sevm.run() generator
@@ -624,7 +598,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
     for path_id, ex in enumerate(exs):
         # cache exec in case we need to print it later
         if args.print_failed_states:
-            exec_cache[path_id] = ex
+            ctx.exec_cache[path_id] = ex
 
         if args.verbose >= VERBOSITY_TRACE_PATHS:
             print(f"Path #{path_id}:")
@@ -647,7 +621,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             # so we save the rendered trace here and potentially print it later
             # if a valid counterexample is found
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-                traces[path_id] = rendered_trace(ex.context)
+                ctx.traces[path_id] = rendered_trace(ex.context)
 
             query: SMTQuery = ex.path.to_smt2(args)
 
@@ -655,16 +629,21 @@ def run_test(ctx: FunctionContext) -> TestResult:
                 path_id=path_id,
                 ex=ex,
                 query=query,
-                fun_info=ctx,
+                fun_ctx=ctx,
             )
 
             dump(path_ctx)
 
             # if the query contains an unsat-core, it is unsat; no need to run the solver
-            if check_unsat_cores(query, unsat_cores):
+            if check_unsat_cores(query, ctx.unsat_cores):
                 if args.verbose >= 1:
                     print("  Already proven unsat")
                 continue
+
+            solve(path_ctx)
+
+            # XXX handle refinement
+            # XXX handle timeout
 
         elif ex.context.is_stuck():
             debug(f"Potential error path (id: {idx+1})")
@@ -706,9 +685,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     # display assertion solving progress
     if not args.no_status or args.early_exit:
         while True:
-            if args.early_exit and len(counterexamples) > 0:
+            if args.early_exit and len(ctx.counterexamples) > 0:
                 break
-            done = sum(fm.done() for fm in futures)
+            done = sum(fm.done() for fm in ctx.thread_pool.futures)
             total = potential
             if done == total:
                 break
@@ -717,11 +696,11 @@ def run_test(ctx: FunctionContext) -> TestResult:
             time.sleep(0.1)
 
     if args.early_exit:
-        thread_pool.shutdown(wait=False, cancel_futures=True)
+        ctx.thread_pool.shutdown(wait=False, cancel_futures=True)
     else:
-        thread_pool.shutdown(wait=True)
+        ctx.thread_pool.shutdown(wait=True)
 
-    counter = Counter(str(m.result) for m in models)
+    counter = Counter(str(m.result) for m in ctx.solver_outputs)
     if counter["sat"] > 0:
         passfail = red("[FAIL]")
         exitcode = Exitcode.COUNTEREXAMPLE.value
@@ -746,16 +725,19 @@ def run_test(ctx: FunctionContext) -> TestResult:
     timer.stop()
     time_info = timer.report(include_subtimers=args.statistics)
 
-    # print result
+    # print test result
     print(
-        f"{passfail} {funsig} (paths: {num_execs}, {time_info}, bounds: [{', '.join([str(x) for x in dyn_params])}])"
+        f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
+        f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
     )
 
     for path_id, _, err in stuck:
         warn_code(INTERNAL_ERROR, f"Encountered {err}")
         if args.print_blocked_states:
             print(f"\nPath #{path_id}")
-            print(traces[path_id], end="")
+            print(ctx.traces[path_id], end="")
+
+    (logs, steps) = (sevm.logs, sevm.steps)
 
     if logs.bounded_loops:
         warn_code(
@@ -771,13 +753,13 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
     # return test result
     if args.minimal_json_output:
-        return TestResult(funsig, exitcode, len(counterexamples))
+        return TestResult(funsig, exitcode, len(ctx.counterexamples))
     else:
         return TestResult(
             funsig,
             exitcode,
-            len(counterexamples),
-            counterexamples,
+            len(ctx.counterexamples),
+            ctx.counterexamples,
             (num_execs, normal, len(stuck)),
             (timer.elapsed(), timer["paths"].elapsed(), timer["models"].elapsed()),
             len(logs.bounded_loops),
@@ -929,46 +911,95 @@ def dump(
             f.write("(get-model)\n")
 
 
-def solve(smt2_filename: str, args: HalmosConfig) -> SolverOutput:
+def solver_callback(future: PopenFuture):
+    """Invoked by a PopenFuture when it is finished."""
+
+    path_ctx: PathContext = future.metadata["path_ctx"]
+    path_id = path_ctx.path_id
+    args = path_ctx.fun_ctx.args
+    smt2_filename = path_ctx.dump_filename
+    stdout, stderr, returncode = future.result()
+
+    # save solver output to file
+    with open(f"{smt2_filename}.out", "w") as f:
+        f.write(stdout)
+
+    # extract the first line (we expect sat/unsat/unknown)
+    newline_idx = stdout.find("\n")
+    first_line = stdout[:newline_idx] if newline_idx != -1 else stdout
+    if args.verbose >= 1:
+        debug(f"    {first_line}")
+
+    solver_output = None
+    match first_line:
+        case "unsat":
+            unsat_core = parse_unsat_core(stdout) if args.cache_solver else None
+            solver_output = SolverOutput(unsat, path_id, unsat_core=unsat_core)
+        case "sat":
+            model = PotentialModel(f"{smt2_filename}.out", args)
+            solver_output = SolverOutput(sat, path_id, model=model)
+        case _:
+            solver_output = SolverOutput(unknown, path_id)
+
+    fun_ctx = path_ctx.fun_ctx
+    fun_ctx.add_solver_output(solver_output)
+
+    model, result = solver_output.model, solver_output.result
+
+    # retrieve cached exec and clear the cache entry
+    exec = fun_ctx.exec_cache.pop(path_id, None)
+
+    if result == unsat:
+        if solver_output.unsat_core:
+            fun_ctx.unsat_cores.append(solver_output.unsat_core)
+        return
+
+    # model could be an empty dict here
+    if model is not None:
+        if model.is_valid:
+            print(red(f"Counterexample: {model}"))
+            fun_ctx.counterexamples.append(model)
+        else:
+            warn_code(
+                COUNTEREXAMPLE_INVALID,
+                f"Counterexample (potentially invalid): {model}",
+            )
+            fun_ctx.counterexamples.append(model)
+    else:
+        warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
+
+    if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+        print(
+            f"Trace #{path_id}:" if args.verbose == VERBOSITY_TRACE_PATHS else "Trace:"
+        )
+        print(fun_ctx.traces[path_id], end="")
+
+    if args.print_failed_states:
+        print(f"# {path_id}")
+        print(exec)
+
+
+def solve(ctx: PathContext):
+    args = ctx.fun_ctx.args
+    smt2_filename = ctx.dump_filename
+
     if args.verbose >= 1:
         debug("  Checking with external solver process")
-        debug(f"    {args.solver_command} {smt2_filename} >{smt2_filename}.out")
+        debug(f"    {args.solver_command} {smt2_filename} > {smt2_filename}.out")
+
+    # XXX fix timeout
 
     # solver_timeout_assertion == 0 means no timeout,
     # which translates to timeout_seconds=None for subprocess.run
-    timeout_seconds = None
-    if timeout_millis := args.solver_timeout_assertion:
-        timeout_seconds = timeout_millis / 1000
+    # timeout_seconds = None
+    # if timeout_millis := args.solver_timeout_assertion:
+    #     timeout_seconds = timeout_millis / 1000
 
     cmd = args.solver_command.split() + [smt2_filename]
-    try:
-        # XXX submit to PopenExecutor, process output in callback
-        res_str = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout_seconds
-        ).stdout.strip()
-
-        # save solver output to file
-        with open(f"{smt2_filename}.out", "w") as f:
-            f.write(res_str)
-
-        # extract the first line (we expect sat/unsat/unknown)
-        newline_idx = res_str.find("\n")
-        res_str_head = res_str[:newline_idx] if newline_idx != -1 else res_str
-        if args.verbose >= 1:
-            debug(f"    {res_str_head}")
-
-        match res_str_head:
-            case "unsat":
-                unsat_core = parse_unsat_core(res_str) if args.cache_solver else None
-                return SolverOutput(result=unsat, unsat_core=unsat_core)
-            case "sat":
-                model = PotentialModel(f"{smt2_filename}.out", args)
-                return SolverOutput(result=sat, model=model)
-            case _:
-                return SolverOutput(result=unknown)
-
-    except subprocess.TimeoutExpired:
-        return SolverOutput(result=unknown)
+    thread_pool: PopenExecutor = ctx.fun_ctx.thread_pool
+    future = PopenFuture(cmd, metadata={"path_ctx": ctx})
+    future.add_done_callback(solver_callback)
+    thread_pool.submit(future)
 
 
 def check_unsat_cores(query: SMTQuery, unsat_cores: list[list]) -> bool:
@@ -977,23 +1008,6 @@ def check_unsat_cores(query: SMTQuery, unsat_cores: list[list]) -> bool:
         if all(core in query.assertions for core in unsat_core):
             return True
     return False
-
-
-def gen_model_from_sexpr(fn_args: GenModelArgs) -> ModelWithContext:
-    args, path_id, sexpr = fn_args.args, fn_args.path_id, fn_args.sexpr
-
-    res, model, unsat_core = solve(sexpr, args)
-
-    # XXX fix refinement
-
-    # if res == sat and not model.is_valid:
-    #     if args.verbose >= 1:
-    #         print("  Checking again with refinement")
-
-    # refined_filename = dump_filename.replace(".smt2", ".refined.smt2")
-    # res, model, unsat_core = solve(refine(sexpr), args, refined_filename)
-
-    return package_result(model, path_id, res, unsat_core, args)
 
 
 def refine(query: SMTQuery) -> SMTQuery:
@@ -1018,27 +1032,27 @@ def refine(query: SMTQuery) -> SMTQuery:
     return SMTQuery(smtlib, query.assertions)
 
 
-def package_result(
-    model: PotentialModel | None,
-    idx: int,
-    result: CheckSatResult,
-    unsat_core: list | None,
-    args: HalmosConfig,
-) -> ModelWithContext:
-    if result == unsat:
-        if args.verbose >= 1:
-            print(f"  Invalid path; ignored (path id: {idx+1})")
-        return ModelWithContext(None, idx, result, unsat_core)
+# def package_result(
+#     model: PotentialModel | None,
+#     idx: int,
+#     result: CheckSatResult,
+#     unsat_core: list | None,
+#     args: HalmosConfig,
+# ) -> ModelWithContext:
+#     if result == unsat:
+#         if args.verbose >= 1:
+#             print(f"  Invalid path; ignored (path id: {idx+1})")
+#         return ModelWithContext(None, idx, result, unsat_core)
 
-    if result == sat:
-        if args.verbose >= 1:
-            print(f"  Valid path; counterexample generated (path id: {idx+1})")
-        return ModelWithContext(model, idx, result, None)
+#     if result == sat:
+#         if args.verbose >= 1:
+#             print(f"  Valid path; counterexample generated (path id: {idx+1})")
+#         return ModelWithContext(model, idx, result, None)
 
-    else:
-        if args.verbose >= 1:
-            print(f"  Timeout (path id: {idx+1})")
-        return ModelWithContext(None, idx, result, None)
+#     else:
+#         if args.verbose >= 1:
+#             print(f"  Timeout (path id: {idx+1})")
+#         return ModelWithContext(None, idx, result, None)
 
 
 def is_model_valid(model: ModelRef | str) -> bool:
@@ -1389,6 +1403,7 @@ def _main(_args=None) -> MainResult:
         contract_ctx = ContractContext(
             args=contract_args,
             name=contract_name,
+            funsigs=funsigs,
             creation_hexcode=creation_hexcode,
             deployed_hexcode=deployed_hexcode,
             abi=abi,

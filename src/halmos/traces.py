@@ -5,16 +5,14 @@ from z3 import Z3_OP_CONCAT, BitVecNumRef, BitVecRef, is_app
 
 from halmos.bytevec import ByteVec
 from halmos.exceptions import HalmosException
-from halmos.sevm import CallContext, EventLog
+from halmos.mapper import DeployAddressMapper, Mapper
+from halmos.sevm import CallContext, EventLog, mnemonic
 from halmos.utils import (
-    DeployAddressMapper,
-    Mapper,
     byte_length,
     cyan,
     green,
     hexify,
     is_bv,
-    mnemonic,
     red,
     unbox_int,
     yellow,
