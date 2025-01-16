@@ -363,9 +363,7 @@ class Message:
     def calldata_slice(self, start: int, size: int) -> ByteVec:
         """Wrapper around calldata access with a size check."""
         if size > MAX_MEMORY_SIZE:
-            raise OutOfGasError(
-                f"calldata slice with {start=} {size=} exceeds MAX_MEMORY_SIZE"
-            )
+            raise OutOfGasError(f"calldata read {start=} {size=} > MAX_MEMORY_SIZE")
 
         return self.data.slice(start=start, stop=start + size)
 
@@ -689,9 +687,7 @@ class Contract:
     def slice(self, start, size) -> ByteVec:
         # large start is allowed, but we must check the size
         if size > MAX_MEMORY_SIZE:
-            raise OutOfGasError(
-                f"code slice with {start=} {size=} exceeds MAX_MEMORY_SIZE"
-            )
+            raise OutOfGasError(f"code read {start=} {size=} > MAX_MEMORY_SIZE")
 
         stop = start + size
 
