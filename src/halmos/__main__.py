@@ -50,6 +50,7 @@ from .logs import (
     error,
     logger,
     logger_unique,
+    warn,
     warn_code,
 )
 from .mapper import BuildOut, DeployAddressMapper
@@ -291,8 +292,6 @@ def setup(ctx: FunctionContext) -> Exec:
         if args.statistics:
             print(setup_timer.report())
         return setup_ex
-
-    setup_timer.create_subtimer("run")
 
     # TODO: dyn_params may need to be passed to mk_calldata in run()
     calldata, dyn_params = mk_calldata(ctx.contract_ctx.abi, setup_info, args)
