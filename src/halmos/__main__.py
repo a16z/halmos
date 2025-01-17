@@ -118,7 +118,8 @@ class PotentialModel:
 
         formatted = []
         for v in self.model.values():
-            stringified = stringify(v.full_name, v.value)
+            # TODO: ideally we would avoid wrapping with con() here
+            stringified = stringify(v.full_name, con(v.value))
             formatted.append(f"\n    {v.full_name} = {stringified}")
         return "".join(sorted(formatted)) if formatted else "∅"
 
@@ -239,7 +240,7 @@ class FunctionContext:
             return
 
         if model.is_valid:
-            print(red(f"Counterexample: {model}"))
+            # we don't print the model here because this may be called from multiple threads
             self.valid_counterexamples.append(model)
 
             # we have a valid counterexample, so we are eligible for early exit
@@ -764,6 +765,12 @@ def run_test(ctx: FunctionContext) -> TestResult:
     # print test result
     #
 
+    for model in ctx.valid_counterexamples:
+        print(red(f"Counterexample: {model}"))
+
+        if args.early_exit:
+            break
+
     counter = Counter(str(m.result) for m in ctx.solver_outputs)
     if counter["sat"] > 0:
         passfail = red("[FAIL]")
@@ -977,7 +984,10 @@ def dump(
 
 
 def solver_callback(future: PopenFuture):
-    """Invoked by a PopenFuture when it is finished."""
+    """Invoked by a PopenFuture when it is finished.
+
+    Note that this may be invoked by different threads
+    (in particular, not the thread that scheduled the future)"""
 
     path_ctx: PathContext = future.metadata["path_ctx"]
     path_id = path_ctx.path_id
@@ -1027,10 +1037,9 @@ def solve(ctx: PathContext):
     #     timeout_seconds = timeout_millis / 1000
 
     cmd = args.solver_command.split() + [smt2_filename]
-    thread_pool: PopenExecutor = ctx.fun_ctx.thread_pool
     future = PopenFuture(cmd, metadata={"path_ctx": ctx})
     future.add_done_callback(solver_callback)
-    thread_pool.submit(future)
+    ctx.fun_ctx.thread_pool.submit(future)
 
 
 def check_unsat_cores(query: SMTQuery, unsat_cores: list[list]) -> bool:
