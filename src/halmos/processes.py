@@ -3,32 +3,32 @@ import contextlib
 import subprocess
 import threading
 import time
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, TimeoutExpired
 
 import psutil
 
 
 class PopenFuture(concurrent.futures.Future):
     cmd: list[str]
+    timeout: float | None  # in seconds, None means no timeout
     process: subprocess.Popen | None
     stdout: str | None
     stderr: str | None
     returncode: int | None
     start_time: float | None
     end_time: float | None
-    metadata: dict | None
     _exception: Exception | None
 
-    def __init__(self, cmd: list[str], metadata: dict | None = None):
+    def __init__(self, cmd: list[str], timeout: float | None = None):
         super().__init__()
         self.cmd = cmd
+        self.timeout = timeout
         self.process = None
         self.stdout = None
         self.stderr = None
         self.returncode = None
         self.start_time = None
         self.end_time = None
-        self.metadata = metadata
         self._exception = None
 
     def start(self):
@@ -40,9 +40,14 @@ class PopenFuture(concurrent.futures.Future):
                 self.process = Popen(self.cmd, stdout=PIPE, stderr=PIPE, text=True)
 
                 # blocks until the process terminates
-                self.stdout, self.stderr = self.process.communicate()
+                self.stdout, self.stderr = self.process.communicate(
+                    timeout=self.timeout
+                )
                 self.end_time = time.time()
                 self.returncode = self.process.returncode
+            except TimeoutExpired as e:
+                self._exception = e
+                self.cancel()
             except Exception as e:
                 self._exception = e
             finally:
@@ -58,30 +63,32 @@ class PopenFuture(concurrent.futures.Future):
 
     def cancel(self):
         """Attempts to terminate and then kill the process and its children."""
-        if self.is_running():
-            self.process.terminate()
+        if not self.is_running():
+            return
 
-            # use psutil to kill the entire process tree (including children)
-            try:
-                parent_process = psutil.Process(self.process.pid)
-                processes = parent_process.children(recursive=True)
-                processes.append(parent_process)
+        self.process.terminate()
 
-                # ask politely to terminate first
-                for process in processes:
-                    process.terminate()
+        # use psutil to kill the entire process tree (including children)
+        try:
+            parent_process = psutil.Process(self.process.pid)
+            processes = parent_process.children(recursive=True)
+            processes.append(parent_process)
 
-                # give them some time to terminate
-                time.sleep(0.1)
+            # ask politely to terminate first
+            for process in processes:
+                process.terminate()
 
-                # after grace period, force kill
-                for process in processes:
-                    if process.is_running():
-                        process.kill()
+            # give them some time to terminate
+            time.sleep(0.5)
 
-            except psutil.NoSuchProcess:
-                # process already terminated, nothing to do
-                pass
+            # after grace period, force kill
+            for process in processes:
+                if process.is_running():
+                    process.kill()
+
+        except psutil.NoSuchProcess:
+            # process already terminated, nothing to do
+            pass
 
     def exception(self) -> Exception | None:
         """Returns any exception raised during the process."""

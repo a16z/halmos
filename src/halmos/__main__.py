@@ -49,7 +49,7 @@ from .logs import (
     warn_code,
 )
 from .mapper import BuildOut, DeployAddressMapper, Mapper
-from .processes import PopenExecutor, PopenFuture
+from .processes import PopenExecutor, PopenFuture, TimeoutExpired
 from .sevm import (
     EMPTY_BALANCE,
     EVM,
@@ -176,7 +176,7 @@ class FunctionContext:
     solver_executor: PopenExecutor = field(default_factory=PopenExecutor)
 
     # list of solver outputs for this function
-    _solver_outputs: list["SolverOutput"] = field(default_factory=list)
+    solver_outputs: list["SolverOutput"] = field(default_factory=list)
 
     # list of valid counterexamples for this function
     valid_counterexamples: list[PotentialModel] = field(default_factory=list)
@@ -202,10 +202,6 @@ class FunctionContext:
             thread_name_prefix=f"{self.info.name}-",
         )
         object.__setattr__(self, "thread_pool", thread_pool)
-
-    @property
-    def solver_outputs(self):
-        return self._solver_outputs
 
 
 @dataclass(frozen=True)
@@ -680,14 +676,11 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
             def log_future_result(future: Future):
                 if e := future.exception():
-                    error(f"encountered exception during assertion solving: {e}")
+                    error(f"encountered exception during assertion solving: {e!r}")
 
             solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
             solve_future.add_done_callback(log_future_result)
             submitted_futures.append(solve_future)
-
-            # XXX handle refinement
-            # XXX handle timeout
 
         elif ex.context.is_stuck():
             debug(f"Potential error path (id: {idx+1})")
@@ -748,12 +741,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
     #
     # print test result
     #
-
-    for model in ctx.valid_counterexamples:
-        print(red(f"Counterexample: {model}"))
-
-        if args.early_exit:
-            break
 
     counter = Counter(str(m.result) for m in ctx.solver_outputs)
     if counter["sat"] > 0:
@@ -980,24 +967,21 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
         print("  Checking with external solver process")
         print(f"    {args.solver_command} {smt2_filename} > {smt2_filename}.out")
 
-    # XXX fix timeout
-
     # solver_timeout_assertion == 0 means no timeout,
     # which translates to timeout_seconds=None for subprocess.run
-    # timeout_seconds = None
-    # if timeout_millis := args.solver_timeout_assertion:
-    #     timeout_seconds = timeout_millis / 1000
+    timeout_seconds = t / 1000 if (t := args.solver_timeout_assertion) else None
 
     cmd = args.solver_command.split() + [smt2_filename]
-    future = PopenFuture(cmd, metadata={"path_ctx": path_ctx})
+    future = PopenFuture(cmd, timeout=timeout_seconds)
 
-    # XXX avoiding callbacks now
-    # future.add_done_callback(solver_callback)
-
+    # starts the subprocess asynchronously
     fun_ctx.solver_executor.submit(future)
 
     # block until the external solver returns, times out, is interrupted, fails, etc.
-    stdout, stderr, returncode = future.result()
+    try:
+        stdout, stderr, returncode = future.result()
+    except TimeoutExpired:
+        return SolverOutput(result=unknown, path_id=path_ctx.path_id)
 
     # save solver stdout to file
     with open(f"{smt2_filename}.out", "w") as f:
@@ -1068,6 +1052,9 @@ def solve_end_to_end(ctx: PathContext) -> None:
         # we want to stop processing remaining models/timeouts/errors, etc.
         return
 
+    # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
+    fun_ctx.solver_outputs.append(solver_output)
+
     if result == unsat:
         if solver_output.unsat_core:
             fun_ctx.unsat_cores.append(solver_output.unsat_core)
@@ -1079,14 +1066,14 @@ def solve_end_to_end(ctx: PathContext) -> None:
         return
 
     if model.is_valid:
-        # we don't print the model here because this may be called from multiple threads
+        print(red(f"Counterexample: {model}"))
+
         fun_ctx.valid_counterexamples.append(model)
 
         # we have a valid counterexample, so we are eligible for early exit
         if args.early_exit:
             fun_ctx.solver_executor.shutdown(wait=False)
     else:
-        # XXX avoid printing here
         warn_str = f"Counterexample (potentially invalid): {model}"
         warn_code(COUNTEREXAMPLE_INVALID, warn_str)
         fun_ctx.invalid_counterexamples.append(model)
