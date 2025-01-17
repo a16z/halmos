@@ -312,7 +312,7 @@ def setup(ctx: FunctionContext) -> Exec:
     )
 
     setup_exs_all = sevm.run(setup_ex)
-    setup_exs_no_error: list[PathContext] = []
+    setup_exs_no_error: list[Exec] = []
 
     for path_id, setup_ex in enumerate(setup_exs_all):
         if args.verbose >= VERBOSITY_TRACE_SETUP:
@@ -333,26 +333,29 @@ def setup(ctx: FunctionContext) -> Exec:
                 render_trace(setup_ex.context)
 
         else:
-            path_ctx = PathContext(
-                path_id=path_id,
-                ex=setup_ex,
-                query=setup_ex.path.to_smt2(args),
-                fun_ctx=ctx,
-            )
-            setup_exs_no_error.append(path_ctx)
+            setup_exs_no_error.append(setup_ex)
 
     setup_exs: list[Exec] = []
 
     match setup_exs_no_error:
         case []:
             pass
-        case [path_ctx]:
-            setup_exs.append(path_ctx.ex)
+        case [ex]:
+            setup_exs.append(ex)
         case _:
-            for path_ctx in setup_exs_no_error:
+            for path_id, ex in enumerate(setup_exs_no_error):
+                path_ctx = PathContext(
+                    args=args,
+                    path_id=path_id,
+                    query=ex.path.to_smt2(args),
+                    solver_executor=ctx.solver_executor,
+                    unsat_cores=ctx.unsat_cores,
+                    dump_dirname=ctx.dump_dirname,
+                )
+
                 solver_output = solve_low_level(path_ctx)
                 if solver_output.result != unsat:
-                    setup_exs.append(path_ctx.ex)
+                    setup_exs.append(ex)
                     if len(setup_exs) > 1:
                         break
 
