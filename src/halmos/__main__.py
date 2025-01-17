@@ -43,6 +43,8 @@ from .constants import (
 )
 from .exceptions import HalmosException
 from .logs import (
+    COUNTEREXAMPLE_INVALID,
+    COUNTEREXAMPLE_UNKNOWN,
     INTERNAL_ERROR,
     LOOP_BOUND,
     REVERT_ALL,
@@ -460,6 +462,62 @@ def run_test(ctx: FunctionContext) -> TestResult:
     potential = 0
     stuck = []
 
+    def solve_end_to_end_callback(future: Future):
+        # beware: this function may be called from threads other than the main thread,
+        # so we must be careful to avoid referencing any z3 objects / contexts
+
+        if e := future.exception():
+            error(f"encountered exception during assertion solving: {e!r}")
+
+        #
+        # we are done solving, process and triage the result
+        #
+
+        solver_output = future.result()
+        result, model = solver_output.result, solver_output.model
+
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            id_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
+            print(f"Trace{id_str}:")
+            print(ctx.traces[path_id], end="")
+
+        # unsafe, can't print an Exec from a different thread
+        # if args.print_failed_states:
+        #     print(f"# {path_id}")
+        #     print(exec)
+
+        if ctx.solver_executor.is_shutdown():
+            # if the thread pool is in the process of shutting down,
+            # we want to stop processing remaining models/timeouts/errors, etc.
+            return
+
+        # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
+        ctx.solver_outputs.append(solver_output)
+
+        if result == unsat:
+            if solver_output.unsat_core:
+                ctx.unsat_cores.append(solver_output.unsat_core)
+            return
+
+        # model could be an empty dict here, so compare to None explicitly
+        if model is None:
+            warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
+            return
+
+        if model.is_valid:
+            print(red(f"Counterexample: {model}"))
+            ctx.valid_counterexamples.append(model)
+
+            # we have a valid counterexample, so we are eligible for early exit
+            if args.early_exit:
+                debug(f"Shutting down {ctx.info.name}'s solver executor")
+                ctx.solver_executor.shutdown(wait=False)
+        else:
+            warn_str = f"Counterexample (potentially invalid): {model}"
+            warn_code(COUNTEREXAMPLE_INVALID, warn_str)
+
+            ctx.invalid_counterexamples.append(model)
+
     #
     # consume the sevm.run() generator
     # (actually triggers path exploration)
@@ -497,19 +555,19 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
             query: SMTQuery = ex.path.to_smt2(args)
 
+            # beware: because this object crosses thread boundaries, we must be careful to
+            # avoid any reference to z3 objects
             path_ctx = PathContext(
+                args=args,
                 path_id=path_id,
-                ex=ex,
                 query=query,
-                fun_ctx=ctx,
+                dump_dirname=dump_dirname,
+                unsat_cores=ctx.unsat_cores,
+                solver_executor=ctx.solver_executor,
             )
 
-            def log_future_result(future: Future):
-                if e := future.exception():
-                    error(f"encountered exception during assertion solving: {e!r}")
-
             solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
-            solve_future.add_done_callback(log_future_result)
+            solve_future.add_done_callback(solve_end_to_end_callback)
             submitted_futures.append(solve_future)
 
         elif ex.context.is_stuck():

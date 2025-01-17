@@ -8,14 +8,10 @@ from z3 import CheckSatResult, Solver, sat, unknown, unsat
 
 from halmos.calldata import FunctionInfo
 from halmos.config import Config as HalmosConfig
-from halmos.constants import VERBOSITY_TRACE_COUNTEREXAMPLE, VERBOSITY_TRACE_PATHS
 from halmos.logs import (
-    COUNTEREXAMPLE_INVALID,
-    COUNTEREXAMPLE_UNKNOWN,
     debug,
     error,
     warn,
-    warn_code,
 )
 from halmos.processes import (
     ExecutorRegistry,
@@ -24,7 +20,7 @@ from halmos.processes import (
     TimeoutExpired,
 )
 from halmos.sevm import Exec, SMTQuery
-from halmos.utils import con, red, stringify
+from halmos.utils import hexify
 
 
 @dataclass
@@ -68,9 +64,8 @@ class PotentialModel:
 
         formatted = []
         for v in self.model.values():
-            # TODO: ideally we would avoid wrapping with con() here
-            stringified = stringify(v.full_name, con(v.value))
-            formatted.append(f"\n    {v.full_name} = {stringified}")
+            # TODO: parse type and render accordingly
+            formatted.append(f"\n    {v.full_name} = {hexify(v.value)}")
         return "".join(sorted(formatted)) if formatted else "∅"
 
 
@@ -157,17 +152,22 @@ class FunctionContext:
 
 @dataclass(frozen=True)
 class PathContext:
+    args: HalmosConfig
+
     # id of this path
     path_id: int
-
-    # path execution object
-    ex: Exec
 
     # SMT query
     query: SMTQuery
 
-    # backlink to the parent function context
-    fun_ctx: FunctionContext
+    # the solver executor is shared across all paths in the same function
+    # we just hold a reference to it
+    solver_executor: PopenExecutor
+
+    # list of unsat cores (inherited from parent function context)
+    unsat_cores: list[list]
+
+    dump_dirname: str
 
     # filename for this path (generated in __post_init__)
     dump_filename: str = field(init=False)
@@ -176,18 +176,21 @@ class PathContext:
 
     def __post_init__(self):
         refined_str = ".refined" if self.is_refined else ""
-        dirname = self.fun_ctx.dump_dirname
-        filename = os.path.join(dirname, f"{self.path_id}{refined_str}.smt2")
+        filename = os.path.join(self.dump_dirname, f"{self.path_id}{refined_str}.smt2")
 
         # use __setattr__ because this is a frozen dataclass
         object.__setattr__(self, "dump_filename", filename)
 
     def refine(self) -> "PathContext":
         return PathContext(
+            # inherited
+            args=self.args,
             path_id=self.path_id,
-            ex=self.ex,
+            solver_executor=self.solver_executor,
+            unsat_cores=self.unsat_cores,
+            dump_dirname=self.dump_dirname,
+            # refined
             query=refine(self.query),
-            fun_ctx=self.fun_ctx,
             is_refined=True,
         )
 
@@ -215,8 +218,7 @@ class SolverOutput:
         newline_idx = stdout.find("\n")
         first_line = stdout[:newline_idx] if newline_idx != -1 else stdout
 
-        args = path_ctx.fun_ctx.args
-        path_id = path_ctx.path_id
+        args, path_id = path_ctx.args, path_ctx.path_id
         if args.verbose >= 1:
             debug(f"    {first_line}")
 
@@ -321,9 +323,7 @@ def parse_unsat_core(output: str) -> list[str] | None:
 def dump(
     path_ctx: PathContext,
 ) -> tuple[CheckSatResult, PotentialModel | None, list | None]:
-    args = path_ctx.fun_ctx.args
-    query = path_ctx.query
-    dump_filename = path_ctx.dump_filename
+    args, query, dump_filename = path_ctx.args, path_ctx.query, path_ctx.dump_filename
 
     if args.verbose >= 1:
         debug(f"Writing SMT query to {dump_filename}")
@@ -368,8 +368,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
 
     Can raise TimeoutError or some Exception raised during execution"""
 
-    fun_ctx, smt2_filename = path_ctx.fun_ctx, path_ctx.dump_filename
-    args = fun_ctx.args
+    args, smt2_filename = path_ctx.args, path_ctx.dump_filename
 
     # make sure the smt2 file has been written
     dump(path_ctx)
@@ -386,7 +385,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     future = PopenFuture(cmd, timeout=timeout_seconds)
 
     # starts the subprocess asynchronously
-    fun_ctx.solver_executor.submit(future)
+    path_ctx.solver_executor.submit(future)
 
     # block until the external solver returns, times out, is interrupted, fails, etc.
     try:
@@ -406,7 +405,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     return SolverOutput.from_result(stdout, stderr, returncode, path_ctx)
 
 
-def solve_end_to_end(ctx: PathContext) -> None:
+def solve_end_to_end(ctx: PathContext) -> SolverOutput:
     """Synchronously resolves a query in a given context, which may result in 0, 1 or multiple solver invocations.
 
     - may result in 0 invocations if the query contains a known unsat core (hence the need for the context)
@@ -415,14 +414,13 @@ def solve_end_to_end(ctx: PathContext) -> None:
 
     If this produces a model, it _should_ be valid.
     """
-    fun_ctx, path_id, query = ctx.fun_ctx, ctx.path_id, ctx.query
-    args, unsat_cores = fun_ctx.args, fun_ctx.unsat_cores
+    path_id, query = ctx.path_id, ctx.query
 
-    verbose = print if args.verbose >= 1 else lambda *args, **kwargs: None
+    verbose = print if ctx.args.verbose >= 1 else lambda *args, **kwargs: None
     verbose(f"Checking path condition {path_id=}")
 
     # if the query contains an unsat-core, it is unsat; no need to run the solver
-    if check_unsat_cores(query, unsat_cores):
+    if check_unsat_cores(query, ctx.unsat_cores):
         verbose("  Already proven unsat")
         return SolverOutput(unsat, path_id)
 
@@ -441,53 +439,7 @@ def solve_end_to_end(ctx: PathContext) -> None:
         else:
             verbose("    Refinement did not change the query, no need to solve again")
 
-    #
-    # we are done solving, process and triage the result
-    #
-
-    # retrieve cached exec and clear the cache entry
-    exec = fun_ctx.exec_cache.pop(path_id, None)
-
-    if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-        id_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
-        print(f"Trace{id_str}:")
-        print(fun_ctx.traces[path_id], end="")
-
-    if args.print_failed_states:
-        print(f"# {path_id}")
-        print(exec)
-
-    if fun_ctx.solver_executor.is_shutdown():
-        # if the thread pool is in the process of shutting down,
-        # we want to stop processing remaining models/timeouts/errors, etc.
-        return
-
-    # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
-    fun_ctx.solver_outputs.append(solver_output)
-
-    if result == unsat:
-        if solver_output.unsat_core:
-            fun_ctx.unsat_cores.append(solver_output.unsat_core)
-        return
-
-    # model could be an empty dict here, so compare to None explicitly
-    if model is None:
-        warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
-        return
-
-    if model.is_valid:
-        print(red(f"Counterexample: {model}"))
-        fun_ctx.valid_counterexamples.append(model)
-
-        # we have a valid counterexample, so we are eligible for early exit
-        if args.early_exit:
-            debug(f"Shutting down {fun_ctx.info.name}'s solver executor")
-            fun_ctx.solver_executor.shutdown(wait=False)
-    else:
-        warn_str = f"Counterexample (potentially invalid): {model}"
-        warn_code(COUNTEREXAMPLE_INVALID, warn_str)
-
-        fun_ctx.invalid_counterexamples.append(model)
+    return solver_output
 
 
 def check_unsat_cores(query: SMTQuery, unsat_cores: list[list]) -> bool:
