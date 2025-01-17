@@ -93,6 +93,18 @@ class ContractContext:
 
 
 @dataclass(frozen=True)
+class SolvingContext:
+    # directory for dumping solver files
+    dump_dirname: str
+
+    # shared solver executor for all paths in the same function
+    executor: PopenExecutor = field(default_factory=PopenExecutor)
+
+    # list of unsat cores
+    unsat_cores: list[list] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class FunctionContext:
     # config with function-specific overrides
     args: HalmosConfig
@@ -109,14 +121,11 @@ class FunctionContext:
     # optional starting state
     setup_ex: Exec | None = None
 
-    # dump directory for this function (generated in __post_init__)
-    dump_dirname: str = field(init=False)
+    # function-level solving context
+    solving_ctx: SolvingContext = field(init=False)
 
     # function-level thread pool that drives assertion solving
     thread_pool: ThreadPoolExecutor = field(init=False)
-
-    # path-specific queries are submitted to this function-specific executor
-    solver_executor: PopenExecutor = field(default_factory=PopenExecutor)
 
     # list of solver outputs for this function
     solver_outputs: list["SolverOutput"] = field(default_factory=list)
@@ -127,9 +136,6 @@ class FunctionContext:
     # list of potentially invalid counterexamples for this function
     invalid_counterexamples: list[PotentialModel] = field(default_factory=list)
 
-    # list of unsat cores for this function
-    unsat_cores: list[list] = field(default_factory=list)
-
     # map from path id to trace
     traces: dict[int, str] = field(default_factory=dict)
 
@@ -138,7 +144,8 @@ class FunctionContext:
 
     def __post_init__(self):
         dirname = f"/tmp/{self.info.name}-{uuid.uuid4().hex}"
-        object.__setattr__(self, "dump_dirname", dirname)
+        solving_ctx = SolvingContext(dump_dirname=dirname)
+        object.__setattr__(self, "solving_ctx", solving_ctx)
 
         thread_pool = ThreadPoolExecutor(
             max_workers=self.args.solver_threads,
@@ -147,49 +154,33 @@ class FunctionContext:
         object.__setattr__(self, "thread_pool", thread_pool)
 
         # register the solver executor to be shutdown on exit
-        ExecutorRegistry().register(self.solver_executor)
+        ExecutorRegistry().register(solving_ctx.executor)
+
+    def append_unsat_core(self, unsat_core: list[str]) -> None:
+        self.solving_ctx.unsat_cores.append(unsat_core)
 
 
 @dataclass(frozen=True)
 class PathContext:
     args: HalmosConfig
-
-    # id of this path
     path_id: int
-
-    # SMT query
+    solving_ctx: SolvingContext
     query: SMTQuery
-
-    # the solver executor is shared across all paths in the same function
-    # we just hold a reference to it
-    solver_executor: PopenExecutor
-
-    # list of unsat cores (inherited from parent function context)
-    unsat_cores: list[list]
-
-    dump_dirname: str
-
-    # filename for this path (generated in __post_init__)
-    dump_filename: str = field(init=False)
-
     is_refined: bool = False
 
-    def __post_init__(self):
+    @property
+    def dump_filename(self) -> str:
         refined_str = ".refined" if self.is_refined else ""
-        filename = os.path.join(self.dump_dirname, f"{self.path_id}{refined_str}.smt2")
-
-        # use __setattr__ because this is a frozen dataclass
-        object.__setattr__(self, "dump_filename", filename)
+        filename = os.path.join(
+            self.solving_ctx.dump_dirname, f"{self.path_id}{refined_str}.smt2"
+        )
+        return filename
 
     def refine(self) -> "PathContext":
         return PathContext(
-            # inherited
             args=self.args,
             path_id=self.path_id,
-            solver_executor=self.solver_executor,
-            unsat_cores=self.unsat_cores,
-            dump_dirname=self.dump_dirname,
-            # refined
+            solving_ctx=self.solving_ctx,
             query=refine(self.query),
             is_refined=True,
         )
@@ -385,7 +376,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     future = PopenFuture(cmd, timeout=timeout_seconds)
 
     # starts the subprocess asynchronously
-    path_ctx.solver_executor.submit(future)
+    path_ctx.solving_ctx.executor.submit(future)
 
     # block until the external solver returns, times out, is interrupted, fails, etc.
     try:
@@ -420,7 +411,7 @@ def solve_end_to_end(ctx: PathContext) -> SolverOutput:
     verbose(f"Checking path condition {path_id=}")
 
     # if the query contains an unsat-core, it is unsat; no need to run the solver
-    if check_unsat_cores(query, ctx.unsat_cores):
+    if check_unsat_cores(query, ctx.solving_ctx.unsat_cores):
         verbose("  Already proven unsat")
         return SolverOutput(unsat, path_id)
 

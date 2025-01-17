@@ -348,9 +348,7 @@ def setup(ctx: FunctionContext) -> Exec:
                     args=args,
                     path_id=path_id,
                     query=ex.path.to_smt2(args),
-                    solver_executor=ctx.solver_executor,
-                    unsat_cores=ctx.unsat_cores,
-                    dump_dirname=ctx.dump_dirname,
+                    solving_ctx=ctx.solving_ctx,
                 )
 
                 solver_output = solve_low_level(path_ctx)
@@ -400,11 +398,12 @@ def run_test(ctx: FunctionContext) -> TestResult:
     # prepare test dump directory if needed
     #
 
-    dump_dirname = ctx.dump_dirname
+    dump_dirname = ctx.solving_ctx.dump_dirname
     should_dump = args.dump_smt_queries or args.solver_command
     if should_dump and not os.path.isdir(dump_dirname):
+        if args.verbose >= 1:
+            print(f"Generating SMT queries in {dump_dirname}")
         os.makedirs(dump_dirname)
-        print(f"Generating SMT queries in {dump_dirname}")
 
     #
     # prepare calldata
@@ -489,7 +488,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
         #     print(f"# {path_id}")
         #     print(exec)
 
-        if ctx.solver_executor.is_shutdown():
+        if ctx.solving_ctx.executor.is_shutdown():
             # if the thread pool is in the process of shutting down,
             # we want to stop processing remaining models/timeouts/errors, etc.
             return
@@ -499,7 +498,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
         if result == unsat:
             if solver_output.unsat_core:
-                ctx.unsat_cores.append(solver_output.unsat_core)
+                ctx.append_unsat_core(solver_output.unsat_core)
             return
 
         # model could be an empty dict here, so compare to None explicitly
@@ -564,9 +563,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
                 args=args,
                 path_id=path_id,
                 query=query,
-                dump_dirname=dump_dirname,
-                unsat_cores=ctx.unsat_cores,
-                solver_executor=ctx.solver_executor,
+                solving_ctx=ctx.solving_ctx,
             )
 
             solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
