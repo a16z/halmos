@@ -395,17 +395,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
         print(f"Executing {funname}")
 
     #
-    # prepare test dump directory if needed
-    #
-
-    dump_dirname = ctx.solving_ctx.dump_dirname
-    should_dump = args.dump_smt_queries or args.solver_command
-    if should_dump and not os.path.isdir(dump_dirname):
-        if args.verbose >= 1:
-            print(f"Generating SMT queries in {dump_dirname}")
-        os.makedirs(dump_dirname)
-
-    #
     # prepare calldata
     #
 

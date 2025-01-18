@@ -1,8 +1,8 @@
-import os
 import re
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from z3 import CheckSatResult, Solver, sat, unknown, unsat
 
@@ -95,7 +95,7 @@ class ContractContext:
 @dataclass(frozen=True)
 class SolvingContext:
     # directory for dumping solver files
-    dump_dirname: str
+    dump_dir: TemporaryDirectory
 
     # shared solver executor for all paths in the same function
     executor: PopenExecutor = field(default_factory=PopenExecutor)
@@ -122,6 +122,7 @@ class FunctionContext:
     setup_ex: Exec | None = None
 
     # function-level solving context
+    # the FunctionContext initializes and owns the SolvingContext
     solving_ctx: SolvingContext = field(init=False)
 
     # function-level thread pool that drives assertion solving
@@ -143,8 +144,25 @@ class FunctionContext:
     exec_cache: dict[int, Exec] = field(default_factory=dict)
 
     def __post_init__(self):
-        dirname = f"/tmp/{self.info.name}-{uuid.uuid4().hex}"
-        solving_ctx = SolvingContext(dump_dirname=dirname)
+        args = self.args
+
+        # create a temporary directory for dumping solver files
+        prefix = (
+            f"{self.info.name}-"
+            if self.info.name
+            else f"{self.contract_ctx.name}-deploy-"
+        )
+
+        # if the user explicitly enabled dumping, we don't want to delete the directory on exit
+        delete = not self.args.dump_smt_queries
+        dump_dir = TemporaryDirectory(
+            prefix=prefix, ignore_cleanup_errors=True, delete=delete
+        )
+
+        if args.verbose >= 1 or args.dump_smt_queries:
+            print(f"Generating SMT queries in {dump_dir.name}")
+
+        solving_ctx = SolvingContext(dump_dir=dump_dir)
         object.__setattr__(self, "solving_ctx", solving_ctx)
 
         thread_pool = ThreadPoolExecutor(
@@ -169,12 +187,11 @@ class PathContext:
     is_refined: bool = False
 
     @property
-    def dump_filename(self) -> str:
+    def dump_file(self) -> Path:
         refined_str = ".refined" if self.is_refined else ""
-        filename = os.path.join(
-            self.solving_ctx.dump_dirname, f"{self.path_id}{refined_str}.smt2"
-        )
-        return filename
+        filename = f"{self.path_id}{refined_str}.smt2"
+
+        return Path(self.solving_ctx.dump_dir.name) / filename
 
     def refine(self) -> "PathContext":
         return PathContext(
@@ -314,10 +331,10 @@ def parse_unsat_core(output: str) -> list[str] | None:
 def dump(
     path_ctx: PathContext,
 ) -> tuple[CheckSatResult, PotentialModel | None, list | None]:
-    args, query, dump_filename = path_ctx.args, path_ctx.query, path_ctx.dump_filename
+    args, query, dump_file = path_ctx.args, path_ctx.query, path_ctx.dump_file
 
     if args.verbose >= 1:
-        debug(f"Writing SMT query to {dump_filename}")
+        debug(f"Writing SMT query to {dump_file}")
 
     # for each implication assertion, `(assert (=> |id| c))`, in query.smtlib,
     # generate a corresponding named assertion, `(assert (! |id| :named <id>))`.
@@ -330,21 +347,20 @@ def dump(
             ]
         )
 
-        with open(dump_filename, "w") as f:
-            f.write("(set-option :produce-unsat-cores true)\n")
-            f.write("(set-logic QF_AUFBV)\n")
-            f.write(query.smtlib)
-            f.write(named_assertions)
-            f.write("(check-sat)\n")
-            f.write("(get-model)\n")
-            f.write("(get-unsat-core)\n")
+        dump_file.write_text(
+            "(set-option :produce-unsat-cores true)\n"
+            "(set-logic QF_AUFBV)\n"
+            f"{query.smtlib}\n"
+            f"{named_assertions}"
+            "(check-sat)\n"
+            "(get-model)\n"
+            "(get-unsat-core)\n"
+        )
 
     else:
-        with open(dump_filename, "w") as f:
-            f.write("(set-logic QF_AUFBV)\n")
-            f.write(query.smtlib)
-            f.write("(check-sat)\n")
-            f.write("(get-model)\n")
+        dump_file.write_text(
+            f"(set-logic QF_AUFBV)\n{query.smtlib}\n(check-sat)\n(get-model)\n"
+        )
 
 
 def is_model_valid(solver_stdout: str) -> bool:
@@ -359,7 +375,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
 
     Can raise TimeoutError or some Exception raised during execution"""
 
-    args, smt2_filename = path_ctx.args, path_ctx.dump_filename
+    args, smt2_filename = path_ctx.args, str(path_ctx.dump_file)
 
     # make sure the smt2 file has been written
     dump(path_ctx)
