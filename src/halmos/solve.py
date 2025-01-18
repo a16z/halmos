@@ -150,14 +150,18 @@ class FunctionContext:
         prefix = (
             f"{self.info.name}-"
             if self.info.name
-            else f"{self.contract_ctx.name}-deploy-"
+            else f"{self.contract_ctx.name}-constructor-"
         )
 
         # if the user explicitly enabled dumping, we don't want to delete the directory on exit
         delete = not self.args.dump_smt_queries
-        dump_dir = TemporaryDirectory(
-            prefix=prefix, ignore_cleanup_errors=True, delete=delete
-        )
+
+        # ideally we would pass `delete=delete` to the constructor, but it's in >=3.12
+        dump_dir = TemporaryDirectory(prefix=prefix, ignore_cleanup_errors=True)
+
+        # If user wants to keep the files, prevent cleanup on exit
+        if not delete:
+            dump_dir._finalizer.detach()
 
         if args.verbose >= 1 or args.dump_smt_queries:
             print(f"Generating SMT queries in {dump_dir.name}")
