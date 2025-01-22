@@ -166,6 +166,9 @@ def load_config(_args) -> HalmosConfig:
             "could not find z3 on the PATH -- check your PATH/venv or pass --solver-command explicitly"
         )
 
+        # XXX undo this
+        print(f"PATH: {os.environ['PATH']}")
+
     # parse CLI args first, so that can get `--help` out of the way and resolve `--debug`
     # but don't apply the CLI overrides yet
     cli_overrides = arg_parser().parse_args(_args)
