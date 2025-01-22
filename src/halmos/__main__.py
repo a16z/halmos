@@ -507,7 +507,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             # we have a valid counterexample, so we are eligible for early exit
             if args.early_exit:
                 debug(f"Shutting down {ctx.info.name}'s solver executor")
-                ctx.solver_executor.shutdown(wait=False)
+                ctx.solving_ctx.executor.shutdown(wait=False)
         else:
             warn_str = f"Counterexample (potentially invalid): {model}"
             warn_code(COUNTEREXAMPLE_INVALID, warn_str)
