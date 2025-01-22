@@ -568,12 +568,20 @@ def run_test(ctx: FunctionContext) -> TestResult:
             submitted_futures.append(solve_future)
 
         elif ex.context.is_stuck():
-            debug(f"Potential error path (id: {idx+1})")
-            res, _, _ = solve(ex.path.to_smt2(args), args)
+            debug(f"Potential error path (id: {path_id})")
+            path_ctx = PathContext(
+                args=args,
+                path_id=path_id,
+                query=ex.path.to_smt2(args),
+                solving_ctx=ctx.solving_ctx,
+            )
+            res, _, _ = solve_low_level(path_ctx)
             if res != unsat:
-                stuck.append((idx, ex, ex.context.get_stuck_reason()))
+                stuck.append((path_id, ex, ex.context.get_stuck_reason()))
                 if args.print_blocked_states:
-                    traces[idx] = f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
+                    ctx.traces[path_id] = (
+                        f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
+                    )
 
         elif not error_output:
             if args.print_success_states:
