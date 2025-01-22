@@ -724,9 +724,12 @@ def run(
             future_models.append(future_model)
 
         elif ex.context.is_stuck():
-            stuck.append((idx, ex, ex.context.get_stuck_reason()))
-            if args.print_blocked_states:
-                traces[idx] = f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
+            debug(f"Potential error path (id: {idx+1})")
+            res, _, _ = solve(ex.path.to_smt2(args), args)
+            if res != unsat:
+                stuck.append((idx, ex, ex.context.get_stuck_reason()))
+                if args.print_blocked_states:
+                    traces[idx] = f"{hexify(ex.path)}\n{rendered_trace(ex.context)}"
 
         elif not error_output:
             if args.print_success_states:
