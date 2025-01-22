@@ -167,7 +167,13 @@ def load_config(_args) -> HalmosConfig:
         )
 
         # XXX undo this
-        print(f"PATH: {os.environ['PATH']}")
+        path = os.environ["PATH"]
+        print(f"PATH: {path}")
+        for p in path.split(";"):
+            if ".venv" in p:
+                print(f"venv: {p}")
+                for f in os.listdir(p):
+                    print(f"  {f}")
 
     # parse CLI args first, so that can get `--help` out of the way and resolve `--debug`
     # but don't apply the CLI overrides yet
@@ -575,8 +581,8 @@ def run_test(ctx: FunctionContext) -> TestResult:
                 query=ex.path.to_smt2(args),
                 solving_ctx=ctx.solving_ctx,
             )
-            res, _, _ = solve_low_level(path_ctx)
-            if res != unsat:
+            solver_output = solve_low_level(path_ctx)
+            if solver_output.result != unsat:
                 stuck.append((path_id, ex, ex.context.get_stuck_reason()))
                 if args.print_blocked_states:
                     ctx.traces[path_id] = (
