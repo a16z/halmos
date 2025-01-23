@@ -1,12 +1,12 @@
 import argparse
 import os
 import re
-import shutil
 import sys
 from collections import OrderedDict
 from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
+from pathlib import Path
 from typing import Any
 
 import toml
@@ -24,6 +24,29 @@ debugging, solver, build, experimental, deprecated = (
     "Experimental options",
     "Deprecated options",
 )
+
+
+def find_venv_root() -> Path | None:
+    # If the environment variable is set, use that
+    if "VIRTUAL_ENV" in os.environ:
+        return Path(os.environ["VIRTUAL_ENV"])
+
+    # Otherwise, if we're in a venv, sys.prefix != sys.base_prefix
+    if sys.prefix != sys.base_prefix:
+        return Path(sys.prefix)
+
+    # Not in a virtual environment
+    return None
+
+
+def find_z3_path() -> Path | None:
+    venv_path = find_venv_root()
+    if venv_path:
+        z3_bin = "z3.exe" if sys.platform == "win32" else "z3"
+        z3_path = venv_path / "bin" / z3_bin
+        if z3_path.exists():
+            return z3_path
+    return None
 
 
 # helper to define config fields
@@ -442,7 +465,7 @@ class Config:
 
     solver_command: str = arg(
         help="use the given command when invoking the solver",
-        global_default=shutil.which("z3"),
+        global_default=str(find_z3_path()),
         metavar="COMMAND",
         group=solver,
     )
