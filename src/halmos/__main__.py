@@ -56,6 +56,7 @@ from .logs import (
     warn_code,
 )
 from .mapper import BuildOut, DeployAddressMapper
+from .processes import ShutdownError
 from .sevm import (
     EMPTY_BALANCE,
     EVM,
@@ -522,6 +523,12 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path_id = 0  # default value in case we don't enter the loop body
     submitted_futures = []
     for path_id, ex in enumerate(exs):
+        # check if early exit is triggered
+        if ctx.solving_ctx.executor.is_shutdown():
+            if args.debug:
+                print("aborting path exploration, executor has been shutdown")
+            break
+
         # cache exec in case we need to print it later
         if args.print_failed_states:
             ctx.exec_cache[path_id] = ex
@@ -560,9 +567,14 @@ def run_test(ctx: FunctionContext) -> TestResult:
                 solving_ctx=ctx.solving_ctx,
             )
 
-            solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
-            solve_future.add_done_callback(solve_end_to_end_callback)
-            submitted_futures.append(solve_future)
+            try:
+                solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
+                solve_future.add_done_callback(solve_end_to_end_callback)
+                submitted_futures.append(solve_future)
+            except ShutdownError:
+                if args.debug:
+                    print("aborting path exploration, executor has been shutdown")
+                break
 
         elif ex.context.is_stuck():
             debug(f"Potential error path (id: {path_id})")

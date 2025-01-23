@@ -23,7 +23,8 @@ class ExecutorRegistry:
         self._executors.add(executor)
 
     def shutdown_all(self):
-        print("Shutting down all executors")
+        """Shuts down all registered executors."""
+
         for ex in list(self._executors):
             ex.shutdown(wait=False)
 
@@ -134,6 +135,10 @@ class PopenFuture(concurrent.futures.Future):
         return self.process and self.process.poll() is None
 
 
+class ShutdownError(RuntimeError):
+    """Raised when submitting a future to an executor that has been shutdown."""
+
+
 class PopenExecutor(concurrent.futures.Executor):
     """
     An executor that runs commands in subprocesses.
@@ -154,11 +159,13 @@ class PopenExecutor(concurrent.futures.Executor):
     def futures(self):
         return self._futures
 
-    def submit(self, future: PopenFuture):
-        """Accepts an unstarted PopenFuture and schedules it for execution."""
+    def submit(self, future: PopenFuture) -> PopenFuture:
+        """Accepts an unstarted PopenFuture and schedules it for execution.
+
+        Raises ShutdownError if the executor has been shutdown."""
 
         if self._shutdown.is_set():
-            raise RuntimeError("Cannot submit to a shutdown executor.")
+            raise ShutdownError()
 
         with self._lock:
             self._futures.append(future)
