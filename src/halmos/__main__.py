@@ -622,7 +622,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
     # display assertion solving progress
     #
 
-    if not args.no_status or args.early_exit:
+    if not args.no_status:
         while True:
             done = sum(fm.done() for fm in submitted_futures)
             total = potential
