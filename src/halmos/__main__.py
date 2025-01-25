@@ -473,16 +473,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
         solver_output = future.result()
         result, model = solver_output.result, solver_output.model
 
-        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-            id_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
-            print(f"Trace{id_str}:")
-            print(ctx.traces[path_id], end="")
-
-        # unsafe, can't print an Exec from a different thread
-        # if args.print_failed_states:
-        #     print(f"# {path_id}")
-        #     print(exec)
-
         if ctx.solving_ctx.executor.is_shutdown():
             # if the thread pool is in the process of shutting down,
             # we want to stop processing remaining models/timeouts/errors, etc.
@@ -500,6 +490,13 @@ def run_test(ctx: FunctionContext) -> TestResult:
         if model is None:
             warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
             return
+
+        # print counterexample trace
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            path_id = solver_output.path_id
+            id_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
+            print(f"Trace{id_str}:")
+            print(ctx.traces[path_id], end="")
 
         if model.is_valid:
             print(red(f"Counterexample: {model}"))
@@ -609,7 +606,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             warn(f"{funsig}: {msg}: --width {args.width}")
             break
 
-    num_execs = path_id
+    num_execs = path_id + 1
 
     # the name is a bit misleading: this timer only starts after the exploration phase is complete
     # but it's possible that solvers have already been running for a while
