@@ -445,8 +445,10 @@ def solve_end_to_end(ctx: PathContext) -> SolverOutput:
         refined_ctx = ctx.refine()
 
         if refined_ctx.query.smtlib != query.smtlib:
-            # recurse with the refined query
-            return solve_end_to_end(refined_ctx)
+            # note that check_unsat_cores cannot return true for the refined query, because it relies on only
+            # constraint ids, which don't change after refinement
+            # therefore we can skip the unsat core check in solve_end_to_end and go directly to solve_low_level
+            return solve_low_level(refined_ctx)
         else:
             verbose("    Refinement did not change the query, no need to solve again")
 

@@ -318,7 +318,7 @@ def setup(ctx: FunctionContext) -> Exec:
     )
 
     setup_exs_all = sevm.run(setup_ex)
-    setup_exs_no_error: list[Exec] = []
+    setup_exs_no_error: list[tuple[Exec, SMTQuery]] = []
 
     for path_id, setup_ex in enumerate(setup_exs_all):
         if args.verbose >= VERBOSITY_TRACE_SETUP:
@@ -339,24 +339,25 @@ def setup(ctx: FunctionContext) -> Exec:
                 render_trace(setup_ex.context)
 
         else:
-            setup_exs_no_error.append(setup_ex)
+            # note: ex.path.to_smt2() needs to be called at this point. The solver object is shared across paths,
+            # and solver.to_smt2() will return a different query if it is called after a different path is explored.
+            setup_exs_no_error.append((setup_ex, setup_ex.path.to_smt2(args)))
 
     setup_exs: list[Exec] = []
 
     match setup_exs_no_error:
         case []:
             pass
-        case [ex]:
+        case [(ex, _)]:
             setup_exs.append(ex)
         case _:
-            for path_id, ex in enumerate(setup_exs_no_error):
+            for path_id, (ex, query) in enumerate(setup_exs_no_error):
                 path_ctx = PathContext(
                     args=args,
                     path_id=path_id,
-                    query=ex.path.to_smt2(args),
+                    query=query,
                     solving_ctx=ctx.solving_ctx,
                 )
-
                 solver_output = solve_low_level(path_ctx)
                 if solver_output.result != unsat:
                     setup_exs.append(ex)
