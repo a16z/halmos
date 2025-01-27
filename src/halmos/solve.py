@@ -54,14 +54,10 @@ halmos_var_pattern = re.compile(
 
 @dataclass(frozen=True)
 class PotentialModel:
-    model: ModelVariables | str | None
+    model: ModelVariables
     is_valid: bool
 
     def __str__(self) -> str:
-        # expected to be a filename
-        if isinstance(self.model, str):
-            return f"see {self.model}"
-
         formatted = []
         for v in self.model.values():
             # TODO: parse type and render accordingly
@@ -88,7 +84,8 @@ class ContractContext:
     contract_json: dict
     libs: dict
 
-    # TODO: check if this is really a contract-level variable
+    # note: build_out_map is shared across all contracts compiled using the same compiler version
+    # so in principle, we could consider having another context, say CompileUnitContext, and put build_out_map there
     build_out_map: dict
 
 
