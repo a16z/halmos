@@ -484,6 +484,7 @@ class State:
         else:
             if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
                 raise ValueError(v)
+
             self.stack.append(simplify(v))
 
     def pop(self) -> Word:
@@ -2608,12 +2609,14 @@ class SEVM:
             follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
-                debug(
-                    f"\nloop id: {jid}\n"
-                    f"loop condition: {cond}\n"
-                    f"calldata: {ex.calldata()}\n"
-                    f"path condition:\n{ex.path}\n"
-                )
+                if self.options.debug:
+                    # rendering ex.path to string can be expensive, so only do it if debug is enabled
+                    debug(
+                        f"\nloop id: {jid}\n"
+                        f"loop condition: {cond}\n"
+                        f"calldata: {ex.calldata()}\n"
+                        f"path condition:\n{ex.path}\n"
+                    )
         else:
             # for constant-bounded loops
             follow_true = potential_true

@@ -3,9 +3,10 @@ import json
 
 import pytest
 
-from halmos.__main__ import _main, rendered_calldata
+from halmos.__main__ import _main
 from halmos.bytevec import ByteVec
 from halmos.sevm import con
+from halmos.traces import rendered_calldata
 
 
 @pytest.mark.parametrize(
