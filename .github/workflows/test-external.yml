@@ -47,7 +47,7 @@ jobs:
             profile: ""
           - repo: "zobront/halmos-solady"
             dir: "halmos-solady"
-            cmd: "--function testCheck --solver-command yices-smt2 --solver-threads 3"
+            cmd: "--function testCheck --solver-command 'bitwuzla --produce-models' --solver-threads 3"
             branch: ""
             profile: ""
           - repo: "pcaversaccio/snekmate"
