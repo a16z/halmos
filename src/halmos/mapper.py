@@ -274,7 +274,7 @@ class Mapper(metaclass=SingletonMeta):
         # }
 
         for contract_mapping_info in self._contracts.values():
-            # TODO: use regex instaed of `endswith` to better handle immutables or constructors with arguments
+            # TODO: use regex instead of `endswith` to better handle immutables or constructors with arguments
             if contract_mapping_info.bytecode.endswith(bytecode):
                 return contract_mapping_info
 
