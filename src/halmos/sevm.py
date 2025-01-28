@@ -2797,7 +2797,7 @@ class SEVM:
                     ex.path.activate()
 
                 # PathEndingException may not be immediately raised; it could be delayed until it comes out of the worklist
-                # see the assert cheatcode hanlder logic for the delayed case
+                # see the assert cheatcode handler logic for the delayed case
                 if isinstance(ex.context.output.error, PathEndingException):
                     raise ex.context.output.error
 
