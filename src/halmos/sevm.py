@@ -1215,7 +1215,7 @@ class Exec:  # an execution path
         assert_address(addr)
         addr = uint160(addr)
         value = self.select(self.balance, addr, self.balances)
-        # generate emptyness axiom for each array index, instead of using quantified formula
+        # generate emptiness axiom for each array index, instead of using quantified formula
         self.path.append(Select(EMPTY_BALANCE, addr) == ZERO)
         # practical assumption on the max balance per account
         self.path.append(ULT(value, con(2**96)))
@@ -1456,7 +1456,7 @@ class SolidityStorage(Storage):
 
         if size_keys > 0:
             # do not use z3 const array `K(BitVecSort(size_keys), ZERO)` when not ex.symbolic
-            # instead use normal smt array, and generate emptyness axiom; see load()
+            # instead use normal smt array, and generate emptiness axiom; see load()
             storage[slot, num_keys, size_keys] = cls.empty(addr, slot, keys)
             return
 
@@ -1487,7 +1487,7 @@ class SolidityStorage(Storage):
         concat_keys = concat(keys)
 
         if not symbolic:
-            # generate emptyness axiom for each array index, instead of using quantified formula; see init()
+            # generate emptiness axiom for each array index, instead of using quantified formula; see init()
             default_value = Select(cls.empty(addr, slot, keys), concat_keys)
             ex.path.append(default_value == ZERO)
 
@@ -1633,7 +1633,7 @@ class GenericStorage(Storage):
         symbolic = storage.symbolic
 
         if not symbolic:
-            # generate emptyness axiom for each array index, instead of using quantified formula; see init()
+            # generate emptiness axiom for each array index, instead of using quantified formula; see init()
             default_value = Select(cls.empty(addr, loc), loc)
             ex.path.append(default_value == ZERO)
 
@@ -2075,10 +2075,10 @@ class SEVM:
                 )
                 potential_aliases.append((addr, alias_cond))
 
-        emptyness_cond = And([target != addr for addr in ex.code])
-        if ex.check(emptyness_cond) != unsat:
+        emptiness_cond = And([target != addr for addr in ex.code])
+        if ex.check(emptiness_cond) != unsat:
             debug_once(f"Potential empty address: {hexify(target)}")
-            potential_aliases.append((None, emptyness_cond))
+            potential_aliases.append((None, emptiness_cond))
 
         if not potential_aliases:
             raise InfeasiblePath("resolve_address_alias: no potential aliases")
