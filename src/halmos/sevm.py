@@ -492,6 +492,10 @@ class State:
             raise StackUnderflowError()
         return self.stack.pop()
 
+    def popi(self) -> Word:
+        """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
+        return b2i(self.pop())
+
     def peek(self, n: int = 1) -> Word:
         return self.stack[-n]
 
@@ -508,7 +512,7 @@ class State:
         self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
 
     def mloc(self, subst: dict = None, check_size: bool = True) -> int:
-        loc: int = int_of(self.pop(), "symbolic memory offset", subst)
+        loc: int = int_of(self.popi(), "symbolic memory offset", subst)
         if check_size and loc > MAX_MEMORY_SIZE:
             raise OutOfGasError(f"memory {loc=} > MAX_MEMORY_SIZE")
         return loc
@@ -539,7 +543,7 @@ class State:
 
     def ret(self, subst: dict = None) -> ByteVec:
         loc: int = self.mloc(subst)
-        size: int = int_of(self.pop(), "symbolic return data size", subst)
+        size: int = int_of(self.popi(), "symbolic return data size", subst)
 
         return self.mslice(loc, size)
 
@@ -1733,12 +1737,8 @@ def bitwise(op, x: Word, y: Word) -> Word:
             return x ^ y  # bvxor
         else:
             raise ValueError(op, x, y)
-    elif is_bool(x) and is_bv(y):
-        return bitwise(op, If(x, ONE, ZERO), y)
-    elif is_bv(x) and is_bool(y):
-        return bitwise(op, x, If(y, ONE, ZERO))
     else:
-        raise ValueError(op, x, y)
+        return bitwise(op, b2i(x), b2i(y))
 
 
 def b2i(w: Word) -> Word:
@@ -1977,12 +1977,12 @@ class SEVM:
 
         if op == EVM.EXP:
             if is_bv_value(w1) and is_bv_value(w2):
-                i1: int = int(str(w1))  # must be concrete
-                i2: int = int(str(w2))  # must be concrete
-                return con(i1**i2)
+                b: int = int_of(w1, "symbolic base for exp")  # must be concrete
+                e: int = int_of(w2, "symbolic exponent for exp")  # must be concrete
+                return con(b**e)
 
             if is_bv_value(w2):
-                i2: int = int(str(w2))
+                i2: int = int_of(w2, "symbolic exponent for exp")  # must be concrete
                 if i2 == 0:
                     return ONE
 
@@ -2830,15 +2830,19 @@ class SEVM:
                 if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
                         ex.halt(data=ByteVec())
+
                     elif opcode == EVM.INVALID:
                         ex.halt(
                             data=ByteVec(),
                             error=InvalidOpcode(opcode),
                         )
+
                     elif opcode == EVM.REVERT:
                         ex.halt(data=ex.ret(), error=Revert())
+
                     elif opcode == EVM.RETURN:
                         ex.halt(data=ex.ret())
+
                     else:
                         raise ValueError(opcode)
 
@@ -2868,28 +2872,29 @@ class SEVM:
                     ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
 
                 elif opcode == EVM.LT:
-                    w1 = b2i(ex.st.pop())
-                    w2 = b2i(ex.st.pop())
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
                     ex.st.push(ULT(w1, w2))  # bvult
 
                 elif opcode == EVM.GT:
-                    w1 = b2i(ex.st.pop())
-                    w2 = b2i(ex.st.pop())
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
                     ex.st.push(UGT(w1, w2))  # bvugt
 
                 elif opcode == EVM.SLT:
-                    w1 = b2i(ex.st.pop())
-                    w2 = b2i(ex.st.pop())
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
                     ex.st.push(w1 < w2)  # bvslt
 
                 elif opcode == EVM.SGT:
-                    w1 = b2i(ex.st.pop())
-                    w2 = b2i(ex.st.pop())
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
                     ex.st.push(w1 > w2)  # bvsgt
 
                 elif opcode == EVM.EQ:
                     w1 = ex.st.pop()
                     w2 = ex.st.pop()
+
                     if eq(w1.sort(), w2.sort()):
                         ex.st.push(w1 == w2)
                     else:
@@ -2903,6 +2908,7 @@ class SEVM:
                             if not is_bool(w2):
                                 raise ValueError(w2)
                             ex.st.push(w1 == If(w2, ONE, ZERO))
+
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
 
@@ -2910,25 +2916,28 @@ class SEVM:
                     ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
 
                 elif opcode == EVM.NOT:
-                    ex.st.push(~b2i(ex.st.pop()))  # bvnot
+                    ex.st.push(~ex.st.popi())  # bvnot
 
                 elif opcode == EVM.SHL:
-                    w = ex.st.pop()
-                    ex.st.push(b2i(ex.st.pop()) << b2i(w))  # bvshl
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w2 << w1)  # bvshl
 
                 elif opcode == EVM.SAR:
-                    w = ex.st.pop()
-                    ex.st.push(ex.st.pop() >> w)  # bvashr
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w2 >> w1)  # bvashr
 
                 elif opcode == EVM.SHR:
-                    w = ex.st.pop()
-                    ex.st.push(LShR(ex.st.pop(), w))  # bvlshr
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(LShR(w2, w1))  # bvlshr
 
                 elif opcode == EVM.SIGNEXTEND:
-                    w = ex.int_of(ex.st.pop(), "symbolic SIGNEXTEND size")
+                    w = ex.int_of(ex.st.popi(), "symbolic SIGNEXTEND size")
                     if w <= 30:  # if w == 31, result is SignExt(0, value) == value
                         bl = (w + 1) * 8
-                        ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.pop())))
+                        ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.popi())))
 
                 elif opcode == EVM.CALLDATALOAD:
                     self.calldataload(ex, stack, step_id)
