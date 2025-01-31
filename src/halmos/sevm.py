@@ -29,6 +29,7 @@ from z3 import (
     ArrayRef,
     BitVec,
     BitVecRef,
+    BoolRef,
     BoolVal,
     CheckSatResult,
     Concat,
@@ -1741,15 +1742,19 @@ def bitwise(op, x: Word, y: Word) -> Word:
         return bitwise(op, b2i(x), b2i(y))
 
 
-def b2i(w: Word) -> Word:
+def b2i(w: BitVecRef | BoolRef) -> BitVecRef:
+    """
+    Convert a boolean or bitvector to a bitvector.
+    """
     if is_true(w):
         return ONE
     if is_false(w):
         return ZERO
     if is_bool(w):
         return If(w, ONE, ZERO)
-    else:
+    if is_bv(w):
         return w
+    raise ValueError(w)
 
 
 def is_power_of_two(x: int) -> bool:
