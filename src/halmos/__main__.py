@@ -20,9 +20,9 @@ from importlib import metadata
 
 from z3 import (
     BitVec,
+    eq,
     set_option,
     unsat,
-    eq,
 )
 
 from .build import (
@@ -34,9 +34,9 @@ from .build import (
 )
 from .bytevec import ByteVec
 from .calldata import FunctionInfo, get_abi, mk_calldata
+from .cheatcodes import snapshot_state
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
-from .cheatcodes import snapshot_state
 from .constants import (
     VERBOSITY_TRACE_CONSTRUCTOR,
     VERBOSITY_TRACE_COUNTEREXAMPLE,
@@ -397,7 +397,6 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 
 def run_invariant(test_ctx):
-
     # check invariant against setup state
     test_result = run_test(test_ctx)
     if test_result.exitcode != Exitcode.PASS.value:
@@ -415,7 +414,6 @@ def run_invariant(test_ctx):
 
 
 def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
-
     results = []
 
     for pre_ex in pre_exs:
@@ -451,7 +449,7 @@ def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
                 test_result = run_test(new_test_ctx)
 
                 if test_result.exitcode != Exitcode.PASS.value:
-                    print(f"Path:")
+                    print("Path:")
                     print(indent_text(hexify(post_ex.path)))
 
                     print("\nTrace:")
@@ -465,16 +463,15 @@ def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
 
 
 def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
-
     code = ex.code[addr]
     contract_name = code.contract_name
     filename = code.filename
 
     if not contract_name:
-    #   if eq(addr, con_addr(FOUNDRY_TEST)):
-    #       debug_once(
-    #           f"{self.fun_info.sig}: couldn't find the contract name for: {hexify(selector)}"
-    #       )
+        # if eq(addr, con_addr(FOUNDRY_TEST)):
+        #     debug_once(
+        #         f"{self.fun_info.sig}: couldn't find the contract name for: {hexify(selector)}"
+        #     )
         return
 
     contract_json = BuildOut().get_by_name(contract_name, filename)
@@ -494,14 +491,16 @@ def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
         path.extend_path(ex.path)
 
         # todo: mk_calldata with symbol name uniqueness
-        cd, dyn_params = mk_calldata(abi, fun_info, args, new_symbol_id=ex.new_symbol_id)
+        cd, dyn_params = mk_calldata(
+            abi, fun_info, args, new_symbol_id=ex.new_symbol_id
+        )
         path.process_dyn_params(dyn_params)
 
         message = Message(
             target=addr,
             caller=ex.this(),
             origin=ex.origin(),
-            value=0, # todo: symbolic value
+            value=0,  # todo: symbolic value
             data=cd,
             call_scheme=EVM.CALL,
         )
@@ -1076,7 +1075,11 @@ def _main(_args=None) -> MainResult:
             continue
 
         methodIdentifiers = contract_json["methodIdentifiers"]
-        funsigs = [f for f in methodIdentifiers if re.search(test_regex(args), f) or re.search(r"^invariant_", f)]
+        funsigs = [
+            f
+            for f in methodIdentifiers
+            if re.search(test_regex(args), f) or re.search(r"^invariant_", f)
+        ]
         num_found = len(funsigs)
 
         if num_found == 0:

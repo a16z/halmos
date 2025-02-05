@@ -20,7 +20,7 @@ from halmos.processes import (
     TimeoutExpired,
 )
 from halmos.sevm import Exec, SMTQuery
-from halmos.utils import hexify, Address
+from halmos.utils import Address, hexify
 
 
 @dataclass
