@@ -441,9 +441,6 @@ def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
                     solver=mk_solver(test_ctx.args),
                     contract_ctx=test_ctx.contract_ctx,
                     setup_ex=post_ex,
-                    target=test_ctx.target,
-                    caller=test_ctx.caller,
-                    origin=test_ctx.origin,
                 )
 
                 test_result = run_test(new_test_ctx)
@@ -560,9 +557,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path.process_dyn_params(dyn_params)
 
     message = Message(
-        target=ctx.target,
-        caller=ctx.caller,
-        origin=ctx.origin,
+        target=setup_ex.this(),
+        caller=setup_ex.caller(),
+        origin=setup_ex.origin(),
         value=0,
         data=cd,
         call_scheme=EVM.CALL,
@@ -587,7 +584,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             context=CallContext(message=message),
             callback=None,
             #
-            pgm=setup_ex.code[ctx.target],
+            pgm=setup_ex.code[setup_ex.this()],
             pc=0,
             st=State(),
             jumpis={},
@@ -914,9 +911,6 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
                 solver=solver,
                 contract_ctx=ctx,
                 setup_ex=setup_ex,
-                target=setup_ex.this(),
-                caller=setup_ex.caller(),
-                origin=setup_ex.origin(),
             )
 
             if funsig.startswith("invariant_"):

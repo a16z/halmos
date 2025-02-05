@@ -118,10 +118,6 @@ class FunctionContext:
     # optional starting state
     setup_ex: Exec | None = None
 
-    target: Address | None = None
-    caller: Address | None = None
-    origin: Address | None = None
-
     # function-level solving context
     # the FunctionContext initializes and owns the SolvingContext
     solving_ctx: SolvingContext = field(init=False)
