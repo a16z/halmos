@@ -396,25 +396,29 @@ def is_global_fail_set(context: CallContext) -> bool:
     return hevm_fail or any(is_global_fail_set(x) for x in context.subcalls())
 
 
-def run_invariant(test_ctx):
-    # check invariant against setup state
-    test_result = run_test(test_ctx)
-    if test_result.exitcode != Exitcode.PASS.value:
-        return test_result
+def run_invariant_tests(ctx, setup_ex):
+    test_results = run_tests(ctx, setup_ex, ctx.invariant_funsigs, terminal = False)
 
-    exs = [test_ctx.setup_ex]
+    test_results_map = {r.name: r for r in test_results if r.exitcode != 0}
 
-    for _ in range(test_ctx.args.inv_depth):
-        test_result, exs = run_invariant_single(test_ctx, exs)
+    funsigs = [r.name for r in test_results if r.exitcode == 0]
 
-        if test_result:
-            return test_result
+    if not funsigs:
+        return test_results_map.values()
 
-    return TestResult(test_ctx.info.sig, 0, 0)
+    exs = [setup_ex]
+
+    depth = 0
+    while True:
+        exs, funsigs = run_invariant_single(ctx, exs, funsigs, test_results_map, depth)
+        depth += 1
+
+        if not exs or not funsigs:
+            return test_results_map.values()
 
 
-def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
-    results = []
+def run_invariant_single(ctx, pre_exs, funsigs, test_results_map, depth) -> list[Exec]:
+    next_exs = []
 
     for pre_ex in pre_exs:
         pre_id = snapshot_state(pre_ex, None, None, None, None)
@@ -423,7 +427,7 @@ def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
             if eq(addr, con_addr(FOUNDRY_TEST)):
                 continue
 
-            post_exs = run_target_contract(test_ctx, pre_ex, addr)
+            post_exs = run_target_contract(ctx, pre_ex, addr)
 
             for post_ex in post_exs:
                 output = post_ex.context.output
@@ -435,31 +439,29 @@ def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
                 if pre_id == snapshot_state(post_ex, None, None, None, None):
                     continue
 
-                new_test_ctx = FunctionContext(
-                    args=test_ctx.args,
-                    info=test_ctx.info,
-                    solver=mk_solver(test_ctx.args),
-                    contract_ctx=test_ctx.contract_ctx,
-                    setup_ex=post_ex,
-                )
+                test_results = run_tests(ctx, post_ex, funsigs, depth, terminal = False)
+                for test_result in test_results:
+                    test_results_map[test_result.name] = test_result
 
-                test_result = run_test(new_test_ctx)
+                failed = [r for r in test_results if r.exitcode != Exitcode.PASS.value]
+                funsigs = [r.name for r in test_results if r.exitcode == Exitcode.PASS.value]
 
-                if test_result.exitcode != Exitcode.PASS.value:
+                if failed:
                     print("Path:")
                     print(indent_text(hexify(post_ex.path)))
 
                     print("\nTrace:")
                     render_trace(post_ex.context)
 
-                    return test_result, None
+                if not funsigs:
+                    return next_exs, funsigs
 
-                results.append(post_ex)
+                next_exs.append(post_ex)
 
-    return None, results
+    return next_exs, funsigs
 
 
-def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
+def run_target_contract(ctx, ex, addr) -> list[Exec]:
     code = ex.code[addr]
     contract_name = code.contract_name
     filename = code.filename
@@ -481,7 +483,7 @@ def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
         fun_name = fun_sig.split("(")[0]
         fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
 
-        args = test_ctx.args
+        args = ctx.args
 
         sevm = SEVM(args, fun_info)
         path = Path(mk_solver(args))
@@ -537,7 +539,7 @@ def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
     return results
 
 
-def run_test(ctx: FunctionContext) -> TestResult:
+def run_test(ctx: FunctionContext, terminal=True) -> TestResult:
     args = ctx.args
     fun_info = ctx.info
     funname, funsig = fun_info.name, fun_info.sig
@@ -811,10 +813,11 @@ def run_test(ctx: FunctionContext) -> TestResult:
     time_info = timer.report(include_subtimers=args.statistics)
 
     # print test result
-    print(
-        f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
-        f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
-    )
+    if terminal or exitcode != Exitcode.PASS.value:
+        print(
+            f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
+            f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
+        )
 
     for path_id, _, err in stuck:
         warn_code(INTERNAL_ERROR, f"Encountered {err}")
@@ -897,13 +900,33 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
         return []
 
     test_results = []
-    for funsig in ctx.funsigs:
+
+    if ctx.funsigs:
+        test_results.extend(run_tests(ctx, setup_ex, ctx.funsigs))
+
+    if ctx.invariant_funsigs:
+        test_results.extend(run_invariant_tests(ctx, setup_ex))
+
+    # reset any remaining solver states from the default context
+    setup_solver.reset()
+
+    return test_results
+
+
+def run_tests(ctx: ContractContext, setup_ex: Exec, funsigs: list, depth: int = 0, terminal: bool = True) -> list[TestResult]:
+    args = ctx.args
+
+    test_results = []
+    for funsig in funsigs:
         selector = ctx.method_identifiers[funsig]
         fun_info = FunctionInfo(funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
             solver = mk_solver(test_config)
             debug(f"{test_config.formatted_layers()}")
+
+            if depth >= test_config.inv_depth:
+                continue
 
             test_ctx = FunctionContext(
                 args=test_config,
@@ -913,10 +936,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
                 setup_ex=setup_ex,
             )
 
-            if funsig.startswith("invariant_"):
-                test_result = run_invariant(test_ctx)
-            else:
-                test_result = run_test(test_ctx)
+            test_result = run_test(test_ctx, terminal or depth + 1 == test_config.inv_depth)
         except Exception as err:
             print(f"{color_error('[ERROR]')} {funsig}")
             error(f"{type(err).__name__}: {err}")
@@ -929,9 +949,6 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
             solver.reset()
 
         test_results.append(test_result)
-
-    # reset any remaining solver states from the default context
-    setup_solver.reset()
 
     return test_results
 
@@ -1069,12 +1086,9 @@ def _main(_args=None) -> MainResult:
             continue
 
         methodIdentifiers = contract_json["methodIdentifiers"]
-        funsigs = [
-            f
-            for f in methodIdentifiers
-            if re.search(test_regex(args), f) or re.search(r"^invariant_", f)
-        ]
-        num_found = len(funsigs)
+        funsigs = [f for f in methodIdentifiers if re.search(test_regex(args), f)]
+        inv_funsigs = [f for f in methodIdentifiers if re.search(r"^invariant_", f)]
+        num_found = len(funsigs) + len(inv_funsigs)
 
         if num_found == 0:
             continue
@@ -1099,6 +1113,7 @@ def _main(_args=None) -> MainResult:
             args=contract_args,
             name=contract_name,
             funsigs=funsigs,
+            invariant_funsigs=inv_funsigs,
             creation_hexcode=creation_hexcode,
             deployed_hexcode=deployed_hexcode,
             abi=abi,

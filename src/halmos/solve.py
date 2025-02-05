@@ -75,6 +75,7 @@ class ContractContext:
 
     # signatures of test functions to run
     funsigs: list[str]
+    invariant_funsigs: list[str]
 
     # data parsed from the build output for this contract
     creation_hexcode: str
