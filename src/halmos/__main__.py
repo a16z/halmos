@@ -22,6 +22,7 @@ from z3 import (
     BitVec,
     set_option,
     unsat,
+    eq,
 )
 
 from .build import (
@@ -35,6 +36,7 @@ from .bytevec import ByteVec
 from .calldata import FunctionInfo, get_abi, mk_calldata
 from .config import Config as HalmosConfig
 from .config import arg_parser, default_config, resolve_config_files, toml_parser
+from .cheatcodes import snapshot_state
 from .constants import (
     VERBOSITY_TRACE_CONSTRUCTOR,
     VERBOSITY_TRACE_COUNTEREXAMPLE,
@@ -394,6 +396,96 @@ def is_global_fail_set(context: CallContext) -> bool:
     return hevm_fail or any(is_global_fail_set(x) for x in context.subcalls())
 
 
+
+
+def run_invariant(test_ctx):
+
+    test_result = run_test(test_ctx) # check invariant against setup state
+    if test_result.exitcode != Exitcode.PASS.value:
+        return test_result
+
+    curr = [test_ctx.setup_ex]
+
+    for i in range(2):
+        test_result, curr = run_invariant_single(test_ctx, curr)
+        if test_result.exitcode != Exitcode.PASS.value:
+            return test_result
+
+    return test_result
+
+def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
+
+    next_exs = []
+
+    for pre_ex in pre_exs:
+        pre_id = snapshot_state(pre_ex, None, None, None, None)
+
+        for addr in pre_ex.code:
+            if eq(addr, con_addr(FOUNDRY_TEST)):
+                continue
+
+            post_exs = run_target_contract(test_ctx, pre_ex, addr)
+
+            # remove non-updated states; in more general, remove visited states
+            # todo: check path feasibility
+            post_exs = filter(lambda post_ex: post_ex.output.data is not None and post_ex.output.error is None and pre_id != snapshot_state(post_ex, None, None, None, None), post_exs)
+
+            for post_ex in post_exs:
+                new_test_ctx = FunctionContext(
+                    args=test_ctx.args,
+                    info=test_ctx.fun_info,
+                    solver=mk_solver(test_ctx.args),
+                    contract_ctx=test_ctx.contract_ctx,
+                    setup_ex=post_ex,
+                )
+
+                test_result = run_test(new_test_ctx)
+                if test_result.exitcode != Exitcode.PASS.value:
+                    return test_result, next_exs
+                next_exs.append(post_ex)
+
+    return test_result, next_exs
+
+
+def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
+
+    code = ex.code[addr]
+    contract_name = code.contract_name
+    filename = code.filename
+
+    if not contract_name:
+    #   if eq(addr, con_addr(FOUNDRY_TEST)):
+    #       debug_once(
+    #           f"{self.fun_info.sig}: couldn't find the contract name for: {hexify(selector)}"
+    #       )
+        return
+
+    contract_json = BuildOut().get_by_name(contract_name, filename)
+    abi = get_abi(contract_json)
+    method_identifiers = contract_json["methodIdentifiers"]
+
+    results = []
+
+    for fun_sig, fun_selector in method_identifiers.items():
+        fun_name = fun_sig.split("(")[0]
+        fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
+
+        new_test_ctx = FunctionContext(
+            args=test_ctx.args,
+            info=fun_info,
+            solver=mk_solver(test_ctx.args),
+            contract_ctx=test_ctx.contract_ctx,
+            setup_ex=ex,
+        )
+
+        # todo: mk_calldata with symbol name uniqueness
+        test_result = run_test(new_test_ctx)
+
+        results.extend(new_test_ctx.exec_cache.values())
+
+    return results
+
+
 def run_test(ctx: FunctionContext) -> TestResult:
     args = ctx.args
     fun_info = ctx.info
@@ -528,7 +620,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             break
 
         # cache exec in case we need to print it later
-        if args.print_failed_states:
+        if True or args.print_failed_states:
             ctx.exec_cache[path_id] = ex
 
         if args.verbose >= VERBOSITY_TRACE_PATHS:
@@ -770,7 +862,10 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
                 setup_ex=setup_ex,
             )
 
-            test_result = run_test(test_ctx)
+            if funsig.startswith("invariant_"):
+                test_result = run_invariant(test_ctx)
+            else:
+                test_result = run_test(test_ctx)
         except Exception as err:
             print(f"{color_error('[ERROR]')} {funsig}")
             error(f"{type(err).__name__}: {err}")
@@ -923,7 +1018,7 @@ def _main(_args=None) -> MainResult:
             continue
 
         methodIdentifiers = contract_json["methodIdentifiers"]
-        funsigs = [f for f in methodIdentifiers if re.search(test_regex(args), f)]
+        funsigs = [f for f in methodIdentifiers if re.search(test_regex(args), f) or re.search(r"^invariant_", f)]
         num_found = len(funsigs)
 
         if num_found == 0:
