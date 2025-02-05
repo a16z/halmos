@@ -248,6 +248,12 @@ class Config:
         action=ParseErrorCodes,
     )
 
+    inv_depth: int = arg(
+        help="set depth for invariant testing",
+        global_default=2,
+        metavar="MAX_BOUND",
+    )
+
     loop: int = arg(
         help="set loop unrolling bounds",
         global_default=2,

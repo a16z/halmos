@@ -19,9 +19,12 @@ contract InvariantTest is Test {
         c = new C();
     }
 
-    function invariant_max() public {
+    function invariant_1() public {
         console.log(c.num());
         assertLe(c.num(), 4);
-    //  assert(c.num() != 3);
+    }
+
+    function invariant_2() public {
+        assert(c.num() != 3);
     }
 }

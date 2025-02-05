@@ -806,7 +806,7 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-#               if self.conditions[cond] and not is_true(cond)
+                if self.conditions[cond] and not is_true(cond)
             ]
         )
 
@@ -2786,9 +2786,6 @@ class SEVM:
                 ex: Exec = item.ex
                 prev_step_id: int = item.step
                 step_id += 1
-
-#               print(f"{step_id=}")
-#               print(ex)
 
                 # display progress
                 if not self.options.no_status and step_id % PULSE_INTERVAL == 0:

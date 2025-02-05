@@ -396,75 +396,47 @@ def is_global_fail_set(context: CallContext) -> bool:
     return hevm_fail or any(is_global_fail_set(x) for x in context.subcalls())
 
 
-
-
 def run_invariant(test_ctx):
 
-#   print(test_ctx.setup_ex)
-
-    print("check base case")
-
-    test_result = run_test(test_ctx) # check invariant against setup state
+    # check invariant against setup state
+    test_result = run_test(test_ctx)
     if test_result.exitcode != Exitcode.PASS.value:
         return test_result
 
-#   print(test_ctx.setup_ex)
+    exs = [test_ctx.setup_ex]
 
-    curr = [test_ctx.setup_ex]
-
-    for i in range(2):
-        print(f"check step {i}")
-
-        test_result, curr = run_invariant_single(test_ctx, curr)
-#       print("done")
-
-#       for ee in curr:
-#           print(ee)
+    for _ in range(test_ctx.args.inv_depth):
+        test_result, exs = run_invariant_single(test_ctx, exs)
 
         if test_result:
             return test_result
 
     return TestResult(test_ctx.info.sig, 0, 0)
 
+
 def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
 
-    next_exs = []
+    results = []
 
     for pre_ex in pre_exs:
         pre_id = snapshot_state(pre_ex, None, None, None, None)
-#       print(f"{pre_id=}")
 
         for addr in pre_ex.code:
-#           print(f"{addr=}")
-
             if eq(addr, con_addr(FOUNDRY_TEST)):
                 continue
 
-            print(f"run_target_contract: {hexify(addr)}")
             post_exs = run_target_contract(test_ctx, pre_ex, addr)
-            print(f"# output states: {len(post_exs)}")
-
-
-#           print("----")
-#           for ee in post_exs:
-#               print(ee)
-#           print("----")
-
-
-            # remove non-updated states; in more general, remove visited states
-            # todo: check path feasibility
-            post_exs = list(filter(lambda post_ex: post_ex.context.output.data is not None and post_ex.context.output.error is None and pre_id != snapshot_state(post_ex, None, None, None, None), post_exs))
-            print(f"# filtered states: {len(post_exs)}")
-
-#           print("done filter")
-
-#           print("---- 2")
-            for ee in post_exs:
-                print(ee)
-#           print("---- 2")
-#           print(len(post_exs))
 
             for post_ex in post_exs:
+                output = post_ex.context.output
+                if output.data is None or output.error is not None:
+                    continue
+
+                # remove non-updated states; in more general, remove visited states
+                # todo: check path feasibility
+                if pre_id == snapshot_state(post_ex, None, None, None, None):
+                    continue
+
                 new_test_ctx = FunctionContext(
                     args=test_ctx.args,
                     info=test_ctx.info,
@@ -476,17 +448,20 @@ def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
                     origin=test_ctx.origin,
                 )
 
-                print(f"check")
                 test_result = run_test(new_test_ctx)
-#               print(f"xx {test_result=}")
-#               print(post_ex)
 
                 if test_result.exitcode != Exitcode.PASS.value:
-                    render_trace(post_ex.context)
-                    return test_result, None
-                next_exs.append(post_ex)
+                    print(f"Path:")
+                    print(indent_text(hexify(post_ex.path)))
 
-    return None, next_exs
+                    print("\nTrace:")
+                    render_trace(post_ex.context)
+
+                    return test_result, None
+
+                results.append(post_ex)
+
+    return None, results
 
 
 def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
@@ -563,8 +538,6 @@ def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
             post_ex.context.trace.append(subcall)
             results.append(post_ex)
 
-    #   results.extend(list(exs))
-
     return results
 
 
@@ -595,8 +568,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
         data=cd,
         call_scheme=EVM.CALL,
     )
-
-#   print(hexify(message))
 
     #
     # run
@@ -697,9 +668,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path_id = 0  # default value in case we don't enter the loop body
     submitted_futures = []
     for path_id, ex in enumerate(exs):
-#       print(f"run_test result {path_id=}")
-#       print(ex)
-
         # check if early exit is triggered
         if ctx.solving_ctx.executor.is_shutdown():
             if args.debug:
