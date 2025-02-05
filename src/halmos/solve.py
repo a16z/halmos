@@ -20,7 +20,7 @@ from halmos.processes import (
     TimeoutExpired,
 )
 from halmos.sevm import Exec, SMTQuery
-from halmos.utils import hexify
+from halmos.utils import hexify, Address
 
 
 @dataclass
@@ -117,6 +117,10 @@ class FunctionContext:
 
     # optional starting state
     setup_ex: Exec | None = None
+
+    target: Address | None = None
+    caller: Address | None = None
+    origin: Address | None = None
 
     # function-level solving context
     # the FunctionContext initializes and owns the SolvingContext

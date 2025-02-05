@@ -400,18 +400,31 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 def run_invariant(test_ctx):
 
+#   print(test_ctx.setup_ex)
+
+    print("check base case")
+
     test_result = run_test(test_ctx) # check invariant against setup state
     if test_result.exitcode != Exitcode.PASS.value:
         return test_result
 
+#   print(test_ctx.setup_ex)
+
     curr = [test_ctx.setup_ex]
 
     for i in range(2):
+        print(f"check step {i}")
+
         test_result, curr = run_invariant_single(test_ctx, curr)
-        if test_result.exitcode != Exitcode.PASS.value:
+#       print("done")
+
+#       for ee in curr:
+#           print(ee)
+
+        if test_result:
             return test_result
 
-    return test_result
+    return TestResult(test_ctx.info.sig, 0, 0)
 
 def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
 
@@ -419,32 +432,61 @@ def run_invariant_single(test_ctx, pre_exs) -> list[Exec]:
 
     for pre_ex in pre_exs:
         pre_id = snapshot_state(pre_ex, None, None, None, None)
+#       print(f"{pre_id=}")
 
         for addr in pre_ex.code:
+#           print(f"{addr=}")
+
             if eq(addr, con_addr(FOUNDRY_TEST)):
                 continue
 
+            print(f"run_target_contract: {hexify(addr)}")
             post_exs = run_target_contract(test_ctx, pre_ex, addr)
+            print(f"# output states: {len(post_exs)}")
+
+
+#           print("----")
+#           for ee in post_exs:
+#               print(ee)
+#           print("----")
+
 
             # remove non-updated states; in more general, remove visited states
             # todo: check path feasibility
-            post_exs = filter(lambda post_ex: post_ex.output.data is not None and post_ex.output.error is None and pre_id != snapshot_state(post_ex, None, None, None, None), post_exs)
+            post_exs = list(filter(lambda post_ex: post_ex.context.output.data is not None and post_ex.context.output.error is None and pre_id != snapshot_state(post_ex, None, None, None, None), post_exs))
+            print(f"# filtered states: {len(post_exs)}")
+
+#           print("done filter")
+
+#           print("---- 2")
+            for ee in post_exs:
+                print(ee)
+#           print("---- 2")
+#           print(len(post_exs))
 
             for post_ex in post_exs:
                 new_test_ctx = FunctionContext(
                     args=test_ctx.args,
-                    info=test_ctx.fun_info,
+                    info=test_ctx.info,
                     solver=mk_solver(test_ctx.args),
                     contract_ctx=test_ctx.contract_ctx,
                     setup_ex=post_ex,
+                    target=test_ctx.target,
+                    caller=test_ctx.caller,
+                    origin=test_ctx.origin,
                 )
 
+                print(f"check")
                 test_result = run_test(new_test_ctx)
+#               print(f"xx {test_result=}")
+#               print(post_ex)
+
                 if test_result.exitcode != Exitcode.PASS.value:
-                    return test_result, next_exs
+                    render_trace(post_ex.context)
+                    return test_result, None
                 next_exs.append(post_ex)
 
-    return test_result, next_exs
+    return None, next_exs
 
 
 def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
@@ -470,18 +512,58 @@ def run_target_contract(test_ctx, ex, addr) -> list[Exec]:
         fun_name = fun_sig.split("(")[0]
         fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
 
-        new_test_ctx = FunctionContext(
-            args=test_ctx.args,
-            info=fun_info,
-            solver=mk_solver(test_ctx.args),
-            contract_ctx=test_ctx.contract_ctx,
-            setup_ex=ex,
-        )
+        args = test_ctx.args
+
+        sevm = SEVM(args, fun_info)
+        path = Path(mk_solver(args))
+        path.extend_path(ex.path)
 
         # todo: mk_calldata with symbol name uniqueness
-        test_result = run_test(new_test_ctx)
+        cd, dyn_params = mk_calldata(abi, fun_info, args, new_symbol_id=ex.new_symbol_id)
+        path.process_dyn_params(dyn_params)
 
-        results.extend(new_test_ctx.exec_cache.values())
+        message = Message(
+            target=addr,
+            caller=ex.this(),
+            origin=ex.origin(),
+            value=0, # todo: symbolic value
+            data=cd,
+            call_scheme=EVM.CALL,
+        )
+
+        exs = sevm.run(
+            Exec(
+                code=ex.code.copy(),  # shallow copy
+                storage=deepcopy(ex.storage),
+                balance=ex.balance,
+                #
+                block=deepcopy(ex.block),
+                #
+                context=CallContext(message=message),
+                callback=None,
+                #
+                pgm=ex.code[addr],
+                pc=0,
+                st=State(),
+                jumpis={},
+                #
+                path=path,
+                alias=ex.alias.copy(),
+                #
+                cnts=deepcopy(ex.cnts),
+                sha3s=ex.sha3s.copy(),
+                storages=ex.storages.copy(),
+                balances=ex.balances.copy(),
+            )
+        )
+
+        for post_ex in exs:
+            subcall = post_ex.context
+            post_ex.context = deepcopy(ex.context)
+            post_ex.context.trace.append(subcall)
+            results.append(post_ex)
+
+    #   results.extend(list(exs))
 
     return results
 
@@ -506,13 +588,15 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path.process_dyn_params(dyn_params)
 
     message = Message(
-        target=setup_ex.this(),
-        caller=setup_ex.caller(),
-        origin=setup_ex.origin(),
+        target=ctx.target,
+        caller=ctx.caller,
+        origin=ctx.origin,
         value=0,
         data=cd,
         call_scheme=EVM.CALL,
     )
+
+#   print(hexify(message))
 
     #
     # run
@@ -533,7 +617,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             context=CallContext(message=message),
             callback=None,
             #
-            pgm=setup_ex.code[setup_ex.this()],
+            pgm=setup_ex.code[ctx.target],
             pc=0,
             st=State(),
             jumpis={},
@@ -613,6 +697,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path_id = 0  # default value in case we don't enter the loop body
     submitted_futures = []
     for path_id, ex in enumerate(exs):
+#       print(f"run_test result {path_id=}")
+#       print(ex)
+
         # check if early exit is triggered
         if ctx.solving_ctx.executor.is_shutdown():
             if args.debug:
@@ -620,7 +707,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             break
 
         # cache exec in case we need to print it later
-        if True or args.print_failed_states:
+        if args.print_failed_states:
             ctx.exec_cache[path_id] = ex
 
         if args.verbose >= VERBOSITY_TRACE_PATHS:
@@ -860,6 +947,9 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
                 solver=solver,
                 contract_ctx=ctx,
                 setup_ex=setup_ex,
+                target=setup_ex.this(),
+                caller=setup_ex.caller(),
+                origin=setup_ex.origin(),
             )
 
             if funsig.startswith("invariant_"):

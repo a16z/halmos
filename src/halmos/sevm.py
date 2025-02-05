@@ -806,7 +806,7 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-                if self.conditions[cond] and not is_true(cond)
+#               if self.conditions[cond] and not is_true(cond)
             ]
         )
 
@@ -929,6 +929,9 @@ class StorageData:
     def __init__(self):
         self.symbolic = False
         self._mapping = {}
+
+    def __str__(self):
+        return f"{self._mapping}"
 
     def __getitem__(self, key) -> ArrayRef | BitVecRef:
         return self._mapping[key]
@@ -2783,6 +2786,9 @@ class SEVM:
                 ex: Exec = item.ex
                 prev_step_id: int = item.step
                 step_id += 1
+
+#               print(f"{step_id=}")
+#               print(ex)
 
                 # display progress
                 if not self.options.no_status and step_id % PULSE_INTERVAL == 0:
