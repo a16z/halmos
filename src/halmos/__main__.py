@@ -415,7 +415,9 @@ def run_invariant_tests(ctx, setup_ex):
     depth = 0
     while True:
         depth += 1
-        exs, funsigs = run_invariant_single(ctx, exs, funsigs, test_results_map, depth)
+        exs, funsigs = run_single_invariant_step(
+            ctx, exs, funsigs, test_results_map, depth
+        )
 
         if not exs or not funsigs:
             break
@@ -430,7 +432,12 @@ def run_invariant_tests(ctx, setup_ex):
     return test_results
 
 
-def run_invariant_single(ctx, pre_exs, funsigs, test_results_map, depth) -> list[Exec]:
+# call every contract (except the test contract itself) with each pre-state,
+# and check all invariants for each post-state.
+# return all post-states, and invariants that haven't failed.
+def run_single_invariant_step(
+    ctx, pre_exs, funsigs, test_results_map, depth
+) -> list[Exec]:
     next_exs = []
 
     for pre_ex in pre_exs:
@@ -461,8 +468,7 @@ def run_invariant_single(ctx, pre_exs, funsigs, test_results_map, depth) -> list
                 test_results = run_tests(ctx, post_ex, funsigs, depth, terminal=False)
 
                 # update the accumulated results
-                for test_result in test_results:
-                    test_results_map[test_result.name] = test_result
+                test_results_map.update({r.name: r for r in test_results})
 
                 failed = [r for r in test_results if r.exitcode != Exitcode.PASS.value]
                 funsigs = [
@@ -486,6 +492,8 @@ def run_invariant_single(ctx, pre_exs, funsigs, test_results_map, depth) -> list
     return next_exs, funsigs
 
 
+# run the given contract `addr` from the given input state `ex`
+# return all output states.
 def run_target_contract(ctx, ex, addr) -> list[Exec]:
     # todo: factor out common logic with run_test
 
@@ -942,6 +950,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
     return test_results
 
 
+# todo: create a new context, say TestsContext, and put arguments in it
 def run_tests(
     ctx: ContractContext,
     setup_ex: Exec,
