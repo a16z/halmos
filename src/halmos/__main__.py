@@ -396,6 +396,8 @@ def is_global_fail_set(context: CallContext) -> bool:
     return hevm_fail or any(is_global_fail_set(x) for x in context.subcalls())
 
 
+# execute invariant test functions in multiple depths
+# reuse states at each depth for all invariant functions
 def run_invariant_tests(ctx, setup_ex):
     # check all invariants against the setup state
     test_results = run_tests(ctx, setup_ex, ctx.invariant_funsigs, terminal=False)
@@ -418,6 +420,8 @@ def run_invariant_tests(ctx, setup_ex):
         exs, funsigs = run_single_invariant_step(
             ctx, exs, funsigs, test_results_map, depth
         )
+
+        # todo: merge, simplify, or prioritize exs to mitigate path explosion
 
         if not exs or not funsigs:
             break
@@ -454,6 +458,7 @@ def run_single_invariant_step(
 
             for post_ex in post_exs:
                 # skip failed path
+                # todo: handle error paths
                 output = post_ex.context.output
                 if output.data is None or output.error is not None:
                     continue
@@ -487,6 +492,7 @@ def run_single_invariant_step(
                 if not funsigs:
                     return next_exs, funsigs
 
+                # note: any state changes made during invariant checking are excluded, to reduce path condition complexity
                 next_exs.append(post_ex)
 
     return next_exs, funsigs
