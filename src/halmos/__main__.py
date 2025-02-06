@@ -431,7 +431,7 @@ def run_invariant_tests(ctx, setup_ex):
     # print successful tests; failed tests have already been displayed
     for r in test_results:
         if r.exitcode == 0:
-            print(f"{green("[PASS]")} {r.name}")
+            print(f"{green('[PASS]')} {r.name}")
 
     return test_results
 
