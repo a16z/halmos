@@ -33,6 +33,11 @@ contract SimpleStateTest is SymTest, Test {
         target = new SimpleState();
     }
 
+    /// @custom:halmos --inv-depth 10
+    function invariant_buggy() public {
+        assertFalse(target.buggy());
+    }
+
     function check_buggy_excluding_view() public {
         bool success;
 
