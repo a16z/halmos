@@ -397,12 +397,16 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 
 def run_invariant_tests(ctx, setup_ex):
-    test_results = run_tests(ctx, setup_ex, ctx.invariant_funsigs, terminal = False)
+    # check all invariants against the setup state
+    test_results = run_tests(ctx, setup_ex, ctx.invariant_funsigs, terminal=False)
 
+    # accumulated test results; to be updated later
     test_results_map = {r.name: r for r in test_results if r.exitcode != 0}
 
+    # invariant tests that have not failed yet
     funsigs = [r.name for r in test_results if r.exitcode == 0]
 
+    # if no more invariant tests to run, stop
     if not funsigs:
         return test_results_map.values()
 
@@ -410,42 +414,62 @@ def run_invariant_tests(ctx, setup_ex):
 
     depth = 0
     while True:
-        exs, funsigs = run_invariant_single(ctx, exs, funsigs, test_results_map, depth)
         depth += 1
+        exs, funsigs = run_invariant_single(ctx, exs, funsigs, test_results_map, depth)
 
         if not exs or not funsigs:
-            return test_results_map.values()
+            break
+
+    test_results = test_results_map.values()
+
+    # print successful tests; failed tests have already been displayed
+    for r in test_results:
+        if r.exitcode == 0:
+            print(f"{green("[PASS]")} {r.name}")
+
+    return test_results
 
 
 def run_invariant_single(ctx, pre_exs, funsigs, test_results_map, depth) -> list[Exec]:
     next_exs = []
 
     for pre_ex in pre_exs:
+        # todo: remove extra parameters
         pre_id = snapshot_state(pre_ex, None, None, None, None)
 
         for addr in pre_ex.code:
+            # skip the test contract
             if eq(addr, con_addr(FOUNDRY_TEST)):
                 continue
 
+            # execute the target contract
             post_exs = run_target_contract(ctx, pre_ex, addr)
 
             for post_ex in post_exs:
+                # skip failed path
                 output = post_ex.context.output
                 if output.data is None or output.error is not None:
                     continue
 
-                # remove non-updated states; in more general, remove visited states
+                # remove states that haven't changed
+                # todo: remove already visited states
                 # todo: check path feasibility
                 if pre_id == snapshot_state(post_ex, None, None, None, None):
                     continue
 
-                test_results = run_tests(ctx, post_ex, funsigs, depth, terminal = False)
+                # check all invariants against the current state
+                test_results = run_tests(ctx, post_ex, funsigs, depth, terminal=False)
+
+                # update the accumulated results
                 for test_result in test_results:
                     test_results_map[test_result.name] = test_result
 
                 failed = [r for r in test_results if r.exitcode != Exitcode.PASS.value]
-                funsigs = [r.name for r in test_results if r.exitcode == Exitcode.PASS.value]
+                funsigs = [
+                    r.name for r in test_results if r.exitcode == Exitcode.PASS.value
+                ]
 
+                # print call trace if failed, to provide additional info for counterexamples
                 if failed:
                     print("Path:")
                     print(indent_text(hexify(post_ex.path)))
@@ -453,6 +477,7 @@ def run_invariant_single(ctx, pre_exs, funsigs, test_results_map, depth) -> list
                     print("\nTrace:")
                     render_trace(post_ex.context)
 
+                # if all invariants failed, stop
                 if not funsigs:
                     return next_exs, funsigs
 
@@ -462,6 +487,8 @@ def run_invariant_single(ctx, pre_exs, funsigs, test_results_map, depth) -> list
 
 
 def run_target_contract(ctx, ex, addr) -> list[Exec]:
+    # todo: factor out common logic with run_test
+
     code = ex.code[addr]
     contract_name = code.contract_name
     filename = code.filename
@@ -471,7 +498,7 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
         #     debug_once(
         #         f"{self.fun_info.sig}: couldn't find the contract name for: {hexify(selector)}"
         #     )
-        return
+        raise ValueError(addr)
 
     contract_json = BuildOut().get_by_name(contract_name, filename)
     abi = get_abi(contract_json)
@@ -531,9 +558,11 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
         )
 
         for post_ex in exs:
+            # update call traces
             subcall = post_ex.context
             post_ex.context = deepcopy(ex.context)
             post_ex.context.trace.append(subcall)
+
             results.append(post_ex)
 
     return results
@@ -913,7 +942,13 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
     return test_results
 
 
-def run_tests(ctx: ContractContext, setup_ex: Exec, funsigs: list, depth: int = 0, terminal: bool = True) -> list[TestResult]:
+def run_tests(
+    ctx: ContractContext,
+    setup_ex: Exec,
+    funsigs: list,
+    depth: int = 0,
+    terminal: bool = True,
+) -> list[TestResult]:
     args = ctx.args
 
     test_results = []
@@ -925,7 +960,7 @@ def run_tests(ctx: ContractContext, setup_ex: Exec, funsigs: list, depth: int = 
             solver = mk_solver(test_config)
             debug(f"{test_config.formatted_layers()}")
 
-            if depth >= test_config.inv_depth:
+            if depth > test_config.inv_depth:
                 continue
 
             test_ctx = FunctionContext(
@@ -936,7 +971,7 @@ def run_tests(ctx: ContractContext, setup_ex: Exec, funsigs: list, depth: int = 
                 setup_ex=setup_ex,
             )
 
-            test_result = run_test(test_ctx, terminal or depth + 1 == test_config.inv_depth)
+            test_result = run_test(test_ctx, terminal)
         except Exception as err:
             print(f"{color_error('[ERROR]')} {funsig}")
             error(f"{type(err).__name__}: {err}")
