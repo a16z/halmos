@@ -396,6 +396,11 @@ def is_global_fail_set(context: CallContext) -> bool:
     return hevm_fail or any(is_global_fail_set(x) for x in context.subcalls())
 
 
+def get_state_id(ex: Exec) -> bytes:
+    # todo: consider path constraints relevant to storage
+    return snapshot_state(ex, None, None, None, None).unwrap()
+
+
 # execute invariant test functions in multiple depths
 # reuse states at each depth for all invariant functions
 def run_invariant_tests(ctx, setup_ex):
@@ -412,13 +417,16 @@ def run_invariant_tests(ctx, setup_ex):
     if not funsigs:
         return test_results_map.values()
 
+    visited = set()
+    visited.add(get_state_id(setup_ex))
+
     exs = [setup_ex]
 
     depth = 0
     while True:
         depth += 1
         exs, funsigs = run_single_invariant_step(
-            ctx, exs, funsigs, test_results_map, depth
+            ctx, exs, funsigs, test_results_map, depth, visited
         )
 
         # todo: merge, simplify, or prioritize exs to mitigate path explosion
@@ -440,14 +448,11 @@ def run_invariant_tests(ctx, setup_ex):
 # and check all invariants for each post-state.
 # return all post-states, and invariants that haven't failed.
 def run_single_invariant_step(
-    ctx, pre_exs, funsigs, test_results_map, depth
+    ctx, pre_exs, funsigs, test_results_map, depth, visited
 ) -> list[Exec]:
     next_exs = []
 
     for pre_ex in pre_exs:
-        # todo: remove extra parameters
-        pre_id = snapshot_state(pre_ex, None, None, None, None)
-
         for addr in pre_ex.code:
             # skip the test contract
             if eq(addr, con_addr(FOUNDRY_TEST)):
@@ -463,11 +468,13 @@ def run_single_invariant_step(
                 if output.data is None or output.error is not None:
                     continue
 
-                # remove states that haven't changed
-                # todo: remove already visited states
+                # skip states that already visited
                 # todo: check path feasibility
-                if pre_id == snapshot_state(post_ex, None, None, None, None):
+                post_id = get_state_id(post_ex)
+                if post_id in visited:
                     continue
+                else:
+                    visited.add(post_id)
 
                 # check all invariants against the current state
                 test_results = run_tests(ctx, post_ex, funsigs, depth, terminal=False)
