@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import itertools
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterator
@@ -830,6 +831,19 @@ class Path:
     def get_related(self, cond) -> set[int]:
         return self._get_related(get_vars(cond))
 
+    def slice(self, var_set) -> "Path":
+        related = self._get_related(var_set)
+
+        path = Path(self.solver)
+
+        idx = 0
+        for cond, branching in self.conditions.items():
+            if idx in related:
+                path.append(cond, branching)
+            idx += 1
+
+        return path
+
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
 
@@ -1067,6 +1081,16 @@ class Exec:  # an execution path
         assert_address(self.origin())
         assert_address(self.caller())
         assert_address(self.this())
+
+    def path_slice(self):
+        var_set = get_vars(self.balance)
+        # todo: include code as well
+        for _addr, _storage in self.storage.items():
+            var_set = itertools.chain(var_set, get_vars(_addr))
+            for _, _val in _storage._mapping.items():
+                var_set = itertools.chain(var_set, get_vars(_val))
+
+        self.path = self.path.slice(var_set)
 
     def context_str(self) -> str:
         opcode = self.current_opcode()

@@ -509,6 +509,7 @@ def run_single_invariant_step(
                     return next_exs, funsigs
 
                 # note: any state changes made during invariant checking are excluded, to reduce path condition complexity
+                post_ex.path_slice()
                 next_exs.append(post_ex)
 
     return next_exs, funsigs
@@ -595,20 +596,20 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
             post_ex.context = deepcopy(ex.context)
             post_ex.context.trace.append(subcall)
 
-            var_set = get_vars(post_ex.balance)
-            for _addr, _storage in post_ex.storage.items():
-                var_set = itertools.chain(var_set, get_vars(_addr))
-                for _, _val in _storage._mapping.items():
-                    var_set = itertools.chain(var_set, get_vars(_val))
+#           var_set = get_vars(post_ex.balance)
+#           for _addr, _storage in post_ex.storage.items():
+#               var_set = itertools.chain(var_set, get_vars(_addr))
+#               for _, _val in _storage._mapping.items():
+#                   var_set = itertools.chain(var_set, get_vars(_val))
 
-            related = post_ex.path._get_related(var_set)
-            post_path = Path(solver)
-            idx = 0
-            for cond, branching in post_ex.path.conditions.items():
-                if idx in related:
-                    post_path.append(cond, branching)
-                idx += 1
-            post_ex.path = post_path
+#           related = post_ex.path._get_related(var_set)
+#           post_path = Path(solver)
+#           idx = 0
+#           for cond, branching in post_ex.path.conditions.items():
+#               if idx in related:
+#                   post_path.append(cond, branching)
+#               idx += 1
+#           post_ex.path = post_path
 
             results.append(post_ex)
 
