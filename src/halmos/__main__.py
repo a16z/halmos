@@ -538,6 +538,12 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
         fun_name = fun_sig.split("(")[0]
         fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
 
+        state_mutability = abi[fun_sig]["stateMutability"]
+        if state_mutability in ["pure", "view"]:
+            if ctx.args.debug:
+                print(f"Skipping {fun_name} ({state_mutability})")
+            continue
+
         args = ctx.args
 
         sevm = SEVM(args, fun_info)
