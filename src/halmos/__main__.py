@@ -429,6 +429,13 @@ def run_invariant_tests(ctx, setup_ex):
             ctx, exs, funsigs, test_results_map, depth, visited
         )
 
+        if ctx.args.debug:
+            print(f"{depth=}\n")
+            for idx, ex in enumerate(exs):
+                print(f"{idx=} {hexify(get_state_id(ex))=}\n")
+                print(ex)
+                render_trace(ex.context)
+
         # todo: merge, simplify, or prioritize exs to mitigate path explosion
 
         if not exs or not funsigs:

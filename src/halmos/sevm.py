@@ -952,6 +952,7 @@ class StorageData:
         For simplicity, all numbers are represented as 256-bit integers, regardless of their actual size.
         """
         m = xxhash.xxh3_128()
+        # todo: consider sorted items
         for key, val in self._mapping.items():
             if isinstance(key, int):  # GenericStorage
                 m.update(int.to_bytes(key, length=32))
