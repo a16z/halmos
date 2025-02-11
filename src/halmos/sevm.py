@@ -796,7 +796,7 @@ class Path:
     # a variable -> a set of conditions in which the variable appears
     var_to_conds: dict[any, set[int]]
 
-    def __init__(self, solver: Solver, path = None):
+    def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = {}
@@ -806,15 +806,15 @@ class Path:
         self.related = {}
         self.var_to_conds = defaultdict(set)
 
-        if path:
-            for cond in path.conditions:
-                self.solver.add(cond)
+#       if path:
+#           for cond in path.conditions:
+#               self.solver.add(cond)
 
-            self.conditions = path.conditions.copy()
-            self.concretization = deepcopy(path.concretization)
+#           self.conditions = path.conditions.copy()
+#           self.concretization = deepcopy(path.concretization)
 
-            self.related = path.related.copy()
-            self.var_to_conds = deepcopy(path.var_to_conds)
+#           self.related = path.related.copy()
+#           self.var_to_conds = deepcopy(path.var_to_conds)
 
     def _get_related(self, var_set) -> set[int]:
         conds = set()
@@ -962,9 +962,9 @@ class Path:
         for cond in conds:
             self.append(cond, branching=branching)
 
-#   def extend_path(self, path):
-#       # branching conditions are not preserved
-#       self.extend(path.conditions.keys())
+    def extend_path(self, path):
+        # branching conditions are not preserved
+        self.extend(path.conditions.keys())
 
 
 class StorageData:

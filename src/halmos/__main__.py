@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import itertools
 import gc
 import json
 import logging
@@ -24,6 +25,7 @@ from z3 import (
     set_option,
     unsat,
 )
+from z3.z3util import get_vars
 
 from .build import (
     build_output_iterator,
@@ -543,8 +545,8 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
         sevm = SEVM(args, fun_info)
         # todo: reuse solver across functions
         solver = mk_solver(args)
-        path = Path(solver, ex.path)
-#       path.extend_path(ex.path)
+        path = Path(solver)
+        path.extend_path(ex.path)
 
         # todo: mk_calldata with symbol name uniqueness
         cd, dyn_params = mk_calldata(
@@ -593,6 +595,21 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
             post_ex.context = deepcopy(ex.context)
             post_ex.context.trace.append(subcall)
 
+            var_set = get_vars(post_ex.balance)
+            for _addr, _storage in post_ex.storage.items():
+                var_set = itertools.chain(var_set, get_vars(_addr))
+                for _, _val in _storage._mapping.items():
+                    var_set = itertools.chain(var_set, get_vars(_val))
+
+            related = post_ex.path._get_related(var_set)
+            post_path = Path(solver)
+            idx = 0
+            for cond, branching in post_ex.path.conditions.items():
+                if idx in related:
+                    post_path.append(cond, branching)
+                idx += 1
+            post_ex.path = post_path
+
             results.append(post_ex)
 
         # todo: try-catch finally
@@ -614,8 +631,8 @@ def run_test(ctx: FunctionContext, terminal=True) -> TestResult:
 
     setup_ex = ctx.setup_ex
     sevm = SEVM(args, fun_info)
-    path = Path(ctx.solver, setup_ex.path)
-#   path.extend_path(setup_ex.path)
+    path = Path(ctx.solver)
+    path.extend_path(setup_ex.path)
 
     cd, dyn_params = mk_calldata(ctx.contract_ctx.abi, fun_info, args)
     path.process_dyn_params(dyn_params)
