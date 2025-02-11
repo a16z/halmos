@@ -56,7 +56,7 @@ from z3 import (
     simplify,
     unsat,
 )
-from z3.z3util import is_expr_var
+from z3.z3util import is_expr_var, get_vars
 
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
 from .calldata import FunctionInfo
@@ -791,12 +791,44 @@ class Path:
     concretization: Concretization
     pending: list
 
-    def __init__(self, solver: Solver):
+    # a condition -> a set of previous conditions that are related to the condition
+    related: dict[int, set[int]]
+    # a variable -> a set of conditions in which the variable appears
+    var_to_conds: dict[any, set[int]]
+
+    def __init__(self, solver: Solver, path = None):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = {}
         self.concretization = Concretization()
         self.pending = []
+
+        self.related = {}
+        self.var_to_conds = defaultdict(set)
+
+        if path:
+            for cond in path.conditions:
+                self.solver.add(cond)
+
+            self.conditions = path.conditions.copy()
+            self.concretization = deepcopy(path.concretization)
+
+            self.related = path.related.copy()
+            self.var_to_conds = deepcopy(path.var_to_conds)
+
+    def _get_related(self, var_set) -> set[int]:
+        conds = set()
+        for var in var_set:
+            conds.update(self.var_to_conds[var])
+
+        result = set(conds)
+        for cond in conds:
+            result.update(self.related[cond])
+
+        return result
+
+    def get_related(self, cond) -> set[int]:
+        return self._get_related(get_vars(cond))
 
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
@@ -883,6 +915,9 @@ class Path:
         # store the branching condition aside until the new path is activated.
         path.pending.append(cond)
 
+        path.related = self.related.copy()
+        path.var_to_conds = deepcopy(self.var_to_conds)
+
         return path
 
     def is_activated(self) -> bool:
@@ -912,17 +947,24 @@ class Path:
         if cond in self.conditions:
             return
 
+        idx = len(self.conditions)
+
         self.solver.add(cond)
         self.conditions[cond] = branching
         self.concretization.process_cond(cond)
+
+        var_set = get_vars(cond)
+        self.related[idx] = self._get_related(var_set)
+        for var in var_set:
+            self.var_to_conds[var].add(idx)
 
     def extend(self, conds, branching=False):
         for cond in conds:
             self.append(cond, branching=branching)
 
-    def extend_path(self, path):
-        # branching conditions are not preserved
-        self.extend(path.conditions.keys())
+#   def extend_path(self, path):
+#       # branching conditions are not preserved
+#       self.extend(path.conditions.keys())
 
 
 class StorageData:

@@ -541,9 +541,10 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
         args = ctx.args
 
         sevm = SEVM(args, fun_info)
+        # todo: reuse solver across functions
         solver = mk_solver(args)
-        path = Path(solver)
-        path.extend_path(ex.path)
+        path = Path(solver, ex.path)
+#       path.extend_path(ex.path)
 
         # todo: mk_calldata with symbol name uniqueness
         cd, dyn_params = mk_calldata(
@@ -613,8 +614,8 @@ def run_test(ctx: FunctionContext, terminal=True) -> TestResult:
 
     setup_ex = ctx.setup_ex
     sevm = SEVM(args, fun_info)
-    path = Path(ctx.solver)
-    path.extend_path(setup_ex.path)
+    path = Path(ctx.solver, setup_ex.path)
+#   path.extend_path(setup_ex.path)
 
     cd, dyn_params = mk_calldata(ctx.contract_ctx.abi, fun_info, args)
     path.process_dyn_params(dyn_params)
@@ -990,6 +991,7 @@ def run_tests(
         fun_info = FunctionInfo(funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
+            # todo: reuse solver across functions
             solver = mk_solver(test_config)
             debug(f"{test_config.formatted_layers()}")
 
