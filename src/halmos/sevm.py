@@ -19,7 +19,7 @@ from typing import (
 import rich
 import xxhash
 from eth_hash.auto import keccak
-from rich.status import Status
+#from rich.status import Status
 from z3 import (
     UGE,
     UGT,
@@ -1874,23 +1874,23 @@ class SEVM:
     storage_model: type[SomeStorage]
     logs: HalmosLogs
     steps: Steps
-    status: Status
+#   status: Status
 
     def __init__(self, options: HalmosConfig, fun_info: FunctionInfo) -> None:
         self.options = options
         self.fun_info = fun_info
         self.logs = HalmosLogs()
         self.steps: Steps = {}
-        self.status: Status = Status("")
+#       self.status: Status = Status("")
 
         # init storage model
         is_generic = self.options.storage_layout == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
 
-    def status_start(self) -> None:
-        # clear any remaining live display before starting a new instance
-        rich.get_console().clear_live()
-        self.status.start()
+#   def status_start(self) -> None:
+#       # clear any remaining live display before starting a new instance
+#       rich.get_console().clear_live()
+#       self.status.start()
 
     def div_xy_y(self, w1: Word, w2: Word) -> Word:
         # return the number of bits required to represent the given value. default = 256
@@ -2862,7 +2862,7 @@ class SEVM:
                     # hh:mm:ss
                     elapsed_fmt = timedelta(seconds=int(elapsed))
 
-                    self.status.update(
+                    BuildOut().status.update(
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"
                         f" | completed paths: {stack.completed_paths}"
                         f" | outstanding paths: {len(stack)}"

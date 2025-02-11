@@ -1,6 +1,7 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, ForwardRef, Optional
+from rich.status import Status
 
 from .exceptions import HalmosException
 from .logs import warn
@@ -85,6 +86,8 @@ class BuildOut(metaclass=SingletonMeta):
         self._build_out_map: dict = None
         self._build_out_map_reverse: dict = None
         self._build_out_map_code: dict = None
+        self.status: Status = Status("")
+        self.status.start()
 
     def set_build_out(self, build_out_map: dict):
         if self._build_out_map is build_out_map:
