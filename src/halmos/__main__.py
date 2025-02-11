@@ -541,7 +541,8 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
         args = ctx.args
 
         sevm = SEVM(args, fun_info)
-        path = Path(mk_solver(args))
+        solver = mk_solver(args)
+        path = Path(solver)
         path.extend_path(ex.path)
 
         # todo: mk_calldata with symbol name uniqueness
@@ -592,6 +593,9 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
             post_ex.context.trace.append(subcall)
 
             results.append(post_ex)
+
+        # todo: try-catch finally
+        solver.reset()
 
     return results
 
