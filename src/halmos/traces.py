@@ -6,13 +6,15 @@ from z3 import Z3_OP_CONCAT, BitVecNumRef, BitVecRef, is_app
 from halmos.bytevec import ByteVec
 from halmos.exceptions import HalmosException
 from halmos.mapper import DeployAddressMapper, Mapper
-from halmos.sevm import CallContext, EventLog, mnemonic
+from halmos.sevm import CallContext, EventLog, StorageRead, StorageWrite, mnemonic
 from halmos.utils import (
+    Address,
     byte_length,
     cyan,
     green,
     hexify,
     is_bv,
+    magenta,
     red,
     unbox_int,
     yellow,
@@ -73,6 +75,16 @@ def render_output(context: CallContext, file=sys.stdout) -> None:
     )
 
 
+def rendered_address(addr: Address) -> str:
+    addr = unbox_int(addr)
+    addr_str = str(addr) if is_bv(addr) else hex(addr)
+
+    # check if we have a contract name for this address in our deployment mapper
+    addr_str = DeployAddressMapper().get_deployed_contract(addr_str)
+
+    return addr_str
+
+
 def rendered_log(log: EventLog) -> str:
     opcode_str = f"LOG{len(log.topics)}"
     topics = [
@@ -82,6 +94,28 @@ def rendered_log(log: EventLog) -> str:
     args_str = ", ".join(topics + [data_str])
 
     return f"{opcode_str}({args_str})"
+
+
+def rendered_slot(slot: Address) -> str:
+    slot = unbox_int(slot)
+
+    if is_bv(slot):
+        return magenta(hexify(slot))
+
+    if slot < 2**16:
+        return magenta(str(slot))
+
+    return magenta(hex(slot))
+
+
+def rendered_storage_write(update: StorageWrite) -> str:
+    slot_str = rendered_slot(update.slot)
+    return f"{cyan('SSTORE')} @{slot_str} ← {hexify(update.value)}"
+
+
+def rendered_storage_read(read: StorageRead) -> str:
+    slot_str = rendered_slot(read.slot)
+    return f"{cyan('SLOAD')}  @{slot_str} → {hexify(read.value)}"
 
 
 def rendered_trace(context: CallContext) -> str:
@@ -107,10 +141,7 @@ def rendered_calldata(calldata: ByteVec, contract_name: str | None = None) -> st
 
 def render_trace(context: CallContext, file=sys.stdout) -> None:
     message = context.message
-    addr = unbox_int(message.target)
-    addr_str = str(addr) if is_bv(addr) else hex(addr)
-    # check if we have a contract name for this address in our deployment mapper
-    addr_str = DeployAddressMapper().get_deployed_contract(addr_str)
+    addr_str = rendered_address(message.target)
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
@@ -147,12 +178,17 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
 
     log_indent = (context.depth + 1) * "    "
     for trace_element in context.trace:
-        if isinstance(trace_element, CallContext):
-            render_trace(trace_element, file=file)
-        elif isinstance(trace_element, EventLog):
-            print(f"{log_indent}{rendered_log(trace_element)}", file=file)
-        else:
-            raise HalmosException(f"unexpected trace element: {trace_element}")
+        match trace_element:
+            case CallContext():
+                render_trace(trace_element, file=file)
+            case EventLog():
+                print(f"{log_indent}{rendered_log(trace_element)}", file=file)
+            case StorageRead():
+                print(f"{log_indent}{rendered_storage_read(trace_element)}", file=file)
+            case StorageWrite():
+                print(f"{log_indent}{rendered_storage_write(trace_element)}", file=file)
+            case _:
+                raise HalmosException(f"unexpected trace element: {trace_element}")
 
     render_output(context, file=file)
 
