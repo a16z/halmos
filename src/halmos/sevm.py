@@ -2284,10 +2284,11 @@ class SEVM:
                 # call never fails, errors result in empty returndata
                 exit_code = ONE
 
-                digest = extract_bytes(arg, 0, 32)
+                # wrapping guarantees that the arguments are bitvecs
+                digest = uint256(extract_bytes(arg, 0, 32))
                 v = uint8(extract_bytes(arg, 32, 32))
-                r = extract_bytes(arg, 64, 32)
-                s = extract_bytes(arg, 96, 32)
+                r = uint256(extract_bytes(arg, 64, 32))
+                s = uint256(extract_bytes(arg, 96, 32))
 
                 # TODO: empty returndata in error
                 ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
