@@ -103,7 +103,11 @@ class ParseCSVTraceEvent(argparse.Action):
     @staticmethod
     def parse(values: str) -> list[TraceEvent]:
         # empty list is ok
-        return [TraceEvent(x) for x in parse_csv(values)]
+        try:
+            return [TraceEvent(x) for x in parse_csv(values)]
+        except ValueError as e:
+            valid = ", ".join([e.value for e in TraceEvent])
+            raise ValueError(f"the list of valid trace events is: {valid}") from e
 
     @staticmethod
     def unparse(values: list[TraceEvent]) -> str:
