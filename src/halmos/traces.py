@@ -1,9 +1,11 @@
 import io
 import sys
+from contextvars import ContextVar
 
 from z3 import Z3_OP_CONCAT, BitVecNumRef, BitVecRef, is_app
 
 from halmos.bytevec import ByteVec
+from halmos.config import Config, TraceEvent
 from halmos.exceptions import HalmosException
 from halmos.mapper import DeployAddressMapper, Mapper
 from halmos.sevm import CallContext, EventLog, StorageRead, StorageWrite, mnemonic
@@ -19,6 +21,8 @@ from halmos.utils import (
     unbox_int,
     yellow,
 )
+
+config_context: ContextVar[Config | None] = ContextVar("config", default=None)
 
 
 def rendered_initcode(context: CallContext) -> str:
@@ -108,12 +112,12 @@ def rendered_slot(slot: Address) -> str:
     return magenta(hex(slot))
 
 
-def rendered_storage_write(update: StorageWrite) -> str:
+def rendered_sstore(update: StorageWrite) -> str:
     slot_str = rendered_slot(update.slot)
     return f"{cyan('SSTORE')} @{slot_str} ← {hexify(update.value)}"
 
 
-def rendered_storage_read(read: StorageRead) -> str:
+def rendered_sload(read: StorageRead) -> str:
     slot_str = rendered_slot(read.slot)
     return f"{cyan('SLOAD')}  @{slot_str} → {hexify(read.value)}"
 
@@ -140,6 +144,10 @@ def rendered_calldata(calldata: ByteVec, contract_name: str | None = None) -> st
 
 
 def render_trace(context: CallContext, file=sys.stdout) -> None:
+    config: Config = config_context.get()
+    if config is None:
+        raise HalmosException("config not set")
+
     message = context.message
     addr_str = rendered_address(message.target)
 
@@ -182,11 +190,14 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
             case CallContext():
                 render_trace(trace_element, file=file)
             case EventLog():
-                print(f"{log_indent}{rendered_log(trace_element)}", file=file)
+                if TraceEvent.LOG in config.trace_events:
+                    print(f"{log_indent}{rendered_log(trace_element)}", file=file)
             case StorageRead():
-                print(f"{log_indent}{rendered_storage_read(trace_element)}", file=file)
+                if TraceEvent.SLOAD in config.trace_events:
+                    print(f"{log_indent}{rendered_sload(trace_element)}", file=file)
             case StorageWrite():
-                print(f"{log_indent}{rendered_storage_write(trace_element)}", file=file)
+                if TraceEvent.SSTORE in config.trace_events:
+                    print(f"{log_indent}{rendered_sstore(trace_element)}", file=file)
             case _:
                 raise HalmosException(f"unexpected trace element: {trace_element}")
 
