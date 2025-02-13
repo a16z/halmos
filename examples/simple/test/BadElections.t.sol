@@ -14,24 +14,9 @@ contract BadElectionsTest is SymTest, Test {
         elections = new BadElections();
     }
 
-    /// The output will look something like this:
-    ///
-    ///     Running 1 tests for test/BadElections.t.sol:BadElectionsTest
-    ///     Counterexample:
-    ///         halmos_fakeSig_bytes_01 = 0x00000000000000000000000000000000000000000000000000000000000000003fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a100 (65 bytes)
-    ///         p_proposalId_uint256 = 0x0000000000000000000000000000000000000000000000000000000000000000 (0)
-    ///     [FAIL] check_canNotVoteTwice(uint256) (paths: 7, time: 0.63s, bounds: [])
-    ///
-    /// the counterexample values are not meaningful, but examining the trace shows
-    /// that halmos found a signature s.t. the voter can vote twice on the same proposal,
-    /// and the final vote count is 2
-    function check_canNotVoteTwice(uint256 proposalId) public {
-        // setup
-        bool support = true;
-        (address voter, uint256 privateKey) = makeAddrAndKey("voter");
-
+    function castVote(uint256 proposalId, bool support, address voter, uint256 voterPrivateKey) internal {
         bytes32 sigDigest = keccak256(abi.encode(proposalId, support, voter));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, sigDigest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(voterPrivateKey, sigDigest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
         // we start with no vote
@@ -49,9 +34,43 @@ contract BadElectionsTest is SymTest, Test {
         } catch {
             // expected
         }
+    }
+
+    /// The output will look something like this:
+    ///
+    ///     Running 1 tests for test/BadElections.t.sol:BadElectionsTest
+    ///     Counterexample:
+    ///         halmos_fakeSig_bytes_01 = 0x00000000000000000000000000000000000000000000000000000000000000003fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a100 (65 bytes)
+    ///         p_proposalId_uint256 = 0x0000000000000000000000000000000000000000000000000000000000000000 (0)
+    ///     [FAIL] check_canNotVoteTwice(uint256) (paths: 7, time: 0.63s, bounds: [])
+    ///
+    /// the counterexample values are not meaningful, but examining the trace shows
+    /// that halmos found a signature s.t. the voter can vote twice on the same proposal,
+    /// and the final vote count is 2
+    function check_canNotVoteTwice(uint256 proposalId) public {
+        // setup
+        bool support = true;
+        (address voter, uint256 privateKey) = makeAddrAndKey("voter");
+
+        castVote(proposalId, support, voter, privateKey);
 
         // when the same voter votes with a different signature
         elections.vote(proposalId, support, voter, svm.createBytes(65, "fakeSig"));
+
+        // then the vote count remains unchanged
+        // @note spoiler alert: it does not
+        assertEq(elections.votesFor(proposalId), 1);
+    }
+
+    function check_canNotVoteTwice_EIP2098(uint256 proposalId) public {
+        // setup
+        bool support = true;
+        (address voter, uint256 privateKey) = makeAddrAndKey("voter");
+
+        castVote(proposalId, support, voter, privateKey);
+
+        // when the same voter votes with a different, compact signature
+        elections.vote(proposalId, support, voter, svm.createBytes(64, "fakeSig"));
 
         // then the vote count remains unchanged
         // @note spoiler alert: it does not
