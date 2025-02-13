@@ -24,6 +24,8 @@ from z3 import (
     unsat,
 )
 
+import halmos.traces
+
 from .build import (
     build_output_iterator,
     import_libs,
@@ -401,6 +403,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     if args.verbose >= 1:
         print(f"Executing {funname}")
 
+    # set the config for every trace rendered in this test
+    halmos.traces.config_context.set(args)
+
     #
     # prepare calldata
     #
@@ -742,6 +747,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
             contract_ctx=ctx,
         )
 
+        halmos.traces.config_context.set(setup_config)
         setup_ex = setup(setup_ctx)
     except Exception as err:
         error(f"{setup_info.sig} failed: {type(err).__name__}: {err}")
