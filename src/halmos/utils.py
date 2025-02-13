@@ -590,7 +590,7 @@ def cyan(text: str) -> str:
 
 
 def magenta(text: str) -> str:
-    return f"\033[35m{text}\033[0m"
+    return f"\033[95m{text}\033[0m"
 
 
 color_good = green

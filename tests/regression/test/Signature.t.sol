@@ -416,4 +416,11 @@ contract SignatureTest is SymTest, Test {
         address recoveredAddr = ecrecover(digest, v, r, s);
         assertEq(addr, recoveredAddr);
     }
+
+    // results in Counterexample: ∅ because we don't actually know the value of addr
+    // but this should not cause an internal ECRECOVER_PRECOMPILE
+    function check_ecrecover_concrete_args() public {
+        address addr = ecrecover(0, 0, 0, 0);
+        assertEq(addr, address(0));
+    }
 }
