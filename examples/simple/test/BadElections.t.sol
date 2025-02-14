@@ -57,4 +57,20 @@ contract BadElectionsTest is SymTest, Test {
         // @note spoiler alert: it does not
         assertEq(elections.votesFor(proposalId), 1);
     }
+
+    // shows that it is possible to derive a compact signature from a valid signature,
+    // with no knowledge of the voter's private key
+    // see https://eips.ethereum.org/EIPS/eip-2098
+    function check_canFindCompactSignatureFromOriginal(uint256 proposalId, bool support, address voter) public {
+        bytes memory originalSig = svm.createBytes(65, "originalSig");
+        bytes memory compactSig = svm.createBytes(64, "compactSig");
+
+        // given a valid vote
+        elections.vote(proposalId, support, voter, originalSig);
+        vm.assume(elections.votesFor(proposalId) == 1);
+
+        // one should not be able to vote again with a compact signature
+        elections.vote(proposalId, support, voter, compactSig);
+        assertEq(elections.votesFor(proposalId), 1);
+    }
 }

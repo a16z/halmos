@@ -6,6 +6,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,12 @@ debugging, solver, build, experimental, deprecated = (
     "Experimental options",
     "Deprecated options",
 )
+
+
+class TraceEvent(Enum):
+    LOG = "LOG"
+    SSTORE = "SSTORE"
+    SLOAD = "SLOAD"
 
 
 def find_venv_root() -> Path | None:
@@ -88,9 +95,28 @@ def parse_csv(values: str, sep: str = ",") -> Generator[Any, None, None]:
     return (x for _x in values.split(sep) if (x := _x.strip()))
 
 
-class ParseCSV(argparse.Action):
+class ParseCSVTraceEvent(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
-        values = ParseCSV.parse(values)
+        values = ParseCSVTraceEvent.parse(values)
+        setattr(namespace, self.dest, values)
+
+    @staticmethod
+    def parse(values: str) -> list[TraceEvent]:
+        # empty list is ok
+        try:
+            return [TraceEvent(x) for x in parse_csv(values)]
+        except ValueError as e:
+            valid = ", ".join([e.value for e in TraceEvent])
+            raise ValueError(f"the list of valid trace events is: {valid}") from e
+
+    @staticmethod
+    def unparse(values: list[TraceEvent]) -> str:
+        return ",".join([x.value for x in values])
+
+
+class ParseCSVInt(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        values = ParseCSVInt.parse(values)
         setattr(namespace, self.dest, values)
 
     @staticmethod
@@ -283,14 +309,14 @@ class Config:
         help="set default lengths for dynamic-sized arrays (excluding bytes and string) not specified in --array-lengths",
         global_default="0,1,2",
         metavar="LENGTH1,LENGTH2,...",
-        action=ParseCSV,
+        action=ParseCSVInt,
     )
 
     default_bytes_lengths: str = arg(
         help="set default lengths for bytes and string types not specified in --array-lengths",
         global_default="0,65,1024",  # 65 is ECDSA signature size
         metavar="LENGTH1,LENGTH2,...",
-        action=ParseCSV,
+        action=ParseCSVInt,
     )
 
     storage_layout: str = arg(
@@ -428,6 +454,13 @@ class Config:
         help="trace memory allocations and deallocations",
         global_default=False,
         group=debugging,
+    )
+
+    trace_events: str = arg(
+        help="include specific events in traces",
+        global_default=",".join([e.value for e in TraceEvent]),
+        metavar="EVENT1,EVENT2,...",
+        action=ParseCSVTraceEvent,
     )
 
     ### Build options

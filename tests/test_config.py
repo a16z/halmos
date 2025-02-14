@@ -7,7 +7,7 @@ import pytest
 from halmos.config import (
     Config,
     ParseArrayLengths,
-    ParseCSV,
+    ParseCSVInt,
     ParseErrorCodes,
     arg_parser,
     default_config,
@@ -192,21 +192,21 @@ def test_config_pickle(config, parser):
 
 def test_parse_csv():
     with pytest.raises(ValueError):
-        ParseCSV.parse("")
-        ParseCSV.parse(" ")
-        ParseCSV.parse(",")
-    assert ParseCSV.parse("0") == [0]
-    assert ParseCSV.parse("0,") == [0]
-    assert ParseCSV.parse("1,2,3") == [1, 2, 3]
-    assert ParseCSV.parse("1,2,3,") == [1, 2, 3]
-    assert ParseCSV.parse(" 1 , 2 , 3 ") == [1, 2, 3]
-    assert ParseCSV.parse(" , 1 , 2 , 3 , ") == [1, 2, 3]
+        ParseCSVInt.parse("")
+        ParseCSVInt.parse(" ")
+        ParseCSVInt.parse(",")
+    assert ParseCSVInt.parse("0") == [0]
+    assert ParseCSVInt.parse("0,") == [0]
+    assert ParseCSVInt.parse("1,2,3") == [1, 2, 3]
+    assert ParseCSVInt.parse("1,2,3,") == [1, 2, 3]
+    assert ParseCSVInt.parse(" 1 , 2 , 3 ") == [1, 2, 3]
+    assert ParseCSVInt.parse(" , 1 , 2 , 3 , ") == [1, 2, 3]
 
 
 def test_unparse_csv():
-    assert ParseCSV.unparse([]) == ""
-    assert ParseCSV.unparse([0]) == "0"
-    assert ParseCSV.unparse([1, 2, 3]) == "1,2,3"
+    assert ParseCSVInt.unparse([]) == ""
+    assert ParseCSVInt.unparse([0]) == "0"
+    assert ParseCSVInt.unparse([1, 2, 3]) == "1,2,3"
 
 
 def test_parse_csv_roundtrip():
@@ -216,8 +216,8 @@ def test_parse_csv_roundtrip():
     ]
 
     for original in test_cases:
-        unparsed = ParseCSV.unparse(original)
-        parsed = ParseCSV.parse(unparsed)
+        unparsed = ParseCSVInt.unparse(original)
+        parsed = ParseCSVInt.parse(unparsed)
         assert parsed == original, f"Roundtrip failed for {original}"
 
 

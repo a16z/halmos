@@ -14,6 +14,7 @@ from typing import (
     ForwardRef,
     Optional,
     TypeVar,
+    Union,
 )
 
 import rich
@@ -346,6 +347,20 @@ class EventLog:
 
 
 @dataclass(frozen=True)
+class StorageWrite:
+    address: Address
+    slot: Word
+    value: Word
+
+
+@dataclass(frozen=True)
+class StorageRead:
+    address: Address
+    slot: Word
+    value: Word
+
+
+@dataclass(frozen=True)
 class Message:
     target: Address
     caller: Address
@@ -388,7 +403,7 @@ class CallOutput:
     #   - gas_left
 
 
-TraceElement = ForwardRef("CallContext") | EventLog
+TraceElement = Union["CallContext", EventLog, StorageRead, StorageWrite]
 
 
 @dataclass
@@ -2107,9 +2122,13 @@ class SEVM:
         return self.storage_model.mk_storagedata()
 
     def sload(self, ex: Exec, addr: Any, loc: Word) -> Word:
-        return self.storage_model.load(ex, addr, loc)
+        val = self.storage_model.load(ex, addr, loc)
+        ex.context.trace.append(StorageRead(addr, loc, val))
+        return val
 
     def sstore(self, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+        ex.context.trace.append(StorageWrite(addr, loc, val))
+
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())
 
@@ -2335,10 +2354,11 @@ class SEVM:
                 # call never fails, errors result in empty returndata
                 exit_code = ONE
 
-                digest = extract_bytes(arg, 0, 32)
+                # wrapping guarantees that the arguments are bitvecs
+                digest = uint256(extract_bytes(arg, 0, 32))
                 v = uint8(extract_bytes(arg, 32, 32))
-                r = extract_bytes(arg, 64, 32)
-                s = extract_bytes(arg, 96, 32)
+                r = uint256(extract_bytes(arg, 64, 32))
+                s = uint256(extract_bytes(arg, 96, 32))
 
                 # TODO: empty returndata in error
                 ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
