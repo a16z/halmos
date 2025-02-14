@@ -3,6 +3,15 @@
     "test_results": {
         "test/BadElections.t.sol:BadElectionsTest": [
             {
+                "name": "check_canFindCompactSignatureFromOriginal(uint256,bool,address)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_canNotVoteTwice(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
