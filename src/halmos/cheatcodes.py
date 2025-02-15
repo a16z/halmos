@@ -265,13 +265,22 @@ def snapshot_state(ex, arg, sevm, stack, step_id):
     code_hash = m.digest()
 
     # storage
-    m = xxh3_128()
+#   m = xxh3_128()
+    m = xxh3_64()
     for addr, storage in ex.storage.items():
         m.update(int.to_bytes(int_of(addr), length=32))
         m.update(storage.digest())
     storage_hash = m.digest()
 
-    return ByteVec(balance_hash + code_hash + storage_hash)
+    # path
+    m = xxh3_64()
+    for cond in ex.path.conditions:
+#       print(f"{cond} {cond.get_id()}")
+        m.update(int.to_bytes(cond.get_id(), length=32))
+    path_hash = m.digest()
+
+#   return ByteVec(balance_hash + code_hash + storage_hash)
+    return ByteVec(balance_hash + code_hash + storage_hash + path_hash)
 
 
 def create_calldata_contract(ex, arg, sevm, stack, step_id):

@@ -483,6 +483,7 @@ def run_single_invariant_step(
 
                 # skip states that already visited
                 # todo: check path feasibility
+                post_ex.path_slice()
                 post_id = get_state_id(post_ex)
                 if post_id in visited:
                     continue
@@ -513,7 +514,7 @@ def run_single_invariant_step(
                     return next_exs, funsigs
 
                 # note: any state changes made during invariant checking are excluded, to reduce path condition complexity
-                post_ex.path_slice()
+#               post_ex.path_slice()
                 next_exs.append(post_ex)
 
     return next_exs, funsigs
@@ -983,6 +984,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
         halmos.traces.config_context.set(setup_config)
         setup_ex = setup(setup_ctx)
+        setup_ex.path_slice()
     except Exception as err:
         error(f"{setup_info.sig} failed: {type(err).__name__}: {err}")
         if args.debug:
