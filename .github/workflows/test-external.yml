@@ -22,7 +22,7 @@ jobs:
         project:
           - repo: "morpho-org/morpho-data-structures"
             dir: "morpho-data-structures"
-            cmd: "--function testProve --loop 4 --solver-command yices-smt2 --solver-threads 3"
+            cmd: "--function testProve --loop 4 --solver-command yices-smt2 --solver-threads 3 --disable-gc"
             branch: ""
             profile: ""
           - repo: "morpho-org/morpho-blue"
