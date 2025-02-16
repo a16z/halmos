@@ -378,7 +378,13 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     return results
 
 
-def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
+def create_any(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
+    """
+    Create a symbolic variable of the given bit size.
+
+    Parameters:
+        bits: bit size of the variable, must be > 0
+    """
     label = f"halmos_{var_name}_{type_name}_{uid()}_{ex.new_symbol_id():>02}"
     return BitVec(label, BitVecSorts[bits])
 
@@ -391,12 +397,12 @@ def create_uint(ex, arg, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name_of(extract_string_argument(arg, 1))
-    return ByteVec(uint256(create_generic(ex, bits, name, f"uint{bits}")))
+    return ByteVec(uint256(create_any(ex, bits, name, f"uint{bits}")))
 
 
 def create_uint256(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return ByteVec(create_generic(ex, 256, name, "uint256"))
+    return ByteVec(create_any(ex, 256, name, "uint256"))
 
 
 def create_int(ex, arg, **kwargs):
@@ -407,20 +413,20 @@ def create_int(ex, arg, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name_of(extract_string_argument(arg, 1))
-    return ByteVec(int256(create_generic(ex, bits, name, f"int{bits}")))
+    return ByteVec(int256(create_any(ex, bits, name, f"int{bits}")))
 
 
 def create_int256(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return ByteVec(create_generic(ex, 256, name, "int256"))
+    return ByteVec(create_any(ex, 256, name, "int256"))
 
 
 def create_bytes(ex, arg, **kwargs):
-    byte_size = int_of(
-        extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createBytes()"
-    )
+    err = "symbolic byte size for halmos.createBytes()"
+    byte_size = int_of(extract_bytes(arg, 4, 32), err)
+    bits = byte_size * 8
     name = name_of(extract_string_argument(arg, 1))
-    symbolic_bytes = create_generic(ex, byte_size * 8, name, "bytes")
+    symbolic_bytes = create_any(ex, bits, name, "bytes") if bits else ByteVec()
     return encode_tuple_bytes(symbolic_bytes)
 
 
@@ -429,30 +435,30 @@ def create_string(ex, arg, **kwargs):
         extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createString()"
     )
     name = name_of(extract_string_argument(arg, 1))
-    symbolic_string = create_generic(ex, byte_size * 8, name, "string")
+    symbolic_string = create_any(ex, byte_size * 8, name, "string")
     return encode_tuple_bytes(symbolic_string)
 
 
 def create_bytes4(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    result = ByteVec(create_generic(ex, 32, name, "bytes4"))
+    result = ByteVec(create_any(ex, 32, name, "bytes4"))
     result.append((0).to_bytes(28))  # pad right
     return result
 
 
 def create_bytes32(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return ByteVec(create_generic(ex, 256, name, "bytes32"))
+    return ByteVec(create_any(ex, 256, name, "bytes32"))
 
 
 def create_address(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return ByteVec(uint256(create_generic(ex, 160, name, "address")))
+    return ByteVec(uint256(create_any(ex, 160, name, "address")))
 
 
 def create_bool(ex, arg, **kwargs):
     name = name_of(extract_string_argument(arg, 0))
-    return ByteVec(uint256(create_generic(ex, 1, name, "bool")))
+    return ByteVec(uint256(create_any(ex, 1, name, "bool")))
 
 
 def apply_vmaddr(ex, private_key: Word):
