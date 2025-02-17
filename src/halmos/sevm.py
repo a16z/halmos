@@ -2851,6 +2851,32 @@ class SEVM:
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
 
+    def run_message(self, pre_ex: Exec, message: Message, path: Path) -> Iterator[Exec]:
+        ex0 = Exec(
+            code=pre_ex.code.copy(),  # shallow copy
+            storage=deepcopy(pre_ex.storage),
+            balance=pre_ex.balance,
+            #
+            block=deepcopy(pre_ex.block),
+            #
+            context=CallContext(message=message),
+            callback=None,
+            #
+            pgm=pre_ex.code[message.target],
+            pc=0,
+            st=State(),
+            jumpis={},
+            #
+            path=path,
+            alias=pre_ex.alias.copy(),
+            #
+            cnts=deepcopy(pre_ex.cnts),
+            sha3s=pre_ex.sha3s.copy(),
+            storages=pre_ex.storages.copy(),
+            balances=pre_ex.balances.copy(),
+        )
+        return self.run(ex0)
+
     def run(self, ex0: Exec) -> Iterator[Exec]:
         step_id: int = 0
         stack: Worklist = Worklist()

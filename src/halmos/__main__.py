@@ -73,7 +73,6 @@ from .sevm import (
     ONE,
     SEVM,
     ZERO,
-    Address,
     Block,
     CallContext,
     CallOutput,
@@ -109,6 +108,7 @@ from .utils import (
     red,
     unbox_int,
     yellow,
+    Address,
 )
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
@@ -523,7 +523,7 @@ def run_single_invariant_step(
 # run the given contract `addr` from the given input state `ex`
 # return all output states.
 def run_target_contract(ctx, ex, addr) -> list[Exec]:
-    # todo: factor out common logic with run_test
+    args = ctx.args
 
     code = ex.code[addr]
     contract_name = code.contract_name
@@ -548,11 +548,9 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
 
         state_mutability = abi[fun_sig]["stateMutability"]
         if state_mutability in ["pure", "view"]:
-            if ctx.args.debug:
+            if args.debug:
                 print(f"Skipping {fun_name} ({state_mutability})")
             continue
-
-        args = ctx.args
 
         sevm = SEVM(args, fun_info)
         # todo: reuse solver across functions
@@ -560,7 +558,6 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
         path = Path(solver)
         path.extend_path(ex.path)
 
-        # todo: mk_calldata with symbol name uniqueness
         cd, dyn_params = mk_calldata(
             abi, fun_info, args, new_symbol_id=ex.new_symbol_id
         )
@@ -575,31 +572,7 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
             call_scheme=EVM.CALL,
         )
 
-        exs = sevm.run(
-            Exec(
-                code=ex.code.copy(),  # shallow copy
-                storage=deepcopy(ex.storage),
-                balance=ex.balance,
-                #
-                block=deepcopy(ex.block),
-                #
-                context=CallContext(message=message),
-                callback=None,
-                #
-                pgm=ex.code[addr],
-                pc=0,
-                st=State(),
-                jumpis={},
-                #
-                path=path,
-                alias=ex.alias.copy(),
-                #
-                cnts=deepcopy(ex.cnts),
-                sha3s=ex.sha3s.copy(),
-                storages=ex.storages.copy(),
-                balances=ex.balances.copy(),
-            )
-        )
+        exs = sevm.run_message(ex, message, path)
 
         for post_ex in exs:
             # update call traces
@@ -669,31 +642,7 @@ def run_test(ctx: FunctionContext, terminal=True) -> TestResult:
     timer.create_subtimer("paths")
 #   sevm.status_start()
 
-    exs = sevm.run(
-        Exec(
-            code=setup_ex.code.copy(),  # shallow copy
-            storage=deepcopy(setup_ex.storage),
-            balance=setup_ex.balance,
-            #
-            block=deepcopy(setup_ex.block),
-            #
-            context=CallContext(message=message),
-            callback=None,
-            #
-            pgm=setup_ex.code[setup_ex.this()],
-            pc=0,
-            st=State(),
-            jumpis={},
-            #
-            path=path,
-            alias=setup_ex.alias.copy(),
-            #
-            cnts=deepcopy(setup_ex.cnts),
-            sha3s=setup_ex.sha3s.copy(),
-            storages=setup_ex.storages.copy(),
-            balances=setup_ex.balances.copy(),
-        )
-    )
+    exs = sevm.run_message(setup_ex, message, path)
 
     normal = 0
     potential = 0
