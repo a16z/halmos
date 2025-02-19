@@ -1041,19 +1041,6 @@ class Exec:  # an execution path
         opcode = self.current_opcode()
         return f"addr={hexify(self.this())} pc={self.pc} insn={mnemonic(opcode)}"
 
-    def push(self, val) -> None:
-        val = unbox_int(val)
-
-        if isinstance(val, int):
-            if val in sha3_inv:
-                # restore precomputed hashes
-                val = self.sha3_data(con(sha3_inv[val]))
-            # TODO: support more commonly used concrete keccak values
-            elif val == EMPTY_KECCAK:
-                val = self.sha3_data(b"")
-
-        self.st._push(val)
-
     def halt(
         self,
         data: ByteVec | None,
@@ -1449,6 +1436,19 @@ class Exec:  # an execution path
 
     def int_of(self, x: Any, err: str = None) -> int:
         return int_of(x, err, self.path.concretization.substitution)
+
+    def push(self, val) -> None:
+        val = unbox_int(val)
+
+        if isinstance(val, int):
+            if val in sha3_inv:
+                # restore precomputed hashes
+                val = self.sha3_data(con(sha3_inv[val]))
+            # TODO: support more commonly used concrete keccak values
+            elif val == EMPTY_KECCAK:
+                val = self.sha3_data(b"")
+
+        self.st._push(val)
 
 
 class Storage:
