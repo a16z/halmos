@@ -669,6 +669,8 @@ class EVM:
     MSIZE = 0x59
     GAS = 0x5A
     JUMPDEST = 0x5B
+    TLOAD = 0x5C
+    TSTORE = 0x5D
     MCOPY = 0x5E
     PUSH0 = 0x5F
     PUSH1 = 0x60
@@ -817,6 +819,9 @@ str_opcode: dict[int, str] = {
     EVM.MSIZE: "MSIZE",
     EVM.GAS: "GAS",
     EVM.JUMPDEST: "JUMPDEST",
+    EVM.TLOAD: "TLOAD",
+    EVM.TSTORE: "TSTORE",
+    EVM.MCOPY: "MCOPY",
     EVM.PUSH0: "PUSH0",
     EVM.PUSH1: "PUSH1",
     EVM.PUSH2: "PUSH2",

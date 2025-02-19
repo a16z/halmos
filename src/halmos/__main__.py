@@ -237,6 +237,7 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
         storage={this: sevm.mk_storagedata()},
+        transient_storage={this: sevm.mk_storagedata()},
         balance=EMPTY_BALANCE,
         block=mk_block(),
         context=CallContext(message=message),
@@ -439,6 +440,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
         Exec(
             code=setup_ex.code.copy(),  # shallow copy
             storage=deepcopy(setup_ex.storage),
+            transient_storage=deepcopy(setup_ex.transient_storage),
             balance=setup_ex.balance,
             #
             block=deepcopy(setup_ex.block),

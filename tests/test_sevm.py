@@ -67,6 +67,7 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
     return sevm.mk_exec(
         code={this: bytecode},
         storage={this: storage},
+        transient_storage={this: storage},
         balance=balance,
         block=mk_block(),
         context=CallContext(message),
