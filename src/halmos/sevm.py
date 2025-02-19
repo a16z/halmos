@@ -350,6 +350,7 @@ class StorageWrite:
     address: Address
     slot: Word
     value: Word
+    transient: bool
 
 
 @dataclass(frozen=True)
@@ -357,6 +358,7 @@ class StorageRead:
     address: Address
     slot: Word
     value: Word
+    transient: bool
 
 
 @dataclass(frozen=True)
@@ -2072,7 +2074,7 @@ class SEVM:
     def sload(self, ex: Exec, addr: Any, loc: Word, transient: bool = False) -> Word:
         storage = ex.storage if not transient else ex.transient_storage
         val = self.storage_model.load(ex, storage, addr, loc)
-        ex.context.trace.append(StorageRead(addr, loc, val))
+        ex.context.trace.append(StorageRead(addr, loc, val, transient))
         return val
 
     def sstore(
@@ -2080,7 +2082,7 @@ class SEVM:
     ) -> None:
         storage = ex.storage if not transient else ex.transient_storage
 
-        ex.context.trace.append(StorageWrite(addr, loc, val))
+        ex.context.trace.append(StorageWrite(addr, loc, val, transient))
 
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())

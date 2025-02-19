@@ -114,12 +114,14 @@ def rendered_slot(slot: Address) -> str:
 
 def rendered_sstore(update: StorageWrite) -> str:
     slot_str = rendered_slot(update.slot)
-    return f"{cyan('SSTORE')} @{slot_str} ← {hexify(update.value)}"
+    opcode = cyan("SSTORE" if not update.transient else "TSTORE")
+    return f"{opcode} @{slot_str} ← {hexify(update.value)}"
 
 
 def rendered_sload(read: StorageRead) -> str:
     slot_str = rendered_slot(read.slot)
-    return f"{cyan('SLOAD')}  @{slot_str} → {hexify(read.value)}"
+    opcode = cyan("SLOAD" if not read.transient else "TLOAD")
+    return f"{opcode}  @{slot_str} → {hexify(read.value)}"
 
 
 def rendered_trace(context: CallContext) -> str:
