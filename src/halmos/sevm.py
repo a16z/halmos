@@ -2072,7 +2072,7 @@ class SEVM:
         return self.storage_model.mk_storagedata()
 
     def sload(self, ex: Exec, addr: Any, loc: Word, transient: bool = False) -> Word:
-        storage = ex.storage if not transient else ex.transient_storage
+        storage = ex.transient_storage if transient else ex.storage
         val = self.storage_model.load(ex, storage, addr, loc)
         ex.context.trace.append(StorageRead(addr, loc, val, transient))
         return val
@@ -2080,7 +2080,7 @@ class SEVM:
     def sstore(
         self, ex: Exec, addr: Any, loc: Any, val: Any, transient: bool = False
     ) -> None:
-        storage = ex.storage if not transient else ex.transient_storage
+        storage = ex.transient_storage if transient else ex.storage
 
         ex.context.trace.append(StorageWrite(addr, loc, val, transient))
 
