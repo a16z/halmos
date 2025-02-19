@@ -1469,7 +1469,14 @@ class SolidityStorage(Storage):
 
     @classmethod
     def init(
-        cls, ex: Exec, storage: dict, addr: Any, slot: int, keys: tuple, num_keys: int, size_keys: int
+        cls,
+        ex: Exec,
+        storage: dict,
+        addr: Any,
+        slot: int,
+        keys: tuple,
+        num_keys: int,
+        size_keys: int,
     ) -> None:
         """
         Initialize storage[addr].mapping[slot][num_keys][size_keys], if not yet initialized
@@ -1637,7 +1644,9 @@ class GenericStorage(Storage):
         )
 
     @classmethod
-    def init(cls, ex: Exec, storage: dict, addr: Any, loc: BitVecRef, size_keys: int) -> None:
+    def init(
+        cls, ex: Exec, storage: dict, addr: Any, loc: BitVecRef, size_keys: int
+    ) -> None:
         """
         Initialize storage[addr].mapping[size_keys], if not yet initialized
 
@@ -2066,7 +2075,9 @@ class SEVM:
         ex.context.trace.append(StorageRead(addr, loc, val))
         return val
 
-    def sstore(self, ex: Exec, addr: Any, loc: Any, val: Any, transient: bool = False) -> None:
+    def sstore(
+        self, ex: Exec, addr: Any, loc: Any, val: Any, transient: bool = False
+    ) -> None:
         storage = ex.storage if not transient else ex.transient_storage
 
         ex.context.trace.append(StorageWrite(addr, loc, val))
@@ -3167,12 +3178,12 @@ class SEVM:
 
                 elif opcode == EVM.TLOAD:
                     slot: Word = ex.st.pop()
-                    ex.st.push(self.sload(ex, ex.this(), slot, transient = True))
+                    ex.st.push(self.sload(ex, ex.this(), slot, transient=True))
 
                 elif opcode == EVM.TSTORE:
                     slot: Word = ex.st.pop()
                     value: Word = ex.st.pop()
-                    self.sstore(ex, ex.this(), slot, value, transient = True)
+                    self.sstore(ex, ex.this(), slot, value, transient=True)
 
                 elif opcode == EVM.RETURNDATASIZE:
                     ex.st.push(ex.returndatasize())
