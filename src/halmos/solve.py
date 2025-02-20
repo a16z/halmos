@@ -395,7 +395,6 @@ def _solve_low_level(path_ctx: PathContext, _) -> SolverOutput:
     # which translates to timeout_seconds=None for subprocess.run
     timeout_seconds = t / 1000 if (t := args.solver_timeout_assertion) else None
 
-    Path("out.txt").write_text(Path(smt2_filename).read_text())
     cmd = args.solver_command.split() + [smt2_filename]
     future = PopenFuture(cmd, timeout=timeout_seconds)
 
