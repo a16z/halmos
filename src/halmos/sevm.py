@@ -138,6 +138,7 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
+    cache,
 )
 
 Steps = dict[int, dict[str, Any]]  # execution tree
@@ -864,16 +865,19 @@ class Path:
                 tmp_solver.assert_and_track(
                     cond.translate(tmp_solver.ctx), str(cond.get_id())
                 )
-            query = tmp_solver.to_smt2()
+            query = tmp_solver.sexpr()
             tmp_solver.reset()
         else:
-            query = self.solver.to_smt2()
+            query = self.solver.sexpr()
         query = query.replace("(check-sat)", "")  # see __main__.solve()
 
         return SMTQuery(query, ids)
 
     def check(self, cond):
-        return self.solver.check(cond)
+        # this cache not always improves performance, probably should be used only if took long enough
+        #return self.solver.check(cond)
+        cache_key = (str(self.solver), str(cond))
+        return _check(self.solver, cond, cache_key)
 
     def branch(self, cond):
         if len(self.pending) > 0:
@@ -940,6 +944,11 @@ class Path:
     def extend_path(self, path):
         # branching conditions are not preserved
         self.extend(path.conditions.keys())
+
+
+@cache
+def _check(solver, cond, _):
+    return solver.check(cond)
 
 
 class StorageData:

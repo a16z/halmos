@@ -6,6 +6,8 @@ import uuid
 from functools import partial
 from timeit import default_timer as timer
 from typing import Any
+from diskcache import Cache
+from pathlib import Path
 
 from z3 import (
     Z3_OP_BADD,
@@ -129,9 +131,12 @@ f_sha3_512_name = f_sha3_name(512)
 #       in both cases, decl() == f_sha3_0_name, and num_args() == 0.
 f_sha3_empty = BitVec(f_sha3_0_name, BitVecSort256)
 
+_ctr = 0
 
 def uid() -> str:
-    return uuid.uuid4().hex[:7]
+    global _ctr
+    _ctr += 1
+    return str(_ctr)
 
 
 def wrap(x: Any) -> Word:
@@ -242,6 +247,9 @@ def is_concat(x: BitVecRef) -> bool:
 
 
 def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
+    global _ctr
+    _ctr = 0
+
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
 
@@ -1249,3 +1257,17 @@ class NamedTimer:
             f"NamedTimer(name={self.name}, start_time={self.start_time}, "
             f"end_time={self.end_time}, sub_timers={self.sub_timers})"
         )
+
+
+#cache = Memory(location=f"{Path.home()}/.cache/halmos", verbose=False).cache   # too slow for many small writes
+_cache = Cache(f"{Path.home()}/.cache/halmos")
+
+def cache(fn):
+    def fn2(*args):
+        r = _cache.get(args[-1])
+        if r:
+            return r
+        r = fn(*args)
+        _cache.set(args[-1], r)
+        return r
+    return fn2

@@ -20,7 +20,7 @@ from halmos.processes import (
     TimeoutExpired,
 )
 from halmos.sevm import Exec, SMTQuery
-from halmos.utils import hexify
+from halmos.utils import hexify, cache
 
 
 @dataclass
@@ -375,7 +375,13 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     """Invokes an external solver process to solve the given query.
 
     Can raise TimeoutError or some Exception raised during execution"""
+    cache_key = (PathContext(**{**path_ctx.__dict__, **dict(args=None, path_id=None, solving_ctx=None, query=None)}),
+                 path_ctx.query.smtlib)
+    return _solve_low_level(path_ctx, cache_key)
 
+
+@cache
+def _solve_low_level(path_ctx: PathContext, _) -> SolverOutput:
     args, smt2_filename = path_ctx.args, str(path_ctx.dump_file)
 
     # make sure the smt2 file has been written
