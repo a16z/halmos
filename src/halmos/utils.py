@@ -157,7 +157,7 @@ def uint(x: Any, n: int) -> Word:
     Truncates or zero-extends x to n bits
     """
 
-    return BV(x, n)
+    return BV(x, size=n)
     # if isinstance(x, bytes):
     #     x = int.from_bytes(x, "big")
 

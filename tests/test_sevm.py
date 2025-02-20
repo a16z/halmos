@@ -284,7 +284,7 @@ def byte_of(i, x):
         ),  # not necessarily 0; TODO: prove it is equal to y >> 255
         # TODO: SHA3
         (o(EVM.ADDRESS), [], uint256(this)),
-        (o(EVM.BALANCE), [x], Select(balance, uint160(x))),
+        (o(EVM.BALANCE), [x], Select(balance, uint160(x).wrapped())),
         (o(EVM.ORIGIN), [], uint256(origin)),
         (o(EVM.CALLER), [], uint256(caller)),
         (o(EVM.CALLVALUE), [], callvalue),

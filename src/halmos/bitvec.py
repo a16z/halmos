@@ -1,4 +1,4 @@
-from typing import TypeAlias, Union
+from typing import TypeAlias
 
 from z3 import (
     And,
@@ -20,10 +20,9 @@ from z3 import (
 from halmos.exceptions import NotConcreteError
 
 BV: TypeAlias = "HalmosBitVec"
-AnyValue: TypeAlias = Union[int, bytes, BitVecRef, BV, "HalmosBool"]
-BVValue: TypeAlias = int | BitVecRef
+AnyValue: TypeAlias = "int | bytes | BitVecRef | BV | HalmosBool"
+BVValue: TypeAlias = int | BitVecRef | BoolRef
 MaybeSize: TypeAlias = int | None
-
 AnyBool: TypeAlias = bool | BoolRef
 
 
@@ -35,24 +34,48 @@ def as_int(value: AnyValue) -> tuple[BVValue, MaybeSize]:
     elif is_bv_value(value):
         return value.as_long(), value.size()
     elif isinstance(value, HalmosBitVec):
-        return value.value, value.size
+        return value.unwrap(), value.size
     elif isinstance(value, BitVecRef):
         return value, value.size()
     elif isinstance(value, HalmosBool):
-        return value.value, 1
+        return value.unwrap(), 1
+    elif isinstance(value, BoolRef):
+        return value, 1
     else:
         raise TypeError(f"Cannot convert {type(value)} to int")
 
 
 class HalmosBool:
+    """
+    Immutable wrapper for concrete or symbolic boolean values.
+
+    Can be constructed with:
+    - HalmosBool(42 % 2 == 0) # bool
+    - HalmosBool(BitVec(x, 8) != 0) # BoolRef
+    - HalmosBool(HalmosBitVec(x, 8)) # HalmosBitVec, same as above
+
+    Conversion to and from HalmosBitVec:
+    - HalmosBitVec(halmos_bool) (same as halmos_bool.as_bv())
+    - HalmosBool(halmos_bitvec) (same as halmos_bitvec.is_non_zero())
+
+    Wrapping/unwrapping:
+    - halmos_bool.wrapped() always converts to a z3 BoolRef
+    - bool(halmos_bool) converts to a concrete bool, raises if symbolic
+    - halmos_bool.value/unwrap() returns the underlying bool or z3 BoolRef
+    """
+
     __slots__ = ("_value", "_symbolic")
 
     def __new__(cls, value):
         if isinstance(value, HalmosBool):
             return value
+
         return super().__new__(cls)
 
     def __init__(self, value: AnyBool):
+        if isinstance(value, HalmosBitVec):
+            value = value.value != 0
+
         self._value = value
         if isinstance(value, bool):
             self._symbolic = False
@@ -138,12 +161,32 @@ class HalmosBool:
     def as_bv(self, size: int = 1) -> BV:
         if self._symbolic:
             expr = If(self._value, BitVecVal(1, size), BitVecVal(0, size))
-            return HalmosBitVec(expr, size)
+            return HalmosBitVec(expr, size=size)
 
         return HalmosBitVec(int(self._value), size)
 
 
 class HalmosBitVec:
+    """
+    Immutable wrapper for concrete or symbolic bitvectors.
+
+    Can be constructed with:
+    - HalmosBitVec(42) # int
+    - HalmosBitVec(bytes.fromhex("12345678")) # bytes
+    - HalmosBitVec(BitVecVal(42, 8)) # BitVecVal
+    - HalmosBitVec(BitVec(x, 8)) # BitVecRef
+    - HalmosBitVec(halmos_bool) # HalmosBool
+
+    Conversion to and from HalmosBool:
+    - HalmosBitVec(halmos_bool) (same as halmos_bool.as_bv())
+    - HalmosBool(halmos_bitvec) (same as halmos_bitvec.is_non_zero())
+
+    Wrapping/unwrapping:
+    - halmos_bitvec.wrapped() always converts to a z3 BitVecRef
+    - int(halmos_bitvec) converts to a concrete int, raises if symbolic
+    - halmos_bitvec.value/unwrap() returns the underlying int or z3 BitVecRef
+    """
+
     __slots__ = ("_value", "_symbolic", "_size")
 
     def __new__(cls, value, size=None):
@@ -154,11 +197,10 @@ class HalmosBitVec:
                 return value
 
         # otherwise, proceed with normal allocation
-        instance = super().__new__(cls)
-        return instance
+        return super().__new__(cls)
 
     def __init__(
-        self, value: AnyValue, size: MaybeSize = None, do_simplify: bool = True
+        self, value: AnyValue, *, size: MaybeSize = None, do_simplify: bool = True
     ):
         """
         Create a new HalmosBitVec from an integer, bytes, or a z3 BitVecRef.
@@ -168,10 +210,18 @@ class HalmosBitVec:
         If do_simplify is True, the value will be simplified using z3's simplify function.
         """
 
-        # first, coerce int-like values to int
+        # unwrap HalmosBool
+        if isinstance(value, HalmosBool):
+            value = value.unwrap()
+
+        # coerce int-like values to int
         value, maybe_size = as_int(value)
         size = size or (maybe_size or 256)
         self._size = size
+
+        # coerce symbolic BoolRef to BitVecRef
+        if isinstance(value, BoolRef):
+            value = If(value, BitVecVal(1, size), BitVecVal(0, size))
 
         # at this point, value should either be an int or a BitVecRef
         if isinstance(value, int):
@@ -249,7 +299,7 @@ class HalmosBitVec:
         # check the fast path (most common case) first:
         if isinstance(other, HalmosBitVec):
             assert size == other._size
-            return HalmosBitVec(self._value + other._value, size)
+            return HalmosBitVec(self._value + other._value, size=size)
 
         # otherwise, attempt to convert the other value to an int
         other_value, other_size = as_int(other)
@@ -264,7 +314,7 @@ class HalmosBitVec:
         # cases:
         # - concrete + concrete may overflow, will be masked in the constructor
         # - any combination of symbolic and concrete is symbolic, handled by z3 module
-        return HalmosBitVec(self._value + other_value, size)
+        return HalmosBitVec(self._value + other_value, size=size)
 
     def __radd__(self, other: AnyValue) -> BV:
         return self.__add__(other)
@@ -274,7 +324,7 @@ class HalmosBitVec:
 
         if isinstance(other, HalmosBitVec):
             assert size == other._size
-            return HalmosBitVec(self._value - other._value, size)
+            return HalmosBitVec(self._value - other._value, size=size)
 
         other_value, other_size = as_int(other)
         assert other_size is None or other_size == size
@@ -283,7 +333,7 @@ class HalmosBitVec:
         if isinstance(other_value, int) and other_value == 0:
             return self
 
-        return HalmosBitVec(self._value - other_value, size)
+        return HalmosBitVec(self._value - other_value, size=size)
 
     def __rsub__(self, other: AnyValue) -> "HalmosBitVec":
         # (other - self)
@@ -291,12 +341,12 @@ class HalmosBitVec:
 
         if isinstance(other, HalmosBitVec):
             assert size == other._size
-            return HalmosBitVec(other._value - self._value, size)
+            return HalmosBitVec(other._value - self._value, size=size)
 
         other_value, other_size = as_int(other)
         assert other_size is None or other_size == size
 
-        return HalmosBitVec(other_value - self._value, size)
+        return HalmosBitVec(other_value - self._value, size=size)
 
     def __mul__(self, other: AnyValue) -> "HalmosBitVec":
         size = self._size
@@ -305,7 +355,7 @@ class HalmosBitVec:
             assert size == other._size
             if not other._symbolic and other._value == 1:
                 return self
-            return HalmosBitVec(self._value * other._value, size)
+            return HalmosBitVec(self._value * other._value, size=size)
 
         other_value, other_size = as_int(other)
         assert other_size is None or other_size == size
@@ -314,7 +364,7 @@ class HalmosBitVec:
         if isinstance(other_value, int) and other_value == 1:
             return self
 
-        return HalmosBitVec(self._value * other_value, size)
+        return HalmosBitVec(self._value * other_value, size=size)
 
     def __rmul__(self, other: AnyValue) -> "HalmosBitVec":
         # just reuse __mul__
@@ -331,7 +381,7 @@ class HalmosBitVec:
 
         if isinstance(other, HalmosBitVec):
             assert size == other._size
-            return HalmosBitVec(UDiv(self._value, other._value), size)
+            return HalmosBitVec(UDiv(self._value, other._value), size=size)
 
         other_value, other_size = as_int(other)
         assert other_size is None or other_size == size
@@ -339,10 +389,10 @@ class HalmosBitVec:
         if isinstance(other_value, int):
             if other_value == 0:
                 raise ZeroDivisionError("division by zero")
-            return HalmosBitVec(self._value // other_value, size)
+            return HalmosBitVec(self._value // other_value, size=size)
         else:
             # symbolic
-            return HalmosBitVec(UDiv(self._value, other_value), size)
+            return HalmosBitVec(UDiv(self._value, other_value), size=size)
 
     def __rfloordiv__(self, other: AnyValue) -> "HalmosBitVec":
         """
@@ -363,9 +413,9 @@ class HalmosBitVec:
                 pass
             if self._value == 0:
                 raise ZeroDivisionError("division by zero")
-            return HalmosBitVec(other_value // self._value, size)
+            return HalmosBitVec(other_value // self._value, size=size)
         else:
-            return HalmosBitVec(UDiv(other_value, self._value), size)
+            return HalmosBitVec(UDiv(other_value, self._value), size=size)
 
     # If you also want __truediv__, just do the same pattern
     # or alias it to __floordiv__ as desired.
@@ -379,7 +429,7 @@ class HalmosBitVec:
 
         if isinstance(other, HalmosBitVec):
             assert size == other._size
-            return HalmosBitVec(URem(self._value, other._value), size)
+            return HalmosBitVec(URem(self._value, other._value), size=size)
 
         other_value, other_size = as_int(other)
         assert other_size is None or other_size == size
@@ -387,9 +437,9 @@ class HalmosBitVec:
         if isinstance(other_value, int):
             if other_value == 0:
                 raise ZeroDivisionError("mod by zero")
-            return HalmosBitVec(self._value % other_value, size)
+            return HalmosBitVec(self._value % other_value, size=size)
         else:
-            return HalmosBitVec(URem(self._value, other_value), size)
+            return HalmosBitVec(URem(self._value, other_value), size=size)
 
     def __rmod__(self, other: AnyValue) -> "HalmosBitVec":
         """
@@ -407,9 +457,9 @@ class HalmosBitVec:
         if isinstance(other_value, int):
             if self._value == 0:
                 raise ZeroDivisionError("mod by zero")
-            return HalmosBitVec(other_value % self._value, size)
+            return HalmosBitVec(other_value % self._value, size=size)
         else:
-            return HalmosBitVec(URem(other_value, self._value), size)
+            return HalmosBitVec(URem(other_value, self._value), size=size)
 
     # Shifts
     def __lshift__(self, shift: AnyValue) -> "HalmosBitVec":
@@ -425,7 +475,7 @@ class HalmosBitVec:
             # if shift._value == 0 and is concrete => return self
             if not shift._symbolic and shift._value == 0:
                 return self
-            return HalmosBitVec(self._value << shift._value, size)
+            return HalmosBitVec(self._value << shift._value, size=size)
 
         shift_value, shift_size = as_int(shift)
         assert shift_size is None or shift_size == size
@@ -433,7 +483,7 @@ class HalmosBitVec:
         if isinstance(shift_value, int) and shift_value == 0:
             return self
 
-        return HalmosBitVec(self._value << shift_value, size)
+        return HalmosBitVec(self._value << shift_value, size=size)
 
     def __rshift__(self, shift: AnyValue) -> "HalmosBitVec":
         """
@@ -452,7 +502,7 @@ class HalmosBitVec:
             # if you stored it in self._value, do that:
             from z3 import LShR
 
-            return HalmosBitVec(LShR(self._value, shift._value), size)
+            return HalmosBitVec(LShR(self._value, shift._value), size=size)
 
         shift_value, shift_size = as_int(shift)
         assert shift_size is None or shift_size == size
@@ -464,7 +514,7 @@ class HalmosBitVec:
         if isinstance(shift_value, int):
             # plain Python >> does an arithmetic shift if self._value < 0, but presumably we treat as unsigned
             # so do standard python right shift for positives or mask out if needed
-            return HalmosBitVec(self._value >> shift_value, size)
+            return HalmosBitVec(self._value >> shift_value, size=size)
         else:
             # symbolic shift
             from z3 import LShR
