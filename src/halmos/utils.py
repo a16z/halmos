@@ -6,7 +6,7 @@ import uuid
 from functools import partial
 from timeit import default_timer as timer
 from typing import Any
-from joblib import Memory
+from diskcache import Cache
 from pathlib import Path
 
 from z3 import (
@@ -1259,4 +1259,15 @@ class NamedTimer:
         )
 
 
-cache = Memory(location=f"{Path.home()}/.cache/halmos", verbose=False).cache
+#cache = Memory(location=f"{Path.home()}/.cache/halmos", verbose=False).cache   # too slow for many small writes
+_cache = Cache(f"{Path.home()}/.cache/halmos")
+
+def cache(fn):
+    def fn2(*args):
+        r = _cache.get(args[-1])
+        if r:
+            return r
+        r = fn(*args)
+        _cache.set(args[-1], r)
+        return r
+    return fn2
