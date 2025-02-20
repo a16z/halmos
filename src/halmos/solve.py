@@ -20,7 +20,7 @@ from halmos.processes import (
     TimeoutExpired,
 )
 from halmos.sevm import Exec, SMTQuery
-from halmos.utils import hexify
+from halmos.utils import hexify, cache
 
 
 @dataclass
@@ -375,7 +375,13 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     """Invokes an external solver process to solve the given query.
 
     Can raise TimeoutError or some Exception raised during execution"""
+    cache_key = (PathContext(**{**path_ctx.__dict__, **dict(args=None, solving_ctx=None, query=None)}),
+                 path_ctx.query.smtlib)
+    return _solve_low_level(path_ctx, cache_key)
 
+
+@cache(ignore=["path_ctx"])
+def _solve_low_level(path_ctx: PathContext, _) -> SolverOutput:
     args, smt2_filename = path_ctx.args, str(path_ctx.dump_file)
 
     # make sure the smt2 file has been written
@@ -389,6 +395,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     # which translates to timeout_seconds=None for subprocess.run
     timeout_seconds = t / 1000 if (t := args.solver_timeout_assertion) else None
 
+    Path("out.txt").write_text(Path(smt2_filename).read_text())
     cmd = args.solver_command.split() + [smt2_filename]
     future = PopenFuture(cmd, timeout=timeout_seconds)
 

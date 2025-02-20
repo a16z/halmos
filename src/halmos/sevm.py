@@ -138,6 +138,7 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
+    cache,
 )
 
 Steps = dict[int, dict[str, Any]]  # execution tree
@@ -873,7 +874,8 @@ class Path:
         return SMTQuery(query, ids)
 
     def check(self, cond):
-        return self.solver.check(cond)
+        cache_key = (str(self.solver), str(cond))
+        return _check(self.solver, cond, cache_key)
 
     def branch(self, cond):
         if len(self.pending) > 0:
@@ -940,6 +942,11 @@ class Path:
     def extend_path(self, path):
         # branching conditions are not preserved
         self.extend(path.conditions.keys())
+
+
+@cache(ignore=["solver", "cond"])
+def _check(solver, cond, _):
+    return solver.check(cond)
 
 
 class StorageData:
