@@ -24,7 +24,6 @@ from z3 import (
     Not,
     SignExt,
     SolverFor,
-    ZeroExt,
     eq,
     is_app,
     is_app_of,
@@ -37,6 +36,8 @@ from z3 import (
     substitute,
 )
 
+from .bitvec import HalmosBitVec as BV
+from .bitvec import HalmosBool as Bool
 from .exceptions import HalmosException, NotConcreteError
 from .logs import warn
 from .mapper import Mapper
@@ -49,7 +50,7 @@ secp256k1n = (
 Byte = int | BitVecRef  # uint8
 Bytes4 = int | BitVecRef  # uint32
 Address = int | BitVecRef  # uint160
-Word = int | BitVecRef  # uint256
+Word = int | BitVecRef | BV  # uint256
 Bytes = bytes | BitVecRef  # arbitrary-length sequence of bytes
 
 
@@ -156,21 +157,22 @@ def uint(x: Any, n: int) -> Word:
     Truncates or zero-extends x to n bits
     """
 
-    if isinstance(x, bytes):
-        x = int.from_bytes(x, "big")
+    return BV(x, n)
+    # if isinstance(x, bytes):
+    #     x = int.from_bytes(x, "big")
 
-    if isinstance(x, int):
-        return con(x, size_bits=n)
+    # if isinstance(x, int):
+    #     return con(x, size_bits=n)
 
-    if is_bool(x):
-        return If(x, con(1, size_bits=n), con(0, size_bits=n))
+    # if is_bool(x):
+    #     return If(x, con(1, size_bits=n), con(0, size_bits=n))
 
-    bitsize = x.size()
-    if bitsize == n:
-        return x
-    if bitsize > n:
-        return simplify(Extract(n - 1, 0, x))
-    return simplify(ZeroExt(n - bitsize, x))
+    # bitsize = x.size()
+    # if bitsize == n:
+    #     return x
+    # if bitsize > n:
+    #     return simplify(Extract(n - 1, 0, x))
+    # return simplify(ZeroExt(n - bitsize, x))
 
 
 def uint8(x: Any) -> Byte:
@@ -208,6 +210,23 @@ def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, BitVecSorts[size_bits])
 
 
+def z3_bv(x: Any) -> BitVecRef:
+    if isinstance(x, BV):
+        return x.value if x.symbolic else con(x.unwrap(), size_bits=x.size)
+
+    # must check before int because isinstance(True, int) is True
+    if isinstance(x, bool):
+        return BoolVal(x)
+
+    if isinstance(x, int):
+        return con(x, size_bits=256)
+
+    if is_bv(x) or is_bool(x):
+        return x
+
+    raise ValueError(x)
+
+
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
 def test(x: Word, b: bool) -> Word:
@@ -225,15 +244,34 @@ def test(x: Word, b: bool) -> Word:
         raise ValueError(x)
 
 
-def is_non_zero(x: Word) -> Word:
-    return test(x, True)
+def is_non_zero(x: Word) -> Bool:
+    if isinstance(x, Bool):
+        return x.neg()
+
+    if isinstance(x, BV):
+        return x.is_non_zero()
+
+    return ValueError(f"Cannot test non-zero for {type(x)}")
+
+    # return test(x, True)
 
 
-def is_zero(x: Word) -> Word:
-    return test(x, False)
+def is_zero(x: Word) -> Bool:
+    if isinstance(x, Bool):
+        return x
+
+    if isinstance(x, BV):
+        return x.is_zero()
+
+    return ValueError(f"Cannot test zero for {type(x)}")
+
+    # return test(x, False)
 
 
 def is_concrete(x: Any) -> bool:
+    if isinstance(x, BV):
+        return not x.symbolic
+
     return isinstance(x, int | bytes) or is_bv_value(x)
 
 
@@ -1249,3 +1287,36 @@ class NamedTimer:
             f"NamedTimer(name={self.name}, start_time={self.start_time}, "
             f"end_time={self.end_time}, sub_timers={self.sub_timers})"
         )
+
+
+def format_time(seconds: float) -> str:
+    """
+    Return a pretty string for an elapsed time in seconds.
+    Automatically choose a relevant time unit among s, ms, µs, ns.
+    """
+    if seconds >= 1:
+        # 1 second or more
+        return f"{seconds:.3f}s"
+    elif seconds >= 1e-3:
+        # 1 millisecond or more
+        return f"{seconds * 1e3:.3f}ms"
+    elif seconds >= 1e-6:
+        # 1 microsecond or more
+        return f"{seconds * 1e6:.3f}µs"
+    else:
+        # Otherwise, display in nanoseconds
+        return f"{seconds * 1e9:.3f}ns"
+
+
+class timed:
+    def __init__(self, label="Block"):
+        self.label = label
+
+    def __enter__(self):
+        self.start = timer()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        end = timer()
+        elapsed = end - self.start
+        print(f"{self.label} took {format_time(elapsed)}")

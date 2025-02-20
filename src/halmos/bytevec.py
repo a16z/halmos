@@ -6,6 +6,7 @@ from typing import Any, ForwardRef
 from sortedcontainers import SortedDict
 from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
 
+from .bitvec import HalmosBitVec as BV
 from .logs import warn
 from .utils import (
     Byte,
@@ -627,11 +628,15 @@ class ByteVec:
         """
 
         # convert to concrete value when possible
+        if isinstance(value, BV):
+            value = value.unwrap()
+
         if is_bv_value(value):
             value = value.as_long()
 
         if isinstance(value, int):
             value = int.to_bytes(value, 32, "big")
+
         elif is_bool(value):
             value = If(value, con(1), con(0))
 

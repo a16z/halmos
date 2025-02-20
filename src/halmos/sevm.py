@@ -59,6 +59,8 @@ from z3 import (
 )
 from z3.z3util import is_expr_var
 
+from .bitvec import HalmosBitVec as BV
+from .bitvec import HalmosBool as Bool
 from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
 from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
@@ -92,7 +94,6 @@ from .mapper import BuildOut
 from .utils import (
     EVM,
     Address,
-    BitVecSort8,
     BitVecSort160,
     BitVecSort256,
     BitVecSort264,
@@ -126,7 +127,6 @@ from .utils import (
     is_bv_value,
     is_concrete,
     is_f_sha3_name,
-    is_non_zero,
     is_zero,
     match_dynamic_array_overflow_condition,
     restore_precomputed_hashes,
@@ -138,6 +138,7 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
+    z3_bv,
 )
 
 Steps = dict[int, dict[str, Any]]  # execution tree
@@ -145,6 +146,7 @@ Steps = dict[int, dict[str, Any]]  # execution tree
 EMPTY_BYTES = ByteVec()
 EMPTY_KECCAK = 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470
 ZERO, ONE = con(0), con(1)
+BV_ZERO, BV_ONE = BV(0), BV(1)
 MAX_CALL_DEPTH = 1024
 
 # bytes4(keccak256("Panic(uint256)"))
@@ -214,15 +216,6 @@ def mnemonic(opcode) -> str:
         return str_opcode.get(opcode, hex(opcode))
     else:
         return str(opcode)
-
-
-def is_byte(x: Any) -> bool:
-    if is_bv(x):
-        return eq(x.sort(), BitVecSort8)
-    elif isinstance(x, int):
-        return 0 <= x < 256
-    else:
-        return False
 
 
 def normalize(expr: Any) -> Any:
@@ -491,19 +484,25 @@ class State:
         )
 
     def push(self, v: Word) -> None:
-        if isinstance(v, int):
+        if isinstance(v, BV | Bool):
+            self.stack.append(v)
+        elif isinstance(v, bool):
+            self.stack.append(Bool(v))
+        elif isinstance(v, int):
             # TODO: support native types on the stack
             # if not (0 <= v < 2**256):
             #     raise ValueError(v)
             # self.stack.append(v)
 
             # for now, wrap ints in a BitVec
-            self.stack.append(con(v))
-        else:
-            if not (eq(v.sort(), BitVecSort256) or is_bool(v)):
+            # self.stack.append(con(v))
+            self.stack.append(BV(v))
+        elif isinstance(v, BitVecRef):
+            if not (eq(v.sort(), BitVecSort256)):
                 raise ValueError(v)
-
-            self.stack.append(simplify(v))
+            self.stack.append(BV(v))
+        else:
+            raise TypeError(f"Cannot push {type(v)} onto the stack")
 
     def pop(self) -> Word:
         if not self.stack:
@@ -889,6 +888,10 @@ class Path:
         # create a new scope within the solver, and save the current scope
         # the solver will roll back to this scope later when the new path is activated
         path.num_scopes = self.solver.num_scopes()
+
+        # import threading
+        # is_main_thread = threading.current_thread() == threading.main_thread()
+        # print(f"[tid={hex(threading.get_ident())} {is_main_thread=}] pushing solver scope {path.solver.num_scopes()}")
         self.solver.push()
 
         # shallow copy because existing conditions won't change
@@ -1781,15 +1784,16 @@ def b2i(w: BitVecRef | BoolRef) -> BitVecRef:
     """
     Convert a boolean or bitvector to a bitvector.
     """
-    if is_true(w):
-        return ONE
-    if is_false(w):
-        return ZERO
-    if is_bool(w):
-        return If(w, ONE, ZERO)
-    if is_bv(w):
-        return w
-    raise ValueError(w)
+
+    return BV(w)
+
+    # if is_true(w):
+    #     return BV_ONE
+    # if is_false(w):
+    #     return BV_ZERO
+    # if is_bool(w):
+    #     return If(w, ONE, ZERO)
+    # return w
 
 
 def is_power_of_two(x: int) -> bool:
@@ -2072,14 +2076,23 @@ class SEVM:
         return self.storage_model.mk_storagedata()
 
     def sload(self, ex: Exec, addr: Any, loc: Word, transient: bool = False) -> Word:
+        addr = z3_bv(addr)
+        loc = z3_bv(loc)
+
         storage = ex.transient_storage if transient else ex.storage
+
         val = self.storage_model.load(ex, storage, addr, loc)
+
         ex.context.trace.append(StorageRead(addr, loc, val, transient))
         return val
 
     def sstore(
         self, ex: Exec, addr: Any, loc: Any, val: Any, transient: bool = False
     ) -> None:
+        addr = z3_bv(addr)
+        loc = z3_bv(loc)
+        val = z3_bv(val)
+
         storage = ex.transient_storage if transient else ex.storage
 
         ex.context.trace.append(StorageWrite(addr, loc, val, transient))
@@ -2649,8 +2662,18 @@ class SEVM:
 
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
-        cond_true = simplify(is_non_zero(cond))
-        cond_false = simplify(is_zero(cond))
+        # print(f"{cond=} {type(cond)=}")
+        # print(f"{is_non_zero(cond)=} {type(is_non_zero(cond))=}")
+        # print(f"{z3_bv(is_non_zero(cond))=} {type(z3_bv(is_non_zero(cond)))=}")
+
+        cond_true = simplify(cond.is_non_zero().wrapped())
+        cond_false = simplify(cond.is_zero().wrapped())
+
+        # cond_true = simplify(is_non_zero(cond))
+        # cond_false = simplify(is_zero(cond))
+
+        # print(f"{cond_true=} {type(cond_true)=}")
+        # print(f"{cond_false=} {type(cond_false)=}")
 
         potential_true: bool = ex.check(cond_true) != unsat
         potential_false: bool = ex.check(cond_false) != unsat
@@ -2666,14 +2689,14 @@ class SEVM:
             follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
-                if self.options.debug:
-                    # rendering ex.path to string can be expensive, so only do it if debug is enabled
-                    debug(
-                        f"\nloop id: {jid}\n"
-                        f"loop condition: {cond}\n"
-                        f"calldata: {ex.calldata()}\n"
-                        f"path condition:\n{ex.path}\n"
-                    )
+                # if self.options.debug:
+                # rendering ex.path to string can be expensive, so only do it if debug is enabled
+                # debug(
+                #     f"\nloop id: {jid}\n"
+                #     f"loop condition: {cond}\n"
+                #     f"calldata: {ex.calldata()}\n"
+                #     f"path condition:\n{ex.path}\n"
+                # )
         else:
             # for constant-bounded loops
             follow_true = potential_true
