@@ -874,8 +874,10 @@ class Path:
         return SMTQuery(query, ids)
 
     def check(self, cond):
-        cache_key = (str(self.solver), str(cond))
-        return _check(self.solver, cond, cache_key)
+        # this cache not always improves performance, probably should be used only if took long enough
+        return self.solver.check(cond)
+        #cache_key = (str(self.solver), str(cond))
+        #return _check(self.solver, cond, cache_key)
 
     def branch(self, cond):
         if len(self.pending) > 0:
