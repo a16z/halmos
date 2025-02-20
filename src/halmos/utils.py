@@ -212,7 +212,10 @@ def con(n: int, size_bits=256) -> Word:
 
 def z3_bv(x: Any) -> BitVecRef:
     if isinstance(x, BV):
-        return x.value if x.symbolic else con(x.unwrap(), size_bits=x.size)
+        return x.wrapped()
+
+    if isinstance(x, Bool):
+        return BV(x).wrapped()
 
     # must check before int because isinstance(True, int) is True
     if isinstance(x, bool):
@@ -270,7 +273,10 @@ def is_zero(x: Word) -> Bool:
 
 def is_concrete(x: Any) -> bool:
     if isinstance(x, BV):
-        return not x.symbolic
+        return x.is_concrete
+
+    if isinstance(x, Bool):
+        return x.is_concrete
 
     return isinstance(x, int | bytes) or is_bv_value(x)
 
