@@ -38,15 +38,12 @@ from z3 import (
     Extract,
     Function,
     If,
-    LShR,
     Or,
     Select,
     SignExt,
     Solver,
     SRem,
     Store,
-    UDiv,
-    URem,
     Xor,
     ZeroExt,
     eq,
@@ -511,7 +508,7 @@ class State:
 
     def popi(self) -> Word:
         """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
-        return b2i(self.pop())
+        return BV(self.pop())
 
     def peek(self, n: int = 1) -> Word:
         return self.stack[-n]
@@ -1780,7 +1777,7 @@ def bitwise(op, x: Word, y: Word) -> Word:
         return bitwise(op, b2i(x), b2i(y))
 
 
-def b2i(w: BitVecRef | BoolRef) -> BitVecRef:
+def b2i(w: BitVecRef | BoolRef) -> BV:
     """
     Convert a boolean or bitvector to a bitvector.
     """
@@ -1794,13 +1791,6 @@ def b2i(w: BitVecRef | BoolRef) -> BitVecRef:
     # if is_bool(w):
     #     return If(w, ONE, ZERO)
     # return w
-
-
-def is_power_of_two(x: int) -> bool:
-    if x > 0:
-        return not (x & (x - 1))
-    else:
-        return False
 
 
 class HalmosLogs:
@@ -1898,10 +1888,6 @@ class SEVM:
         # ex.path.append(Or(y == ZERO, ULT(term, y))) # (x % y) < y if y != 0
         return term
 
-    def mk_mul(self, ex: Exec, x: Any, y: Any) -> Any:
-        term = f_mul[x.size()](x, y)
-        return term
-
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
         w1 = b2i(w1)
         w2 = b2i(w2)
@@ -1913,79 +1899,50 @@ class SEVM:
             return w1 - w2
 
         if op == EVM.MUL:
-            is_bv_value_w1 = is_bv_value(w1)
-            is_bv_value_w2 = is_bv_value(w2)
-
-            if is_bv_value_w1 and is_bv_value_w2:
-                return w1 * w2
-
-            if is_bv_value_w1:
-                i1: int = w1.as_long()
-                if i1 == 0:
-                    return w1
-
-                if i1 == 1:
-                    return w2
-
-                if is_power_of_two(i1):
-                    return w2 << (i1.bit_length() - 1)
-
-            if is_bv_value_w2:
-                i2: int = w2.as_long()
-                if i2 == 0:
-                    return w2
-
-                if i2 == 1:
-                    return w1
-
-                if is_power_of_two(i2):
-                    return w1 << (i2.bit_length() - 1)
-
-            if is_bv_value_w1 or is_bv_value_w2:
-                return w1 * w2
-
-            return self.mk_mul(ex, w1, w2)
+            return w1.mul(w2, abstraction=f_mul[w1.size])
 
         if op == EVM.DIV:
-            div_for_overflow_check = self.div_xy_y(w1, w2)
-            if div_for_overflow_check is not None:  # xy/x or xy/y
-                return div_for_overflow_check
+            # TODO: move to bitvec.py
+            # div_for_overflow_check = self.div_xy_y(w1, w2)
+            # if div_for_overflow_check is not None:  # xy/x or xy/y
+            #     return div_for_overflow_check
 
-            if is_bv_value(w1) and is_bv_value(w2):
-                if w2.as_long() == 0:
-                    return w2
-                else:
-                    return UDiv(w1, w2)  # unsigned div (bvudiv)
+            # if is_bv_value(w1) and is_bv_value(w2):
+            #     if w2.as_long() == 0:
+            #         return w2
+            #     else:
+            #         return UDiv(w1, w2)  # unsigned div (bvudiv)
 
-            if is_bv_value(w2):
-                # concrete denominator case
-                i2: int = w2.as_long()
-                if i2 == 0:
-                    return w2
+            # if is_bv_value(w2):
+            #     # concrete denominator case
+            #     i2: int = w2.as_long()
+            #     if i2 == 0:
+            #         return w2
 
-                if i2 == 1:
-                    return w1
+            #     if i2 == 1:
+            #         return w1
 
-                if is_power_of_two(i2):
-                    return LShR(w1, i2.bit_length() - 1)
+            #     if is_power_of_two(i2):
+            #         return LShR(w1, i2.bit_length() - 1)
 
             return self.mk_div(ex, w1, w2)
 
         if op == EVM.MOD:
-            if is_bv_value(w1) and is_bv_value(w2):
-                if w2.as_long() == 0:
-                    return w2
-                else:
-                    return URem(w1, w2)  # bvurem
+            # TODO: move to bitvec.py
+            # if is_bv_value(w1) and is_bv_value(w2):
+            #     if w2.as_long() == 0:
+            #         return w2
+            #     else:
+            #         return URem(w1, w2)  # bvurem
 
-            if is_bv_value(w2):
-                i2: int = int(str(w2))
-                if i2 == 0 or i2 == 1:
-                    return con(0, w2.size())
+            # if is_bv_value(w2):
+            #     i2: int = int(str(w2))
+            #     if i2 == 0 or i2 == 1:
+            #         return con(0, w2.size())
 
-                if is_power_of_two(i2):
-                    bitsize = i2.bit_length() - 1
-                    return ZeroExt(w2.size() - bitsize, Extract(bitsize - 1, 0, w1))
+            #     if is_power_of_two(i2):
+            #         bitsize = i2.bit_length() - 1
+            #         return ZeroExt(w2.size() - bitsize, Extract(bitsize - 1, 0, w1))
 
             return self.mk_mod(ex, w1, w2)
 
@@ -2658,22 +2615,12 @@ class SEVM:
         jid = ex.jumpi_id()
 
         target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
-        cond: Word = ex.st.pop()
+        cond = Bool(ex.st.pop())
 
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
-        # print(f"{cond=} {type(cond)=}")
-        # print(f"{is_non_zero(cond)=} {type(is_non_zero(cond))=}")
-        # print(f"{z3_bv(is_non_zero(cond))=} {type(z3_bv(is_non_zero(cond)))=}")
-
-        cond_true = simplify(cond.is_non_zero().wrapped())
-        cond_false = simplify(cond.is_zero().wrapped())
-
-        # cond_true = simplify(is_non_zero(cond))
-        # cond_false = simplify(is_zero(cond))
-
-        # print(f"{cond_true=} {type(cond_true)=}")
-        # print(f"{cond_false=} {type(cond_false)=}")
+        cond_true = simplify(cond.wrapped())
+        cond_false = simplify(cond.neg().wrapped())
 
         potential_true: bool = ex.check(cond_true) != unsat
         potential_false: bool = ex.check(cond_false) != unsat
@@ -2955,7 +2902,7 @@ class SEVM:
                 elif opcode == EVM.LT:
                     w1 = ex.st.popi()
                     w2 = ex.st.popi()
-                    ex.st.push(ULT(w1, w2))  # bvult
+                    ex.st.push(w1 < w2)  # bvult
 
                 elif opcode == EVM.GT:
                     w1 = ex.st.popi()
@@ -2976,19 +2923,13 @@ class SEVM:
                     w1 = ex.st.pop()
                     w2 = ex.st.pop()
 
-                    if eq(w1.sort(), w2.sort()):
-                        ex.st.push(w1 == w2)
-                    else:
-                        if is_bool(w1):
-                            if not is_bv(w2):
-                                raise ValueError(w2)
-                            ex.st.push(If(w1, ONE, ZERO) == w2)
-                        else:
-                            if not is_bv(w1):
-                                raise ValueError(w1)
-                            if not is_bool(w2):
-                                raise ValueError(w2)
-                            ex.st.push(w1 == If(w2, ONE, ZERO))
+                    match (w1, w2):
+                        case (Bool(), Bool()):
+                            ex.st.push(w1 == w2)
+                        case (BV(), BV()):
+                            ex.st.push(w1 == w2)
+                        case (_, _):
+                            ex.st.push(BV(w1) == BV(w2))
 
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
@@ -3007,12 +2948,12 @@ class SEVM:
                 elif opcode == EVM.SAR:
                     w1 = ex.st.popi()
                     w2 = ex.st.popi()
-                    ex.st.push(w2 >> w1)  # bvashr
+                    ex.st.push(w2.ashr(w1))  # bvashr
 
                 elif opcode == EVM.SHR:
                     w1 = ex.st.popi()
                     w2 = ex.st.popi()
-                    ex.st.push(LShR(w2, w1))  # bvlshr
+                    ex.st.push(w2.lshr(w1))  # bvlshr
 
                 elif opcode == EVM.SIGNEXTEND:
                     w = ex.int_of(ex.st.popi(), "symbolic SIGNEXTEND size")

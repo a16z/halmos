@@ -7,12 +7,15 @@ from z3 import (
     BoolRef,
     BoolVal,
     Extract,
+    FuncDeclRef,
     If,
+    LShR,
     Not,
     Or,
     UDiv,
     URem,
     ZeroExt,
+    eq,
     is_bv_value,
     simplify,
 )
@@ -24,6 +27,10 @@ AnyValue: TypeAlias = "int | bytes | BitVecRef | BV | HalmosBool"
 BVValue: TypeAlias = int | BitVecRef | BoolRef
 MaybeSize: TypeAlias = int | None
 AnyBool: TypeAlias = bool | BoolRef
+
+
+def is_power_of_two(x: int) -> bool:
+    return x > 0 and not (x & (x - 1))
 
 
 def as_int(value: AnyValue) -> tuple[BVValue, MaybeSize]:
@@ -73,8 +80,9 @@ class HalmosBool:
         return super().__new__(cls)
 
     def __init__(self, value: AnyBool):
-        if isinstance(value, HalmosBitVec):
-            value = value.value != 0
+        # avoid reinitializing HalmosBool because of __new__ shortcut
+        if isinstance(value, HalmosBool):
+            return
 
         self._value = value
         if isinstance(value, bool):
@@ -110,8 +118,12 @@ class HalmosBool:
         return self._value
 
     @property
-    def symbolic(self) -> bool:
+    def is_symbolic(self) -> bool:
         return self._symbolic
+
+    @property
+    def is_concrete(self) -> bool:
+        return not self._symbolic
 
     @property
     def value(self) -> AnyBool:
@@ -210,6 +222,10 @@ class HalmosBitVec:
         If do_simplify is True, the value will be simplified using z3's simplify function.
         """
 
+        # avoid reinitializing HalmosBitVec because of __new__ shortcut
+        if isinstance(value, HalmosBitVec):
+            return
+
         # unwrap HalmosBool
         if isinstance(value, HalmosBool):
             value = value.unwrap()
@@ -249,8 +265,12 @@ class HalmosBitVec:
         return self._size
 
     @property
-    def symbolic(self) -> bool:
+    def is_symbolic(self) -> bool:
         return self._symbolic
+
+    @property
+    def is_concrete(self) -> bool:
+        return not self._symbolic
 
     @property
     def value(self) -> int | BitVecRef:
@@ -348,23 +368,47 @@ class HalmosBitVec:
 
         return HalmosBitVec(other_value - self._value, size=size)
 
-    def __mul__(self, other: AnyValue) -> "HalmosBitVec":
+    def __mul__(self, other: BV) -> "HalmosBitVec":
+        return self.mul(other)
+
+    def mul(
+        self, other: BV, *, abstraction: FuncDeclRef | None = None
+    ) -> "HalmosBitVec":
         size = self._size
+        assert size == other.size
 
-        if isinstance(other, HalmosBitVec):
-            assert size == other._size
-            if not other._symbolic and other._value == 1:
-                return self
-            return HalmosBitVec(self._value * other._value, size=size)
+        lhs, rhs = self.value, other.value
+        print(f"{self=}, {other=}")
 
-        other_value, other_size = as_int(other)
-        assert other_size is None or other_size == size
+        match (self.is_concrete, other.is_concrete):
+            case (True, True):
+                return HalmosBitVec(lhs * rhs, size=size)
 
-        # If we multiply by 1, no new object needed
-        if isinstance(other_value, int) and other_value == 1:
-            return self
+            case (True, False):
+                if lhs == 0:
+                    return self
 
-        return HalmosBitVec(self._value * other_value, size=size)
+                if lhs == 1:
+                    return other
+
+                if is_power_of_two(lhs):
+                    return other << (lhs.bit_length() - 1)
+
+            case (False, True):
+                if rhs == 0:
+                    return other
+
+                if rhs == 1:
+                    return self
+
+                if is_power_of_two(rhs):
+                    return self << (rhs.bit_length() - 1)
+
+        return (
+            HalmosBitVec(lhs * rhs, size=size)
+            if abstraction is None
+            else HalmosBitVec(abstraction(lhs, rhs), size=size)
+        )
 
     def __rmul__(self, other: AnyValue) -> "HalmosBitVec":
         # just reuse __mul__
@@ -486,67 +530,60 @@ class HalmosBitVec:
         return HalmosBitVec(self._value << shift_value, size=size)
 
     def __rshift__(self, shift: AnyValue) -> "HalmosBitVec":
+        raise NotImplementedError("ambiguous, use lshr or ashr")
+
+    def lshr(self, shift: BV) -> "HalmosBitVec":
         """
-        Logical right shift by shift bits.
-        Python's >> is an arithmetic shift for negative ints,
-        but if we're dealing with unsigned logic, mask out as needed.
-        For Z3, use LShR if you want a logical shift: LShR(a, b).
+        Logical right shift
         """
+
         size = self._size
 
-        if isinstance(shift, HalmosBitVec):
-            assert size == shift._size
-            if not shift._symbolic and shift._value == 0:
+        # check for no-op
+        if shift.is_concrete:
+            if shift.value == 0:
                 return self
-            # for symbolic, might want z3.LShR
-            # if you stored it in self._value, do that:
-            from z3 import LShR
 
-            return HalmosBitVec(LShR(self._value, shift._value), size=size)
+            if shift.value >= size:
+                return HalmosBitVec(0, size=size)
 
-        shift_value, shift_size = as_int(shift)
-        assert shift_size is None or shift_size == size
+        return HalmosBitVec(LShR(self.wrapped(), shift.wrapped()), size=size)
 
-        if isinstance(shift_value, int) and shift_value == 0:
+    def ashr(self, shift: BV) -> "HalmosBitVec":
+        """
+        Arithmetic right shift
+        """
+
+        # check for no-op
+        if shift.is_concrete and shift.value == 0:
             return self
 
-        # for concrete
-        if isinstance(shift_value, int):
-            # plain Python >> does an arithmetic shift if self._value < 0, but presumably we treat as unsigned
-            # so do standard python right shift for positives or mask out if needed
-            return HalmosBitVec(self._value >> shift_value, size=size)
-        else:
-            # symbolic shift
-            from z3 import LShR
+        return HalmosBitVec(self.wrapped() >> shift.value, size=self.size)
 
-            return HalmosBitVec(LShR(self._value, shift_value), size)
+    def __invert__(self) -> BV:
+        # TODO: handle concrete case
+        return HalmosBitVec(~self.wrapped(), size=self.size)
 
-    def __rlshift__(self, shift: AnyValue) -> "HalmosBitVec":
-        """
-        shift << self
-        """
-        # same pattern as other r-operations
-        if isinstance(shift, HalmosBitVec):
-            assert shift._size == self._size
-            return shift.__lshift__(self)
-        # fallback
-        shift_value, shift_size = as_int(shift)
-        # just do shift_value << self._value
-        # careful about symbolic
-        return HalmosBitVec(shift_value << self._value, self._size)
+    def __lt__(self, other: BV) -> HalmosBool:
+        return self.ult(other)
 
-    def __rrshift__(self, shift: AnyValue) -> "HalmosBitVec":
-        """
-        shift >> self
-        """
-        if isinstance(shift, HalmosBitVec):
-            assert shift._size == self._size
-            return shift.__rshift__(self)
-        shift_value, shift_size = as_int(shift)
-        # do shift_value >> self._value
-        from z3 import LShR
+    def __gt__(self, other: BV) -> HalmosBool:
+        return self.ugt(other)
 
-        return HalmosBitVec(LShR(shift_value, self._value), self._size)
+    def __le__(self, other: BV) -> HalmosBool:
+        return self.ule(other)
+
+    def __ge__(self, other: BV) -> HalmosBool:
+        return self.uge(other)
+
+    def __eq__(self, other: BV) -> bool:
+        if self.is_symbolic and other.is_symbolic:
+            return self.size == other.size and eq(self.value, other.value)
+
+        if self.is_concrete and other.is_concrete:
+            return self.size == other.size and self.value == other.value
+
+        return False
 
     def ult(self, other: BV) -> HalmosBool:
         assert self._size == other._size
