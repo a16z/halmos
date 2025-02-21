@@ -249,7 +249,7 @@ def test(x: Word, b: bool) -> Word:
 
 def is_non_zero(x: Word) -> Bool:
     if isinstance(x, Bool):
-        return x.neg()
+        return x
 
     if isinstance(x, BV):
         return x.is_non_zero()
@@ -261,7 +261,7 @@ def is_non_zero(x: Word) -> Bool:
 
 def is_zero(x: Word) -> Bool:
     if isinstance(x, Bool):
-        return x
+        return x.neg()
 
     if isinstance(x, BV):
         return x.is_zero()
@@ -409,6 +409,9 @@ def int_of(x: Any, err: str = None, subst: dict = None) -> int:
     """
     Converts int-like objects to int or raises NotConcreteError
     """
+
+    if hasattr(x, "unwrap"):
+        x = x.unwrap()
 
     # attempt to replace symbolic (sub-)terms with their concrete values
     if subst and is_bv(x) and not is_bv_value(x):
