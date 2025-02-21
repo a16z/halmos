@@ -836,17 +836,18 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
 
 def contract_regex(args):
-    if args.contract:
-        return f"^{args.contract}$"
+    if contract := args.contract:
+        return f"^{contract}$"
     else:
         return args.match_contract
 
 
 def test_regex(args):
-    if args.match_test.startswith("^"):
-        return args.match_test
+    match_test = args.match_test
+    if match_test.startswith("^"):
+        return match_test
     else:
-        return f"^{args.function}.*{args.match_test}"
+        return f"^{args.function}.*{match_test}"
 
 
 @dataclass(frozen=True)
@@ -959,8 +960,11 @@ def _main(_args=None) -> MainResult:
     # run
     #
 
+    _contract_regex = contract_regex(args)
+    _test_regex = test_regex(args)
+
     for build_out_map, filename, contract_name in build_output_iterator(build_out):
-        if not re.search(contract_regex(args), contract_name):
+        if not re.search(_contract_regex, contract_name):
             continue
 
         (contract_json, contract_type, natspec) = build_out_map[filename][contract_name]
@@ -968,7 +972,7 @@ def _main(_args=None) -> MainResult:
             continue
 
         methodIdentifiers = contract_json["methodIdentifiers"]
-        funsigs = [f for f in methodIdentifiers if re.search(test_regex(args), f)]
+        funsigs = [f for f in methodIdentifiers if re.search(_test_regex, f)]
         num_found = len(funsigs)
 
         if num_found == 0:

@@ -22,7 +22,6 @@ from eth_hash.auto import keccak
 from rich.status import Status
 from z3 import (
     UGE,
-    UGT,
     ULE,
     ULT,
     And,
@@ -38,13 +37,11 @@ from z3 import (
     Extract,
     Function,
     If,
-    Or,
     Select,
     SignExt,
     Solver,
     SRem,
     Store,
-    Xor,
     ZeroExt,
     eq,
     is_eq,
@@ -506,7 +503,7 @@ class State:
             raise StackUnderflowError()
         return self.stack.pop()
 
-    def popi(self) -> Word:
+    def popi(self) -> BV:
         """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
         return BV(self.pop())
 
@@ -1755,16 +1752,14 @@ SomeStorage = TypeVar("SomeStorage", bound=Storage)
 
 
 def bitwise(op, x: Word, y: Word) -> Word:
-    if is_bool(x) and is_bool(y):
-        if op == EVM.AND:
-            return And(x, y)
-        elif op == EVM.OR:
-            return Or(x, y)
-        elif op == EVM.XOR:
-            return Xor(x, y)
-        else:
-            raise ValueError(op, x, y)
-    elif is_bv(x) and is_bv(y):
+    # only convert to BV if one of the operands is a bool
+    if isinstance(x, Bool) and isinstance(y, BV):
+        return bitwise(op, BV(x), y)
+
+    elif isinstance(x, BV) and isinstance(y, Bool):
+        return bitwise(op, x, BV(y))
+
+    else:
         if op == EVM.AND:
             return x & y
         elif op == EVM.OR:
@@ -1773,8 +1768,6 @@ def bitwise(op, x: Word, y: Word) -> Word:
             return x ^ y  # bvxor
         else:
             raise ValueError(op, x, y)
-    else:
-        return bitwise(op, b2i(x), b2i(y))
 
 
 def b2i(w: BitVecRef | BoolRef) -> BV:
@@ -1924,7 +1917,7 @@ class SEVM:
 
             #     if is_power_of_two(i2):
             #         return LShR(w1, i2.bit_length() - 1)
-
+            raise NotImplementedError("TODO: move to bitvec.py")
             return self.mk_div(ex, w1, w2)
 
         if op == EVM.MOD:
@@ -2902,22 +2895,22 @@ class SEVM:
                 elif opcode == EVM.LT:
                     w1 = ex.st.popi()
                     w2 = ex.st.popi()
-                    ex.st.push(w1 < w2)  # bvult
+                    ex.st.push(w1.ult(w2))  # bvult
 
                 elif opcode == EVM.GT:
                     w1 = ex.st.popi()
                     w2 = ex.st.popi()
-                    ex.st.push(UGT(w1, w2))  # bvugt
+                    ex.st.push(w1.ugt(w2))  # bvugt
 
                 elif opcode == EVM.SLT:
                     w1 = ex.st.popi()
                     w2 = ex.st.popi()
-                    ex.st.push(w1 < w2)  # bvslt
+                    ex.st.push(w1.slt(w2))  # bvslt
 
                 elif opcode == EVM.SGT:
                     w1 = ex.st.popi()
                     w2 = ex.st.popi()
-                    ex.st.push(w1 > w2)  # bvsgt
+                    ex.st.push(w1.sgt(w2))  # bvsgt
 
                 elif opcode == EVM.EQ:
                     w1 = ex.st.pop()
@@ -2925,11 +2918,11 @@ class SEVM:
 
                     match (w1, w2):
                         case (Bool(), Bool()):
-                            ex.st.push(w1 == w2)
+                            ex.st.push(w1.eq(w2))
                         case (BV(), BV()):
-                            ex.st.push(w1 == w2)
+                            ex.st.push(w1.eq(w2))
                         case (_, _):
-                            ex.st.push(BV(w1) == BV(w2))
+                            ex.st.push(BV(w1).eq(BV(w2)))
 
                 elif opcode == EVM.ISZERO:
                     ex.st.push(is_zero(ex.st.pop()))
