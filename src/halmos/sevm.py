@@ -2610,18 +2610,28 @@ class SEVM:
         target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
         cond = Bool(ex.st.pop())
 
-        visited = ex.jumpis.get(jid, {True: 0, False: 0})
+        if cond.is_true:
+            ex.pc = target
+            stack.push(ex, step_id)
+            return
 
-        cond_true = BoolVal(True) if cond.is_true else simplify(cond.wrapped())
-        cond_false = BoolVal(True) if cond.is_false else simplify(cond.neg().wrapped())
+        if cond.is_false:
+            ex.advance_pc()
+            stack.push(ex, step_id)
+            return
 
-        potential_true: bool = is_true(cond_true) or ex.check(cond_true) != unsat
-        potential_false: bool = is_true(cond_false) or ex.check(cond_false) != unsat
+        cond_true = simplify(cond.wrapped())
+        cond_false = simplify(cond.neg().wrapped())
+
+        potential_true: bool = ex.check(cond_true) != unsat
+        potential_false: bool = ex.check(cond_false) != unsat
 
         # note: both may be false if the previous path condition was considered unknown but turns out to be unsat later
 
         follow_true = False
         follow_false = False
+
+        visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
         if potential_true and potential_false:
             # for loop unrolling
