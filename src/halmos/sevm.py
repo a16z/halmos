@@ -2793,6 +2793,13 @@ class SEVM:
             else:
                 yield from ex.callback(ex, stack, step_id)
 
+        # cache config options out of the hot loop
+        no_status = self.options.no_status
+        max_depth = self.options.depth
+        log_option = self.options.log
+        print_steps = self.options.print_steps
+        print_mem = self.options.print_mem
+
         while stack:
             try:
                 item = stack.pop()
@@ -2801,7 +2808,7 @@ class SEVM:
                 step_id += 1
 
                 # display progress
-                if not self.options.no_status and step_id % PULSE_INTERVAL == 0:
+                if not no_status and step_id % PULSE_INTERVAL == 0:
                     elapsed = timer() - stack.start_time
                     speed = step_id / elapsed
 
@@ -2828,7 +2835,7 @@ class SEVM:
                 insn = ex.current_instruction()
                 opcode = insn.opcode
 
-                if (max_depth := self.options.depth) and step_id > max_depth:
+                if max_depth and step_id > max_depth:
                     warn(
                         f"{self.fun_info.sig}: incomplete execution due to the specified limit: --depth {max_depth}",
                         allow_duplicate=False,
@@ -2836,7 +2843,7 @@ class SEVM:
                     continue
 
                 # TODO: clean up
-                if self.options.log:
+                if log_option:
                     if opcode == EVM.JUMPI:
                         self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
                     # elif opcode == EVM.CALL:
@@ -2845,8 +2852,8 @@ class SEVM:
                         # self.steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
                         self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
-                if self.options.print_steps:
-                    print(ex.dump(print_mem=self.options.print_mem))
+                if print_steps:
+                    print(ex.dump(print_mem=print_mem))
 
                 if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
