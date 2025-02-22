@@ -108,10 +108,10 @@ class HalmosBool:
         return self._value
 
     def __repr__(self) -> str:
-        return f"HalmosBool({self._value})"
+        return str(self._value) if not self._symbolic else f"⚠️ SYM {self._value}"
 
     def __str__(self) -> str:
-        return str(self._value)
+        return str(self._value) if not self._symbolic else f"⚠️ SYM {self._value}"
 
     def __int__(self) -> int:
         return int(bool(self))
@@ -302,14 +302,10 @@ class HalmosBitVec:
         return self._value
 
     def __repr__(self) -> str:
-        return (
-            f"HalmosBitVec({self._value}, {self._size})"
-            if self._size != 256
-            else f"{self._value}"
-        )
+        return str(self._value) if not self._symbolic else f"⚠️ SYM {self._value}"
 
     def __str__(self) -> str:
-        return str(self._value)
+        return str(self._value) if not self._symbolic else f"⚠️ SYM {self._value}"
 
     def __hex__(self) -> str:
         raise NotImplementedError("Hex representation not implemented")
@@ -554,6 +550,9 @@ class HalmosBitVec:
         if shift.is_concrete:
             if shift.value == 0:
                 return self
+
+            if self.is_concrete:
+                return HalmosBitVec(self.value >> shift.value, size=size)
 
             if shift.value >= size:
                 return HalmosBitVec(0, size=size)
