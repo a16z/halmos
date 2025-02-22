@@ -2612,11 +2612,11 @@ class SEVM:
 
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
-        cond_true = simplify(cond.wrapped())
-        cond_false = simplify(cond.neg().wrapped())
+        cond_true = BoolVal(True) if cond.is_true else simplify(cond.wrapped())
+        cond_false = BoolVal(True) if cond.is_false else simplify(cond.neg().wrapped())
 
-        potential_true: bool = ex.check(cond_true) != unsat
-        potential_false: bool = ex.check(cond_false) != unsat
+        potential_true: bool = is_true(cond_true) or ex.check(cond_true) != unsat
+        potential_false: bool = is_true(cond_false) or ex.check(cond_false) != unsat
 
         # note: both may be false if the previous path condition was considered unknown but turns out to be unsat later
 
