@@ -301,15 +301,11 @@ def copy_returndata_to_memory(
     ex.st.set_mslice(ret_loc, data)
 
 
+@dataclass(frozen=True, slots=True, eq=False, order=False)
 class Instruction:
     opcode: int
     pc: int = -1
     operand: ByteVec | None = None
-
-    def __init__(self, opcode, pc=-1, operand=None) -> None:
-        self.opcode = opcode
-        self.pc = pc
-        self.operand = operand
 
     def __str__(self) -> str:
         operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
@@ -322,7 +318,7 @@ class Instruction:
         return insn_len(self.opcode)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, eq=False, order=False)
 class EventLog:
     """
     Data record produced during the execution of a transaction.
@@ -333,7 +329,7 @@ class EventLog:
     data: Bytes | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, eq=False, order=False)
 class StorageWrite:
     address: Address
     slot: Word
@@ -341,7 +337,7 @@ class StorageWrite:
     transient: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, eq=False, order=False)
 class StorageRead:
     address: Address
     slot: Word
@@ -349,7 +345,7 @@ class StorageRead:
     transient: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True, eq=False, order=False)
 class Message:
     target: Address
     caller: Address
@@ -374,7 +370,7 @@ class Message:
         return self.data.slice(start=start, stop=start + size)
 
 
-@dataclass
+@dataclass(frozen=False, slots=True, eq=False, order=False)
 class CallOutput:
     """
     Data record produced during the execution of a call.
@@ -395,7 +391,8 @@ class CallOutput:
 TraceElement = Union["CallContext", EventLog, StorageRead, StorageWrite]
 
 
-@dataclass
+# TODO: support frozen=True
+@dataclass(frozen=False, slots=True, eq=False, order=False)
 class CallContext:
     message: Message
     output: CallOutput = field(default_factory=CallOutput)
@@ -445,13 +442,11 @@ class CallContext:
             return last_subcall.get_stuck_reason()
 
 
+# TODO: support frozen=True
+@dataclass(frozen=True, slots=True, eq=False, order=False)
 class State:
-    stack: list[Word]
-    memory: ByteVec
-
-    def __init__(self) -> None:
-        self.stack = []
-        self.memory = ByteVec()
+    stack: list[Word] = field(default_factory=list)
+    memory: ByteVec = field(default_factory=ByteVec)
 
     def __deepcopy__(self, memo):  # -> State:
         st = State()
@@ -1807,8 +1802,6 @@ class Worklist:
     # for status reporting
     completed_paths: int = 0
 
-    _top: int = 0
-
     def push(self, ex: Exec, step: int):
         self.stack.append((ex, step))
 
@@ -2812,7 +2805,9 @@ class SEVM:
 
         while stack:
             try:
-                ex, prev_step_id = stack.pop()
+                item = stack.pop()
+                ex: Exec = item[0]
+                prev_step_id: int = item[1]
                 step_id += 1
 
                 # display progress
@@ -2840,8 +2835,8 @@ class SEVM:
                 if ex.context.depth > MAX_CALL_DEPTH:
                     raise MessageDepthLimitError(ex.context)
 
-                insn = ex.current_instruction()
-                opcode = insn.opcode
+                insn: Instruction = ex.current_instruction()
+                opcode: int = insn.opcode
 
                 if max_depth and step_id > max_depth:
                     warn(
