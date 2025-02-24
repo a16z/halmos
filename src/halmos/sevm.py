@@ -56,7 +56,7 @@ from z3.z3util import is_expr_var
 
 from .bitvec import HalmosBitVec as BV
 from .bitvec import HalmosBool as Bool
-from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
+from .bytevec import ByteVec, Chunk, ConcreteChunk
 from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
@@ -305,7 +305,9 @@ def copy_returndata_to_memory(
 class Instruction:
     opcode: int
     pc: int = -1
-    operand: ByteVec | None = None
+
+    # expected to be a BV256, so that it can be pushed on the stack with no conversion
+    operand: BV | None = None
 
     def __str__(self) -> str:
         operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
@@ -709,12 +711,15 @@ class Contract:
 
         return self._code.slice(start, stop)
 
-    def unwrapped_slice(self, start, stop) -> UnwrappedBytes:
+    def unwrapped_slice(self, start, stop) -> BV:
+        """
+        Returns a BV256 representing the slice of the bytecode
+        """
         # fast path for offsets in the concrete prefix
         if self._fastcode and stop < len(self._fastcode):
-            return self._fastcode[start:stop]
+            return BV(self._fastcode[start:stop], size=256)
 
-        return self._code.slice(start, stop).unwrap()
+        return BV(self._code.slice(start, stop).unwrap(), size=256)
 
     def __getitem__(self, key: int) -> Byte:
         """Returns the byte at the given offset."""
@@ -3235,21 +3240,22 @@ class SEVM:
                     ex.st.push(0)
 
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
-                    val = unbox_int(insn.operand)
-                    if isinstance(val, int):
-                        if opcode == EVM.PUSH32:
-                            if val in sha3_inv:
-                                # restore precomputed hashes
-                                ex.st.push(ex.sha3_data(con(sha3_inv[val])))
-                            # TODO: support more commonly used concrete keccak values
-                            elif val == EMPTY_KECCAK:
-                                ex.st.push(ex.sha3_data(b""))
-                            else:
-                                ex.st.push(val)
+                    val = insn.operand
+                    assert val.size == 256
+
+                    # Special handling for PUSH32 with concrete values
+                    if val.is_concrete and opcode == EVM.PUSH32:
+                        if inverse := sha3_inv.get(val.value):
+                            # restore precomputed hashes
+                            ex.st.push(ex.sha3_data(con(inverse)))
+                        # TODO: support more commonly used concrete keccak values
+                        elif val == EMPTY_KECCAK:
+                            ex.st.push(ex.sha3_data(b""))
                         else:
                             ex.st.push(val)
                     else:
-                        ex.st.push(uint256(val) if opcode < EVM.PUSH32 else val)
+                        # Handle all other cases (non-PUSH32 or non-concrete values)
+                        ex.st.push(val)
 
                 elif EVM.DUP1 <= opcode <= EVM.DUP16:
                     ex.st.dup(opcode - EVM.DUP1 + 1)
