@@ -2602,8 +2602,6 @@ class SEVM:
         stack: list[tuple[Exec, int]],
         step_id: int,
     ) -> None:
-        jid = ex.jumpi_id()
-
         target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
         cond = Bool(ex.st.pop())
 
@@ -2628,6 +2626,7 @@ class SEVM:
         follow_true = False
         follow_false = False
 
+        jid = ex.jumpi_id()
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
         if potential_true and potential_false:
