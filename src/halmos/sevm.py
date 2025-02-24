@@ -12,6 +12,7 @@ from typing import (
     Any,
     ForwardRef,
     Optional,
+    TypeAlias,
     TypeVar,
     Union,
 )
@@ -1796,22 +1797,20 @@ class HalmosLogs:
         self.bounded_loops.extend(logs.bounded_loops)
 
 
-@dataclass
-class WorklistItem:
-    ex: Exec
-    step: int
+WorklistItem: TypeAlias = tuple[Exec, int]
 
 
+@dataclass(slots=True, eq=False, order=False)
 class Worklist:
-    def __init__(self):
-        self.stack = []
+    stack: list[WorklistItem] = field(default_factory=list)
 
-        # status data
-        self.completed_paths = 0
-        self.start_time = timer()
+    # for status reporting
+    completed_paths: int = 0
+
+    _top: int = 0
 
     def push(self, ex: Exec, step: int):
-        self.stack.append(WorklistItem(ex, step))
+        self.stack.append((ex, step))
 
     def pop(self) -> WorklistItem:
         return self.stack.pop()
@@ -2809,17 +2808,16 @@ class SEVM:
         log_option = self.options.log
         print_steps = self.options.print_steps
         print_mem = self.options.print_mem
+        start_time = timer()
 
         while stack:
             try:
-                item = stack.pop()
-                ex: Exec = item.ex
-                prev_step_id: int = item.step
+                ex, prev_step_id = stack.pop()
                 step_id += 1
 
                 # display progress
                 if not no_status and step_id % PULSE_INTERVAL == 0:
-                    elapsed = timer() - stack.start_time
+                    elapsed = timer() - start_time
                     speed = step_id / elapsed
 
                     # hh:mm:ss
