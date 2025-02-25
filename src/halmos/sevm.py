@@ -984,8 +984,9 @@ class Exec:  # an execution path
     callback: Callable | None  # to be called when returning back to parent context
 
     # vm state
-    pgm: Contract
+    pgm: Contract | None
     pc: int
+    insn: Instruction | None
     st: State  # stack and memory
     jumpis: dict[JumpID, dict[bool, int]]  # for loop detection
     addresses_to_delete: set[Address]
@@ -1013,7 +1014,8 @@ class Exec:  # an execution path
         self.callback = kwargs["callback"]
         #
         self.pgm = kwargs["pgm"]
-        self.pc = kwargs["pc"]
+        self.pc = kwargs.get("pc") or 0
+        self.insn = None
         self.st = kwargs["st"]
         self.jumpis = kwargs["jumpis"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
@@ -1109,10 +1111,10 @@ class Exec:  # an execution path
         return self.context.message
 
     def current_opcode(self) -> Byte:
-        return unbox_int(self.pgm[self.pc])
+        return self.insn.opcode
 
-    def current_instruction(self) -> Instruction:
-        return self.pgm.decode_instruction(self.pc)
+    def fetch_instruction(self) -> None:
+        self.insn = self.pgm.decode_instruction(self.pc)
 
     def resolve_prank(self, to: Address) -> tuple[Address, Address]:
         # this potentially "consumes" the active prank
@@ -1171,8 +1173,12 @@ class Exec:  # an execution path
             )
         )
 
-    def advance_pc(self) -> None:
-        self.pc = self.pgm.next_pc(self.pc)
+    def advance(self, pc: int | None = None) -> None:
+        next_pc = pc or self.insn.next_pc
+
+        # updating pc will also trigger an insn fetch
+        self.pc = next_pc
+        self.insn = self.pgm.decode_instruction(next_pc)
 
     def quick_custom_check(self, cond: BitVecRef) -> CheckSatResult | None:
         """
@@ -2174,6 +2180,7 @@ class SEVM:
                 # restore vm state
                 new_ex.pgm = ex.pgm
                 new_ex.pc = ex.pc
+                new_ex.insn = ex.insn
                 new_ex.st = deepcopy(ex.st)
                 new_ex.jumpis = deepcopy(ex.jumpis)
 
@@ -2191,7 +2198,7 @@ class SEVM:
                     new_ex.balance = orig_balance
 
                 # add to worklist even if it reverted during the external call
-                new_ex.advance_pc()
+                new_ex.advance()
                 stack.push(new_ex)
 
             sub_ex = Exec(
@@ -2374,7 +2381,7 @@ class SEVM:
                     )
                 )
 
-                new_ex.advance_pc()
+                new_ex.advance()
                 stack.push(new_ex)
 
         # precompiles or cheatcodes
@@ -2449,7 +2456,7 @@ class SEVM:
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
             ex.st.push(0)
-            ex.advance_pc()
+            ex.advance()
 
             # add a virtual subcontext to the trace for debugging purposes
             subcall = CallContext(message=message, depth=ex.context.depth + 1)
@@ -2489,6 +2496,7 @@ class SEVM:
             # restore vm state
             new_ex.pgm = ex.pgm
             new_ex.pc = ex.pc
+            new_ex.insn = ex.insn
             new_ex.st = deepcopy(ex.st)
             new_ex.jumpis = deepcopy(ex.jumpis)
 
@@ -2521,7 +2529,7 @@ class SEVM:
                 new_ex.balance = orig_balance
 
             # add to worklist
-            new_ex.advance_pc()
+            new_ex.advance()
             stack.push(new_ex)
 
         sub_ex = Exec(
@@ -2561,12 +2569,12 @@ class SEVM:
         cond = Bool(ex.st.pop())
 
         if cond.is_true:
-            ex.pc = target
+            ex.advance(pc=target)
             stack.push(ex)
             return
 
         if cond.is_false:
-            ex.advance_pc()
+            ex.advance()
             stack.push(ex)
             return
 
@@ -2612,12 +2620,12 @@ class SEVM:
             else:
                 new_ex_true = ex
                 new_ex_true.path.append(cond_true, branching=True)
-                new_ex_true.pc = target
+                new_ex_true.advance(pc=target)
 
         if follow_false:
             new_ex_false = ex
             new_ex_false.path.append(cond_false, branching=True)
-            new_ex_false.advance_pc()
+            new_ex_false.advance()
 
         if new_ex_true:
             if potential_true and potential_false:
@@ -2640,7 +2648,7 @@ class SEVM:
 
         # if dst is concrete, just jump
         if is_concrete(dst):
-            ex.pc = int_of(dst)
+            ex.advance(pc=int_of(dst))
             stack.push(ex)
 
         # otherwise, create a new execution for feasible targets
@@ -2712,12 +2720,12 @@ class SEVM:
                 for candidate in ex.path.concretization.candidates[loaded]:
                     new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
                     new_ex.st.push(candidate)
-                    new_ex.advance_pc()
+                    new_ex.advance()
                     stack.push(new_ex)
                 return
 
         ex.st.push(loaded)
-        ex.advance_pc()
+        ex.advance()
         stack.push(ex)
 
     def sym_byte_of(self, idx: BitVecRef, w: BitVecRef) -> BitVecRef:
@@ -2760,6 +2768,10 @@ class SEVM:
 
         step_id = 0
 
+        # make sure the initial instruction has been fetched
+        if not ex0.insn:
+            ex0.fetch_instruction()
+
         try:
             while ex := stack.pop():
                 try:
@@ -2790,7 +2802,7 @@ class SEVM:
                     if ex.context.depth > MAX_CALL_DEPTH:
                         raise MessageDepthLimitError(ex.context)
 
-                    insn: Instruction = ex.current_instruction()
+                    insn: Instruction = ex.insn
                     opcode: int = insn.opcode
 
                     if max_depth and step_id > max_depth:
@@ -3210,7 +3222,7 @@ class SEVM:
                         # this halts the path, but we should only halt the current context
                         raise HalmosException(f"Unsupported opcode {hex(opcode)}")
 
-                    ex.advance_pc()
+                    ex.advance()
                     stack.push(ex)
 
                 except InfeasiblePath:
