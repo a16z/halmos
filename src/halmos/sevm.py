@@ -60,7 +60,7 @@ from z3 import (
 )
 from z3.z3util import is_expr_var, get_vars
 
-from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
+from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes, SymbolicChunk
 from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
@@ -1127,10 +1127,18 @@ class Exec:  # an execution path
 
     def path_slice(self):
         var_set = get_vars(self.balance)
-        # todo: include code as well
-        for _addr, _storage in self.storage.items():
+
+        for _addr, _contract in self.code.items():
             var_set = itertools.chain(var_set, get_vars(_addr))
-            for _, _val in _storage._mapping.items():
+            _code = _contract._code
+            for _chunk in _code.chunks.values():
+                if isinstance(_chunk, SymbolicChunk):
+                    var_set = itertools.chain(var_set, get_vars(_chunk.data))
+
+        # the addresses of self.storage have already been added in the above iterations
+        for _storage in self.storage.values():
+            # the keys of _storage._mapping are constant
+            for _val in _storage._mapping.values():
                 var_set = itertools.chain(var_set, get_vars(_val))
 
         self.path.slice(var_set)
