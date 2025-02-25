@@ -305,6 +305,7 @@ def copy_returndata_to_memory(
 class Instruction:
     opcode: int
     pc: int = -1
+    next_pc: int = -1
 
     # expected to be a BV256, so that it can be pushed on the stack with no conversion
     operand: BV | None = None
@@ -583,8 +584,7 @@ class Contract:
 
     _code: ByteVec
     _fastcode: bytes | None
-    _insn: dict[int, Instruction]
-    _next_pc: dict[int, int]
+    _insn: list[Instruction]
     _jumpdests: tuple[set] | None
 
     contract_name: str | None
@@ -607,8 +607,7 @@ class Contract:
                 self._fastcode = first_chunk.unwrap()
 
         # maps pc to decoded instruction (including operand and next_pc)
-        self._insn = dict()
-        self._next_pc = dict()
+        self._insn = [None] * len(code)
         self._jumpdests = None
 
         self.contract_name = contract_name
@@ -669,7 +668,7 @@ class Contract:
         except ValueError as e:
             raise ValueError(f"{e} (hexcode={hexcode})") from e
 
-    def _decode_instruction(self, pc: int) -> tuple[Instruction, int]:
+    def _decode_instruction(self, pc: int) -> Instruction:
         opcode = int_of(self[pc], f"symbolic opcode at pc={pc}")
         length = insn_len(opcode)
         next_pc = pc + length
@@ -677,26 +676,27 @@ class Contract:
         if length > 1:
             # TODO: consider slicing lazily
             operand = self.unwrapped_slice(pc + 1, next_pc)
-            return (Instruction(opcode, pc=pc, operand=operand), next_pc)
+            return Instruction(opcode, pc=pc, operand=operand, next_pc=next_pc)
 
-        return (Instruction(opcode, pc=pc), next_pc)
+        return Instruction(opcode, pc=pc, next_pc=next_pc)
 
     def decode_instruction(self, pc: int) -> Instruction:
         """decode instruction at pc and cache the result"""
 
-        if (insn := self._insn.get(pc)) is None:
-            insn, next_pc = self._decode_instruction(pc)
-            self._insn[pc] = insn
-            self._next_pc[pc] = next_pc
+        if (insn := self._insn[pc]) is not None:
+            return insn
 
+        insn = self._decode_instruction(pc)
+        self._insn[pc] = insn
         return insn
 
     def next_pc(self, pc):
-        if (result := self._next_pc.get(pc)) is not None:
-            return result
+        if (insn := self._insn[pc]) is not None:
+            return insn.next_pc
 
-        self.decode_instruction(pc)
-        return self._next_pc[pc]
+        insn = self._decode_instruction(pc)
+        self._insn[pc] = insn
+        return insn.next_pc
 
     def slice(self, start, size) -> ByteVec:
         # large start is allowed, but we must check the size
