@@ -813,6 +813,8 @@ class Path:
     related: dict[int, set[int]]
     # a variable -> a set of conditions in which the variable appears
     var_to_conds: dict[any, set[int]]
+    # constraints related to storage
+    sliced: set[int]
 
     def __init__(self, solver: Solver):
         self.solver = solver
@@ -823,6 +825,7 @@ class Path:
 
         self.related = {}
         self.var_to_conds = defaultdict(set)
+        self.sliced = None
 
 #       if path:
 #           for cond in path.conditions:
@@ -848,18 +851,23 @@ class Path:
     def get_related(self, cond) -> set[int]:
         return self._get_related(get_vars(cond))
 
-    def slice(self, var_set) -> "Path":
-        related = self._get_related(var_set)
+    def slice(self, var_set) -> None:
+        if self.sliced is not None:
+            raise ValueError("already sliced")
 
-        path = Path(self.solver)
+        self.sliced = self._get_related(var_set)
 
-        idx = 0
-        for cond, branching in self.conditions.items():
-            if idx in related:
-                path.append(cond, branching)
-            idx += 1
+#       related = self._get_related(var_set)
 
-        return path
+#       path = Path(self.solver)
+
+#       idx = 0
+#       for cond, branching in self.conditions.items():
+#           if idx in related:
+#               path.append(cond, branching)
+#           idx += 1
+
+#       return path
 
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
@@ -903,17 +911,17 @@ class Path:
 
         ids = [str(cond.get_id()) for cond in self.conditions]
 
-        if args.cache_solver:
-            # TODO: investigate whether a separate context is necessary here
-            tmp_solver = create_solver(ctx=Context())
-            for cond in self.conditions:
-                tmp_solver.assert_and_track(
-                    cond.translate(tmp_solver.ctx), str(cond.get_id())
-                )
-            query = tmp_solver.to_smt2()
-            tmp_solver.reset()
-        else:
-            query = self.solver.to_smt2()
+        # TODO: investigate whether a separate context is necessary here
+        tmp_solver = create_solver(ctx=Context())
+        for cond in self.conditions:
+            cond_copied = cond.translate(tmp_solver.ctx)
+            if args.cache_solver:
+                tmp_solver.assert_and_track(cond_copied, str(cond.get_id()))
+            else:
+                tmp_solver.add(cond_copied)
+        query = tmp_solver.to_smt2()
+        tmp_solver.reset()
+
         query = query.replace("(check-sat)", "")  # see __main__.solve()
 
         return SMTQuery(query, ids)
@@ -948,6 +956,7 @@ class Path:
 
         path.related = self.related.copy()
         path.var_to_conds = deepcopy(self.var_to_conds)
+        # path.sliced = None
 
         return path
 
@@ -993,9 +1002,24 @@ class Path:
         for cond in conds:
             self.append(cond, branching=branching)
 
+#   def extend_path(self, path):
+#       # branching conditions are not preserved
+#       self.extend(path.conditions.keys())
+
     def extend_path(self, path):
-        # branching conditions are not preserved
-        self.extend(path.conditions.keys())
+        self.conditions = path.conditions.copy()
+        self.concretization = deepcopy(path.concretization)
+        self.related = path.related.copy()
+        self.var_to_conds = deepcopy(path.var_to_conds)
+
+        if path.sliced is None:
+            for cond in self.conditions:
+                self.solver.add(cond)
+            return
+
+        for idx, cond in enumerate(self.conditions):
+            if idx in path.sliced:
+                self.solver.add(cond)
 
 
 class StorageData:
@@ -1109,7 +1133,7 @@ class Exec:  # an execution path
             for _, _val in _storage._mapping.items():
                 var_set = itertools.chain(var_set, get_vars(_val))
 
-        self.path = self.path.slice(var_set)
+        self.path.slice(var_set)
 
     def context_str(self) -> str:
         opcode = self.current_opcode()

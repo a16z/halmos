@@ -403,8 +403,7 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 
 def get_state_id(ex: Exec) -> bytes:
-    # todo: consider path constraints relevant to storage
-    return snapshot_state(ex, None, None, None, None).unwrap()
+    return snapshot_state(ex, include_path = True).unwrap()
 
 
 # execute invariant test functions in multiple depths
