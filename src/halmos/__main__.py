@@ -72,7 +72,6 @@ from .sevm import (
     Address,
     Block,
     CallContext,
-    CallOutput,
     Contract,
     Exec,
     FailCheatcode,
@@ -288,10 +287,7 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
     ex.pgm = deployed_bytecode
 
     # reset vm state
-    ex.pc = 0
-    ex.st = State()
-    ex.context.output = CallOutput()
-    ex.jumpis = {}
+    ex.reset()
 
     return ex
 

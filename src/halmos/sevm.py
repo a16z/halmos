@@ -137,8 +137,8 @@ from .utils import (
 
 EMPTY_BYTES = ByteVec()
 EMPTY_KECCAK = 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470
-ZERO, ONE = con(0), con(1)
-BV_ZERO, BV_ONE = BV(0), BV(1)
+Z3_ZERO, Z3_ONE = con(0), con(1)
+ZERO, ONE = BV(0), BV(1)
 MAX_CALL_DEPTH = 1024
 
 # bytes4(keccak256("Panic(uint256)"))
@@ -449,10 +449,7 @@ class State:
     memory: ByteVec = field(default_factory=ByteVec)
 
     def __deepcopy__(self, memo):  # -> State:
-        st = State()
-        st.stack = self.stack.copy()
-        st.memory = self.memory.copy()
-        return st
+        return State(stack=self.stack.copy(), memory=self.memory.copy())
 
     def dump(self, print_mem=False) -> str:
         if print_mem:
@@ -911,7 +908,7 @@ class Path:
         self.extend(self.pending, branching=True)
         self.pending = []
 
-    def append(self, cond, branching=False):
+    def append(self, cond: BoolRef, branching=False):
         cond = simplify(cond)
 
         if is_true(cond):
@@ -1019,7 +1016,7 @@ class Exec:  # an execution path
         #
         self.pgm = kwargs["pgm"]
         self.pc = kwargs.get("pc") or 0
-        self.insn = None
+        self.insn = self.pgm.decode_instruction(self.pc) if self.pgm else None
         self.st = kwargs["st"]
         self.jumpis = kwargs["jumpis"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()
@@ -1041,6 +1038,15 @@ class Exec:  # an execution path
     def context_str(self) -> str:
         opcode = self.current_opcode()
         return f"addr={hexify(self.this())} pc={self.pc} insn={mnemonic(opcode)}"
+
+    def reset(self):
+        """Resets VM state"""
+
+        self.pc = 0
+        self.insn = None
+        self.st = State()
+        self.context.output = CallOutput()
+        self.jumpis = {}
 
     def halt(
         self,
@@ -1763,13 +1769,15 @@ def bitwise(op, x: Word, y: Word) -> Word:
     elif isinstance(x, BV) and isinstance(y, Bool):
         return bitwise(op, x, BV(y))
 
+    # at this point, we expect x and y to be both Bool or both BV
+
     else:
         if op == EVM.AND:
             return x & y
         elif op == EVM.OR:
             return x | y
         elif op == EVM.XOR:
-            return x ^ y  # bvxor
+            return x ^ y
         else:
             raise ValueError(op, x, y)
 
@@ -1881,42 +1889,24 @@ class SEVM:
         w2 = b2i(w2)
 
         if op == EVM.ADD:
-            return w1 + w2
+            return w1.add(w2)
 
         if op == EVM.SUB:
-            return w1 - w2
+            return w1.sub(w2)
 
         if op == EVM.MUL:
             return w1.mul(w2, abstraction=f_mul[w1.size])
 
         if op == EVM.DIV:
-            # TODO: move to bitvec.py
-            # div_for_overflow_check = self.div_xy_y(w1, w2)
-            # if div_for_overflow_check is not None:  # xy/x or xy/y
-            #     return div_for_overflow_check
+            # TODO: div_xy_y
 
-            # if is_bv_value(w1) and is_bv_value(w2):
-            #     if w2.as_long() == 0:
-            #         return w2
-            #     else:
-            #         return UDiv(w1, w2)  # unsigned div (bvudiv)
-
-            # if is_bv_value(w2):
-            #     # concrete denominator case
-            #     i2: int = w2.as_long()
-            #     if i2 == 0:
-            #         return w2
-
-            #     if i2 == 1:
-            #         return w1
-
-            #     if is_power_of_two(i2):
-            #         return LShR(w1, i2.bit_length() - 1)
-            raise NotImplementedError("TODO: move to bitvec.py")
-            return self.mk_div(ex, w1, w2)
+            term = w1.div(w2, abstraction=f_div)
+            if term.is_symbolic:
+                ex.path.append(ULE(term.wrapped(), w1.wrapped()))  # (x / y) <= x
+            return term
 
         if op == EVM.MOD:
-            # TODO: move to bitvec.py
+            raise NotImplementedError("TODO: move to bitvec.py")
             # if is_bv_value(w1) and is_bv_value(w2):
             #     if w2.as_long() == 0:
             #         return w2
@@ -2114,12 +2104,12 @@ class SEVM:
         condition: Word = None,
     ) -> None:
         # no-op if value is zero
-        if is_bv_value(value) and value.as_long() == 0:
+        if value.is_concrete and value.value == 0:
             return
 
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
-        balance_cond = simplify(UGE(ex.balance_of(caller), value))
+        balance_cond = simplify(UGE(ex.balance_of(caller), value.wrapped()))
         if is_false(balance_cond):
             raise InfeasiblePath("transfer_value: balance is not enough")
         ex.path.append(balance_cond)
@@ -2632,14 +2622,15 @@ class SEVM:
             follow_false = visited[False] < self.options.loop
             if not (follow_true and follow_false):
                 self.logs.bounded_loops.append(jid)
-                # if self.options.debug:
+
                 # rendering ex.path to string can be expensive, so only do it if debug is enabled
-                # debug(
-                #     f"\nloop id: {jid}\n"
-                #     f"loop condition: {cond}\n"
-                #     f"calldata: {ex.calldata()}\n"
-                #     f"path condition:\n{ex.path}\n"
-                # )
+                if self.options.debug:
+                    debug(
+                        f"\nloop id: {jid}\n"
+                        f"loop condition: {cond}\n"
+                        f"calldata: {ex.calldata()}\n"
+                        f"path condition:\n{ex.path}\n"
+                    )
         else:
             # for constant-bounded loops
             follow_true = potential_true
@@ -2681,8 +2672,8 @@ class SEVM:
         dst = ex.st.pop()
 
         # if dst is concrete, just jump
-        if is_concrete(dst):
-            ex.advance(pc=int_of(dst))
+        if dst.is_concrete:
+            ex.advance(pc=dst.value)
             stack.push(ex)
 
         # otherwise, create a new execution for feasible targets
@@ -2935,12 +2926,12 @@ class SEVM:
                         ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
 
                     elif opcode == EVM.NOT:
-                        ex.st.push(~ex.st.popi())  # bvnot
+                        ex.st.push(ex.st.popi().bitwise_not())
 
                     elif opcode == EVM.SHL:
                         w1 = ex.st.popi()
                         w2 = ex.st.popi()
-                        ex.st.push(w2 << w1)  # bvshl
+                        ex.st.push(w2.lshl(w1))
 
                     elif opcode == EVM.SAR:
                         w1 = ex.st.popi()
@@ -3247,7 +3238,7 @@ class SEVM:
                                 # restore precomputed hashes
                                 ex.st.push(ex.sha3_data(con(inverse)))
                             # TODO: support more commonly used concrete keccak values
-                            elif val == EMPTY_KECCAK:
+                            elif val.value == EMPTY_KECCAK:
                                 ex.st.push(ex.sha3_data(b""))
                             else:
                                 ex.st.push(val)
