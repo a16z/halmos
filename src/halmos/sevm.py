@@ -351,6 +351,7 @@ class StorageWrite:
     address: Address
     slot: Word
     value: Word
+    transient: bool
 
 
 @dataclass(frozen=True)
@@ -358,6 +359,7 @@ class StorageRead:
     address: Address
     slot: Word
     value: Word
+    transient: bool
 
 
 @dataclass(frozen=True)
@@ -1039,6 +1041,7 @@ class Exec:  # an execution path
     # network
     code: dict[Address, Contract]
     storage: dict[Address, StorageData]  # address -> { storage slot -> value }
+    transient_storage: dict[Address, StorageData]  # for TLOAD and TSTORE
     balance: Any  # address -> balance
 
     # block
@@ -1070,6 +1073,7 @@ class Exec:  # an execution path
     def __init__(self, **kwargs) -> None:
         self.code = kwargs["code"]
         self.storage = kwargs["storage"]
+        self.transient_storage = kwargs["transient_storage"]
         self.balance = kwargs["balance"]
         #
         self.block = kwargs["block"]
@@ -1220,6 +1224,13 @@ class Exec:  # an execution path
                         map(
                             lambda x: f"- {x}: {self.storage[x]}\n",
                             self.storage,
+                        )
+                    ),
+                    "Transient Storage:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}: {self.transient_storage[x]}\n",
+                            self.transient_storage,
                         )
                     ),
                     f"Path:\n{self.path}",
@@ -1530,50 +1541,57 @@ class SolidityStorage(Storage):
 
     @classmethod
     def init(
-        cls, ex: Exec, addr: Any, slot: int, keys: tuple, num_keys: int, size_keys: int
+        cls,
+        ex: Exec,
+        storage: dict,
+        addr: Any,
+        slot: int,
+        keys: tuple,
+        num_keys: int,
+        size_keys: int,
     ) -> None:
         """
-        Initialize ex.storage[addr].mapping[slot][num_keys][size_keys], if not yet initialized
+        Initialize storage[addr].mapping[slot][num_keys][size_keys], if not yet initialized
         - case size_keys == 0: scalar type: initialized with zero or symbolic value
         - case size_keys != 0: mapping type: initialized with empty array or symbolic array
         """
         assert_address(addr)
 
-        storage = ex.storage[addr]
+        storage_addr = storage[addr]
 
-        if (slot, num_keys, size_keys) in storage:
+        if (slot, num_keys, size_keys) in storage_addr:
             return
 
         if size_keys > 0:
             # do not use z3 const array `K(BitVecSort(size_keys), ZERO)` when not ex.symbolic
             # instead use normal smt array, and generate emptyness axiom; see load()
-            storage[slot, num_keys, size_keys] = cls.empty(addr, slot, keys)
+            storage_addr[slot, num_keys, size_keys] = cls.empty(addr, slot, keys)
             return
 
         # size_keys == 0
-        storage[slot, num_keys, size_keys] = (
+        storage_addr[slot, num_keys, size_keys] = (
             BitVec(
                 # note: uuid is excluded to be deterministic
                 f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_00",
                 BitVecSort256,
             )
-            if storage.symbolic
+            if storage_addr.symbolic
             else ZERO
         )
 
     @classmethod
-    def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
+    def load(cls, ex: Exec, storage: dict, addr: Any, loc: Word) -> Word:
         (slot, keys, num_keys, size_keys) = cls.get_key_structure(ex, loc)
 
-        cls.init(ex, addr, slot, keys, num_keys, size_keys)
+        cls.init(ex, storage, addr, slot, keys, num_keys, size_keys)
 
-        storage = ex.storage[addr]
-        storage_chunk = storage[slot, num_keys, size_keys]
+        storage_addr = storage[addr]
+        storage_chunk = storage_addr[slot, num_keys, size_keys]
 
         if num_keys == 0:
             return storage_chunk
 
-        symbolic = storage.symbolic
+        symbolic = storage_addr.symbolic
         concat_keys = concat(keys)
 
         if not symbolic:
@@ -1584,15 +1602,15 @@ class SolidityStorage(Storage):
         return ex.select(storage_chunk, concat_keys, ex.storages, symbolic)
 
     @classmethod
-    def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+    def store(cls, ex: Exec, storage: dict, addr: Any, loc: Any, val: Any) -> None:
         (slot, keys, num_keys, size_keys) = cls.get_key_structure(ex, loc)
 
-        cls.init(ex, addr, slot, keys, num_keys, size_keys)
+        cls.init(ex, storage, addr, slot, keys, num_keys, size_keys)
 
-        storage = ex.storage[addr]
+        storage_addr = storage[addr]
 
         if num_keys == 0:
-            storage[slot, num_keys, size_keys] = val
+            storage_addr[slot, num_keys, size_keys] = val
             return
 
         new_storage_var = Array(
@@ -1600,10 +1618,10 @@ class SolidityStorage(Storage):
             BitVecSorts[size_keys],
             BitVecSort256,
         )
-        new_storage = Store(storage[slot, num_keys, size_keys], concat(keys), val)
+        new_storage = Store(storage_addr[slot, num_keys, size_keys], concat(keys), val)
         ex.path.append(new_storage_var == new_storage)
 
-        storage[slot, num_keys, size_keys] = new_storage_var
+        storage_addr[slot, num_keys, size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
@@ -1698,55 +1716,57 @@ class GenericStorage(Storage):
         )
 
     @classmethod
-    def init(cls, ex: Exec, addr: Any, loc: BitVecRef, size_keys: int) -> None:
+    def init(
+        cls, ex: Exec, storage: dict, addr: Any, loc: BitVecRef, size_keys: int
+    ) -> None:
         """
-        Initialize ex.storage[addr].mapping[size_keys], if not yet initialized
+        Initialize storage[addr].mapping[size_keys], if not yet initialized
 
         NOTE: unlike SolidityStorage, size_keys > 0 in GenericStorage.
               thus it is of mapping type, and initialized with empty array or symbolic array.
         """
         assert_address(addr)
 
-        storage = ex.storage[addr]
+        storage_addr = storage[addr]
 
-        if size_keys not in storage:
-            storage[size_keys] = cls.empty(addr, loc)
+        if size_keys not in storage_addr:
+            storage_addr[size_keys] = cls.empty(addr, loc)
 
     @classmethod
-    def load(cls, ex: Exec, addr: Any, loc: Word) -> Word:
+    def load(cls, ex: Exec, storage: dict, addr: Any, loc: Word) -> Word:
         loc = cls.decode(loc)
         size_keys = loc.size()
 
-        cls.init(ex, addr, loc, size_keys)
+        cls.init(ex, storage, addr, loc, size_keys)
 
-        storage = ex.storage[addr]
-        symbolic = storage.symbolic
+        storage_addr = storage[addr]
+        symbolic = storage_addr.symbolic
 
         if not symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
             default_value = Select(cls.empty(addr, loc), loc)
             ex.path.append(default_value == ZERO)
 
-        return ex.select(storage[size_keys], loc, ex.storages, symbolic)
+        return ex.select(storage_addr[size_keys], loc, ex.storages, symbolic)
 
     @classmethod
-    def store(cls, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
+    def store(cls, ex: Exec, storage: dict, addr: Any, loc: Any, val: Any) -> None:
         loc = cls.decode(loc)
         size_keys = loc.size()
 
-        cls.init(ex, addr, loc, size_keys)
+        cls.init(ex, storage, addr, loc, size_keys)
 
-        storage = ex.storage[addr]
+        storage_addr = storage[addr]
 
         new_storage_var = Array(
             f"storage_{id_str(addr)}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
-        new_storage = Store(storage[size_keys], loc, val)
+        new_storage = Store(storage_addr[size_keys], loc, val)
         ex.path.append(new_storage_var == new_storage)
 
-        storage[size_keys] = new_storage_var
+        storage_addr[size_keys] = new_storage_var
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
@@ -2121,13 +2141,18 @@ class SEVM:
     def mk_storagedata(self) -> StorageData:
         return self.storage_model.mk_storagedata()
 
-    def sload(self, ex: Exec, addr: Any, loc: Word) -> Word:
-        val = self.storage_model.load(ex, addr, loc)
-        ex.context.trace.append(StorageRead(addr, loc, val))
+    def sload(self, ex: Exec, addr: Any, loc: Word, transient: bool = False) -> Word:
+        storage = ex.transient_storage if transient else ex.storage
+        val = self.storage_model.load(ex, storage, addr, loc)
+        ex.context.trace.append(StorageRead(addr, loc, val, transient))
         return val
 
-    def sstore(self, ex: Exec, addr: Any, loc: Any, val: Any) -> None:
-        ex.context.trace.append(StorageWrite(addr, loc, val))
+    def sstore(
+        self, ex: Exec, addr: Any, loc: Any, val: Any, transient: bool = False
+    ) -> None:
+        storage = ex.transient_storage if transient else ex.storage
+
+        ex.context.trace.append(StorageWrite(addr, loc, val, transient))
 
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())
@@ -2135,7 +2160,7 @@ class SEVM:
         if is_bool(val):
             val = If(val, ONE, ZERO)
 
-        self.storage_model.store(ex, addr, loc, val)
+        self.storage_model.store(ex, storage, addr, loc, val)
 
     def resolve_address_alias(
         self, ex: Exec, target: Address, stack, step_id, allow_branching=True
@@ -2260,6 +2285,7 @@ class SEVM:
             # backup current state
             orig_code = ex.code.copy()
             orig_storage = deepcopy(ex.storage)
+            orig_transient_storage = deepcopy(ex.transient_storage)
             orig_balance = ex.balance
 
             # transfer msg.value
@@ -2309,6 +2335,7 @@ class SEVM:
                     # revert network states
                     new_ex.code = orig_code.copy()
                     new_ex.storage = deepcopy(orig_storage)
+                    new_ex.transient_storage = deepcopy(orig_transient_storage)
                     new_ex.balance = orig_balance
 
                 # add to worklist even if it reverted during the external call
@@ -2318,6 +2345,7 @@ class SEVM:
             sub_ex = Exec(
                 code=ex.code,
                 storage=ex.storage,
+                transient_storage=ex.transient_storage,
                 balance=ex.balance,
                 #
                 block=ex.block,
@@ -2588,6 +2616,7 @@ class SEVM:
         # backup current state
         orig_code = ex.code.copy()
         orig_storage = deepcopy(ex.storage)
+        orig_transient_storage = deepcopy(ex.transient_storage)
         orig_balance = ex.balance
 
         # setup new account
@@ -2595,6 +2624,7 @@ class SEVM:
 
         # existing storage may not be empty and reset here
         ex.storage[new_addr] = self.mk_storagedata()
+        ex.transient_storage[new_addr] = self.mk_storagedata()
 
         # transfer value
         self.transfer_value(ex, pranked_caller, new_addr, value)
@@ -2640,6 +2670,7 @@ class SEVM:
                 # revert network states
                 new_ex.code = orig_code.copy()
                 new_ex.storage = deepcopy(orig_storage)
+                new_ex.transient_storage = deepcopy(orig_transient_storage)
                 new_ex.balance = orig_balance
 
             # add to worklist
@@ -2649,6 +2680,7 @@ class SEVM:
         sub_ex = Exec(
             code=ex.code,
             storage=ex.storage,
+            transient_storage=ex.transient_storage,
             balance=ex.balance,
             #
             block=ex.block,
@@ -2772,6 +2804,7 @@ class SEVM:
         new_ex = Exec(
             code=ex.code.copy(),  # shallow copy for potential new contract creation; existing code doesn't change
             storage=deepcopy(ex.storage),
+            transient_storage=deepcopy(ex.transient_storage),
             balance=ex.balance,
             #
             block=deepcopy(ex.block),
@@ -2855,6 +2888,7 @@ class SEVM:
         ex0 = Exec(
             code=pre_ex.code.copy(),  # shallow copy
             storage=deepcopy(pre_ex.storage),
+            transient_storage=deepcopy(pre_ex.transient_storage),
             balance=pre_ex.balance,
             #
             block=deepcopy(pre_ex.block),
@@ -3241,6 +3275,15 @@ class SEVM:
                     value: Word = ex.st.pop()
                     self.sstore(ex, ex.this(), slot, value)
 
+                elif opcode == EVM.TLOAD:
+                    slot: Word = ex.st.pop()
+                    ex.st.push(self.sload(ex, ex.this(), slot, transient=True))
+
+                elif opcode == EVM.TSTORE:
+                    slot: Word = ex.st.pop()
+                    value: Word = ex.st.pop()
+                    self.sstore(ex, ex.this(), slot, value, transient=True)
+
                 elif opcode == EVM.RETURNDATASIZE:
                     ex.st.push(ex.returndatasize())
 
@@ -3380,6 +3423,7 @@ class SEVM:
         #
         code,
         storage,
+        transient_storage,
         balance,
         #
         block,
@@ -3392,6 +3436,7 @@ class SEVM:
         return Exec(
             code=code,
             storage=storage,
+            transient_storage=transient_storage,
             balance=balance,
             #
             block=block,

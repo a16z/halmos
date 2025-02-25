@@ -242,6 +242,7 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
         storage={this: sevm.mk_storagedata()},
+        transient_storage={this: sevm.mk_storagedata()},
         balance=EMPTY_BALANCE,
         block=mk_block(),
         context=CallContext(message=message),
