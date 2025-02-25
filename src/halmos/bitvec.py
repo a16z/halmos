@@ -458,24 +458,70 @@ class HalmosBitVec:
 
         return HalmosBitVec(abstraction(lhs, rhs), size=size)
 
-    def mod(self, other: AnyValue) -> "HalmosBitVec":
+    def mod(
+        self, other: "HalmosBitVec", *, abstraction: FuncDeclRef | None = None
+    ) -> "HalmosBitVec":
         size = self._size
+        assert size == other.size
 
-        if isinstance(other, HalmosBitVec):
-            assert size == other._size
-            return HalmosBitVec(URem(self._value, other._value), size=size)
+        lhs, rhs = self.value, other.value
 
-        other_value, other_size = as_int(other)
-        assert other_size is None or other_size == size
+        if other.is_concrete:
+            # mod by zero is zero
+            if rhs == 0:
+                return other
 
-        if isinstance(other_value, int):
-            if other_value == 0:
-                raise ZeroDivisionError("mod by zero")
-            return HalmosBitVec(self._value % other_value, size=size)
-        else:
-            return HalmosBitVec(URem(self._value, other_value), size=size)
+            # mod by one is zero
+            if rhs == 1:
+                return HalmosBitVec(0, size=size)
 
-    # Shifts
+            # fully concrete case
+            if self.is_concrete:
+                return HalmosBitVec(lhs % rhs, size=size)
+
+            # mod by a power of two is the bitwise and of self and the mask
+            if is_power_of_two(rhs):
+                return self.bitwise_and(HalmosBitVec(rhs.bit_length() - 1, size=size))
+
+        # symbolic case
+        if abstraction is None:
+            return HalmosBitVec(URem(lhs, rhs), size=size)
+
+        return HalmosBitVec(abstraction(lhs, rhs), size=size)
+
+    def exp(
+        self,
+        other: "HalmosBitVec",
+        *,
+        abstraction: FuncDeclRef | None = None,
+        smt_exp_by_const: int = 0,
+    ) -> "HalmosBitVec":
+        size = self._size
+        assert size == other.size
+
+        lhs, rhs = self.value, other.value
+
+        if other.is_concrete:
+            if rhs == 0:
+                return HalmosBitVec(1, size=size)
+
+            if rhs == 1:
+                return self
+
+            if self.is_concrete:
+                return HalmosBitVec(lhs**rhs, size=size)
+
+            if rhs <= smt_exp_by_const:
+                exp = self
+                for _ in range(rhs - 1):
+                    exp = self.mul(exp)
+                return exp
+
+        if abstraction is None:
+            raise NotImplementedError("missing SMT abstraction for exponentiation")
+
+        return HalmosBitVec(abstraction(lhs, rhs), size=size)
+
     def lshl(self, shift: AnyValue) -> "HalmosBitVec":
         """
         Logical left shift
@@ -579,6 +625,16 @@ class HalmosBitVec:
     def ugt(self, other: BV) -> HalmosBool:
         assert self._size == other._size
         return HalmosBool(self._value > other._value)
+
+    def sgt(self, other: BV) -> HalmosBool:
+        assert self._size == other._size
+
+        if self.is_concrete and other.is_concrete:
+            left = to_signed(self._value, self._size)
+            right = to_signed(other._value, other._size)
+            return HalmosBool(left > right)
+
+        return HalmosBool(self.wrapped() > other.wrapped())
 
     def ule(self, other: BV) -> HalmosBool:
         assert self._size == other._size
