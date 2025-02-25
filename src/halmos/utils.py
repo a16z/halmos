@@ -179,7 +179,7 @@ def uint8(x: Any) -> Byte:
     return uint(x, 8)
 
 
-def uint160(x: BitVecRef) -> BitVecRef:
+def uint160(x: Word) -> Address:
     return uint(x, 160)
 
 
@@ -855,6 +855,7 @@ str_opcode: dict[int, str] = {
     EVM.SELFBALANCE: "SELFBALANCE",
     EVM.BASEFEE: "BASEFEE",
     EVM.POP: "POP",
+    EVM.MCOPY: "MCOPY",
     EVM.MLOAD: "MLOAD",
     EVM.MSTORE: "MSTORE",
     EVM.MSTORE8: "MSTORE8",

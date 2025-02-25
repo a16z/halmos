@@ -635,9 +635,7 @@ class Contract:
                         # because it makes jumpi_id cheaper to compute
                         jumpdests_str.add(str(pc))
 
-                    next_pc = pc + insn_len(opcode)
-                    self._next_pc[pc] = next_pc
-                    pc = next_pc
+                    pc = pc + insn_len(opcode)
                 except NotConcreteError:
                     break
 
@@ -1145,47 +1143,47 @@ class Exec:  # an execution path
         return self.dump()
 
     def dump(self, print_mem=False) -> str:
-        output = self.context.output.data
+        # output = self.context.output.data
         return hexify(
             "".join(
                 [
                     f"PC: {self.this()} {self.pc} {mnemonic(self.current_opcode())}\n",
                     self.st.dump(print_mem=print_mem),
-                    f"\nBalance: {self.balance}\n",
-                    "Storage:\n",
-                    "".join(
-                        map(
-                            lambda x: f"- {x}: {self.storage[x]}\n",
-                            self.storage,
-                        )
-                    ),
-                    "Transient Storage:\n",
-                    "".join(
-                        map(
-                            lambda x: f"- {x}: {self.transient_storage[x]}\n",
-                            self.transient_storage,
-                        )
-                    ),
-                    f"Path:\n{self.path}",
-                    "Aliases:\n",
-                    "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
-                    f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
-                    "Balance updates:\n",
-                    "".join(
-                        map(
-                            lambda x: f"- {x}\n",
-                            sorted(self.balances.items(), key=lambda x: str(x[0])),
-                        )
-                    ),
-                    "Storage updates:\n",
-                    "".join(
-                        map(
-                            lambda x: f"- {x}\n",
-                            sorted(self.storages.items(), key=lambda x: str(x[0])),
-                        )
-                    ),
-                    "SHA3 hashes:\n",
-                    "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
+                    # f"\nBalance: {self.balance}\n",
+                    # "Storage:\n",
+                    # "".join(
+                    #     map(
+                    #         lambda x: f"- {x}: {self.storage[x]}\n",
+                    #         self.storage,
+                    #     )
+                    # ),
+                    # "Transient Storage:\n",
+                    # "".join(
+                    #     map(
+                    #         lambda x: f"- {x}: {self.transient_storage[x]}\n",
+                    #         self.transient_storage,
+                    #     )
+                    # ),
+                    # f"Path:\n{self.path}",
+                    # "Aliases:\n",
+                    # "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
+                    # f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
+                    # "Balance updates:\n",
+                    # "".join(
+                    #     map(
+                    #         lambda x: f"- {x}\n",
+                    #         sorted(self.balances.items(), key=lambda x: str(x[0])),
+                    #     )
+                    # ),
+                    # "Storage updates:\n",
+                    # "".join(
+                    #     map(
+                    #         lambda x: f"- {x}\n",
+                    #         sorted(self.storages.items(), key=lambda x: str(x[0])),
+                    #     )
+                    # ),
+                    # "SHA3 hashes:\n",
+                    # "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
                 ]
             )
         )
@@ -1906,25 +1904,15 @@ class SEVM:
             return term
 
         if op == EVM.MOD:
-            raise NotImplementedError("TODO: move to bitvec.py")
-            # if is_bv_value(w1) and is_bv_value(w2):
-            #     if w2.as_long() == 0:
-            #         return w2
-            #     else:
-            #         return URem(w1, w2)  # bvurem
-
-            # if is_bv_value(w2):
-            #     i2: int = int(str(w2))
-            #     if i2 == 0 or i2 == 1:
-            #         return con(0, w2.size())
-
-            #     if is_power_of_two(i2):
-            #         bitsize = i2.bit_length() - 1
-            #         return ZeroExt(w2.size() - bitsize, Extract(bitsize - 1, 0, w1))
-
-            return self.mk_mod(ex, w1, w2)
+            term = w1.mod(w2, abstraction=f_mod[w1.size])
+            if term.is_symbolic:
+                # (x % y) <= y
+                # not ULT, because y could be 0 and x % 0 = 0
+                ex.path.append(ULE(term.wrapped(), w2.wrapped()))
+            return term
 
         if op == EVM.SDIV:
+            raise NotImplementedError("TODO: move to bitvec.py")
             if is_bv_value(w1) and is_bv_value(w2):
                 if w2.as_long() == 0:
                     return w2
@@ -1944,6 +1932,8 @@ class SEVM:
             return f_sdiv(w1, w2)
 
         if op == EVM.SMOD:
+            raise NotImplementedError("TODO: move to bitvec.py")
+
             if is_bv_value(w1) and is_bv_value(w2):
                 if w2.as_long() == 0:
                     return w2
@@ -1955,26 +1945,7 @@ class SEVM:
             return f_smod(w1, w2)
 
         if op == EVM.EXP:
-            if is_bv_value(w1) and is_bv_value(w2):
-                b: int = int_of(w1, "symbolic base for exp")  # must be concrete
-                e: int = int_of(w2, "symbolic exponent for exp")  # must be concrete
-                return con(b**e)
-
-            if is_bv_value(w2):
-                i2: int = int_of(w2, "symbolic exponent for exp")  # must be concrete
-                if i2 == 0:
-                    return ONE
-
-                if i2 == 1:
-                    return w1
-
-                if i2 <= self.options.smt_exp_by_const:
-                    exp = w1
-                    for _ in range(i2 - 1):
-                        exp = self.arith(ex, EVM.MUL, exp, w1)
-                    return exp
-
-            return f_exp(w1, w2)
+            return w1.exp(w2, abstraction=f_exp)
 
         raise ValueError(op)
 
@@ -2043,6 +2014,10 @@ class SEVM:
     def resolve_address_alias(
         self, ex: Exec, target: Address, stack, allow_branching=True
     ) -> Address:
+        # TODO: avoid the extra wrapping/unwrapping
+        if isinstance(target, BV):
+            target = target.wrapped()
+
         assert_bv(target)
         assert_address(target)
 
@@ -2133,7 +2108,10 @@ class SEVM:
         #            it could be None, indicating a non-existent address.
 
         ex.st.pop()  # gas
-        to = uint160(ex.st.pop())
+
+        # TODO: avoid the extra wrapping/unwrapping
+        to = uint160(ex.st.pop()).wrapped()
+
         fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
         arg_loc: int = ex.mloc(check_size=False)
@@ -2358,14 +2336,21 @@ class SEVM:
                 ret = ByteVec()
 
             # push exit code
-            exit_code_var = BitVec(
-                f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
-            )
-            ex.path.append(exit_code_var == exit_code)
-            ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
+            if exit_code.is_concrete:
+                ex.st.push(exit_code)
 
-            # transfer msg.value
-            send_callvalue(exit_code_var != ZERO)
+                # transfer msg.value
+                if exit_code.value != 0:
+                    send_callvalue()
+            else:
+                exit_code_var = BitVec(
+                    f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
+                )
+                ex.path.append(exit_code_var == exit_code)
+                ex.st.push(exit_code_var)
+
+                # transfer msg.value
+                send_callvalue(exit_code_var != ZERO)
 
             ret_lst = ret if isinstance(ret, list) else [ret]
 
@@ -2971,7 +2956,7 @@ class SEVM:
                         ex.st.push(uint256(ex.this()))
 
                     elif opcode == EVM.EXTCODESIZE:
-                        account = uint160(ex.st.peek())
+                        account = uint160(ex.st.peek()).wrapped()
                         account_alias = self.resolve_address_alias(ex, account, stack)
                         ex.st.pop()
 
