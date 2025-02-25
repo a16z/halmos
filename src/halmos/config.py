@@ -358,13 +358,6 @@ class Config:
         group=debugging,
     )
 
-    log: str = arg(
-        help="log every execution steps in JSON",
-        global_default=None,
-        metavar="LOG_FILE_PATH",
-        group=debugging,
-    )
-
     json_output: str = arg(
         help="output test results in JSON",
         global_default=None,
@@ -534,6 +527,13 @@ class Config:
     solver_parallel: bool = arg(
         help="(Deprecated; no-op; use --solver-threads instead) run assertion solvers in parallel",
         global_default=False,
+        group=deprecated,
+    )
+
+    log: str = arg(
+        help="(Deprecated; no-op) log every execution steps in JSON",
+        global_default=None,
+        metavar="LOG_FILE_PATH",
         group=deprecated,
     )
 
