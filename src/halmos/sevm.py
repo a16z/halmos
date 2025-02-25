@@ -2802,7 +2802,6 @@ class SEVM:
         # cache config options out of the hot loop
         no_status = self.options.no_status
         max_depth = self.options.depth
-        log_option = self.options.log
         print_steps = self.options.print_steps
         print_mem = self.options.print_mem
         start_time = timer()
@@ -2811,7 +2810,6 @@ class SEVM:
             try:
                 item = stack.pop()
                 ex: Exec = item[0]
-                prev_step_id: int = item[1]
                 step_id += 1
 
                 # display progress
@@ -2848,16 +2846,6 @@ class SEVM:
                         allow_duplicate=False,
                     )
                     continue
-
-                # TODO: clean up
-                if log_option:
-                    if opcode == EVM.JUMPI:
-                        self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
-                    # elif opcode == EVM.CALL:
-                    #     self.steps[step_id] = {'parent': prev_step_id, 'exec': str(ex) + ex.st.str_memory() + '\n'}
-                    else:
-                        # self.steps[step_id] = {'parent': prev_step_id, 'exec': ex.summary()}
-                        self.steps[step_id] = {"parent": prev_step_id, "exec": str(ex)}
 
                 if print_steps:
                     print(ex.dump(print_mem=print_mem))
