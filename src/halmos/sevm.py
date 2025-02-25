@@ -12,7 +12,6 @@ from typing import (
     Any,
     ForwardRef,
     Optional,
-    TypeAlias,
     TypeVar,
     Union,
 )
@@ -135,8 +134,6 @@ from .utils import (
     unbox_int,
     z3_bv,
 )
-
-Steps = dict[int, dict[str, Any]]  # execution tree
 
 EMPTY_BYTES = ByteVec()
 EMPTY_KECCAK = 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470
@@ -1797,20 +1794,17 @@ class HalmosLogs:
         self.bounded_loops.extend(logs.bounded_loops)
 
 
-WorklistItem: TypeAlias = tuple[Exec, int]
-
-
 @dataclass(slots=True, eq=False, order=False)
 class Worklist:
-    stack: list[WorklistItem] = field(default_factory=list)
+    stack: list[Exec] = field(default_factory=list)
 
     # for status reporting
     completed_paths: int = 0
 
-    def push(self, ex: Exec, step: int):
-        self.stack.append((ex, step))
+    def push(self, ex: Exec):
+        self.stack.append(ex)
 
-    def pop(self) -> WorklistItem:
+    def pop(self) -> Exec:
         return self.stack.pop()
 
     def __len__(self) -> int:
@@ -1822,14 +1816,12 @@ class SEVM:
     fun_info: FunctionInfo
     storage_model: type[SomeStorage]
     logs: HalmosLogs
-    steps: Steps
     status: Status
 
     def __init__(self, options: HalmosConfig, fun_info: FunctionInfo) -> None:
         self.options = options
         self.fun_info = fun_info
         self.logs = HalmosLogs()
-        self.steps: Steps = {}
         self.status: Status = Status("")
 
         # init storage model
@@ -2053,7 +2045,7 @@ class SEVM:
         self.storage_model.store(ex, storage, addr, loc, val)
 
     def resolve_address_alias(
-        self, ex: Exec, target: Address, stack, step_id, allow_branching=True
+        self, ex: Exec, target: Address, stack, allow_branching=True
     ) -> Address:
         assert_bv(target)
         assert_address(target)
@@ -2100,7 +2092,7 @@ class SEVM:
         for addr, cond in tail:
             new_ex = self.create_branch(ex, cond, ex.pc)
             new_ex.alias[target] = addr
-            stack.push(new_ex, step_id)
+            stack.push(new_ex)
 
         addr, cond = head
         ex.path.append(cond, branching=True)
@@ -2138,8 +2130,7 @@ class SEVM:
         ex: Exec,
         op: int,
         to_alias: Address,
-        stack: list[tuple[Exec, int]],
-        step_id: int,
+        stack: Worklist,
     ) -> None:
         # `to`: the original (symbolic) target address
         # `to_alias`: a (concrete) alias of the target considered in this path.
@@ -2191,7 +2182,7 @@ class SEVM:
                 call_scheme=op,
             )
 
-            def callback(new_ex: Exec, stack, step_id):
+            def callback(new_ex: Exec, stack):
                 # continue execution in the context of the parent
                 # pessimistic copy because the subcall results may diverge
                 subcall = new_ex.context
@@ -2230,7 +2221,7 @@ class SEVM:
 
                 # add to worklist even if it reverted during the external call
                 new_ex.advance_pc()
-                stack.push(new_ex, step_id)
+                stack.push(new_ex)
 
             sub_ex = Exec(
                 code=ex.code,
@@ -2259,7 +2250,7 @@ class SEVM:
                 known_sigs=ex.known_sigs,
             )
 
-            stack.push(sub_ex, step_id)
+            stack.push(sub_ex)
 
         def call_unknown() -> None:
             # ecrecover
@@ -2349,12 +2340,12 @@ class SEVM:
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
                 exit_code = ONE
-                ret = halmos_cheat_code.handle(self, ex, arg, stack, step_id)
+                ret = halmos_cheat_code.handle(self, ex, arg, stack)
 
             # vm cheat code
             elif eq(to, hevm_cheat_code.address):
                 exit_code = ONE
-                ret = hevm_cheat_code.handle(self, ex, arg, stack, step_id)
+                ret = hevm_cheat_code.handle(self, ex, arg, stack)
 
             # console
             elif eq(to, console.address):
@@ -2414,7 +2405,7 @@ class SEVM:
                 )
 
                 new_ex.advance_pc()
-                stack.push(new_ex, step_id)
+                stack.push(new_ex)
 
         # precompiles or cheatcodes
         if (
@@ -2436,8 +2427,7 @@ class SEVM:
         self,
         ex: Exec,
         op: int,
-        stack: list[tuple[Exec, int]],
-        step_id: int,
+        stack: Worklist,
     ) -> None:
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())
@@ -2497,7 +2487,7 @@ class SEVM:
             subcall.output.error = AddressCollision()
             ex.context.trace.append(subcall)
 
-            stack.push(ex, step_id)
+            stack.push(ex)
             return
 
         for addr in ex.code:
@@ -2519,7 +2509,7 @@ class SEVM:
         # transfer value
         self.transfer_value(ex, pranked_caller, new_addr, value)
 
-        def callback(new_ex: Exec, stack, step_id):
+        def callback(new_ex: Exec, stack):
             subcall = new_ex.context
 
             # continue execution in the context of the parent
@@ -2565,7 +2555,7 @@ class SEVM:
 
             # add to worklist
             new_ex.advance_pc()
-            stack.push(new_ex, step_id)
+            stack.push(new_ex)
 
         sub_ex = Exec(
             code=ex.code,
@@ -2594,25 +2584,24 @@ class SEVM:
             known_sigs=ex.known_sigs,
         )
 
-        stack.push(sub_ex, step_id)
+        stack.push(sub_ex)
 
     def jumpi(
         self,
         ex: Exec,
-        stack: list[tuple[Exec, int]],
-        step_id: int,
+        stack: Worklist,
     ) -> None:
         target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
         cond = Bool(ex.st.pop())
 
         if cond.is_true:
             ex.pc = target
-            stack.push(ex, step_id)
+            stack.push(ex)
             return
 
         if cond.is_false:
             ex.advance_pc()
-            stack.push(ex, step_id)
+            stack.push(ex)
             return
 
         cond_true = simplify(cond.wrapped())
@@ -2670,7 +2659,7 @@ class SEVM:
                     True: visited[True] + 1,
                     False: visited[False],
                 }
-            stack.push(new_ex_true, step_id)
+            stack.push(new_ex_true)
 
         if new_ex_false:
             if potential_true and potential_false:
@@ -2678,15 +2667,15 @@ class SEVM:
                     True: visited[True],
                     False: visited[False] + 1,
                 }
-            stack.push(new_ex_false, step_id)
+            stack.push(new_ex_false)
 
-    def jump(self, ex: Exec, stack: list[tuple[Exec, int]], step_id: int) -> None:
+    def jump(self, ex: Exec, stack: Worklist) -> None:
         dst = ex.st.pop()
 
         # if dst is concrete, just jump
         if is_concrete(dst):
             ex.pc = int_of(dst)
-            stack.push(ex, step_id)
+            stack.push(ex)
 
         # otherwise, create a new execution for feasible targets
         elif self.options.symbolic_jump:
@@ -2694,7 +2683,7 @@ class SEVM:
                 target_reachable = simplify(dst == target)
                 if ex.check(target_reachable) != unsat:  # jump
                     new_ex = self.create_branch(ex, target_reachable, target)
-                    stack.push(new_ex, step_id)
+                    stack.push(new_ex)
         else:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
@@ -2731,8 +2720,7 @@ class SEVM:
     def calldataload(
         self,
         ex: Exec,
-        stack: list[tuple[Exec, int]],
-        step_id: int,
+        stack: Worklist,
     ) -> None:
         """
         Handle generalized calldata encoding. (See calldata.encode for more details on generalized encoding.)
@@ -2760,12 +2748,12 @@ class SEVM:
                     new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
                     new_ex.st.push(candidate)
                     new_ex.advance_pc()
-                    stack.push(new_ex, step_id)
+                    stack.push(new_ex)
                 return
 
         ex.st.push(loaded)
         ex.advance_pc()
-        stack.push(ex, step_id)
+        stack.push(ex)
 
     def sym_byte_of(self, idx: BitVecRef, w: BitVecRef) -> BitVecRef:
         """generate symbolic BYTE opcode result using 32 nested ite"""
@@ -2784,9 +2772,8 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
-        step_id: int = 0
         stack: Worklist = Worklist()
-        stack.push(ex0, 0)
+        stack.push(ex0)
 
         def finalize(ex: Exec):
             # if it's at the top-level, there is no callback; yield the current execution state
@@ -2797,7 +2784,7 @@ class SEVM:
             # otherwise, execute the callback to return to the parent execution context
             # note: `yield from` is used as the callback may yield the current execution state that got stuck
             else:
-                yield from ex.callback(ex, stack, step_id)
+                yield from ex.callback(ex, stack)
 
         # cache config options out of the hot loop
         no_status = self.options.no_status
@@ -2806,11 +2793,12 @@ class SEVM:
         print_mem = self.options.print_mem
         start_time = timer()
 
+        step_id = 0
+
         while stack:
             try:
-                item = stack.pop()
-                ex: Exec = item[0]
                 step_id += 1
+                ex: Exec = stack.pop()
 
                 # display progress
                 if not no_status and step_id % PULSE_INTERVAL == 0:
@@ -2873,11 +2861,11 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.JUMPI:
-                    self.jumpi(ex, stack, step_id)
+                    self.jumpi(ex, stack)
                     continue
 
                 elif opcode == EVM.JUMP:
-                    self.jump(ex, stack, step_id)
+                    self.jump(ex, stack)
                     continue
 
                 elif opcode == EVM.JUMPDEST:
@@ -2957,7 +2945,7 @@ class SEVM:
                         ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.popi())))
 
                 elif opcode == EVM.CALLDATALOAD:
-                    self.calldataload(ex, stack, step_id)
+                    self.calldataload(ex, stack)
                     continue
 
                 elif opcode == EVM.CALLDATASIZE:
@@ -2977,9 +2965,7 @@ class SEVM:
 
                 elif opcode == EVM.EXTCODESIZE:
                     account = uint160(ex.st.peek())
-                    account_alias = self.resolve_address_alias(
-                        ex, account, stack, step_id
-                    )
+                    account_alias = self.resolve_address_alias(ex, account, stack)
                     ex.st.pop()
 
                     if account_alias is not None:
@@ -2999,9 +2985,7 @@ class SEVM:
 
                 elif opcode == EVM.EXTCODECOPY:
                     account: Address = uint160(ex.st.peek())
-                    account_alias = self.resolve_address_alias(
-                        ex, account, stack, step_id
-                    )
+                    account_alias = self.resolve_address_alias(ex, account, stack)
                     ex.st.pop()
 
                     loc: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
@@ -3021,9 +3005,7 @@ class SEVM:
 
                 elif opcode == EVM.EXTCODEHASH:
                     account = uint160(ex.st.peek())
-                    account_alias = self.resolve_address_alias(
-                        ex, account, stack, step_id
-                    )
+                    account_alias = self.resolve_address_alias(ex, account, stack)
                     ex.st.pop()
 
                     if account_alias is not None:
@@ -3093,16 +3075,16 @@ class SEVM:
                     EVM.STATICCALL,
                 ]:
                     to = uint160(ex.st.peek(2))
-                    to_alias = self.resolve_address_alias(ex, to, stack, step_id)
+                    to_alias = self.resolve_address_alias(ex, to, stack)
 
-                    self.call(ex, opcode, to_alias, stack, step_id)
+                    self.call(ex, opcode, to_alias, stack)
                     continue
 
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
                 elif opcode in [EVM.CREATE, EVM.CREATE2]:
-                    self.create(ex, opcode, stack, step_id)
+                    self.create(ex, opcode, stack)
                     continue
 
                 elif opcode == EVM.POP:
@@ -3256,7 +3238,7 @@ class SEVM:
                     raise HalmosException(f"Unsupported opcode {hex(opcode)}")
 
                 ex.advance_pc()
-                stack.push(ex, step_id)
+                stack.push(ex)
 
             except InfeasiblePath:
                 # ignore infeasible path

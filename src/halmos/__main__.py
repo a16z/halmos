@@ -710,19 +710,13 @@ def run_test(ctx: FunctionContext) -> TestResult:
             print(f"\nPath #{path_id}")
             print(ctx.traces[path_id], end="")
 
-    (logs, steps) = (sevm.logs, sevm.steps)
-
+    logs = sevm.logs
     if logs.bounded_loops:
         warn_code(
             LOOP_BOUND,
             f"{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
         )
         debug("\n".join(jumpid_str(x) for x in logs.bounded_loops))
-
-    # log steps
-    if args.log:
-        with open(args.log, "w") as json_file:
-            json.dump(steps, json_file)
 
     # return test result
     num_cexes = len(ctx.valid_counterexamples) + len(ctx.invalid_counterexamples)

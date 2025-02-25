@@ -216,10 +216,10 @@ class Prank:
         return True
 
 
-def symbolic_storage(ex, arg, sevm, stack, step_id):
+def symbolic_storage(ex, arg, sevm, stack):
     account = uint160(arg.get_word(4))
     account_alias = sevm.resolve_address_alias(
-        ex, account, stack, step_id, allow_branching=False
+        ex, account, stack, allow_branching=False
     )
 
     if account_alias is None:
@@ -231,10 +231,10 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
     return ByteVec()  # empty return data
 
 
-def snapshot_storage(ex, arg, sevm, stack, step_id):
+def snapshot_storage(ex, arg, sevm, stack):
     account = uint160(arg.get_word(4))
     account_alias = sevm.resolve_address_alias(
-        ex, account, stack, step_id, allow_branching=False
+        ex, account, stack, allow_branching=False
     )
 
     if account_alias is None:
@@ -245,7 +245,7 @@ def snapshot_storage(ex, arg, sevm, stack, step_id):
     return ByteVec(zero_pad + ex.storage[account_alias].digest())
 
 
-def snapshot_state(ex, arg, sevm, stack, step_id):
+def snapshot_state(ex, arg, sevm, stack):
     """
     Generates a snapshot ID by hashing the current state (balance, code, and storage).
 
@@ -274,12 +274,12 @@ def snapshot_state(ex, arg, sevm, stack, step_id):
     return ByteVec(balance_hash + code_hash + storage_hash)
 
 
-def create_calldata_contract(ex, arg, sevm, stack, step_id):
+def create_calldata_contract(ex, arg, sevm, stack):
     contract_name = name_of(extract_string_argument(arg, 0))
     return create_calldata_generic(ex, sevm, contract_name)
 
 
-def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
+def create_calldata_contract_bool(ex, arg, sevm, stack):
     contract_name = name_of(extract_string_argument(arg, 0))
     include_view = int_of(
         extract_bytes(arg, 4 + 32 * 1, 32),
@@ -290,13 +290,13 @@ def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
     )
 
 
-def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
+def create_calldata_file_contract(ex, arg, sevm, stack):
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     return create_calldata_generic(ex, sevm, contract_name, filename)
 
 
-def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
+def create_calldata_file_contract_bool(ex, arg, sevm, stack):
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     include_view = int_of(
@@ -500,10 +500,10 @@ class halmos_cheat_code:
     }
 
     @staticmethod
-    def handle(sevm, ex, arg: BitVecRef, stack, step_id) -> list[BitVecRef]:
+    def handle(sevm, ex, arg: BitVecRef, stack) -> list[BitVecRef]:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
-            result = handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id)
+            result = handler(ex, arg, sevm=sevm, stack=stack)
             return result if isinstance(result, list) else [result]
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
@@ -600,7 +600,7 @@ class hevm_cheat_code:
     snapshot_state_sig: int = 0x9CD23835
 
     @staticmethod
-    def handle(sevm, ex, arg: ByteVec, stack, step_id) -> ByteVec | None:
+    def handle(sevm, ex, arg: ByteVec, stack) -> ByteVec | None:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 
@@ -612,7 +612,7 @@ class hevm_cheat_code:
             if ex.check(not_cond) != unsat:
                 new_ex = sevm.create_branch(ex, not_cond, ex.pc)
                 new_ex.halt(data=ByteVec(), error=FailCheatcode(f"{vm_assert}"))
-                stack.push(new_ex, step_id)
+                stack.push(new_ex)
 
             return ret
 
@@ -713,7 +713,7 @@ class hevm_cheat_code:
             store_slot = uint256(arg.get_word(36))
             store_value = uint256(arg.get_word(68))
             store_account_alias = sevm.resolve_address_alias(
-                ex, store_account, stack, step_id, allow_branching=False
+                ex, store_account, stack, allow_branching=False
             )
 
             if store_account_alias is None:
@@ -728,7 +728,7 @@ class hevm_cheat_code:
             load_account = uint160(arg.get_word(4))
             load_slot = uint256(arg.get_word(36))
             load_account_alias = sevm.resolve_address_alias(
-                ex, load_account, stack, step_id, allow_branching=False
+                ex, load_account, stack, allow_branching=False
             )
 
             if load_account_alias is None:
@@ -903,7 +903,7 @@ class hevm_cheat_code:
 
         # vm.snapshotState() return (uint256)
         elif funsig == hevm_cheat_code.snapshot_state_sig:
-            return snapshot_state(ex, arg, sevm, stack, step_id)
+            return snapshot_state(ex, arg, sevm, stack)
 
         else:
             # TODO: support other cheat codes
