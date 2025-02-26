@@ -607,7 +607,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 results.append(post_ex)
 
         except Exception as err:
-            error(f"{funsig}: {type(err).__name__}: {err}")
+            error(f"run_target_contract {addr} {funsig}: {type(err).__name__}: {err}")
             if args.debug:
                 traceback.print_exc()
             continue
