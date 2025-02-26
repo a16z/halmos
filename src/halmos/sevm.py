@@ -2239,29 +2239,39 @@ class SEVM:
                 exit_code = ONE
 
                 # wrapping guarantees that the arguments are bitvecs
-                digest = uint256(extract_bytes(arg, 0, 32))
-                v = uint8(extract_bytes(arg, 32, 32))
-                r = uint256(extract_bytes(arg, 64, 32))
-                s = uint256(extract_bytes(arg, 96, 32))
+                digest = uint256(extract_bytes(arg, 0, 32)).wrapped()
+                v = uint8(extract_bytes(arg, 32, 32)).wrapped()
+                r = uint256(extract_bytes(arg, 64, 32)).wrapped()
+                s = uint256(extract_bytes(arg, 96, 32)).wrapped()
 
                 # TODO: empty returndata in error
                 ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
 
             # sha256
             elif eq(to, con_addr(2)):
-                exit_code = con(1)
+                exit_code = ONE
                 f_sha256 = Function(
                     f"f_sha256_{arg_size}", BitVecSorts[arg_size], BitVecSort256
                 )
-                ret = ByteVec(f_sha256(arg))
+
+                unwrapped = arg.unwrap()
+                wrapped = (
+                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+                )
+                ret = ByteVec(f_sha256(wrapped))
 
             # ripemd160
             elif eq(to, con_addr(3)):
-                exit_code = con(1)
+                exit_code = ONE
                 f_ripemd160 = Function(
                     f"f_ripemd160_{arg_size}", BitVecSorts[arg_size], BitVecSort160
                 )
-                ret = ByteVec(uint256(f_ripemd160(arg)))
+
+                unwrapped = arg.unwrap()
+                wrapped = (
+                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+                )
+                ret = ByteVec(uint256(f_ripemd160(wrapped)))
 
             # identity
             elif eq(to, con_addr(4)):
@@ -2270,47 +2280,76 @@ class SEVM:
 
             # modexp
             elif eq(to, con_addr(5)):
-                exit_code = con(1)
+                exit_code = ONE
                 modulus_size = ex.int_of(extract_bytes(arg, 64, 32))
                 f_modexp = Function(
                     f"f_modexp_{arg_size}_{modulus_size}",
                     BitVecSorts[arg_size],
                     BitVecSorts[modulus_size],
                 )
-                # TODO: empty returndata in error
-                ret = ByteVec(f_modexp(arg))
+
+                unwrapped = arg.unwrap()
+                wrapped = (
+                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+                )
+                ret = ByteVec(f_modexp(wrapped))
 
             # ecadd
             elif eq(to, con_addr(6)):
-                exit_code = con(1)
+                exit_code = ONE
                 f_ecadd = Function("f_ecadd", BitVecSorts[1024], BitVecSorts[512])
-                ret = ByteVec(f_ecadd(arg))
+
+                unwrapped = arg.unwrap()
+                wrapped = (
+                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+                )
+                ret = ByteVec(f_ecadd(wrapped))
 
             # ecmul
             elif eq(to, con_addr(7)):
-                exit_code = con(1)
+                exit_code = ONE
                 f_ecmul = Function("f_ecmul", BitVecSorts[768], BitVecSorts[512])
-                ret = ByteVec(f_ecmul(arg))
+
+                unwrapped = arg.unwrap()
+                wrapped = (
+                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+                )
+                ret = ByteVec(f_ecmul(wrapped))
 
             # ecpairing
             elif eq(to, con_addr(8)):
-                exit_code = con(1)
+                exit_code = ONE
                 f_ecpairing = Function("f_ecpairing", BitVecSorts[1536], BitVecSorts[1])
-                ret = ByteVec(uint256(f_ecpairing(arg)))
+
+                unwrapped = arg.unwrap()
+                wrapped = (
+                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+                )
+                ret = ByteVec(uint256(f_ecpairing(wrapped)))
 
             # blake2f
             elif eq(to, con_addr(9)):
-                exit_code = con(1)
+                exit_code = ONE
                 f_blake2f = Function("f_blake2f", BitVecSorts[1704], BitVecSorts[512])
-                ret = ByteVec(f_blake2f(arg))
+
+                unwrapped = arg.unwrap()
+                wrapped = (
+                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+                )
+                ret = ByteVec(f_blake2f(wrapped))
 
             # point_evaluation
             elif eq(to, con_addr(10)):
-                exit_code = con(1)
+                exit_code = ONE
                 f_point_evaluation = Function(
                     "f_point_evaluation", BitVecSorts[1544], BitVecSorts[512]
                 )
-                ret = ByteVec(f_point_evaluation(arg))
+
+                unwrapped = arg.unwrap()
+                wrapped = (
+                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
+                )
+                ret = ByteVec(f_point_evaluation(wrapped))
 
             # halmos cheat code
             elif eq(to, halmos_cheat_code.address):
@@ -2332,7 +2371,7 @@ class SEVM:
             else:
                 # in evm, calls to non-existing contracts always succeed with empty returndata
                 # TODO: exitcode should be 0 when balance is not enough for callvalue
-                exit_code = con(1)
+                exit_code = ONE
                 ret = ByteVec()
 
             # push exit code
@@ -2902,7 +2941,7 @@ class SEVM:
                             case (BV(), BV()):
                                 ex.st.push(w1.eq(w2))
                             case (_, _):
-                                ex.st.push(BV(w1).eq(BV(w2)))
+                                ex.st.push(BV(w1, size=256).eq(BV(w2, size=256)))
 
                     elif opcode == EVM.ISZERO:
                         ex.st.push(is_zero(ex.st.pop()))

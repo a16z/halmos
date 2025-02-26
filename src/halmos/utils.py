@@ -254,9 +254,7 @@ def is_non_zero(x: Word) -> Bool:
     if isinstance(x, BV):
         return x.is_non_zero()
 
-    return ValueError(f"Cannot test non-zero for {type(x)}")
-
-    # return test(x, True)
+    return BV(x).is_non_zero()
 
 
 def is_zero(x: Word) -> Bool:

@@ -540,8 +540,8 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path_id = 0  # default value in case we don't enter the loop body
     submitted_futures = []
     for path_id, ex in enumerate(exs):
-        with timed("gc.collect()"):
-            gc.collect()
+        # with timed("gc.collect()"):
+        #     gc.collect()
 
         # check if early exit is triggered
         if ctx.solving_ctx.executor.is_shutdown():
