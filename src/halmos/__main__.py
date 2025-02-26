@@ -482,6 +482,7 @@ def run_single_invariant_step(
 
     for idx, pre_ex in enumerate(pre_exs):
         progress_status.update(f"{depth=} {len(visited)=} {idx=} {len(pre_exs)=}")
+
         for addr in pre_ex.code:
             # skip the test contract
             if eq(addr, con_addr(FOUNDRY_TEST)):
@@ -491,10 +492,15 @@ def run_single_invariant_step(
             post_exs = run_target_contract(ctx, pre_ex, addr)
 
             for post_ex in post_exs:
-                # skip failed path
-                # todo: handle error paths
-                output = post_ex.context.output
-                if output.data is None or output.error is not None:
+                subcall = post_ex.context
+
+                # ignore and report stuck
+                if subcall.is_stuck():
+                    warn_code(INTERNAL_ERROR, f"Encountered {subcall.get_stuck_reason()}")
+                    continue
+
+                # ignore revert
+                if subcall.output.error:
                     continue
 
                 # skip states that already visited
@@ -505,6 +511,10 @@ def run_single_invariant_step(
                     continue
                 else:
                     visited.add(post_id)
+
+                # update call traces
+                post_ex.context = deepcopy(pre_ex.context)
+                post_ex.context.trace.append(subcall)
 
                 # check all invariants against the current state
                 test_results = run_tests(ctx, post_ex, funsigs, depth, terminal=False)
@@ -593,15 +603,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 call_scheme=EVM.CALL,
             )
 
-            exs = sevm.run_message(ex, message, path)
-
-            for post_ex in exs:
-                # update call traces
-                subcall = post_ex.context
-                post_ex.context = deepcopy(ex.context)
-                post_ex.context.trace.append(subcall)
-
-                results.append(post_ex)
+            results.extend(sevm.run_message(ex, message, path))
 
         except Exception as err:
             error(f"run_target_contract {addr} {fun_sig}: {type(err).__name__}: {err}")

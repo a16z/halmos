@@ -2907,7 +2907,7 @@ class SEVM:
             storages=pre_ex.storages.copy(),
             balances=pre_ex.balances.copy(),
         )
-        return self.run(ex0)
+        yield from self.run(ex0)
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
         step_id: int = 0
