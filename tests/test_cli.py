@@ -87,9 +87,7 @@ def test_decode_mixed_bytecode():
         contract.decode_instruction(pc)
         pc = contract.next_pc(pc)
 
-    pcs, insns = zip(
-        *((pc, insn) for (pc, insn) in contract._insn.items()), strict=False
-    )
+    insns = [insn for insn in contract._insn if insn is not None]
     opcodes = tuple(insn.opcode for insn in insns)
 
     assert opcodes == (
