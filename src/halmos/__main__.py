@@ -571,57 +571,49 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 print(f"Skipping {fun_name} ({state_mutability})")
             continue
 
-        sevm = SEVM(args, fun_info)
-        # todo: reuse solver across functions
-        solver = mk_solver(args)
-        path = Path(solver)
-        path.extend_path(ex.path)
+        try:
+            sevm = SEVM(args, fun_info)
+            # todo: reuse solver across functions
+            solver = mk_solver(args)
+            path = Path(solver)
+            path.extend_path(ex.path)
 
-        cd, dyn_params = mk_calldata(
-            abi, fun_info, args, new_symbol_id=ex.new_symbol_id
-        )
-        path.process_dyn_params(dyn_params)
+            cd, dyn_params = mk_calldata(
+                abi, fun_info, args, new_symbol_id=ex.new_symbol_id
+            )
+            path.process_dyn_params(dyn_params)
 
-        msg_value = BitVec(
-            f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}", BitVecSort256
-        )
+            msg_value = BitVec(
+                f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}", BitVecSort256
+            )
 
-        message = Message(
-            target=addr,
-            caller=ex.this(),
-            origin=ex.origin(),
-            value=msg_value,
-            data=cd,
-            call_scheme=EVM.CALL,
-        )
+            message = Message(
+                target=addr,
+                caller=ex.this(),
+                origin=ex.origin(),
+                value=msg_value,
+                data=cd,
+                call_scheme=EVM.CALL,
+            )
 
-        exs = sevm.run_message(ex, message, path)
+            exs = sevm.run_message(ex, message, path)
 
-        for post_ex in exs:
-            # update call traces
-            subcall = post_ex.context
-            post_ex.context = deepcopy(ex.context)
-            post_ex.context.trace.append(subcall)
+            for post_ex in exs:
+                # update call traces
+                subcall = post_ex.context
+                post_ex.context = deepcopy(ex.context)
+                post_ex.context.trace.append(subcall)
 
-#           var_set = get_vars(post_ex.balance)
-#           for _addr, _storage in post_ex.storage.items():
-#               var_set = itertools.chain(var_set, get_vars(_addr))
-#               for _, _val in _storage._mapping.items():
-#                   var_set = itertools.chain(var_set, get_vars(_val))
+                results.append(post_ex)
 
-#           related = post_ex.path._get_related(var_set)
-#           post_path = Path(solver)
-#           idx = 0
-#           for cond, branching in post_ex.path.conditions.items():
-#               if idx in related:
-#                   post_path.append(cond, branching)
-#               idx += 1
-#           post_ex.path = post_path
+        except Exception as err:
+            error(f"{funsig}: {type(err).__name__}: {err}")
+            if args.debug:
+                traceback.print_exc()
+            continue
 
-            results.append(post_ex)
-
-        # todo: try-catch finally
-        solver.reset()
+        finally:
+            solver.reset()
 
     return results
 
