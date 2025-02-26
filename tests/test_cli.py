@@ -5,6 +5,7 @@ from z3 import (
     BitVec,
     BitVecVal,
     Concat,
+    eq,
 )
 
 from halmos.calldata import str_abi
@@ -139,19 +140,23 @@ def test_decode_hex():
 
 
 def test_decode():
-    code = Contract(Concat(BitVecVal(EVM.PUSH32, 8), BitVec("x", 256)))
+    x = BitVec("x", 256)
+    code = Contract(Concat(BitVecVal(EVM.PUSH32, 8), x))
     assert len(code) == 33
-    assert str(code.decode_instruction(0)) == "PUSH32 x"
+    insn0 = code.decode_instruction(0)
+    assert insn0.opcode == EVM.PUSH32
+    assert eq(insn0.operand.value, x)
     assert str(code.decode_instruction(33)) == "STOP"
 
-    code = Contract(BitVec("x", 256))
+    code = Contract(x)
     assert len(code) == 32
     assert str(code[31]) == "Extract(7, 0, x)"
 
     code = Contract(Concat(BitVecVal(EVM.PUSH3, 8), BitVec("x", 16)))
-    assert (
-        str(code.decode_instruction(0)) == "PUSH3 Concat(x, 0x00)"
-    )  # 'PUSH3 ERROR x (1 bytes missed)'
+    operand = code.decode_instruction(0).operand
+    assert operand.is_symbolic
+    assert operand.size == 24
+    assert eq(operand.value, Concat(BitVec("x", 16), con(0, 8)))
 
 
 @pytest.mark.parametrize(
