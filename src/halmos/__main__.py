@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import rich
 import itertools
 import gc
 import json
@@ -18,7 +19,7 @@ from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
 from importlib import metadata
-#from rich.status import Status
+import rich
 
 from z3 import (
     BitVec,
@@ -50,6 +51,7 @@ from .constants import (
 )
 from .exceptions import HalmosException
 from .logs import (
+    progress_status,
     COUNTEREXAMPLE_INVALID,
     COUNTEREXAMPLE_UNKNOWN,
     INTERNAL_ERROR,
@@ -484,7 +486,7 @@ def run_single_invariant_step(
     next_exs = []
 
     for idx, pre_ex in enumerate(pre_exs):
-        BuildOut().status.update(f"{depth=} {len(visited)=} {idx=} {len(pre_exs)=}")
+        progress_status.update(f"{depth=} {len(visited)=} {idx=} {len(pre_exs)=}")
         for addr in pre_ex.code:
             # skip the test contract
             if eq(addr, con_addr(FOUNDRY_TEST)):
@@ -654,7 +656,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
-#   sevm.status_start()
 
     exs = sevm.run_message(setup_ex, message, path)
 
@@ -832,7 +833,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             if done == total:
                 break
             elapsed = timedelta(seconds=int(timer.elapsed()))
-            BuildOut().status.update(f"[{elapsed}] solving queries: {done} / {total}")
+            progress_status.update(f"[{elapsed}] solving queries: {done} / {total}")
             time.sleep(0.1)
 
     ctx.thread_pool.shutdown(wait=True)
@@ -865,7 +866,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
         passfail = green("[PASS]")
         exitcode = Exitcode.PASS.value
 
-#   sevm.status.stop()
     timer.stop()
     time_info = timer.report(include_subtimers=args.statistics)
 
@@ -1045,6 +1045,10 @@ def _main(_args=None) -> MainResult:
     timer = NamedTimer("total")
     timer.create_subtimer("build")
 
+    # clear any remaining live display before starting a new instance
+    rich.get_console().clear_live()
+    progress_status.start()
+
     #
     # z3 global options
     #
@@ -1121,6 +1125,8 @@ def _main(_args=None) -> MainResult:
 
     def on_exit(exitcode: int) -> MainResult:
         ExecutorRegistry().shutdown_all()
+
+        progress_status.stop()
 
         result = MainResult(exitcode, test_results_map)
 

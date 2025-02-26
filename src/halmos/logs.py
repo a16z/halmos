@@ -1,7 +1,19 @@
 import logging
 from dataclasses import dataclass
 
+import rich
 from rich.logging import RichHandler
+from rich.status import Status
+
+#
+# Progress status
+#
+
+# clear any remaining live display before starting a new instance
+rich.get_console().clear_live()
+
+progress_status: Status = Status("")
+
 
 #
 # Basic logging
