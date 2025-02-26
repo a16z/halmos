@@ -1128,14 +1128,14 @@ class Exec:  # an execution path
     def path_slice(self):
         var_set = get_vars(self.balance)
 
-        for _addr, _contract in self.code.items():
-            var_set = itertools.chain(var_set, get_vars(_addr))
+        # the keys of self.code are constant
+        for _contract in self.code.values():
             _code = _contract._code
             for _chunk in _code.chunks.values():
                 if isinstance(_chunk, SymbolicChunk):
                     var_set = itertools.chain(var_set, get_vars(_chunk.data))
 
-        # the addresses of self.storage have already been added in the above iterations
+        # the keys of self.storage are constant
         for _storage in self.storage.values():
             # the keys of _storage._mapping are constant
             for _val in _storage._mapping.values():
