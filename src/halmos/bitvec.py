@@ -25,7 +25,7 @@ from z3 import (
 from halmos.exceptions import NotConcreteError
 
 BV: TypeAlias = "HalmosBitVec"
-AnyValue: TypeAlias = "int | bytes | BitVecRef | BV | HalmosBool"
+AnyValue: TypeAlias = "int | bytes | BitVecRef | BV | HalmosBool | str"
 BVValue: TypeAlias = int | BitVecRef | BoolRef
 MaybeSize: TypeAlias = int | None
 AnyBool: TypeAlias = bool | BoolRef
@@ -145,10 +145,12 @@ class HalmosBool:
 
     @property
     def is_true(self) -> bool:
+        """checks if it is the literal True"""
         return self.is_concrete and self._value
 
     @property
     def is_false(self) -> bool:
+        """checks if it is the literal False"""
         return self.is_concrete and not self._value
 
     def is_zero(self) -> "HalmosBool":
@@ -175,7 +177,7 @@ class HalmosBool:
         else:
             return HalmosBool(And(self.wrapped(), other.wrapped()))
 
-    def __or__(self, other: AnyValue) -> "HalmosBool":
+    def __or__(self, other: "HalmosBool") -> "HalmosBool":
         if self.is_true or other.is_true:
             return HalmosBool(True)
         elif self.is_false and other.is_false:
@@ -183,7 +185,7 @@ class HalmosBool:
         else:
             return HalmosBool(Or(self.wrapped(), other.wrapped()))
 
-    def __xor__(self, other: AnyValue) -> "HalmosBool":
+    def __xor__(self, other: "HalmosBool") -> "HalmosBool":
         if self.is_true:
             if other.is_true:
                 return HalmosBool(False)
@@ -248,7 +250,7 @@ class HalmosBitVec:
 
         If the value is too large for the bit size, it will be truncated.
 
-        If do_simplify is True, the value will be simplified using z3's simplify function.
+        If do_simplify is True, z3's simplify function will be applied to the value.
         """
 
         if isinstance(value, HalmosBitVec):
@@ -370,44 +372,17 @@ class HalmosBitVec:
     # operations
     #
 
-    def add(self, other: AnyValue) -> BV:
+    def add(self, other: BV) -> BV:
         size = self._size
+        assert size == other._size
 
-        # check the fast path (most common case) first:
-        if isinstance(other, HalmosBitVec):
-            assert size == other._size
-            return HalmosBitVec(self._value + other._value, size=size)
+        return HalmosBitVec(self._value + other._value, size=size)
 
-        # otherwise, attempt to convert the other value to an int
-        other_value, other_size = as_int(other)
-
-        # if the other value has a known size, it must match the size of self
-        assert size == other_size if other_size is not None else True
-
-        # if the other value is zero, we don't need to create a new object
-        if isinstance(other_value, int) and other_value == 0:
-            return self
-
-        # cases:
-        # - concrete + concrete may overflow, will be masked in the constructor
-        # - any combination of symbolic and concrete is symbolic, handled by z3 module
-        return HalmosBitVec(self._value + other_value, size=size)
-
-    def sub(self, other: AnyValue) -> "HalmosBitVec":
+    def sub(self, other: BV) -> "HalmosBitVec":
         size = self._size
+        assert size == other._size
 
-        if isinstance(other, HalmosBitVec):
-            assert size == other._size
-            return HalmosBitVec(self._value - other._value, size=size)
-
-        other_value, other_size = as_int(other)
-        assert other_size is None or other_size == size
-
-        # If other_value == 0, result is just self
-        if isinstance(other_value, int) and other_value == 0:
-            return self
-
-        return HalmosBitVec(self._value - other_value, size=size)
+        return HalmosBitVec(self._value - other._value, size=size)
 
     def mul(
         self, other: BV, *, abstraction: FuncDeclRef | None = None
@@ -590,26 +565,22 @@ class HalmosBitVec:
 
         return HalmosBitVec(abstraction(lhs, rhs), size=size)
 
-    def lshl(self, shift: AnyValue) -> "HalmosBitVec":
+    def lshl(self, shift: BV) -> "HalmosBitVec":
         """
         Logical left shift
         """
+
         size = self._size
+        shift_amount = shift.value
 
-        if isinstance(shift, HalmosBitVec):
-            assert size == shift._size
-            # if shift._value == 0 and is concrete => return self
-            if not shift._symbolic and shift._value == 0:
+        if shift.is_concrete:
+            if shift_amount == 0:
                 return self
-            return HalmosBitVec(self._value << shift._value, size=size)
 
-        shift_value, shift_size = as_int(shift)
-        assert shift_size is None or shift_size == size
+            if shift_amount >= size:
+                return HalmosBitVec(0, size=size)
 
-        if isinstance(shift_value, int) and shift_value == 0:
-            return self
-
-        return HalmosBitVec(self._value << shift_value, size=size)
+        return HalmosBitVec(self._value << shift_amount, size=size)
 
     def lshr(self, shift: BV) -> "HalmosBitVec":
         """
@@ -617,16 +588,16 @@ class HalmosBitVec:
         """
 
         size = self._size
+        shift_amount = shift.value
 
-        # check for no-op
         if shift.is_concrete:
-            if shift.value == 0:
+            if shift_amount == 0:
                 return self
 
             if self.is_concrete:
-                return HalmosBitVec(self.value >> shift.value, size=size)
+                return HalmosBitVec(self.value >> shift_amount, size=size)
 
-            if shift.value >= size:
+            if shift_amount >= size:
                 return HalmosBitVec(0, size=size)
 
         return HalmosBitVec(LShR(self.wrapped(), shift.wrapped()), size=size)
