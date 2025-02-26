@@ -10,6 +10,7 @@ from functools import reduce
 from timeit import default_timer as timer
 from typing import (
     Any,
+    ClassVar,
     ForwardRef,
     Optional,
     TypeVar,
@@ -307,6 +308,8 @@ class Instruction:
     # expected to be a BV256, so that it can be pushed on the stack with no conversion
     operand: BV | None = None
 
+    STOP: ClassVar["Instruction"] = None
+
     def __str__(self) -> str:
         operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
         return f"{mnemonic(self.opcode)}{operand_str}"
@@ -316,6 +319,10 @@ class Instruction:
 
     def __len__(self) -> int:
         return insn_len(self.opcode)
+
+
+# Initialize the STOP singleton
+Instruction.STOP = Instruction(EVM.STOP)
 
 
 @dataclass(frozen=True, slots=True, eq=False, order=False)
@@ -675,6 +682,13 @@ class Contract:
     def decode_instruction(self, pc: int) -> Instruction:
         """decode instruction at pc and cache the result"""
 
+        # Return None if pc is out of bounds
+        if pc < 0:
+            raise ValueError(f"invalid {pc=}")
+
+        if pc >= len(self._insn):
+            return Instruction.STOP
+
         if (insn := self._insn[pc]) is not None:
             return insn
 
@@ -682,13 +696,8 @@ class Contract:
         self._insn[pc] = insn
         return insn
 
-    def next_pc(self, pc):
-        if (insn := self._insn[pc]) is not None:
-            return insn.next_pc
-
-        insn = self._decode_instruction(pc)
-        self._insn[pc] = insn
-        return insn.next_pc
+    def next_pc(self, pc) -> int:
+        return self.decode_instruction(pc).next_pc
 
     def slice(self, start, size) -> ByteVec:
         # large start is allowed, but we must check the size
@@ -705,13 +714,13 @@ class Contract:
 
     def unwrapped_slice(self, start, stop) -> BV:
         """
-        Returns a BV256 representing the slice of the bytecode
+        Returns a BV representing the slice of the bytecode
         """
         # fast path for offsets in the concrete prefix
         if self._fastcode and stop < len(self._fastcode):
-            return BV(self._fastcode[start:stop], size=256)
+            return BV(self._fastcode[start:stop])
 
-        return BV(self._code.slice(start, stop).unwrap(), size=256)
+        return BV(self._code.slice(start, stop).unwrap())
 
     def __getitem__(self, key: int) -> Byte:
         """Returns the byte at the given offset."""
