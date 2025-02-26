@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from subprocess import PIPE, Popen
 
-from xxhash import xxh3_64, xxh3_64_digest, xxh3_128
+from xxhash import xxh3_64, xxh3_64_digest
 from z3 import (
     ULT,
     And,
@@ -245,7 +245,9 @@ def snapshot_storage(ex, arg, sevm, stack, step_id):
     return ByteVec(zero_pad + ex.storage[account_alias].digest())
 
 
-def snapshot_state(ex, arg, sevm, stack, step_id):
+def snapshot_state(
+    ex, arg=None, sevm=None, stack=None, step_id=None, include_path=False
+):
     """
     Generates a snapshot ID by hashing the current state (balance, code, and storage).
 
@@ -265,13 +267,23 @@ def snapshot_state(ex, arg, sevm, stack, step_id):
     code_hash = m.digest()
 
     # storage
-    m = xxh3_128()
+    m = xxh3_64()
     for addr, storage in ex.storage.items():
         m.update(int.to_bytes(int_of(addr), length=32))
         m.update(storage.digest())
     storage_hash = m.digest()
 
-    return ByteVec(balance_hash + code_hash + storage_hash)
+    # path
+    m = xxh3_64()
+    if include_path:
+        if ex.path.sliced is None:
+            raise ValueError("path not yet sliced")
+        for idx, cond in enumerate(ex.path.conditions):
+            if idx in ex.path.sliced:
+                m.update(int.to_bytes(cond.get_id(), length=32))
+    path_hash = m.digest()
+
+    return ByteVec(balance_hash + code_hash + storage_hash + path_hash)
 
 
 def create_calldata_contract(ex, arg, sevm, stack, step_id):

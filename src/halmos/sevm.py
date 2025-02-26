@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import itertools
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterator
@@ -16,10 +17,8 @@ from typing import (
     Union,
 )
 
-import rich
 import xxhash
 from eth_hash.auto import keccak
-from rich.status import Status
 from z3 import (
     UGE,
     UGT,
@@ -57,9 +56,9 @@ from z3 import (
     simplify,
     unsat,
 )
-from z3.z3util import is_expr_var
+from z3.z3util import get_vars, is_expr_var
 
-from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes
+from .bytevec import ByteVec, Chunk, ConcreteChunk, SymbolicChunk, UnwrappedBytes
 from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
@@ -85,6 +84,7 @@ from .logs import (
     LIBRARY_PLACEHOLDER,
     debug,
     debug_once,
+    progress_status,
     warn,
     warn_code,
 )
@@ -808,12 +808,43 @@ class Path:
     concretization: Concretization
     pending: list
 
+    # a condition -> a set of previous conditions that are related to the condition
+    related: dict[int, set[int]]
+    # a variable -> a set of conditions in which the variable appears
+    var_to_conds: dict[any, set[int]]
+    # constraints related to storage
+    sliced: set[int]
+
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
         self.conditions = {}
         self.concretization = Concretization()
         self.pending = []
+
+        self.related = {}
+        self.var_to_conds = defaultdict(set)
+        self.sliced = None
+
+    def _get_related(self, var_set) -> set[int]:
+        conds = set()
+        for var in var_set:
+            conds.update(self.var_to_conds[var])
+
+        result = set(conds)
+        for cond in conds:
+            result.update(self.related[cond])
+
+        return result
+
+    def get_related(self, cond) -> set[int]:
+        return self._get_related(get_vars(cond))
+
+    def slice(self, var_set) -> None:
+        if self.sliced is not None:
+            raise ValueError("already sliced")
+
+        self.sliced = self._get_related(var_set)
 
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
@@ -857,17 +888,17 @@ class Path:
 
         ids = [str(cond.get_id()) for cond in self.conditions]
 
-        if args.cache_solver:
-            # TODO: investigate whether a separate context is necessary here
-            tmp_solver = create_solver(ctx=Context())
-            for cond in self.conditions:
-                tmp_solver.assert_and_track(
-                    cond.translate(tmp_solver.ctx), str(cond.get_id())
-                )
-            query = tmp_solver.to_smt2()
-            tmp_solver.reset()
-        else:
-            query = self.solver.to_smt2()
+        # TODO: investigate whether a separate context is necessary here
+        tmp_solver = create_solver(ctx=Context())
+        for cond in self.conditions:
+            cond_copied = cond.translate(tmp_solver.ctx)
+            if args.cache_solver:
+                tmp_solver.assert_and_track(cond_copied, str(cond.get_id()))
+            else:
+                tmp_solver.add(cond_copied)
+        query = tmp_solver.to_smt2()
+        tmp_solver.reset()
+
         query = query.replace("(check-sat)", "")  # see __main__.solve()
 
         return SMTQuery(query, ids)
@@ -900,6 +931,10 @@ class Path:
         # store the branching condition aside until the new path is activated.
         path.pending.append(cond)
 
+        path.related = self.related.copy()
+        path.var_to_conds = deepcopy(self.var_to_conds)
+        # path.sliced = None
+
         return path
 
     def is_activated(self) -> bool:
@@ -929,23 +964,44 @@ class Path:
         if cond in self.conditions:
             return
 
+        idx = len(self.conditions)
+
         self.solver.add(cond)
         self.conditions[cond] = branching
         self.concretization.process_cond(cond)
+
+        var_set = get_vars(cond)
+        self.related[idx] = self._get_related(var_set)
+        for var in var_set:
+            self.var_to_conds[var].add(idx)
 
     def extend(self, conds, branching=False):
         for cond in conds:
             self.append(cond, branching=branching)
 
     def extend_path(self, path):
-        # branching conditions are not preserved
-        self.extend(path.conditions.keys())
+        self.conditions = path.conditions.copy()
+        self.concretization = deepcopy(path.concretization)
+        self.related = path.related.copy()
+        self.var_to_conds = deepcopy(path.var_to_conds)
+
+        if path.sliced is None:
+            for cond in self.conditions:
+                self.solver.add(cond)
+            return
+
+        for idx, cond in enumerate(self.conditions):
+            if idx in path.sliced:
+                self.solver.add(cond)
 
 
 class StorageData:
     def __init__(self):
         self.symbolic = False
         self._mapping = {}
+
+    def __str__(self):
+        return f"{self._mapping}"
 
     def __getitem__(self, key) -> ArrayRef | BitVecRef:
         return self._mapping[key]
@@ -966,6 +1022,7 @@ class StorageData:
         For simplicity, all numbers are represented as 256-bit integers, regardless of their actual size.
         """
         m = xxhash.xxh3_128()
+        # todo: consider sorted items
         for key, val in self._mapping.items():
             if isinstance(key, int):  # GenericStorage
                 m.update(int.to_bytes(key, length=32))
@@ -1040,6 +1097,24 @@ class Exec:  # an execution path
         assert_address(self.origin())
         assert_address(self.caller())
         assert_address(self.this())
+
+    def path_slice(self):
+        var_set = get_vars(self.balance)
+
+        # the keys of self.code are constant
+        for _contract in self.code.values():
+            _code = _contract._code
+            for _chunk in _code.chunks.values():
+                if isinstance(_chunk, SymbolicChunk):
+                    var_set = itertools.chain(var_set, get_vars(_chunk.data))
+
+        # the keys of self.storage are constant
+        for _storage in self.storage.values():
+            # the keys of _storage._mapping are constant
+            for _val in _storage._mapping.values():
+                var_set = itertools.chain(var_set, get_vars(_val))
+
+        self.path.slice(var_set)
 
     def context_str(self) -> str:
         opcode = self.current_opcode()
@@ -1839,23 +1914,16 @@ class SEVM:
     storage_model: type[SomeStorage]
     logs: HalmosLogs
     steps: Steps
-    status: Status
 
     def __init__(self, options: HalmosConfig, fun_info: FunctionInfo) -> None:
         self.options = options
         self.fun_info = fun_info
         self.logs = HalmosLogs()
         self.steps: Steps = {}
-        self.status: Status = Status("")
 
         # init storage model
         is_generic = self.options.storage_layout == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
-
-    def status_start(self) -> None:
-        # clear any remaining live display before starting a new instance
-        rich.get_console().clear_live()
-        self.status.start()
 
     def div_xy_y(self, w1: Word, w2: Word) -> Word:
         # return the number of bits required to represent the given value. default = 256
@@ -2814,6 +2882,33 @@ class SEVM:
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
 
+    def run_message(self, pre_ex: Exec, message: Message, path: Path) -> Iterator[Exec]:
+        ex0 = Exec(
+            code=pre_ex.code.copy(),  # shallow copy
+            storage=deepcopy(pre_ex.storage),
+            transient_storage=deepcopy(pre_ex.transient_storage),
+            balance=pre_ex.balance,
+            #
+            block=deepcopy(pre_ex.block),
+            #
+            context=CallContext(message=message),
+            callback=None,
+            #
+            pgm=pre_ex.code[message.target],
+            pc=0,
+            st=State(),
+            jumpis={},
+            #
+            path=path,
+            alias=pre_ex.alias.copy(),
+            #
+            cnts=deepcopy(pre_ex.cnts),
+            sha3s=pre_ex.sha3s.copy(),
+            storages=pre_ex.storages.copy(),
+            balances=pre_ex.balances.copy(),
+        )
+        return self.run(ex0)
+
     def run(self, ex0: Exec) -> Iterator[Exec]:
         step_id: int = 0
         stack: Worklist = Worklist()
@@ -2845,7 +2940,7 @@ class SEVM:
                     # hh:mm:ss
                     elapsed_fmt = timedelta(seconds=int(elapsed))
 
-                    self.status.update(
+                    progress_status.update(
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"
                         f" | completed paths: {stack.completed_paths}"
                         f" | outstanding paths: {len(stack)}"

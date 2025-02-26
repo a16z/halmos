@@ -75,6 +75,7 @@ class ContractContext:
 
     # signatures of test functions to run
     funsigs: list[str]
+    invariant_funsigs: list[str]
 
     # data parsed from the build output for this contract
     creation_hexcode: str
@@ -102,6 +103,16 @@ class SolvingContext:
 
 
 @dataclass(frozen=True)
+class InvariantContext:
+    # backlink to the parent contract context
+    contract_ctx: ContractContext
+
+    visited: set
+
+    test_results_map: dict
+
+
+@dataclass(frozen=True)
 class FunctionContext:
     # config with function-specific overrides
     args: HalmosConfig
@@ -117,6 +128,9 @@ class FunctionContext:
 
     # optional starting state
     setup_ex: Exec | None = None
+
+    # optional terminal mode flag (default: true)
+    terminal: bool = True
 
     # function-level solving context
     # the FunctionContext initializes and owns the SolvingContext
