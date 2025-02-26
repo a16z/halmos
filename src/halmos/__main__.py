@@ -95,6 +95,7 @@ from .solve import (
     SolverOutput,
     solve_end_to_end,
     solve_low_level,
+    InvariantContext,
 )
 from .traces import render_trace, rendered_trace
 from .utils import (
@@ -411,9 +412,11 @@ def get_state_id(ex: Exec) -> bytes:
 
 # execute invariant test functions in multiple depths
 # reuse states at each depth for all invariant functions
-def run_invariant_tests(ctx, setup_ex):
+def run_invariant_tests(ctx: ContractContext, pre_ex: Exec):
+    args = ctx.args
+
     # check all invariants against the setup state
-    test_results = run_tests(ctx, setup_ex, ctx.invariant_funsigs, terminal=False)
+    test_results = run_tests(ctx, pre_ex, ctx.invariant_funsigs, terminal=False)
 
     # accumulated test results; to be updated later
     test_results_map = {r.name: r for r in test_results if r.exitcode != 0}
@@ -426,18 +429,24 @@ def run_invariant_tests(ctx, setup_ex):
         return test_results_map.values()
 
     visited = set()
-    visited.add(get_state_id(setup_ex))
+    visited.add(get_state_id(pre_ex))
 
-    exs = [setup_ex]
+    exs = [pre_ex]
+
+    inv_ctx = InvariantContext(
+        contract_ctx=ctx,
+        visited=visited,
+        test_results_map=test_results_map,
+    )
 
     depth = 0
     while True:
         depth += 1
         exs, funsigs = run_single_invariant_step(
-            ctx, exs, funsigs, test_results_map, depth, visited
+            inv_ctx, exs, funsigs, depth
         )
 
-        if ctx.args.debug:
+        if args.debug:
             print(f"{depth=}\n")
             for idx, ex in enumerate(exs):
                 print(f"{idx=} {hexify(get_state_id(ex))=}\n")
@@ -463,8 +472,15 @@ def run_invariant_tests(ctx, setup_ex):
 # and check all invariants for each post-state.
 # return all post-states, and invariants that haven't failed.
 def run_single_invariant_step(
-    ctx, pre_exs, funsigs, test_results_map, depth, visited
+    inv_ctx: InvariantContext,
+    pre_exs: list,
+    funsigs: list,
+    depth: int,
 ) -> list[Exec]:
+    ctx = inv_ctx.contract_ctx
+    test_results_map = inv_ctx.test_results_map
+    visited = inv_ctx.visited
+
     next_exs = []
 
     for idx, pre_ex in enumerate(pre_exs):
@@ -525,7 +541,7 @@ def run_single_invariant_step(
 
 # run the given contract `addr` from the given input state `ex`
 # return all output states.
-def run_target_contract(ctx, ex, addr) -> list[Exec]:
+def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[Exec]:
     args = ctx.args
 
     code = ex.code[addr]
@@ -965,10 +981,9 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
     return test_results
 
 
-# todo: create a new context, say TestsContext, and put arguments in it
 def run_tests(
     ctx: ContractContext,
-    setup_ex: Exec,
+    pre_ex: Exec,
     funsigs: list,
     depth: int = 0,
     terminal: bool = True,
@@ -993,7 +1008,7 @@ def run_tests(
                 info=fun_info,
                 solver=solver,
                 contract_ctx=ctx,
-                setup_ex=setup_ex,
+                setup_ex=pre_ex,
                 terminal=terminal,
             )
 

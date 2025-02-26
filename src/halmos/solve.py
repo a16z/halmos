@@ -103,6 +103,16 @@ class SolvingContext:
 
 
 @dataclass(frozen=True)
+class InvariantContext:
+    # backlink to the parent contract context
+    contract_ctx: ContractContext
+
+    visited: set
+
+    test_results_map: dict
+
+
+@dataclass(frozen=True)
 class FunctionContext:
     # config with function-specific overrides
     args: HalmosConfig
