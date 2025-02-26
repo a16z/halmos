@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from subprocess import PIPE, Popen
 
-from xxhash import xxh3_64, xxh3_64_digest, xxh3_128
+from xxhash import xxh3_64, xxh3_64_digest
 from z3 import (
     ULT,
     And,
@@ -245,7 +245,9 @@ def snapshot_storage(ex, arg, sevm, stack, step_id):
     return ByteVec(zero_pad + ex.storage[account_alias].digest())
 
 
-def snapshot_state(ex, arg = None, sevm = None, stack = None, step_id = None, include_path = False):
+def snapshot_state(
+    ex, arg=None, sevm=None, stack=None, step_id=None, include_path=False
+):
     """
     Generates a snapshot ID by hashing the current state (balance, code, and storage).
 

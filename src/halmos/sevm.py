@@ -56,9 +56,9 @@ from z3 import (
     simplify,
     unsat,
 )
-from z3.z3util import is_expr_var, get_vars
+from z3.z3util import get_vars, is_expr_var
 
-from .bytevec import ByteVec, Chunk, ConcreteChunk, UnwrappedBytes, SymbolicChunk
+from .bytevec import ByteVec, Chunk, ConcreteChunk, SymbolicChunk, UnwrappedBytes
 from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
@@ -80,11 +80,11 @@ from .exceptions import (
     WriteInStaticContext,
 )
 from .logs import (
-    progress_status,
     INTERNAL_ERROR,
     LIBRARY_PLACEHOLDER,
     debug,
     debug_once,
+    progress_status,
     warn,
     warn_code,
 )

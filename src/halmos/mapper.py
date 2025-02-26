@@ -1,7 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, ForwardRef, Optional
-from rich.status import Status
 
 from .exceptions import HalmosException
 from .logs import warn

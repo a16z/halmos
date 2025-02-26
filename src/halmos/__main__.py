@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import rich
-import itertools
 import gc
 import json
 import logging
@@ -19,15 +17,14 @@ from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
 from importlib import metadata
-import rich
 
+import rich
 from z3 import (
     BitVec,
     eq,
     set_option,
     unsat,
 )
-from z3.z3util import get_vars
 
 import halmos.traces
 
@@ -51,7 +48,6 @@ from .constants import (
 )
 from .exceptions import HalmosException
 from .logs import (
-    progress_status,
     COUNTEREXAMPLE_INVALID,
     COUNTEREXAMPLE_UNKNOWN,
     INTERNAL_ERROR,
@@ -61,13 +57,13 @@ from .logs import (
     error,
     logger,
     logger_unique,
+    progress_status,
     warn,
     warn_code,
 )
 from .mapper import BuildOut, DeployAddressMapper
 from .processes import ExecutorRegistry, ShutdownError
 from .sevm import (
-    id_str,
     EMPTY_BALANCE,
     EVM,
     FOUNDRY_CALLER,
@@ -87,20 +83,23 @@ from .sevm import (
     SMTQuery,
     State,
     con_addr,
+    id_str,
     jumpid_str,
     mnemonic,
 )
 from .solve import (
     ContractContext,
     FunctionContext,
+    InvariantContext,
     PathContext,
     SolverOutput,
     solve_end_to_end,
     solve_low_level,
-    InvariantContext,
 )
 from .traces import render_trace, rendered_trace
 from .utils import (
+    Address,
+    BitVecSort256,
     NamedTimer,
     address,
     color_error,
@@ -110,11 +109,9 @@ from .utils import (
     hexify,
     indent_text,
     red,
+    uid,
     unbox_int,
     yellow,
-    Address,
-    uid,
-    BitVecSort256,
 )
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
@@ -409,7 +406,7 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 
 def get_state_id(ex: Exec) -> bytes:
-    return snapshot_state(ex, include_path = True).unwrap()
+    return snapshot_state(ex, include_path=True).unwrap()
 
 
 # execute invariant test functions in multiple depths
@@ -444,9 +441,7 @@ def run_invariant_tests(ctx: ContractContext, pre_ex: Exec):
     depth = 0
     while True:
         depth += 1
-        exs, funsigs = run_single_invariant_step(
-            inv_ctx, exs, funsigs, depth
-        )
+        exs, funsigs = run_single_invariant_step(inv_ctx, exs, funsigs, depth)
 
         if args.debug:
             print(f"{depth=}\n")
@@ -585,7 +580,8 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
             path.process_dyn_params(dyn_params)
 
             msg_value = BitVec(
-                f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}", BitVecSort256
+                f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}",
+                BitVecSort256,
             )
 
             message = Message(
@@ -608,7 +604,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 results.append(post_ex)
 
         except Exception as err:
-            error(f"run_target_contract {addr} {funsig}: {type(err).__name__}: {err}")
+            error(f"run_target_contract {addr} {fun_sig}: {type(err).__name__}: {err}")
             if args.debug:
                 traceback.print_exc()
             continue
