@@ -610,7 +610,7 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
     return results
 
 
-def run_test(ctx: FunctionContext, terminal=True) -> TestResult:
+def run_test(ctx: FunctionContext) -> TestResult:
     args = ctx.args
     fun_info = ctx.info
     funname, funsig = fun_info.name, fun_info.sig
@@ -863,7 +863,7 @@ def run_test(ctx: FunctionContext, terminal=True) -> TestResult:
     time_info = timer.report(include_subtimers=args.statistics)
 
     # print test result
-    if terminal or exitcode != Exitcode.PASS.value:
+    if ctx.terminal or exitcode != Exitcode.PASS.value:
         print(
             f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
             f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
@@ -994,9 +994,10 @@ def run_tests(
                 solver=solver,
                 contract_ctx=ctx,
                 setup_ex=setup_ex,
+                terminal=terminal,
             )
 
-            test_result = run_test(test_ctx, terminal)
+            test_result = run_test(test_ctx)
         except Exception as err:
             print(f"{color_error('[ERROR]')} {funsig}")
             error(f"{type(err).__name__}: {err}")
