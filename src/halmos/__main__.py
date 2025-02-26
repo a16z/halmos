@@ -65,6 +65,7 @@ from .logs import (
 from .mapper import BuildOut, DeployAddressMapper
 from .processes import ExecutorRegistry, ShutdownError
 from .sevm import (
+    id_str,
     EMPTY_BALANCE,
     EVM,
     FOUNDRY_CALLER,
@@ -109,6 +110,8 @@ from .utils import (
     unbox_int,
     yellow,
     Address,
+    uid,
+    BitVecSort256,
 )
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
@@ -563,11 +566,15 @@ def run_target_contract(ctx, ex, addr) -> list[Exec]:
         )
         path.process_dyn_params(dyn_params)
 
+        msg_value = BitVec(
+            f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}", BitVecSort256
+        )
+
         message = Message(
             target=addr,
             caller=ex.this(),
             origin=ex.origin(),
-            value=0,  # todo: symbolic value
+            value=msg_value,
             data=cd,
             call_scheme=EVM.CALL,
         )
@@ -683,8 +690,8 @@ def run_test(ctx: FunctionContext, terminal=True) -> TestResult:
         # print counterexample trace
         if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
             path_id = solver_output.path_id
-            id_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
-            print(f"Trace{id_str}:")
+            pid_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
+            print(f"Trace{pid_str}:")
             print(ctx.traces[path_id], end="")
 
         if model.is_valid:
