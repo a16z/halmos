@@ -458,7 +458,7 @@ class Config:
 
     trace_events: str = arg(
         help="include specific events in traces",
-        global_default="LOG",
+        global_default=",".join([e.value for e in TraceEvent]),
         metavar="EVENT1,EVENT2,...",
         action=ParseCSVTraceEvent,
     )
