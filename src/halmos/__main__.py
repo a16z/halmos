@@ -533,7 +533,6 @@ def run_single_invariant_step(
                     return next_exs, funsigs
 
                 # note: any state changes made during invariant checking are excluded, to reduce path condition complexity
-#               post_ex.path_slice()
                 next_exs.append(post_ex)
 
     return next_exs, funsigs

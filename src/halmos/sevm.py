@@ -827,16 +827,6 @@ class Path:
         self.var_to_conds = defaultdict(set)
         self.sliced = None
 
-#       if path:
-#           for cond in path.conditions:
-#               self.solver.add(cond)
-
-#           self.conditions = path.conditions.copy()
-#           self.concretization = deepcopy(path.concretization)
-
-#           self.related = path.related.copy()
-#           self.var_to_conds = deepcopy(path.var_to_conds)
-
     def _get_related(self, var_set) -> set[int]:
         conds = set()
         for var in var_set:
@@ -857,18 +847,6 @@ class Path:
 
         self.sliced = self._get_related(var_set)
 
-#       related = self._get_related(var_set)
-
-#       path = Path(self.solver)
-
-#       idx = 0
-#       for cond, branching in self.conditions.items():
-#           if idx in related:
-#               path.append(cond, branching)
-#           idx += 1
-
-#       return path
-
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
 
@@ -877,7 +855,7 @@ class Path:
             [
                 f"- {cond}\n"
                 for cond in self.conditions
-#               if self.conditions[cond] and not is_true(cond)
+                if self.conditions[cond] and not is_true(cond)
             ]
         )
 
@@ -1001,10 +979,6 @@ class Path:
     def extend(self, conds, branching=False):
         for cond in conds:
             self.append(cond, branching=branching)
-
-#   def extend_path(self, path):
-#       # branching conditions are not preserved
-#       self.extend(path.conditions.keys())
 
     def extend_path(self, path):
         self.conditions = path.conditions.copy()
