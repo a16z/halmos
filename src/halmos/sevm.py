@@ -1921,24 +1921,7 @@ class SEVM:
             return term
 
         if op == EVM.SDIV:
-            raise NotImplementedError("TODO: move to bitvec.py")
-            if is_bv_value(w1) and is_bv_value(w2):
-                if w2.as_long() == 0:
-                    return w2
-                else:
-                    return w1 / w2  # bvsdiv
-
-            if is_bv_value(w2):
-                # concrete denominator case
-                i2: int = w2.as_long()
-                if i2 == 0:
-                    return w2  # div by 0 is 0
-
-                if i2 == 1:
-                    return w1  # div by 1 is identity
-
-            # fall back to uninterpreted function :(
-            return f_sdiv(w1, w2)
+            return w1.sdiv(w2, abstraction=f_sdiv)
 
         if op == EVM.SMOD:
             raise NotImplementedError("TODO: move to bitvec.py")
