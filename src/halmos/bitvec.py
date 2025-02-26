@@ -3,6 +3,7 @@ from typing import TypeAlias
 from z3 import (
     ULT,
     And,
+    BitVec,
     BitVecRef,
     BitVecVal,
     BoolRef,
@@ -209,11 +210,13 @@ class HalmosBitVec:
     Immutable wrapper for concrete or symbolic bitvectors.
 
     Can be constructed with:
-    - HalmosBitVec(42) # int
-    - HalmosBitVec(bytes.fromhex("12345678")) # bytes
-    - HalmosBitVec(BitVecVal(42, 8)) # BitVecVal
-    - HalmosBitVec(BitVec(x, 8)) # BitVecRef
-    - HalmosBitVec(halmos_bool) # HalmosBool
+    - HalmosBitVec(42) # int, size is default (256)
+    - HalmosBitVec(-1, size=8) # int, 2's complement
+    - HalmosBitVec(bytes.fromhex("12345678")) # bytes, size is inherited
+    - HalmosBitVec(BitVecVal(42, 8)) # BitVecVal, size is inherited
+    - HalmosBitVec(BitVec(x, 8)) # BitVecRef, size is inherited
+    - HalmosBitVec(halmos_bool) # HalmosBool, size 1
+    - HalmosBitVec("x") # named symbol, size is default (256)
 
     Conversion to and from HalmosBool:
     - HalmosBitVec(halmos_bool) (same as halmos_bool.as_bv())
@@ -227,7 +230,7 @@ class HalmosBitVec:
 
     __slots__ = ("_value", "_symbolic", "_size")
 
-    def __new__(cls, value, size=None):
+    def __new__(cls, value, size=None, do_simplify=True):
         # fast path for existing HalmosBitVec of same size
         if isinstance(value, HalmosBitVec):
             size = size or value._size
@@ -260,6 +263,10 @@ class HalmosBitVec:
         elif isinstance(value, HalmosBool):
             value = value.unwrap()
 
+        # convenience, wrap a string as a named symbol
+        elif isinstance(value, str):
+            value = BitVec(value, size or 256)
+
         # coerce int-like values to int
         value, maybe_size = as_int(value)
         size = size or (maybe_size or 256)
@@ -275,14 +282,20 @@ class HalmosBitVec:
             self._value = value & ((1 << size) - 1)
 
         elif isinstance(value, BitVecRef):
-            self._symbolic = True
-
             if size < value.size():
                 value = Extract(size - 1, 0, value)
             elif size > value.size():
                 value = ZeroExt(size - value.size(), value)
 
-            self._value = simplify(value) if do_simplify else value
+            simplified = simplify(value) if do_simplify else value
+
+            if is_bv_value(simplified):
+                self._symbolic = False
+                self._value = simplified.as_long()
+            else:
+                self._symbolic = True
+                self._value = simplified
+
         else:
             raise TypeError(f"Cannot create HalmosBitVec from {type(value)}")
 
@@ -307,19 +320,27 @@ class HalmosBitVec:
         return self._value
 
     def wrapped(self) -> BitVecRef:
-        if self._symbolic:
-            return self._value
-        return BitVecVal(self._value, self._size)
+        return self._value if self._symbolic else BitVecVal(self._value, self._size)
 
     def unwrap(self) -> int | BitVecRef:
         return self._value
 
     def __eq__(self, other: BV) -> bool:
+        """checks for structural equality, including size
+
+        note: this is not the same as z3's comparison, which returns a constraint
+        """
+        if not isinstance(other, HalmosBitVec):
+            return False
+
+        if self._size != other.size:
+            return False
+
         if self.is_symbolic and other.is_symbolic:
-            return self.size == other.size and eq(self.value, other.value)
+            return eq(self.value, other.value)
 
         if self.is_concrete and other.is_concrete:
-            return self.size == other.size and self.value == other.value
+            return self.value == other.value
 
         return False
 
@@ -455,6 +476,53 @@ class HalmosBitVec:
         # symbolic case
         if abstraction is None:
             return HalmosBitVec(UDiv(lhs, rhs), size=size)
+
+        return HalmosBitVec(abstraction(lhs, rhs), size=size)
+
+        # if is_bv_value(w1) and is_bv_value(w2):
+        #     if w2.as_long() == 0:
+        #         return w2
+        #     else:
+        #         return w1 / w2  # bvsdiv
+
+        # if is_bv_value(w2):
+        #     # concrete denominator case
+        #     i2: int = w2.as_long()
+        #     if i2 == 0:
+        #         return w2  # div by 0 is 0
+
+        #     if i2 == 1:
+        #         return w1  # div by 1 is identity
+
+        # # fall back to uninterpreted function :(
+        # return f_sdiv(w1, w2)
+
+    def sdiv(
+        self, other: BV, *, abstraction: FuncDeclRef | None = None
+    ) -> "HalmosBitVec":
+        # TODO: sdiv_xy_y
+        size = self._size
+        assert size == other.size
+
+        lhs, rhs = self.value, other.value
+
+        if other.is_concrete:
+            if rhs == 0:
+                return other  # div by zero is zero
+
+            if rhs == 1:
+                return self  # div by one is identity
+
+            if self.is_concrete:
+                # rely on z3 to handle the signed division
+                return HalmosBitVec(
+                    BitVecVal(lhs, size) / BitVecVal(rhs, size),
+                    size=size,
+                    do_simplify=True,
+                )
+
+        if abstraction is None:
+            return HalmosBitVec(other / self, size=size)
 
         return HalmosBitVec(abstraction(lhs, rhs), size=size)
 
