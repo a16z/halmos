@@ -1929,7 +1929,12 @@ class SEVM:
             return w1.smod(w2, abstraction=f_smod)
 
         if op == EVM.EXP:
-            return w1.exp(w2, abstraction=f_exp)
+            return w1.exp(
+                w2,
+                exp_abstraction=f_exp,
+                mul_abstraction=f_mul[w1.size],
+                smt_exp_by_const=self.options.smt_exp_by_const,
+            )
 
         raise ValueError(op)
 
