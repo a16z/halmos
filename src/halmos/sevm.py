@@ -2139,6 +2139,12 @@ class SEVM:
     def mk_storagedata(self) -> StorageData:
         return self.storage_model.mk_storagedata()
 
+    def fresh_transient_storage(self, ex: Exec) -> dict:
+        return {
+            addr: self.mk_storagedata()
+            for addr in ex.transient_storage
+        }
+
     def sload(self, ex: Exec, addr: Any, loc: Word, transient: bool = False) -> Word:
         storage = ex.transient_storage if transient else ex.storage
         val = self.storage_model.load(ex, storage, addr, loc)
@@ -2886,7 +2892,7 @@ class SEVM:
         ex0 = Exec(
             code=pre_ex.code.copy(),  # shallow copy
             storage=deepcopy(pre_ex.storage),
-            transient_storage=deepcopy(pre_ex.transient_storage),
+            transient_storage=self.fresh_transient_storage(pre_ex),
             balance=pre_ex.balance,
             #
             block=deepcopy(pre_ex.block),
