@@ -1938,16 +1938,7 @@ class SEVM:
         w2 = b2i(w2)
         w3 = b2i(w3)
         if op == EVM.ADDMOD:
-            # to avoid add overflow; and to be a multiple of 8-bit
-            r1 = self.arith(
-                ex, EVM.ADD, simplify(ZeroExt(8, w1)), simplify(ZeroExt(8, w2))
-            )
-            r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(8, w3)))
-            if r1.size() != 264:
-                raise ValueError(r1)
-            if r2.size() != 264:
-                raise ValueError(r2)
-            return Extract(255, 0, r2)
+            return w1.addmod(w2, w3, abstraction=f_mod[w1.size + 8])
         elif op == EVM.MULMOD:
             # to avoid mul overflow
             r1 = self.arith(

@@ -619,6 +619,33 @@ class HalmosBitVec:
 
         return HalmosBitVec(abstraction(lhs, rhs), size=size)
 
+    def addmod(
+        self,
+        other: "HalmosBitVec",
+        modulus: "HalmosBitVec",
+        *,
+        abstraction: FuncDeclRef | None = None,
+    ) -> "HalmosBitVec":
+        size = self._size
+        assert size == other.size
+        assert size == modulus.size
+
+        if self.is_concrete and other.is_concrete and modulus.is_concrete:
+            return HalmosBitVec((self.value + other.value) % modulus.value, size=size)
+
+        # to avoid add overflow; and to be a multiple of 8-bit
+        newsize = size + 8
+
+        r1 = HalmosBitVec(self, size=newsize).add(HalmosBitVec(other, size=newsize))
+        r2 = r1.mod(HalmosBitVec(modulus, size=newsize), abstraction=abstraction)
+
+        if r1.size != newsize:
+            raise ValueError(r1)
+        if r2.size != newsize:
+            raise ValueError(r2)
+
+        return HalmosBitVec(r2, size=size)
+
     def lshl(self, shift: BV) -> "HalmosBitVec":
         """
         Logical left shift
