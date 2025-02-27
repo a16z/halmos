@@ -159,11 +159,18 @@ def compare(stmts=None, *args, **kwargs):
 compare(
     setup=dedent("""
         import random
-        from z3 import BitVec, BitVecRef, BitVecVal
+        from z3 import BitVec, BitVecRef, BitVecVal, URem, Extract, ZeroExt, simplify
         from halmos.bitvec import HalmosBitVec as BV
+        from halmos.utils import con
+
+        def addmod(x, y, z):
+            r1 = simplify(ZeroExt(8, x)) + simplify(ZeroExt(8, y))
+            r2 = URem(r1, simplify(ZeroExt(8, z)))
+            return Extract(255, 0, r2)
     """),
     stmts=[
-        "BV('x').mod(BV(2**3))",
+        "BV(4).addmod(BV(1), BV(3)) == BV(2)",
+        "addmod(con(4), con(1), con(3)) == con(2)",
     ],
     number=10**4,
 )
