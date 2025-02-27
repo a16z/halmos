@@ -145,6 +145,7 @@ class Exitcode(Enum):
     REVERT_ALL = 4
     EXCEPTION = 5
 
+
 PASS = Exitcode.PASS.value
 
 
@@ -462,7 +463,9 @@ def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, funsigs: list):
     # print successful tests; failed tests have already been displayed
     for r in test_results:
         if r.exitcode == PASS:
-            print(f"{green('[PASS]')} {r.name} (depth: {depth-1}, paths: {len(visited)})")
+            print(
+                f"{green('[PASS]')} {r.name} (depth: {depth-1}, paths: {len(visited)})"
+            )
 
     return test_results
 
@@ -498,7 +501,9 @@ def step_invariant_tests(
 
                 # ignore and report stuck
                 if subcall.is_stuck():
-                    error(f"{depth=}: addr={hexify(addr)}: {subcall.get_stuck_reason()}")
+                    error(
+                        f"{depth=}: addr={hexify(addr)}: {subcall.get_stuck_reason()}"
+                    )
                     continue
 
                 # ignore revert
