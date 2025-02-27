@@ -8,6 +8,7 @@ from z3 import (
     BitVecVal,
     BoolRef,
     BoolVal,
+    Concat,
     Extract,
     FuncDeclRef,
     If,
@@ -288,7 +289,8 @@ class HalmosBitVec:
             if size < value.size():
                 value = Extract(size - 1, 0, value)
             elif size > value.size():
-                value = ZeroExt(size - value.size(), value)
+                # ZeroExt will get simplified to Concat
+                value = Concat(BitVecVal(0, size - value.size()), value)
 
             simplified = simplify(value) if do_simplify else value
 
@@ -454,24 +456,6 @@ class HalmosBitVec:
             return HalmosBitVec(UDiv(lhs, rhs), size=size)
 
         return HalmosBitVec(abstraction(lhs, rhs), size=size)
-
-        # if is_bv_value(w1) and is_bv_value(w2):
-        #     if w2.as_long() == 0:
-        #         return w2
-        #     else:
-        #         return w1 / w2  # bvsdiv
-
-        # if is_bv_value(w2):
-        #     # concrete denominator case
-        #     i2: int = w2.as_long()
-        #     if i2 == 0:
-        #         return w2  # div by 0 is 0
-
-        #     if i2 == 1:
-        #         return w1  # div by 1 is identity
-
-        # # fall back to uninterpreted function :(
-        # return f_sdiv(w1, w2)
 
     def sdiv(
         self, other: BV, *, abstraction: FuncDeclRef | None = None
@@ -641,6 +625,38 @@ class HalmosBitVec:
 
         if r1.size != newsize:
             raise ValueError(r1)
+        if r2.size != newsize:
+            raise ValueError(r2)
+
+        return HalmosBitVec(r2, size=size)
+
+    def mulmod(
+        self,
+        other: "HalmosBitVec",
+        modulus: "HalmosBitVec",
+        *,
+        mul_abstraction: FuncDeclRef | None = None,
+        mod_abstraction: FuncDeclRef | None = None,
+    ) -> "HalmosBitVec":
+        size = self._size
+        assert size == other.size
+        assert size == modulus.size
+
+        if self.is_concrete and other.is_concrete and modulus.is_concrete:
+            return HalmosBitVec((self.value * other.value) % modulus.value, size=size)
+
+        # to avoid mul overflow
+        newsize = size * 2
+        self_ext = HalmosBitVec(self, size=newsize)
+        other_ext = HalmosBitVec(other, size=newsize)
+        mod_ext = HalmosBitVec(modulus, size=newsize)
+
+        r1 = self_ext.mul(other_ext, abstraction=mul_abstraction)
+        r2 = r1.mod(mod_ext, abstraction=mod_abstraction)
+
+        if r1.size != newsize:
+            raise ValueError(r1)
+
         if r2.size != newsize:
             raise ValueError(r2)
 

@@ -1933,26 +1933,6 @@ class SEVM:
 
         raise ValueError(op)
 
-    def arith2(self, ex: Exec, op: int, w1: Word, w2: Word, w3: Word) -> Word:
-        w1 = b2i(w1)
-        w2 = b2i(w2)
-        w3 = b2i(w3)
-        if op == EVM.ADDMOD:
-            return w1.addmod(w2, w3, abstraction=f_mod[w1.size + 8])
-        elif op == EVM.MULMOD:
-            # to avoid mul overflow
-            r1 = self.arith(
-                ex, EVM.MUL, simplify(ZeroExt(256, w1)), simplify(ZeroExt(256, w2))
-            )
-            r2 = self.arith(ex, EVM.MOD, simplify(r1), simplify(ZeroExt(256, w3)))
-            if r1.size() != 512:
-                raise ValueError(r1)
-            if r2.size() != 512:
-                raise ValueError(r2)
-            return Extract(255, 0, r2)
-        else:
-            raise ValueError(op)
-
     def mk_storagedata(self) -> StorageData:
         return self.storage_model.mk_storagedata()
 
@@ -2875,10 +2855,27 @@ class SEVM:
                 elif EVM.ADD <= opcode <= EVM.SMOD:  # ADD MUL SUB DIV SDIV MOD SMOD
                     ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
 
-                elif EVM.ADDMOD <= opcode <= EVM.MULMOD:  # ADDMOD MULMOD
-                    ex.st.push(
-                        self.arith2(ex, opcode, ex.st.pop(), ex.st.pop(), ex.st.pop())
+                elif opcode == EVM.ADDMOD:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    w3 = ex.st.popi()
+
+                    result = w1.addmod(w2, w3, abstraction=f_mod[w1.size + 8])
+                    ex.st.push(result)
+
+                elif opcode == EVM.MULMOD:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    w3 = ex.st.popi()
+
+                    newsize = 2 * w1.size
+                    result = w1.mulmod(
+                        w2,
+                        w3,
+                        mul_abstraction=f_mul[newsize],
+                        mod_abstraction=f_mod[newsize],
                     )
+                    ex.st.push(result)
 
                 elif opcode == EVM.EXP:
                     ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
