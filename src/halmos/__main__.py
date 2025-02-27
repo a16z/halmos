@@ -496,7 +496,9 @@ def run_single_invariant_step(
 
                 # ignore and report stuck
                 if subcall.is_stuck():
-                    warn_code(INTERNAL_ERROR, f"Encountered {subcall.get_stuck_reason()}")
+                    warn_code(
+                        INTERNAL_ERROR, f"Encountered {subcall.get_stuck_reason()}"
+                    )
                     continue
 
                 # ignore revert

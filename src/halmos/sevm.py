@@ -2140,10 +2140,7 @@ class SEVM:
         return self.storage_model.mk_storagedata()
 
     def fresh_transient_storage(self, ex: Exec) -> dict:
-        return {
-            addr: self.mk_storagedata()
-            for addr in ex.transient_storage
-        }
+        return {addr: self.mk_storagedata() for addr in ex.transient_storage}
 
     def sload(self, ex: Exec, addr: Any, loc: Word, transient: bool = False) -> Word:
         storage = ex.transient_storage if transient else ex.storage
