@@ -411,11 +411,11 @@ def get_state_id(ex: Exec) -> bytes:
 
 # execute invariant test functions in multiple depths
 # reuse states at each depth for all invariant functions
-def run_invariant_tests(ctx: ContractContext, pre_ex: Exec):
+def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, inv_funsigs: list):
     args = ctx.args
 
     # check all invariants against the setup state
-    test_results = run_tests(ctx, pre_ex, ctx.invariant_funsigs, terminal=False)
+    test_results = run_tests(ctx, pre_ex, inv_funsigs, terminal=False)
 
     # accumulated test results; to be updated later
     test_results_map = {r.name: r for r in test_results if r.exitcode != 0}
@@ -958,13 +958,17 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
         return []
 
+    test_funsigs, inv_funsigs = [], []
+    for sig in ctx.funsigs:
+        (inv_funsigs if sig.startswith("invariant_") else test_funsigs).append(sig)
+
     test_results = []
 
-    if ctx.funsigs:
-        test_results.extend(run_tests(ctx, setup_ex, ctx.funsigs))
+    if test_funsigs:
+        test_results.extend(run_tests(ctx, setup_ex, test_funsigs))
 
-    if ctx.invariant_funsigs:
-        test_results.extend(run_invariant_tests(ctx, setup_ex))
+    if inv_funsigs:
+        test_results.extend(run_invariant_tests(ctx, setup_ex, inv_funsigs))
 
     # reset any remaining solver states from the default context
     setup_solver.reset()
@@ -1160,8 +1164,7 @@ def _main(_args=None) -> MainResult:
 
         methodIdentifiers = contract_json["methodIdentifiers"]
         funsigs = [f for f in methodIdentifiers if re.search(test_regex(args), f)]
-        inv_funsigs = [f for f in methodIdentifiers if re.search(r"^invariant_", f)]
-        num_found = len(funsigs) + len(inv_funsigs)
+        num_found = len(funsigs)
 
         if num_found == 0:
             continue
@@ -1186,7 +1189,6 @@ def _main(_args=None) -> MainResult:
             args=contract_args,
             name=contract_name,
             funsigs=funsigs,
-            invariant_funsigs=inv_funsigs,
             creation_hexcode=creation_hexcode,
             deployed_hexcode=deployed_hexcode,
             abi=abi,

@@ -256,7 +256,7 @@ class Config:
 
     function: str = arg(
         help="run tests matching the given prefix. Shortcut for `--match-test '^{PREFIX}'`.",
-        global_default="check_",
+        global_default="(check|invariant)_",
         metavar="FUNCTION_NAME_PREFIX",
     )
 
