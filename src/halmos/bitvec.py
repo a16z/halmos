@@ -574,7 +574,8 @@ class HalmosBitVec:
         self,
         other: "HalmosBitVec",
         *,
-        abstraction: FuncDeclRef | None = None,
+        exp_abstraction: FuncDeclRef | None = None,
+        mul_abstraction: FuncDeclRef | None = None,
         smt_exp_by_const: int = 0,
     ) -> "HalmosBitVec":
         size = self._size
@@ -595,13 +596,13 @@ class HalmosBitVec:
             if rhs <= smt_exp_by_const:
                 exp = self
                 for _ in range(rhs - 1):
-                    exp = self.mul(exp)
+                    exp = self.mul(exp, abstraction=mul_abstraction)
                 return exp
 
-        if abstraction is None:
+        if exp_abstraction is None:
             raise NotImplementedError("missing SMT abstraction for exponentiation")
 
-        return HalmosBitVec(abstraction(lhs, rhs), size=size)
+        return HalmosBitVec(exp_abstraction(lhs, rhs), size=size)
 
     def addmod(
         self,
