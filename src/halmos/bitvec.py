@@ -15,6 +15,7 @@ from z3 import (
     LShR,
     Not,
     Or,
+    SignExt,
     SRem,
     UDiv,
     URem,
@@ -662,6 +663,20 @@ class HalmosBitVec:
             raise ValueError(r2)
 
         return HalmosBitVec(r2, size=size)
+
+    def signextend(self, size: int) -> "HalmosBitVec":
+        # TODO: handle other sizes
+        assert self.size == 256
+
+        if size >= 31:
+            return self
+
+        # TODO: handle concrete case natively
+
+        bl = (size + 1) * 8
+        return HalmosBitVec(
+            SignExt(256 - bl, Extract(bl - 1, 0, self.wrapped())), size=256
+        )
 
     def lshl(self, shift: BV) -> "HalmosBitVec":
         """
