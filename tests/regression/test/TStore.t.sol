@@ -31,6 +31,7 @@ contract C {
     }
 }
 
+/// @custom:halmos --storage-layout generic
 contract TStoreTest is Test {
     C c;
 

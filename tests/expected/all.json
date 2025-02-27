@@ -4552,6 +4552,24 @@
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_storage()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_transient_storage()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/TestConstructor.t.sol:TestConstructorTest": [
