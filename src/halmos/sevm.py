@@ -41,7 +41,6 @@ from z3 import (
     Select,
     SignExt,
     Solver,
-    SRem,
     Store,
     ZeroExt,
     eq,
@@ -1825,8 +1824,11 @@ class Worklist:
     def push(self, ex: Exec):
         self.stack.append(ex)
 
-    def pop(self) -> Exec:
-        return self.stack.pop()
+    def pop(self) -> Exec | None:
+        try:
+            return self.stack.pop()
+        except IndexError:
+            return None
 
     def __len__(self) -> int:
         return len(self.stack)
@@ -1924,17 +1926,7 @@ class SEVM:
             return w1.sdiv(w2, abstraction=f_sdiv)
 
         if op == EVM.SMOD:
-            raise NotImplementedError("TODO: move to bitvec.py")
-
-            if is_bv_value(w1) and is_bv_value(w2):
-                if w2.as_long() == 0:
-                    return w2
-                else:
-                    return SRem(w1, w2)  # bvsrem  # vs: w1 % w2 (bvsmod w1 w2)
-
-            # TODO: if is_bv_value(w2):
-
-            return f_smod(w1, w2)
+            return w1.smod(w2, abstraction=f_smod)
 
         if op == EVM.EXP:
             return w1.exp(w2, abstraction=f_exp)
@@ -2814,493 +2806,473 @@ class SEVM:
         if not ex0.insn:
             ex0.fetch_instruction()
 
-        try:
-            while ex := stack.pop():
-                try:
-                    step_id += 1
+        while (ex := stack.pop()) is not None:
+            try:
+                step_id += 1
 
-                    # display progress
-                    if not no_status and step_id % PULSE_INTERVAL == 0:
-                        elapsed = timer() - start_time
-                        speed = step_id / elapsed
+                # display progress
+                if not no_status and step_id % PULSE_INTERVAL == 0:
+                    elapsed = timer() - start_time
+                    speed = step_id / elapsed
 
-                        # hh:mm:ss
-                        elapsed_fmt = timedelta(seconds=int(elapsed))
+                    # hh:mm:ss
+                    elapsed_fmt = timedelta(seconds=int(elapsed))
 
-                        self.status.update(
-                            f"[{elapsed_fmt}] {speed:.0f} ops/s"
-                            f" | completed paths: {stack.completed_paths}"
-                            f" | outstanding paths: {len(stack)}"
+                    self.status.update(
+                        f"[{elapsed_fmt}] {speed:.0f} ops/s"
+                        f" | completed paths: {stack.completed_paths}"
+                        f" | outstanding paths: {len(stack)}"
+                    )
+
+                if not ex.path.is_activated():
+                    ex.path.activate()
+
+                # PathEndingException may not be immediately raised; it could be delayed until it comes out of the worklist
+                # see the assert cheatcode hanlder logic for the delayed case
+                if isinstance(ex.context.output.error, PathEndingException):
+                    raise ex.context.output.error
+
+                if ex.context.depth > MAX_CALL_DEPTH:
+                    raise MessageDepthLimitError(ex.context)
+
+                insn: Instruction = ex.insn
+                opcode: int = insn.opcode
+
+                if max_depth and step_id > max_depth:
+                    warn(
+                        f"{self.fun_info.sig}: incomplete execution due to the specified limit: --depth {max_depth}",
+                        allow_duplicate=False,
+                    )
+                    continue
+
+                if print_steps:
+                    print(ex.dump(print_mem=print_mem))
+
+                if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
+                    if opcode == EVM.STOP:
+                        ex.halt(data=ByteVec())
+
+                    elif opcode == EVM.INVALID:
+                        ex.halt(
+                            data=ByteVec(),
+                            error=InvalidOpcode(opcode),
                         )
 
-                    if not ex.path.is_activated():
-                        ex.path.activate()
-
-                    # PathEndingException may not be immediately raised; it could be delayed until it comes out of the worklist
-                    # see the assert cheatcode hanlder logic for the delayed case
-                    if isinstance(ex.context.output.error, PathEndingException):
-                        raise ex.context.output.error
-
-                    if ex.context.depth > MAX_CALL_DEPTH:
-                        raise MessageDepthLimitError(ex.context)
-
-                    insn: Instruction = ex.insn
-                    opcode: int = insn.opcode
-
-                    if max_depth and step_id > max_depth:
-                        warn(
-                            f"{self.fun_info.sig}: incomplete execution due to the specified limit: --depth {max_depth}",
-                            allow_duplicate=False,
-                        )
-                        continue
-
-                    if print_steps:
-                        print(ex.dump(print_mem=print_mem))
-
-                    if opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
-                        if opcode == EVM.STOP:
-                            ex.halt(data=ByteVec())
-
-                        elif opcode == EVM.INVALID:
-                            ex.halt(
-                                data=ByteVec(),
-                                error=InvalidOpcode(opcode),
-                            )
-
-                        elif opcode == EVM.REVERT:
-                            ex.halt(data=ex.ret(), error=Revert())
-
-                        elif opcode == EVM.RETURN:
-                            ex.halt(data=ex.ret())
-
-                        else:
-                            raise ValueError(opcode)
-
-                        yield from finalize(ex)
-                        continue
-
-                    elif opcode == EVM.JUMPI:
-                        self.jumpi(ex, stack)
-                        continue
-
-                    elif opcode == EVM.JUMP:
-                        self.jump(ex, stack)
-                        continue
-
-                    elif opcode == EVM.JUMPDEST:
-                        pass
-
-                    elif EVM.ADD <= opcode <= EVM.SMOD:  # ADD MUL SUB DIV SDIV MOD SMOD
-                        ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
-
-                    elif EVM.ADDMOD <= opcode <= EVM.MULMOD:  # ADDMOD MULMOD
-                        ex.st.push(
-                            self.arith2(
-                                ex, opcode, ex.st.pop(), ex.st.pop(), ex.st.pop()
-                            )
-                        )
-
-                    elif opcode == EVM.EXP:
-                        ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
-
-                    elif opcode == EVM.LT:
-                        w1 = ex.st.popi()
-                        w2 = ex.st.popi()
-                        ex.st.push(w1.ult(w2))  # bvult
-
-                    elif opcode == EVM.GT:
-                        w1 = ex.st.popi()
-                        w2 = ex.st.popi()
-                        ex.st.push(w1.ugt(w2))  # bvugt
-
-                    elif opcode == EVM.SLT:
-                        w1 = ex.st.popi()
-                        w2 = ex.st.popi()
-                        ex.st.push(w1.slt(w2))  # bvslt
-
-                    elif opcode == EVM.SGT:
-                        w1 = ex.st.popi()
-                        w2 = ex.st.popi()
-                        ex.st.push(w1.sgt(w2))  # bvsgt
-
-                    elif opcode == EVM.EQ:
-                        w1 = ex.st.pop()
-                        w2 = ex.st.pop()
-
-                        match (w1, w2):
-                            case (Bool(), Bool()):
-                                ex.st.push(w1.eq(w2))
-                            case (BV(), BV()):
-                                ex.st.push(w1.eq(w2))
-                            case (_, _):
-                                ex.st.push(BV(w1, size=256).eq(BV(w2, size=256)))
-
-                    elif opcode == EVM.ISZERO:
-                        ex.st.push(is_zero(ex.st.pop()))
-
-                    elif opcode in [EVM.AND, EVM.OR, EVM.XOR]:
-                        ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
-
-                    elif opcode == EVM.NOT:
-                        ex.st.push(ex.st.popi().bitwise_not())
-
-                    elif opcode == EVM.SHL:
-                        w1 = ex.st.popi()
-                        w2 = ex.st.popi()
-                        ex.st.push(w2.lshl(w1))
-
-                    elif opcode == EVM.SAR:
-                        w1 = ex.st.popi()
-                        w2 = ex.st.popi()
-                        ex.st.push(w2.ashr(w1))  # bvashr
-
-                    elif opcode == EVM.SHR:
-                        w1 = ex.st.popi()
-                        w2 = ex.st.popi()
-                        ex.st.push(w2.lshr(w1))  # bvlshr
-
-                    elif opcode == EVM.SIGNEXTEND:
-                        w = ex.int_of(ex.st.popi(), "symbolic SIGNEXTEND size")
-                        if w <= 30:  # if w == 31, result is SignExt(0, value) == value
-                            bl = (w + 1) * 8
-                            ex.st.push(
-                                SignExt(256 - bl, Extract(bl - 1, 0, ex.st.popi()))
-                            )
-
-                    elif opcode == EVM.CALLDATALOAD:
-                        self.calldataload(ex, stack)
-                        continue
-
-                    elif opcode == EVM.CALLDATASIZE:
-                        ex.st.push(len(ex.calldata()))
-
-                    elif opcode == EVM.CALLVALUE:
-                        ex.st.push(ex.callvalue())
-
-                    elif opcode == EVM.CALLER:
-                        ex.st.push(uint256(ex.caller()))
-
-                    elif opcode == EVM.ORIGIN:
-                        ex.st.push(uint256(ex.origin()))
-
-                    elif opcode == EVM.ADDRESS:
-                        ex.st.push(uint256(ex.this()))
-
-                    elif opcode == EVM.EXTCODESIZE:
-                        account = uint160(ex.st.peek()).wrapped()
-                        account_alias = self.resolve_address_alias(ex, account, stack)
-                        ex.st.pop()
-
-                        if account_alias is not None:
-                            codesize = len(ex.code[account_alias])
-                        else:
-                            codesize = (
-                                1  # dummy arbitrary value, consistent with foundry
-                                if eq(account, hevm_cheat_code.address)
-                                # NOTE: the codesize of halmos cheatcode should be non-zero to pass the extcodesize check for external calls with non-empty return types. this behavior differs from foundry.
-                                or eq(account, halmos_cheat_code.address)
-                                # the codesize of console is considered zero in foundry
-                                # or eq(account, console.address)
-                                else 0
-                            )
-
-                        ex.st.push(codesize)
-
-                    elif opcode == EVM.EXTCODECOPY:
-                        account: Address = uint160(ex.st.peek())
-                        account_alias = self.resolve_address_alias(ex, account, stack)
-                        ex.st.pop()
-
-                        loc: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
-                        offset: int = ex.int_of(
-                            ex.st.pop(), "symbolic EXTCODECOPY offset"
-                        )
-                        size: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
-
-                        if size:
-                            if account_alias is None:
-                                warn(
-                                    f"EXTCODECOPY: unknown address {hexify(account)} "
-                                    "is assumed to have empty bytecode"
-                                )
-
-                            account_code: Contract = (
-                                ex.code.get(account_alias) or ByteVec()
-                            )
-                            codeslice: ByteVec = account_code.slice(offset, size)
-                            ex.st.set_mslice(loc, codeslice)
-
-                    elif opcode == EVM.EXTCODEHASH:
-                        account = uint160(ex.st.peek())
-                        account_alias = self.resolve_address_alias(ex, account, stack)
-                        ex.st.pop()
-
-                        if account_alias is not None:
-                            codehash = ex.sha3_data(
-                                ex.code[account_alias]._code.unwrap()
-                            )
-                        elif (
-                            eq(account, hevm_cheat_code.address)
-                            or eq(account, halmos_cheat_code.address)
-                            or eq(account, console.address)
-                        ):
-                            # dummy arbitrary value, consistent with foundry
-                            codehash = (
-                                0xB0450508E5A2349057C3B4C9C84524D62BE4BB17E565DBE2DF34725A26872291
-                                if eq(account, hevm_cheat_code.address)
-                                else 0
-                            )
-                        else:
-                            codehash = 0  # vs EMPTY_KECCAK, see EIP-1052
-
-                        ex.st.push(codehash)
-
-                    elif opcode == EVM.CODESIZE:
-                        ex.st.push(len(ex.pgm))
-
-                    elif opcode == EVM.GAS:
-                        ex.st.push(f_gas(con(ex.new_gas_id())))
-
-                    elif opcode == EVM.GASPRICE:
-                        ex.st.push(f_gasprice())
-
-                    elif opcode == EVM.BASEFEE:
-                        ex.st.push(ex.block.basefee)
-
-                    elif opcode == EVM.CHAINID:
-                        ex.st.push(ex.block.chainid)
-
-                    elif opcode == EVM.COINBASE:
-                        ex.st.push(uint256(ex.block.coinbase))
-
-                    elif opcode == EVM.DIFFICULTY:
-                        ex.st.push(ex.block.difficulty)
-
-                    elif opcode == EVM.GASLIMIT:
-                        ex.st.push(ex.block.gaslimit)
-
-                    elif opcode == EVM.NUMBER:
-                        ex.st.push(ex.block.number)
-
-                    elif opcode == EVM.TIMESTAMP:
-                        ex.st.push(ex.block.timestamp)
-
-                    elif opcode == EVM.PC:
-                        ex.st.push(ex.pc)
-
-                    elif opcode == EVM.BLOCKHASH:
-                        ex.st.push(f_blockhash(ex.st.pop()))
-
-                    elif opcode == EVM.BALANCE:
-                        ex.st.push(ex.balance_of(uint160(ex.st.pop())))
-
-                    elif opcode == EVM.SELFBALANCE:
-                        ex.st.push(ex.balance_of(ex.this()))
-
-                    elif opcode in [
-                        EVM.CALL,
-                        EVM.CALLCODE,
-                        EVM.DELEGATECALL,
-                        EVM.STATICCALL,
-                    ]:
-                        to = uint160(ex.st.peek(2))
-                        to_alias = self.resolve_address_alias(ex, to, stack)
-
-                        self.call(ex, opcode, to_alias, stack)
-                        continue
-
-                    elif opcode == EVM.SHA3:
-                        ex.sha3()
-
-                    elif opcode in [EVM.CREATE, EVM.CREATE2]:
-                        self.create(ex, opcode, stack)
-                        continue
-
-                    elif opcode == EVM.POP:
-                        ex.st.pop()
-
-                    elif opcode == EVM.MLOAD:
-                        loc: int = ex.mloc(check_size=True)
-                        ex.st.push(ex.st.memory.get_word(loc))
-
-                    elif opcode == EVM.MSTORE:
-                        loc: int = ex.mloc(check_size=True)
-                        val: Word = ex.st.pop()
-                        ex.st.memory.set_word(loc, uint256(val))
-
-                    elif opcode == EVM.MSTORE8:
-                        loc: int = ex.mloc(check_size=True)
-                        val: Word = ex.st.pop()
-                        ex.st.memory.set_byte(loc, uint8(val))
-
-                    elif opcode == EVM.MSIZE:
-                        size: int = len(ex.st.memory)
-                        # round up to the next multiple of 32
-                        size = ((size + 31) // 32) * 32
-                        ex.st.push(size)
-
-                    elif opcode == EVM.SLOAD:
-                        slot: Word = ex.st.pop()
-                        ex.st.push(self.sload(ex, ex.this(), slot))
-
-                    elif opcode == EVM.SSTORE:
-                        slot: Word = ex.st.pop()
-                        value: Word = ex.st.pop()
-                        self.sstore(ex, ex.this(), slot, value)
-
-                    elif opcode == EVM.TLOAD:
-                        slot: Word = ex.st.popi()
-                        ex.st.push(self.sload(ex, ex.this(), slot, transient=True))
-
-                    elif opcode == EVM.TSTORE:
-                        slot: Word = ex.st.popi()
-                        value: Word = ex.st.popi()
-                        self.sstore(ex, ex.this(), slot, value, transient=True)
-
-                    elif opcode == EVM.RETURNDATASIZE:
-                        ex.st.push(ex.returndatasize())
-
-                    elif opcode == EVM.RETURNDATACOPY:
-                        loc: int = ex.mloc(check_size=False)
-                        offset = ex.int_of(
-                            ex.st.pop(), "symbolic RETURNDATACOPY offset"
-                        )
-                        size: int = ex.int_of(
-                            ex.st.pop(), "symbolic RETURNDATACOPY size"
-                        )
-
-                        if size:
-                            # no need to check for a huge size because reading out of bounds reverts
-                            if offset + size > ex.returndatasize():
-                                raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
-
-                            data: ByteVec = ex.returndata().slice(offset, offset + size)
-                            ex.st.set_mslice(loc, data)
-
-                    elif opcode == EVM.CALLDATACOPY:
-                        loc: int = ex.mloc(check_size=False)
-                        offset: int = ex.int_of(
-                            ex.st.pop(), "symbolic CALLDATACOPY offset"
-                        )
-                        size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
-
-                        if size:
-                            data: ByteVec = ex.message().calldata_slice(offset, size)
-                            data = data.concretize(ex.path.concretization.substitution)
-                            ex.st.set_mslice(loc, data)
-
-                    elif opcode == EVM.CODECOPY:
-                        loc: int = ex.mloc(check_size=False)
-                        offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
-                        size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
-
-                        if size:
-                            codeslice: ByteVec = ex.pgm.slice(offset, size)
-                            ex.st.set_mslice(loc, codeslice)
-
-                    elif opcode == EVM.MCOPY:
-                        dst_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY dstOffset")
-                        src_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
-                        size = ex.int_of(ex.st.pop(), "symbolic MCOPY size")
-
-                        if size:
-                            data = ex.st.mslice(src_offset, size)
-                            ex.st.set_mslice(dst_offset, data)
-
-                    elif opcode == EVM.BYTE:
-                        idx = ex.st.pop()
-                        w = ex.st.pop()
-                        if is_bv_value(idx):
-                            idx = idx.as_long()
-                            if idx < 0:
-                                raise ValueError(idx)
-                            if idx >= 32:
-                                ex.st.push(0)
-                            else:
-                                ex.st.push(
-                                    ZeroExt(
-                                        248,
-                                        Extract((31 - idx) * 8 + 7, (31 - idx) * 8, w),
-                                    )
-                                )
-                        else:
-                            debug_once(
-                                f"Warning: the use of symbolic BYTE indexing may potentially "
-                                f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
-                            )
-                            ex.st.push(self.sym_byte_of(idx, w))
-
-                    elif EVM.LOG0 <= opcode <= EVM.LOG4:
-                        if ex.message().is_static:
-                            raise WriteInStaticContext(ex.context_str())
-
-                        num_topics: int = opcode - EVM.LOG0
-                        loc: int = ex.mloc()
-                        size: int = ex.int_of(ex.st.pop(), "symbolic LOG data size")
-                        topics = list(ex.st.pop() for _ in range(num_topics))
-                        data = ex.st.mslice(loc, size)
-                        ex.emit_log(EventLog(ex.this(), topics, data))
-
-                    elif opcode == EVM.PUSH0:
-                        ex.st.push(0)
-
-                    elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
-                        val = insn.operand
-                        assert val.size == 256
-
-                        # Special handling for PUSH32 with concrete values
-                        if val.is_concrete and opcode == EVM.PUSH32:
-                            if inverse := sha3_inv.get(val.value):
-                                # restore precomputed hashes
-                                ex.st.push(ex.sha3_data(con(inverse)))
-                            # TODO: support more commonly used concrete keccak values
-                            elif val.value == EMPTY_KECCAK:
-                                ex.st.push(ex.sha3_data(b""))
-                            else:
-                                ex.st.push(val)
-                        else:
-                            # Handle all other cases (non-PUSH32 or non-concrete values)
-                            ex.st.push(val)
-
-                    elif EVM.DUP1 <= opcode <= EVM.DUP16:
-                        ex.st.dup(opcode - EVM.DUP1 + 1)
-
-                    elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
-                        ex.st.swap(opcode - EVM.SWAP1 + 1)
+                    elif opcode == EVM.REVERT:
+                        ex.halt(data=ex.ret(), error=Revert())
+
+                    elif opcode == EVM.RETURN:
+                        ex.halt(data=ex.ret())
 
                     else:
-                        # TODO: switch to InvalidOpcode when we have full opcode coverage
-                        # this halts the path, but we should only halt the current context
-                        raise HalmosException(f"Unsupported opcode {hex(opcode)}")
+                        raise ValueError(opcode)
 
-                    ex.advance()
-                    stack.push(ex)
-
-                except InfeasiblePath:
-                    # ignore infeasible path
+                    yield from finalize(ex)
                     continue
 
-                except EvmException as err:
+                elif opcode == EVM.JUMPI:
+                    self.jumpi(ex, stack)
+                    continue
+
+                elif opcode == EVM.JUMP:
+                    self.jump(ex, stack)
+                    continue
+
+                elif opcode == EVM.JUMPDEST:
+                    pass
+
+                elif EVM.ADD <= opcode <= EVM.SMOD:  # ADD MUL SUB DIV SDIV MOD SMOD
+                    ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
+
+                elif EVM.ADDMOD <= opcode <= EVM.MULMOD:  # ADDMOD MULMOD
+                    ex.st.push(
+                        self.arith2(ex, opcode, ex.st.pop(), ex.st.pop(), ex.st.pop())
+                    )
+
+                elif opcode == EVM.EXP:
+                    ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
+
+                elif opcode == EVM.LT:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w1.ult(w2))  # bvult
+
+                elif opcode == EVM.GT:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w1.ugt(w2))  # bvugt
+
+                elif opcode == EVM.SLT:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w1.slt(w2))  # bvslt
+
+                elif opcode == EVM.SGT:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w1.sgt(w2))  # bvsgt
+
+                elif opcode == EVM.EQ:
+                    w1 = ex.st.pop()
+                    w2 = ex.st.pop()
+
+                    match (w1, w2):
+                        case (Bool(), Bool()):
+                            ex.st.push(w1.eq(w2))
+                        case (BV(), BV()):
+                            ex.st.push(w1.eq(w2))
+                        case (_, _):
+                            ex.st.push(BV(w1, size=256).eq(BV(w2, size=256)))
+
+                elif opcode == EVM.ISZERO:
+                    ex.st.push(is_zero(ex.st.pop()))
+
+                elif opcode in [EVM.AND, EVM.OR, EVM.XOR]:
+                    ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
+
+                elif opcode == EVM.NOT:
+                    ex.st.push(ex.st.popi().bitwise_not())
+
+                elif opcode == EVM.SHL:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w2.lshl(w1))
+
+                elif opcode == EVM.SAR:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w2.ashr(w1))  # bvashr
+
+                elif opcode == EVM.SHR:
+                    w1 = ex.st.popi()
+                    w2 = ex.st.popi()
+                    ex.st.push(w2.lshr(w1))  # bvlshr
+
+                elif opcode == EVM.SIGNEXTEND:
+                    w = ex.int_of(ex.st.popi(), "symbolic SIGNEXTEND size")
+                    if w <= 30:  # if w == 31, result is SignExt(0, value) == value
+                        bl = (w + 1) * 8
+                        ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.popi())))
+
+                elif opcode == EVM.CALLDATALOAD:
+                    self.calldataload(ex, stack)
+                    continue
+
+                elif opcode == EVM.CALLDATASIZE:
+                    ex.st.push(len(ex.calldata()))
+
+                elif opcode == EVM.CALLVALUE:
+                    ex.st.push(ex.callvalue())
+
+                elif opcode == EVM.CALLER:
+                    ex.st.push(uint256(ex.caller()))
+
+                elif opcode == EVM.ORIGIN:
+                    ex.st.push(uint256(ex.origin()))
+
+                elif opcode == EVM.ADDRESS:
+                    ex.st.push(uint256(ex.this()))
+
+                elif opcode == EVM.EXTCODESIZE:
+                    account = uint160(ex.st.peek()).wrapped()
+                    account_alias = self.resolve_address_alias(ex, account, stack)
+                    ex.st.pop()
+
+                    if account_alias is not None:
+                        codesize = len(ex.code[account_alias])
+                    else:
+                        codesize = (
+                            1  # dummy arbitrary value, consistent with foundry
+                            if eq(account, hevm_cheat_code.address)
+                            # NOTE: the codesize of halmos cheatcode should be non-zero to pass the extcodesize check for external calls with non-empty return types. this behavior differs from foundry.
+                            or eq(account, halmos_cheat_code.address)
+                            # the codesize of console is considered zero in foundry
+                            # or eq(account, console.address)
+                            else 0
+                        )
+
+                    ex.st.push(codesize)
+
+                elif opcode == EVM.EXTCODECOPY:
+                    account: Address = uint160(ex.st.peek())
+                    account_alias = self.resolve_address_alias(ex, account, stack)
+                    ex.st.pop()
+
+                    loc: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
+
+                    if size:
+                        if account_alias is None:
+                            warn(
+                                f"EXTCODECOPY: unknown address {hexify(account)} "
+                                "is assumed to have empty bytecode"
+                            )
+
+                        account_code: Contract = ex.code.get(account_alias) or ByteVec()
+                        codeslice: ByteVec = account_code.slice(offset, size)
+                        ex.st.set_mslice(loc, codeslice)
+
+                elif opcode == EVM.EXTCODEHASH:
+                    account = uint160(ex.st.peek())
+                    account_alias = self.resolve_address_alias(ex, account, stack)
+                    ex.st.pop()
+
+                    if account_alias is not None:
+                        codehash = ex.sha3_data(ex.code[account_alias]._code.unwrap())
+                    elif (
+                        eq(account, hevm_cheat_code.address)
+                        or eq(account, halmos_cheat_code.address)
+                        or eq(account, console.address)
+                    ):
+                        # dummy arbitrary value, consistent with foundry
+                        codehash = (
+                            0xB0450508E5A2349057C3B4C9C84524D62BE4BB17E565DBE2DF34725A26872291
+                            if eq(account, hevm_cheat_code.address)
+                            else 0
+                        )
+                    else:
+                        codehash = 0  # vs EMPTY_KECCAK, see EIP-1052
+
+                    ex.st.push(codehash)
+
+                elif opcode == EVM.CODESIZE:
+                    ex.st.push(len(ex.pgm))
+
+                elif opcode == EVM.GAS:
+                    ex.st.push(f_gas(con(ex.new_gas_id())))
+
+                elif opcode == EVM.GASPRICE:
+                    ex.st.push(f_gasprice())
+
+                elif opcode == EVM.BASEFEE:
+                    ex.st.push(ex.block.basefee)
+
+                elif opcode == EVM.CHAINID:
+                    ex.st.push(ex.block.chainid)
+
+                elif opcode == EVM.COINBASE:
+                    ex.st.push(uint256(ex.block.coinbase))
+
+                elif opcode == EVM.DIFFICULTY:
+                    ex.st.push(ex.block.difficulty)
+
+                elif opcode == EVM.GASLIMIT:
+                    ex.st.push(ex.block.gaslimit)
+
+                elif opcode == EVM.NUMBER:
+                    ex.st.push(ex.block.number)
+
+                elif opcode == EVM.TIMESTAMP:
+                    ex.st.push(ex.block.timestamp)
+
+                elif opcode == EVM.PC:
+                    ex.st.push(ex.pc)
+
+                elif opcode == EVM.BLOCKHASH:
+                    ex.st.push(f_blockhash(ex.st.pop()))
+
+                elif opcode == EVM.BALANCE:
+                    ex.st.push(ex.balance_of(uint160(ex.st.pop())))
+
+                elif opcode == EVM.SELFBALANCE:
+                    ex.st.push(ex.balance_of(ex.this()))
+
+                elif opcode in [
+                    EVM.CALL,
+                    EVM.CALLCODE,
+                    EVM.DELEGATECALL,
+                    EVM.STATICCALL,
+                ]:
+                    to = uint160(ex.st.peek(2))
+                    to_alias = self.resolve_address_alias(ex, to, stack)
+
+                    self.call(ex, opcode, to_alias, stack)
+                    continue
+
+                elif opcode == EVM.SHA3:
+                    ex.sha3()
+
+                elif opcode in [EVM.CREATE, EVM.CREATE2]:
+                    self.create(ex, opcode, stack)
+                    continue
+
+                elif opcode == EVM.POP:
+                    ex.st.pop()
+
+                elif opcode == EVM.MLOAD:
+                    loc: int = ex.mloc(check_size=True)
+                    ex.st.push(ex.st.memory.get_word(loc))
+
+                elif opcode == EVM.MSTORE:
+                    loc: int = ex.mloc(check_size=True)
+                    val: Word = ex.st.pop()
+                    ex.st.memory.set_word(loc, uint256(val))
+
+                elif opcode == EVM.MSTORE8:
+                    loc: int = ex.mloc(check_size=True)
+                    val: Word = ex.st.pop()
+                    ex.st.memory.set_byte(loc, uint8(val))
+
+                elif opcode == EVM.MSIZE:
+                    size: int = len(ex.st.memory)
+                    # round up to the next multiple of 32
+                    size = ((size + 31) // 32) * 32
+                    ex.st.push(size)
+
+                elif opcode == EVM.SLOAD:
+                    slot: Word = ex.st.pop()
+                    ex.st.push(self.sload(ex, ex.this(), slot))
+
+                elif opcode == EVM.SSTORE:
+                    slot: Word = ex.st.pop()
+                    value: Word = ex.st.pop()
+                    self.sstore(ex, ex.this(), slot, value)
+
+                elif opcode == EVM.TLOAD:
+                    slot: Word = ex.st.popi()
+                    ex.st.push(self.sload(ex, ex.this(), slot, transient=True))
+
+                elif opcode == EVM.TSTORE:
+                    slot: Word = ex.st.popi()
+                    value: Word = ex.st.popi()
+                    self.sstore(ex, ex.this(), slot, value, transient=True)
+
+                elif opcode == EVM.RETURNDATASIZE:
+                    ex.st.push(ex.returndatasize())
+
+                elif opcode == EVM.RETURNDATACOPY:
+                    loc: int = ex.mloc(check_size=False)
+                    offset = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
+
+                    if size:
+                        # no need to check for a huge size because reading out of bounds reverts
+                        if offset + size > ex.returndatasize():
+                            raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
+
+                        data: ByteVec = ex.returndata().slice(offset, offset + size)
+                        ex.st.set_mslice(loc, data)
+
+                elif opcode == EVM.CALLDATACOPY:
+                    loc: int = ex.mloc(check_size=False)
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
+
+                    if size:
+                        data: ByteVec = ex.message().calldata_slice(offset, size)
+                        data = data.concretize(ex.path.concretization.substitution)
+                        ex.st.set_mslice(loc, data)
+
+                elif opcode == EVM.CODECOPY:
+                    loc: int = ex.mloc(check_size=False)
+                    offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
+                    size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
+
+                    if size:
+                        codeslice: ByteVec = ex.pgm.slice(offset, size)
+                        ex.st.set_mslice(loc, codeslice)
+
+                elif opcode == EVM.MCOPY:
+                    dst_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY dstOffset")
+                    src_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
+                    size = ex.int_of(ex.st.pop(), "symbolic MCOPY size")
+
+                    if size:
+                        data = ex.st.mslice(src_offset, size)
+                        ex.st.set_mslice(dst_offset, data)
+
+                elif opcode == EVM.BYTE:
+                    idx = ex.st.pop()
+                    w = ex.st.pop()
+                    if is_bv_value(idx):
+                        idx = idx.as_long()
+                        if idx < 0:
+                            raise ValueError(idx)
+                        if idx >= 32:
+                            ex.st.push(0)
+                        else:
+                            ex.st.push(
+                                ZeroExt(
+                                    248,
+                                    Extract((31 - idx) * 8 + 7, (31 - idx) * 8, w),
+                                )
+                            )
+                    else:
+                        debug_once(
+                            f"Warning: the use of symbolic BYTE indexing may potentially "
+                            f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
+                        )
+                        ex.st.push(self.sym_byte_of(idx, w))
+
+                elif EVM.LOG0 <= opcode <= EVM.LOG4:
+                    if ex.message().is_static:
+                        raise WriteInStaticContext(ex.context_str())
+
+                    num_topics: int = opcode - EVM.LOG0
+                    loc: int = ex.mloc()
+                    size: int = ex.int_of(ex.st.pop(), "symbolic LOG data size")
+                    topics = list(ex.st.pop() for _ in range(num_topics))
+                    data = ex.st.mslice(loc, size)
+                    ex.emit_log(EventLog(ex.this(), topics, data))
+
+                elif opcode == EVM.PUSH0:
+                    ex.st.push(0)
+
+                elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
+                    val = insn.operand
+                    assert val.size == 256
+
+                    # Special handling for PUSH32 with concrete values
+                    if val.is_concrete and opcode == EVM.PUSH32:
+                        if inverse := sha3_inv.get(val.value):
+                            # restore precomputed hashes
+                            ex.st.push(ex.sha3_data(con(inverse)))
+                        # TODO: support more commonly used concrete keccak values
+                        elif val.value == EMPTY_KECCAK:
+                            ex.st.push(ex.sha3_data(b""))
+                        else:
+                            ex.st.push(val)
+                    else:
+                        # Handle all other cases (non-PUSH32 or non-concrete values)
+                        ex.st.push(val)
+
+                elif EVM.DUP1 <= opcode <= EVM.DUP16:
+                    ex.st.dup(opcode - EVM.DUP1 + 1)
+
+                elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
+                    ex.st.swap(opcode - EVM.SWAP1 + 1)
+
+                else:
+                    # TODO: switch to InvalidOpcode when we have full opcode coverage
+                    # this halts the path, but we should only halt the current context
+                    raise HalmosException(f"Unsupported opcode {hex(opcode)}")
+
+                ex.advance()
+                stack.push(ex)
+
+            except InfeasiblePath:
+                # ignore infeasible path
+                continue
+
+            except EvmException as err:
+                ex.halt(data=ByteVec(), error=err)
+                yield from finalize(ex)
+                continue
+
+            except HalmosException as err:
+                debug(err)
+                ex.halt(data=None, error=err)
+                yield from finalize(ex)
+                continue
+
+            except FailCheatcode as err:
+                if not ex.is_halted():
+                    # return data shouldn't be None, as it is considered being stuck
                     ex.halt(data=ByteVec(), error=err)
-                    yield from finalize(ex)
-                    continue
-
-                except HalmosException as err:
-                    debug(err)
-                    ex.halt(data=None, error=err)
-                    yield from finalize(ex)
-                    continue
-
-                except FailCheatcode as err:
-                    if not ex.is_halted():
-                        # return data shouldn't be None, as it is considered being stuck
-                        ex.halt(data=ByteVec(), error=err)
-                    stack.completed_paths += 1
-                    yield ex  # early exit; do not call finalize()
-                    continue
-        except IndexError:
-            # stack is empty, our work is done
-            pass
+                stack.completed_paths += 1
+                yield ex  # early exit; do not call finalize()
+                continue
 
     def mk_exec(
         self,

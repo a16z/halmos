@@ -14,6 +14,7 @@ from z3 import (
     LShR,
     Not,
     Or,
+    SRem,
     UDiv,
     URem,
     ZeroExt,
@@ -522,13 +523,66 @@ class HalmosBitVec:
             if self.is_concrete:
                 return HalmosBitVec(lhs % rhs, size=size)
 
-            # mod by a power of two is the bitwise and of self and the mask
+            # mod by a power of two only keeps the low bits
             if is_power_of_two(rhs):
-                return self.bitwise_and(HalmosBitVec(rhs.bit_length() - 1, size=size))
+                # option 1: use z3 bitwise and
+                # 10000 loops, best of 5: 148.215 usec per loop
+                # return HalmosBitVec(lhs & (rhs - 1), size=size)
+
+                # option 2: truncate and extend
+                # 10000 loops, best of 5: 146.525 usec per loop
+                # truncated = HalmosBitVec(lhs, size=rhs.bit_length() - 1)
+                # return HalmosBitVec(truncated, size=size)
+
+                # option 3: truncate and extend, skip simplify
+                # 10000 loops, best of 5: 130.028 usec per loop
+                # truncated = HalmosBitVec(lhs, size=rhs.bit_length() - 1, do_simplify=False)
+                # return HalmosBitVec(truncated, size=size)
+
+                # option 4: explicit ZeroExt and Extract
+                # on this path, we know that rhs > 1, so bitsize > 1
+                # 10000 loops, best of 5: 106.079 usec per loop
+                bitsize = rhs.bit_length() - 1
+                truncated = Extract(bitsize - 1, 0, lhs)
+                extended = ZeroExt(size - bitsize, truncated)
+                return HalmosBitVec(extended, size=size)
 
         # symbolic case
         if abstraction is None:
             return HalmosBitVec(URem(lhs, rhs), size=size)
+
+        return HalmosBitVec(abstraction(lhs, rhs), size=size)
+
+    def smod(
+        self, other: "HalmosBitVec", *, abstraction: FuncDeclRef | None = None
+    ) -> "HalmosBitVec":
+        size = self._size
+        assert size == other.size
+
+        lhs, rhs = self.value, other.value
+
+        if other.is_concrete:
+            if rhs == 0:
+                return other
+
+            # mod by one is zero
+            if rhs == 1:
+                return HalmosBitVec(0, size=size)
+
+            # TODO: implement concrete signed remainder
+            # (tricky because it truncates towards zero)
+
+            if self.is_concrete:
+                # rely on z3 to handle the signed division
+                return HalmosBitVec(
+                    SRem(BitVecVal(lhs, size), BitVecVal(rhs, size)),
+                    size=size,
+                    do_simplify=True,
+                )
+
+        # lhs and rhs are symbolic
+        if abstraction is None:
+            return HalmosBitVec(SRem(lhs, rhs), size=size)
 
         return HalmosBitVec(abstraction(lhs, rhs), size=size)
 
