@@ -39,7 +39,6 @@ from z3 import (
     Function,
     If,
     Select,
-    SignExt,
     Solver,
     Store,
     ZeroExt,
@@ -2782,6 +2781,9 @@ class SEVM:
         if not ex0.insn:
             ex0.fetch_instruction()
 
+        # not strictly necessary, but helps type checking
+        ex: Exec | None = None
+
         while (ex := stack.pop()) is not None:
             try:
                 step_id += 1
@@ -2942,10 +2944,9 @@ class SEVM:
                     ex.st.push(w2.lshr(w1))  # bvlshr
 
                 elif opcode == EVM.SIGNEXTEND:
-                    w = ex.int_of(ex.st.popi(), "symbolic SIGNEXTEND size")
-                    if w <= 30:  # if w == 31, result is SignExt(0, value) == value
-                        bl = (w + 1) * 8
-                        ex.st.push(SignExt(256 - bl, Extract(bl - 1, 0, ex.st.popi())))
+                    w1 = ex.int_of(ex.st.popi(), "symbolic SIGNEXTEND size")
+                    w2 = ex.st.popi()
+                    ex.st.push(w2.signextend(w1))
 
                 elif opcode == EVM.CALLDATALOAD:
                     self.calldataload(ex, stack)
