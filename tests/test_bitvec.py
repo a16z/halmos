@@ -1,3 +1,5 @@
+from textwrap import dedent
+
 import pytest
 from z3 import BitVec, BitVecVal, Concat, eq, simplify
 
@@ -154,49 +156,14 @@ def compare(stmts=None, *args, **kwargs):
         print()
 
 
-# compare(
-#     setup=dedent("""
-#         import random
-#         from z3 import BitVec, BitVecRef, BitVecVal
-#         from halmos.bitvec import HalmosBool,BV, bitwise_and
-#         from halmos.utils import EVM
-
-#         def bitwise_preconvert(op, x, y):
-#             # only convert to BV if one of the operands is a bool
-#             if isinstance(x, HalmosBool) and isinstance(y, BV):
-#                 return bitwise_preconvert(op, BV(x), y)
-
-#             elif isinstance(x, BV) and isinstance(y, HalmosBool):
-#                 return bitwise_preconvert(op, x, BV(y))
-
-#             else:
-#                 if op == EVM.AND:
-#                     return x and y
-#                 elif op == EVM.OR:
-#                     return x or y
-#                 elif op == EVM.XOR:
-#                     return x ^ y
-#                 else:
-#                     raise ValueError(op, x, y)
-
-
-#         def bitwise_flexible(op, x, y):
-#             if op == EVM.AND:
-#                 bitwise_and(x, y)
-#             # elif op == EVM.OR:
-#             #     bitwise_or(x, y)
-#             # elif op == EVM.XOR:
-#             #     bitwise_xor(x, y)
-#             # else:
-#             #     raise ValueError(op, x, y)
-#     """),
-#     stmts=[
-#         "bitwise_preconvert(EVM.AND, HalmosBool(True), HalmosBool(True))",
-#         "bitwise_preconvert(EVM.AND, HalmosBool(True), BV(42))",
-#         "bitwise_preconvert(EVM.AND, BV(42), BV(68))",
-#         "bitwise_flexible(EVM.AND, HalmosBool(True), BV(42))",
-#         "bitwise_flexible(EVM.AND, HalmosBool(True), HalmosBool(True))",
-#         "bitwise_flexible(EVM.AND, BV(42), BV(68))",
-#     ],
-#     number=10**4
-# )
+compare(
+    setup=dedent("""
+        import random
+        from z3 import BitVec, BitVecRef, BitVecVal
+        from halmos.bitvec import HalmosBitVec as BV
+    """),
+    stmts=[
+        "BV('x').mod(BV(2**3))",
+    ],
+    number=10**4,
+)
