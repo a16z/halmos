@@ -128,7 +128,7 @@ if sys.stdout.encoding != "utf-8":
 
 @dataclass(frozen=True)
 class TestResult:
-    name: str  # test function name
+    name: str  # test function name (funsig)
     exitcode: int
     num_models: int = None
     models: list[SolverOutput] = None
@@ -144,6 +144,8 @@ class Exitcode(Enum):
     STUCK = 3
     REVERT_ALL = 4
     EXCEPTION = 5
+
+PASS = Exitcode.PASS.value
 
 
 def with_devdoc(args: HalmosConfig, fn_sig: str, contract_json: dict) -> HalmosConfig:
@@ -411,17 +413,17 @@ def get_state_id(ex: Exec) -> bytes:
 
 # execute invariant test functions in multiple depths
 # reuse states at each depth for all invariant functions
-def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, inv_funsigs: list):
+def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, funsigs: list):
     args = ctx.args
 
     # check all invariants against the setup state
-    test_results = run_tests(ctx, pre_ex, inv_funsigs, terminal=False)
+    test_results = run_tests(ctx, pre_ex, funsigs, terminal=False)
 
-    # accumulated test results; to be updated later
-    test_results_map = {r.name: r for r in test_results if r.exitcode != 0}
+    # initial test results; to be updated later
+    test_results_map = {r.name: r for r in test_results}
 
-    # invariant tests that have not failed yet
-    funsigs = [r.name for r in test_results if r.exitcode == 0]
+    # remaining tests that have not failed yet
+    funsigs = [r.name for r in test_results if r.exitcode == PASS]
 
     # if no more invariant tests to run, stop
     if not funsigs:
@@ -441,7 +443,7 @@ def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, inv_funsigs: list):
     depth = 0
     while True:
         depth += 1
-        exs, funsigs = run_single_invariant_step(inv_ctx, exs, funsigs, depth)
+        exs, funsigs = step_invariant_tests(inv_ctx, exs, funsigs, depth)
 
         if args.debug:
             print(f"{depth=}\n")
@@ -459,8 +461,8 @@ def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, inv_funsigs: list):
 
     # print successful tests; failed tests have already been displayed
     for r in test_results:
-        if r.exitcode == 0:
-            print(f"{green('[PASS]')} {r.name}")
+        if r.exitcode == PASS:
+            print(f"{green('[PASS]')} {r.name} (depth: {depth-1}, paths: {len(visited)})")
 
     return test_results
 
@@ -468,7 +470,7 @@ def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, inv_funsigs: list):
 # call every contract (except the test contract itself) with each pre-state,
 # and check all invariants for each post-state.
 # return all post-states, and invariants that haven't failed.
-def run_single_invariant_step(
+def step_invariant_tests(
     inv_ctx: InvariantContext,
     pre_exs: list,
     funsigs: list,
@@ -496,9 +498,7 @@ def run_single_invariant_step(
 
                 # ignore and report stuck
                 if subcall.is_stuck():
-                    warn_code(
-                        INTERNAL_ERROR, f"Encountered {subcall.get_stuck_reason()}"
-                    )
+                    error(f"{depth=}: addr={hexify(addr)}: {subcall.get_stuck_reason()}")
                     continue
 
                 # ignore revert
@@ -524,13 +524,10 @@ def run_single_invariant_step(
                 # update the accumulated results
                 test_results_map.update({r.name: r for r in test_results})
 
-                failed = [r for r in test_results if r.exitcode != Exitcode.PASS.value]
-                funsigs = [
-                    r.name for r in test_results if r.exitcode == Exitcode.PASS.value
-                ]
+                funsigs = [r.name for r in test_results if r.exitcode == PASS]
 
                 # print call trace if failed, to provide additional info for counterexamples
-                if failed:
+                if any(r.exitcode != PASS for r in test_results):
                     print("Path:")
                     print(indent_text(hexify(post_ex.path)))
 
@@ -870,7 +867,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
     time_info = timer.report(include_subtimers=args.statistics)
 
     # print test result
-    if ctx.terminal or exitcode != Exitcode.PASS.value:
+    if ctx.terminal or exitcode != PASS:
         print(
             f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
             f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
@@ -1199,7 +1196,7 @@ def _main(_args=None) -> MainResult:
         )
 
         test_results = run_contract(contract_ctx)
-        num_passed = sum(r.exitcode == 0 for r in test_results)
+        num_passed = sum(r.exitcode == PASS for r in test_results)
         num_failed = num_found - num_passed
 
         print(
