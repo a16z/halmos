@@ -3177,27 +3177,16 @@ class SEVM:
                         ex.st.set_mslice(dst_offset, data)
 
                 elif opcode == EVM.BYTE:
-                    idx = ex.st.pop()
-                    w = ex.st.pop()
-                    if is_bv_value(idx):
-                        idx = idx.as_long()
-                        if idx < 0:
-                            raise ValueError(idx)
-                        if idx >= 32:
-                            ex.st.push(0)
-                        else:
-                            ex.st.push(
-                                ZeroExt(
-                                    248,
-                                    Extract((31 - idx) * 8 + 7, (31 - idx) * 8, w),
-                                )
-                            )
+                    idx = ex.st.popi()
+                    w: BV = ex.st.popi()
+                    if idx.is_concrete:
+                        ex.st.push(w.byte(idx.value, output_size=256))
                     else:
                         debug_once(
                             f"Warning: the use of symbolic BYTE indexing may potentially "
                             f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
                         )
-                        ex.st.push(self.sym_byte_of(idx, w))
+                        ex.st.push(BV(self.sym_byte_of(idx.value, w.wrapped())))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     if ex.message().is_static:
