@@ -1,4 +1,4 @@
-from typing import TypeAlias
+from typing import Any, TypeAlias
 
 from z3 import (
     ULT,
@@ -22,6 +22,8 @@ from z3 import (
     ZeroExt,
     eq,
     is_bv_value,
+    is_false,
+    is_true,
     simplify,
 )
 
@@ -87,7 +89,7 @@ class HalmosBool:
 
     __slots__ = ("_value", "_symbolic")
 
-    def __new__(cls, value):
+    def __new__(cls, value, *, do_simplify: bool = True):
         if isinstance(value, HalmosBool):
             return value
 
@@ -96,16 +98,27 @@ class HalmosBool:
 
         return super().__new__(cls)
 
-    def __init__(self, value: AnyBool):
+    def __init__(self, value: AnyBool, *, do_simplify: bool = True):
         # avoid reinitializing HalmosBool because of __new__ shortcut
         if isinstance(value, HalmosBool | HalmosBitVec):
             return
 
-        self._value = value
         if isinstance(value, bool):
             self._symbolic = False
+            self._value = value
         elif isinstance(value, BoolRef):
-            self._symbolic = True
+            simplified = simplify(value) if do_simplify else value
+
+            if is_true(simplified):
+                self._symbolic = False
+                self._value = True
+            elif is_false(simplified):
+                self._symbolic = False
+                self._value = False
+            else:
+                self._symbolic = True
+                self._value = simplified
+
         else:
             raise TypeError(f"Cannot create HalmosBool from {type(value)}")
 
@@ -155,6 +168,24 @@ class HalmosBool:
     def is_false(self) -> bool:
         """checks if it is the literal False"""
         return self.is_concrete and not self._value
+
+    def __eq__(self, other: Any) -> bool:
+        """
+        tests for structural equality, including size
+
+        note: this is not the same as z3's comparison, which returns a constraint
+        """
+        if not isinstance(other, HalmosBool):
+            return False
+
+        if self._symbolic != other._symbolic:
+            return False
+
+        return (
+            eq(self._value, other._value)
+            if self._symbolic
+            else self._value == other._value
+        )
 
     def is_zero(self) -> "HalmosBool":
         return self
@@ -331,8 +362,9 @@ class HalmosBitVec:
     def unwrap(self) -> int | BitVecRef:
         return self._value
 
-    def __eq__(self, other: BV) -> bool:
-        """checks for structural equality, including size
+    def __eq__(self, other: Any) -> bool:
+        """
+        tests for structural equality, including size
 
         note: this is not the same as z3's comparison, which returns a constraint
         """
