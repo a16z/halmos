@@ -342,6 +342,9 @@ class HalmosBitVec:
 
     @property
     def size(self) -> int:
+        """
+        The size of the bitvector in bits.
+        """
         return self._size
 
     @property
@@ -831,3 +834,38 @@ class HalmosBitVec:
     def eq(self, other: BV) -> HalmosBool:
         assert self._size == other._size
         return HalmosBool(self._value == other._value)
+
+    def byte(self, idx: int, *, output_size: int | None = None) -> BV:
+        """
+        Extract a byte from the bitvector.
+
+        Args:
+            idx: the index of the byte to extract, 0 is the most significant byte
+            output_size: the size of the output bitvector, default is 8
+
+        Requires:
+            - idx >= 0
+            - size to be a multiple of 8
+        """
+        assert idx >= 0
+
+        size = self._size
+        byte_length = size // 8
+        assert size == byte_length * 8
+
+        output_size = output_size or 8
+
+        if idx >= byte_length:
+            return HalmosBitVec(0, size=output_size)
+
+        if self.is_concrete:
+            b = self._value.to_bytes(length=byte_length, byteorder="little")
+            return HalmosBitVec(b[idx], size=output_size)
+
+        # symbolic case
+        lo = (byte_length - 1 - idx) * 8
+        hi = lo + 7
+        return HalmosBitVec(
+            Extract(hi, lo, self._value),
+            size=output_size,
+        )
