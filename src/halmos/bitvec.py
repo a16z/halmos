@@ -121,7 +121,7 @@ class HalmosBool:
             else:
                 self._symbolic = True
                 self._value = simplified
-        elif isinstance(value, HalmosBool):
+        elif isinstance(value, HalmosBool | HalmosBitVec):
             return
         else:
             raise TypeError(f"Cannot create HalmosBool from {type(value)}")
@@ -166,12 +166,12 @@ class HalmosBool:
     @property
     def is_true(self) -> bool:
         """checks if it is the literal True"""
-        return self.is_concrete and self._value
+        return self is HalmosBool.TRUE
 
     @property
     def is_false(self) -> bool:
         """checks if it is the literal False"""
-        return self.is_concrete and not self._value
+        return self is HalmosBool.FALSE
 
     def __eq__(self, other: Any) -> bool:
         """
