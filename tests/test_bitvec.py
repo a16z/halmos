@@ -95,6 +95,8 @@ def test_bitvec_to_bool_conversion():
 
 
 def test_bool_wrapping():
+    assert HalmosBool(True) == HalmosBool.TRUE
+    assert HalmosBool(False) == HalmosBool.FALSE
     assert HalmosBool(True) == HalmosBool(HalmosBool(True))
     assert HalmosBool(True) is HalmosBool(HalmosBool(True))
     assert bool(HalmosBool(True))

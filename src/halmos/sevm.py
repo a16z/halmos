@@ -672,7 +672,7 @@ class Contract:
 
         if length > 1:
             # TODO: consider slicing lazily
-            operand = self.unwrapped_slice(pc + 1, next_pc)
+            operand = uint256(self.unwrapped_slice(pc + 1, next_pc))
             return Instruction(opcode, pc=pc, operand=operand, next_pc=next_pc)
 
         return Instruction(opcode, pc=pc, next_pc=next_pc)

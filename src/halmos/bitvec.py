@@ -89,7 +89,14 @@ class HalmosBool:
 
     __slots__ = ("_value", "_symbolic")
 
+    # class attributes
+    TRUE = None
+    FALSE = None
+
     def __new__(cls, value, *, do_simplify: bool = True):
+        if isinstance(value, bool):
+            return cls.TRUE if value else cls.FALSE
+
         if isinstance(value, HalmosBool):
             return value
 
@@ -99,10 +106,6 @@ class HalmosBool:
         return super().__new__(cls)
 
     def __init__(self, value: AnyBool, *, do_simplify: bool = True):
-        # avoid reinitializing HalmosBool because of __new__ shortcut
-        if isinstance(value, HalmosBool | HalmosBitVec):
-            return
-
         if isinstance(value, bool):
             self._symbolic = False
             self._value = value
@@ -118,7 +121,8 @@ class HalmosBool:
             else:
                 self._symbolic = True
                 self._value = simplified
-
+        elif isinstance(value, HalmosBool):
+            return
         else:
             raise TypeError(f"Cannot create HalmosBool from {type(value)}")
 
@@ -239,6 +243,15 @@ class HalmosBool:
             return HalmosBitVec(expr, size=size)
 
         return HalmosBitVec(int(self._value), size)
+
+
+# initialize class attributes
+HalmosBool.TRUE = object.__new__(HalmosBool)
+HalmosBool.FALSE = object.__new__(HalmosBool)
+HalmosBool.TRUE._value = True
+HalmosBool.FALSE._value = False
+HalmosBool.TRUE._symbolic = False
+HalmosBool.FALSE._symbolic = False
 
 
 class HalmosBitVec:
