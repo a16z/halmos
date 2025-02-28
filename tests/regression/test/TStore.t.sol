@@ -31,6 +31,7 @@ contract C {
     }
 }
 
+/// @custom:halmos --storage-layout generic
 contract TStoreTest is Test {
     C c;
 
@@ -64,11 +65,9 @@ contract TStoreTest is Test {
         assertEq(c.sload(0), 0);
     }
 
-    /*
     function invariant_storage() public {
         assertEq(c.sload(0), 0); // fail
     }
-    */
 
     function invariant_transient_storage() public {
         // note: transient storage is reset after each tx in the invariant tx sequence

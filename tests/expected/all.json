@@ -1587,6 +1587,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Invariant.t.sol:InvariantTest": [
+            {
+                "name": "invariant_1()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_2()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Library.t.sol:LibraryTest": [
             {
                 "name": "check_add(uint256,uint256)",
@@ -4526,6 +4546,24 @@
             },
             {
                 "name": "check_tstore(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_storage()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_transient_storage()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
