@@ -1,7 +1,7 @@
 from textwrap import dedent
 
 import pytest
-from z3 import BitVec, BitVecVal, Concat, eq, simplify
+from z3 import BitVec, BitVecVal, BoolVal, Concat, eq, simplify
 
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bitvec import HalmosBool
@@ -95,12 +95,21 @@ def test_bitvec_to_bool_conversion():
 
 
 def test_bool_wrapping():
-    hbool = HalmosBool(True)
-    hbool2 = HalmosBool(hbool)
-    assert hbool == hbool2
-    assert hbool2 is hbool
-    assert bool(hbool2)
-    assert not bool(hbool2.neg())
+    assert HalmosBool(True) == HalmosBool(HalmosBool(True))
+    assert HalmosBool(True) is HalmosBool(HalmosBool(True))
+    assert bool(HalmosBool(True))
+    assert not bool(HalmosBool(True).neg())
+
+    # BoolVal is lowered to True/False
+    assert HalmosBool(True) == HalmosBool(BoolVal(True), do_simplify=True)
+    assert HalmosBool(True) == HalmosBool(BoolVal(True), do_simplify=False)
+
+    x = BitVec("x", 256)
+    tautology = x == x
+
+    # tautology is lowered to True, but only when do_simplify is True
+    assert HalmosBool(True) == HalmosBool(tautology, do_simplify=True)
+    assert HalmosBool(True) != HalmosBool(tautology, do_simplify=False)
 
 
 def test_bool_to_bitvec_conversion():
@@ -120,6 +129,15 @@ def test_bool_to_bitvec_conversion():
     hbv = BV(hbool, size=256)
     assert hbv.is_symbolic
     assert hbv.size == 256
+
+
+def test_bool_eq():
+    x = BV("x")
+    y = BV("y")
+    assert x.sgt(y) == x.sgt(y)
+    assert x.eq(x) == HalmosBool(True)
+    assert x.eq(y) == x.eq(y)
+    assert x.eq(y) != y.eq(x)
 
 
 def timeme(*args, **kwargs) -> tuple[int, float]:
@@ -171,6 +189,7 @@ compare(
     stmts=[
         "BV(4).addmod(BV(1), BV(3)) == BV(2)",
         "addmod(con(4), con(1), con(3)) == con(2)",
+        # "BV('x').mod(BV(2**3)) == BV('x', size=3)",
     ],
     number=10**4,
 )
