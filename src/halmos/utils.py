@@ -598,6 +598,11 @@ def assert_bv(x) -> None:
 
 
 def assert_address(x: Word) -> None:
+    if isinstance(x, BV):
+        if x.size != 160:
+            raise ValueError(x)
+        return
+
     if is_concrete(x):
         if not 0 <= int_of(x) < 2**160:
             raise ValueError(x)

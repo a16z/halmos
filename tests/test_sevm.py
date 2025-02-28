@@ -1,7 +1,5 @@
 import pytest
 from z3 import (
-    UGT,
-    ULT,
     Array,
     BitVec,
     BitVecSort,
@@ -13,10 +11,10 @@ from z3 import (
     Select,
     SignExt,
     ZeroExt,
-    simplify,
 )
 
 from halmos.__main__ import mk_block
+from halmos.bitvec import HalmosBitVec as BV
 from halmos.bytevec import ByteVec
 from halmos.exceptions import OutOfGasError, StackUnderflowError
 from halmos.sevm import (
@@ -76,9 +74,9 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
     )
 
 
-x = BitVec("x", 256)
-y = BitVec("y", 256)
-z = BitVec("z", 256)
+x = BV("x")
+y = BV("y")
+z = BV("z")
 
 
 def o(opcode):
@@ -151,149 +149,186 @@ def byte_of(i, x):
 
 
 @pytest.mark.parametrize(
-    "hexcode, params, output",
+    "opcode, params, output",
     [
-        (o(EVM.PUSH0), [], con(0)),
-        (o(EVM.ADD), [x, y], x + y),
-        (o(EVM.MUL), [x, y], f_mul[x.size()](x, y)),
-        (o(EVM.SUB), [x, y], x - y),
-        (o(EVM.DIV), [x, y], f_div(x, y)),
-        (o(EVM.DIV), [con(5), con(3)], con(1)),
-        (o(EVM.DIV), [x, con(0)], con(0)),
-        (o(EVM.DIV), [x, con(1)], x),
-        (o(EVM.DIV), [x, con(2**3)], LShR(x, 3)),
-        (o(EVM.SDIV), [x, y], f_sdiv(x, y)),
-        (o(EVM.SDIV), [con(5), con(3)], con(1)),
-        (o(EVM.SDIV), [con(-5), con(3)], con(-1)),
-        (o(EVM.SDIV), [con(5), con(-3)], con(-1)),
-        (o(EVM.SDIV), [con(-5), con(-3)], con(1)),
-        (o(EVM.SDIV), [con(-(2**255)), con(-1)], con(-(2**255))),  # overflow
-        (o(EVM.SDIV), [con(-(2**255)), con(-1)], con(2**255)),  # overflow
-        (o(EVM.MOD), [x, y], f_mod[x.size()](x, y)),
-        (o(EVM.MOD), [con(5), con(3)], con(2)),
-        (o(EVM.MOD), [x, con(0)], con(0)),
-        (o(EVM.MOD), [x, con(1)], con(0)),
-        (o(EVM.MOD), [x, con(2**3)], ZeroExt(253, Extract(2, 0, x))),
-        (o(EVM.SMOD), [x, y], f_smod(x, y)),  # sdiv(x,y) * y + smod(x,y) == x
-        (o(EVM.SMOD), [con(5), con(3)], con(2)),
-        (o(EVM.SMOD), [con(-5), con(3)], con(-2)),
-        (o(EVM.SMOD), [con(5), con(-3)], con(2)),
-        (o(EVM.SMOD), [con(-5), con(-3)], con(-2)),
-        (o(EVM.ADDMOD), [con(4), con(1), con(3)], con(2)),
-        (o(EVM.ADDMOD), [x, y, con(0)], con(0)),
-        (o(EVM.ADDMOD), [x, y, con(1)], con(0)),
+        (o(EVM.PUSH0), [], BV(0)),
+        (o(EVM.ADD), [x, y], x.add(y)),
+        (o(EVM.MUL), [x, y], x.mul(y, abstraction=f_mul[x.size])),
+        (o(EVM.SUB), [x, y], x.sub(y)),
+        (o(EVM.DIV), [x, y], x.div(y, abstraction=f_div)),
+        (o(EVM.DIV), [BV(5), BV(3)], BV(1)),
+        (o(EVM.DIV), [x, BV(0)], BV(0)),
+        (o(EVM.DIV), [x, BV(1)], x),
+        (o(EVM.DIV), [x, BV(2**3)], BV(LShR(x.wrapped(), 3))),
+        (o(EVM.SDIV), [x, y], x.sdiv(y, abstraction=f_sdiv)),
+        (o(EVM.SDIV), [BV(5), BV(3)], BV(1)),
+        (o(EVM.SDIV), [BV(-5), BV(3)], BV(-1)),
+        (o(EVM.SDIV), [BV(5), BV(-3)], BV(-1)),
+        (o(EVM.SDIV), [BV(-5), BV(-3)], BV(1)),
+        (o(EVM.SDIV), [BV(-(2**255)), BV(-1)], BV(-(2**255))),  # overflow
+        (o(EVM.SDIV), [BV(-(2**255)), BV(-1)], BV(2**255)),  # overflow
+        (o(EVM.MOD), [x, y], x.mod(y, abstraction=f_mod[x.size])),
+        (o(EVM.MOD), [BV(5), BV(3)], BV(2)),
+        (o(EVM.MOD), [x, BV(0)], BV(0)),
+        (o(EVM.MOD), [x, BV(1)], BV(0)),
+        (o(EVM.MOD), [x, BV(2**3)], BV(ZeroExt(253, Extract(2, 0, x.wrapped())))),
+        (
+            o(EVM.SMOD),
+            [x, y],
+            x.smod(y, abstraction=f_smod),
+        ),  # sdiv(x,y) * y + smod(x,y) == x
+        (o(EVM.SMOD), [BV(5), BV(3)], BV(2)),
+        (o(EVM.SMOD), [BV(-5), BV(3)], BV(-2)),
+        (o(EVM.SMOD), [BV(5), BV(-3)], BV(2)),
+        (o(EVM.SMOD), [BV(-5), BV(-3)], BV(-2)),
+        (o(EVM.SMOD), [x, BV(0)], BV(0)),
+        (o(EVM.SMOD), [x, BV(1)], BV(0)),
+        (o(EVM.ADDMOD), [BV(4), BV(1), BV(3)], BV(2)),
+        (o(EVM.ADDMOD), [x, y, BV(0)], BV(0)),
+        (o(EVM.ADDMOD), [x, y, BV(1)], BV(0)),
         (
             o(EVM.ADDMOD),
-            [x, y, con(2**3)],
-            ZeroExt(253, Extract(2, 0, ZeroExt(8, x) + ZeroExt(8, y))),
-        ),
-        (
-            o(EVM.ADDMOD),
-            [x, y, z],
-            Extract(255, 0, f_mod[264](ZeroExt(8, x) + ZeroExt(8, y), ZeroExt(8, z))),
-        ),
-        (o(EVM.ADDMOD), [con(10), con(10), con(8)], con(4)),
-        (
-            o(EVM.ADDMOD),
-            [
-                con(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF),
-                con(2),
-                con(2),
-            ],
-            con(1),
-        ),
-        (o(EVM.MULMOD), [con(5), con(1), con(3)], con(2)),
-        (o(EVM.MULMOD), [x, y, con(0)], con(0)),
-        (o(EVM.MULMOD), [x, y, con(1)], con(0)),
-        (
-            o(EVM.MULMOD),
-            [x, y, con(2**3)],
-            ZeroExt(253, Extract(2, 0, f_mul[512](ZeroExt(256, x), ZeroExt(256, y)))),
-        ),
-        (
-            o(EVM.MULMOD),
-            [x, y, z],
-            Extract(
-                255,
-                0,
-                f_mod[512](
-                    f_mul[512](ZeroExt(256, x), ZeroExt(256, y)), ZeroExt(256, z)
-                ),
+            [x, y, BV(2**3)],
+            BV(
+                ZeroExt(
+                    253,
+                    Extract(2, 0, ZeroExt(8, x.wrapped()) + ZeroExt(8, y.wrapped())),
+                )
             ),
         ),
-        (o(EVM.MULMOD), [con(10), con(10), con(8)], con(4)),
+        (
+            o(EVM.ADDMOD),
+            [x, y, z],
+            BV(
+                Extract(
+                    255,
+                    0,
+                    f_mod[264](
+                        ZeroExt(8, x.wrapped()) + ZeroExt(8, y.wrapped()),
+                        ZeroExt(8, z.wrapped()),
+                    ),
+                )
+            ),
+        ),
+        (o(EVM.ADDMOD), [BV(10), BV(10), BV(8)], BV(4)),
+        (
+            o(EVM.ADDMOD),
+            [
+                BV(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF),
+                BV(2),
+                BV(2),
+            ],
+            BV(1),
+        ),
+        (o(EVM.MULMOD), [BV(5), BV(1), BV(3)], BV(2)),
+        (o(EVM.MULMOD), [x, y, BV(0)], BV(0)),
+        (o(EVM.MULMOD), [x, y, BV(1)], BV(0)),
+        (
+            o(EVM.MULMOD),
+            [x, y, BV(2**3)],
+            BV(
+                ZeroExt(
+                    253,
+                    Extract(
+                        2,
+                        0,
+                        f_mul[512](
+                            ZeroExt(256, x.wrapped()), ZeroExt(256, y.wrapped())
+                        ),
+                    ),
+                )
+            ),
+        ),
+        (
+            o(EVM.MULMOD),
+            [x, y, z],
+            BV(
+                Extract(
+                    255,
+                    0,
+                    f_mod[512](
+                        f_mul[512](
+                            ZeroExt(256, x.wrapped()), ZeroExt(256, y.wrapped())
+                        ),
+                        ZeroExt(256, z.wrapped()),
+                    ),
+                )
+            ),
+        ),
+        (o(EVM.MULMOD), [BV(10), BV(10), BV(8)], BV(4)),
         (
             o(EVM.MULMOD),
             [
-                con(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF),
-                con(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF),
-                con(12),
+                BV(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF),
+                BV(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF),
+                BV(12),
             ],
-            con(9),
+            BV(9),
         ),
-        (o(EVM.EXP), [x, y], f_exp(x, y)),
-        (o(EVM.EXP), [x, con(0)], con(1)),
-        (o(EVM.EXP), [x, con(1)], x),
-        (o(EVM.EXP), [x, con(2)], f_mul[x.size()](x, x)),
-        (o(EVM.SIGNEXTEND), [con(0), y], SignExt(248, Extract(7, 0, y))),
-        (o(EVM.SIGNEXTEND), [con(1), y], SignExt(240, Extract(15, 0, y))),
-        (o(EVM.SIGNEXTEND), [con(30), y], SignExt(8, Extract(247, 0, y))),
-        (o(EVM.SIGNEXTEND), [con(31), y], y),
-        (o(EVM.SIGNEXTEND), [con(32), y], y),
-        (o(EVM.SIGNEXTEND), [con(33), y], y),
-        (o(EVM.SIGNEXTEND), [con(2**256 - 1), y], y),
-        (o(EVM.LT), [x, y], ULT(x, y)),
-        (o(EVM.GT), [x, y], UGT(x, y)),
-        (o(EVM.SLT), [x, y], x < y),
-        (o(EVM.SGT), [x, y], x > y),
-        (o(EVM.EQ), [x, y], x == y),
-        (o(EVM.ISZERO), [x], x == con(0)),
-        (o(EVM.AND), [x, y], x & y),
-        (o(EVM.OR), [x, y], x | y),
-        (o(EVM.XOR), [x, y], x ^ y),
-        (o(EVM.NOT), [x], ~x),
-        (o(EVM.BYTE), [con(0), y], ZeroExt(248, Extract(255, 248, y))),
-        (o(EVM.BYTE), [con(1), y], ZeroExt(248, Extract(247, 240, y))),
-        (o(EVM.BYTE), [con(31), y], ZeroExt(248, Extract(7, 0, y))),
-        (o(EVM.BYTE), [con(32), y], con(0)),
-        (o(EVM.BYTE), [con(33), y], con(0)),
-        (o(EVM.BYTE), [con(2**256 - 1), y], con(0)),
-        (o(EVM.BYTE), [x, y], byte_of(x, y)),
-        (o(EVM.SHL), [x, y], y << x),
-        (o(EVM.SHL), [con(0), y], y),
-        (o(EVM.SHL), [con(255), y], y << con(255)),
-        (o(EVM.SHL), [con(256), y], con(0)),
-        (o(EVM.SHL), [con(2**256 - 1), y], con(0)),
-        (o(EVM.SHR), [x, y], LShR(y, x)),
-        (o(EVM.SHR), [con(0), y], y),
-        (o(EVM.SHR), [con(255), y], LShR(y, con(255))),
-        (o(EVM.SHR), [con(256), y], con(0)),
-        (o(EVM.SHR), [con(2**256 - 1), y], con(0)),
-        (o(EVM.SAR), [x, y], y >> x),
-        (o(EVM.SAR), [con(0), y], y),
-        (o(EVM.SAR), [con(255), y], y >> con(255)),
+        (o(EVM.EXP), [x, y], x.exp(y, exp_abstraction=f_exp)),
+        (o(EVM.EXP), [x, BV(0)], BV(1)),
+        (o(EVM.EXP), [x, BV(1)], x),
+        (o(EVM.EXP), [x, BV(2)], x.mul(x, abstraction=f_mul[x.size])),
+        (o(EVM.SIGNEXTEND), [BV(0), BV(0xFF)], BV(-1)),
+        (o(EVM.SIGNEXTEND), [BV(0), y], BV(SignExt(248, Extract(7, 0, y.wrapped())))),
+        (o(EVM.SIGNEXTEND), [BV(1), y], BV(SignExt(240, Extract(15, 0, y.wrapped())))),
+        (o(EVM.SIGNEXTEND), [BV(30), y], BV(SignExt(8, Extract(247, 0, y.wrapped())))),
+        (o(EVM.SIGNEXTEND), [BV(31), y], y),
+        (o(EVM.SIGNEXTEND), [BV(32), y], y),
+        (o(EVM.SIGNEXTEND), [BV(33), y], y),
+        (o(EVM.SIGNEXTEND), [BV(2**256 - 1), y], y),
+        (o(EVM.LT), [x, y], x.ult(y)),
+        (o(EVM.GT), [x, y], x.ugt(y)),
+        (o(EVM.SLT), [x, y], x.slt(y)),
+        (o(EVM.SGT), [x, y], x.sgt(y)),
+        (o(EVM.EQ), [x, y], x.eq(y)),
+        (o(EVM.ISZERO), [x], x.is_zero()),
+        (o(EVM.AND), [x, y], x.bitwise_and(y)),
+        (o(EVM.OR), [x, y], x.bitwise_or(y)),
+        (o(EVM.XOR), [x, y], x.bitwise_xor(y)),
+        (o(EVM.NOT), [x], x.bitwise_not()),
+        (o(EVM.BYTE), [BV(0), y], BV(ZeroExt(248, Extract(255, 248, y.wrapped())))),
+        (o(EVM.BYTE), [BV(1), y], BV(ZeroExt(248, Extract(247, 240, y.wrapped())))),
+        (o(EVM.BYTE), [BV(31), y], BV(ZeroExt(248, Extract(7, 0, y.wrapped())))),
+        (o(EVM.BYTE), [BV(32), y], BV(0)),
+        (o(EVM.BYTE), [BV(33), y], BV(0)),
+        (o(EVM.BYTE), [BV(2**256 - 1), y], BV(0)),
+        (o(EVM.BYTE), [x, y], BV(byte_of(x.wrapped(), y.wrapped()))),
+        (o(EVM.SHL), [x, y], y.lshl(x)),
+        (o(EVM.SHL), [BV(0), y], y),
+        (o(EVM.SHL), [BV(255), y], y.lshl(BV(255))),
+        (o(EVM.SHL), [BV(256), y], BV(0)),
+        (o(EVM.SHL), [BV(2**256 - 1), y], BV(0)),
+        (o(EVM.SHR), [x, y], y.lshr(x)),
+        (o(EVM.SHR), [BV(0), y], y),
+        (o(EVM.SHR), [BV(255), y], y.lshr(BV(255))),
+        (o(EVM.SHR), [BV(256), y], BV(0)),
+        (o(EVM.SHR), [BV(2**256 - 1), y], BV(0)),
+        (o(EVM.SAR), [x, y], y.ashr(x)),
+        (o(EVM.SAR), [BV(0), y], y),
+        (o(EVM.SAR), [BV(255), y], y.ashr(BV(255))),
         (
             o(EVM.SAR),
-            [con(256), y],
-            y >> con(256),
+            [BV(256), y],
+            y.ashr(BV(256)),
         ),  # not necessarily 0; TODO: prove it is equal to y >> 255
         (
             o(EVM.SAR),
-            [con(2**256 - 1), y],
-            y >> con(2**256 - 1),
+            [BV(2**256 - 1), y],
+            y.ashr(BV(2**256 - 1)),
         ),  # not necessarily 0; TODO: prove it is equal to y >> 255
         # TODO: SHA3
         (o(EVM.ADDRESS), [], uint256(this)),
-        (o(EVM.BALANCE), [x], Select(balance, uint160(x).wrapped())),
+        (o(EVM.BALANCE), [x], BV(Select(balance, uint160(x).wrapped()))),
         (o(EVM.ORIGIN), [], uint256(origin)),
         (o(EVM.CALLER), [], uint256(caller)),
-        (o(EVM.CALLVALUE), [], callvalue),
+        (o(EVM.CALLVALUE), [], BV(callvalue)),
         # TODO: CALLDATA*, CODE*, EXTCODE*, RETURNDATA*, CREATE*
-        (o(EVM.SELFBALANCE), [], Select(balance, this)),
+        (o(EVM.SELFBALANCE), [], BV(Select(balance, this))),
     ],
 )
-def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
-    ex = mk_ex(Concat(hexcode, o(EVM.STOP)), sevm, solver, storage, caller, this)
+def test_opcode_simple(opcode, params, output, sevm: SEVM, solver, storage):
+    ex = mk_ex(Concat(opcode, o(EVM.STOP)), sevm, solver, storage, caller, this)
 
     # reversed because in the tests the stack is written with the top on the left
     # but in the internal state, the top of the stack is the last element of the list
@@ -301,7 +336,7 @@ def test_opcode_simple(hexcode, params, output, sevm: SEVM, solver, storage):
     exs: list[Exec] = list(sevm.run(ex))
 
     [output_ex] = exs
-    assert output_ex.st.stack.pop() == simplify(output)
+    assert output_ex.st.stack.pop() == output
 
 
 @pytest.mark.parametrize(

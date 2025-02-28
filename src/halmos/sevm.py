@@ -1255,8 +1255,8 @@ class Exec:  # an execution path
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
-        assert_address(addr)
-        addr = uint160(addr)
+        # assert_address(addr)
+        addr = uint160(addr).wrapped()
         value = self.select(self.balance, addr, self.balances)
         # generate emptyness axiom for each array index, instead of using quantified formula
         self.path.append(Select(EMPTY_BALANCE, addr) == ZERO)
