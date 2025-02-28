@@ -54,7 +54,7 @@ from z3.z3util import is_expr_var
 
 from .bitvec import HalmosBitVec as BV
 from .bitvec import HalmosBool as Bool
-from .bytevec import ByteVec, Chunk, ConcreteChunk
+from .bytevec import ByteVec, ConcreteChunk
 from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
@@ -1108,7 +1108,7 @@ class Exec:  # an execution path
 
     def calldata(self) -> ByteVec:
         message = self.message()
-        return Chunk.empty() if message.is_create() else message.data
+        return ByteVec() if message.is_create() else message.data
 
     def caller(self):
         return self.message().caller
