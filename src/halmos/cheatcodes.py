@@ -249,10 +249,9 @@ def snapshot_state(
     ex, arg=None, sevm=None, stack=None, step_id=None, include_path=False
 ):
     """
-    Generates a snapshot ID by hashing the current state (balance, code, and storage).
+    Generates a snapshot ID by hashing the current state (balance, code, and storage), including constraints over state variables if include_path is set.
 
-    The snapshot ID is constructed by concatenating three hashes of: balance (64 bits), code (64 bits), and storage (128 bits).
-    This design ensures that the lower 128 bits of both storage and state snapshot IDs correspond to storage hashes.
+    The snapshot ID is constructed by concatenating four hashes: balance (64 bits), code (64 bits), storage (64 bits), and constraints (64 bits).
     """
     # balance
     balance_hash = xxh3_64_digest(int.to_bytes(ex.balance.get_id(), length=32))

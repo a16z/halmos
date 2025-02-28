@@ -798,12 +798,26 @@ class Concretization:
 
 
 class Path:
-    # a Path object represents a prefix of the path currently being executed
-    # initially, it's an empty path at the beginning of execution
+    """
+    A Path object represents a prefix of the path currently being executed, where a path is defined by a sequence of branching conditions.
+    A path may span internal contract calls and multiple transactions.
+
+    In addition to branching conditions, a Path object also maintains additional constraints over symbolic values, such as implicit assumptions like no hash collisions.
+
+    The `conditions` attribute contains both branching conditions and additional constraints.
+
+    The `solver` attribute is a Z3 Solver object that essentially mirrors the `conditions` attribute.
+    The Z3 solver is used to check whether a new branching condition is satisfiable, filtering out infeasible paths.
+
+    For regular tests, `solver` contains all constraints from `conditions`.
+    For invariant tests, however, `solver` excludes certain irrelevant constraints from `conditions`.
+    Specifically, after executing each transaction, constraints related to state variables are identified and stored in the `sliced` attribute.
+    Later, when a new Path object is created extending the previous path, only the `sliced` constraints are considered by the solver. This improves the performance of the solver as it handles fewer constraints.
+    """
 
     solver: Solver
     num_scopes: int
-    # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
+
     conditions: dict  # cond -> bool (true if explicit branching conditions)
     concretization: Concretization
     pending: list
@@ -812,7 +826,7 @@ class Path:
     related: dict[int, set[int]]
     # a variable -> a set of conditions in which the variable appears
     var_to_conds: dict[any, set[int]]
-    # constraints related to storage
+    # constraints related to state variables
     sliced: set[int]
 
     def __init__(self, solver: Solver):
@@ -896,6 +910,7 @@ class Path:
                 tmp_solver.assert_and_track(cond_copied, str(cond.get_id()))
             else:
                 tmp_solver.add(cond_copied)
+        # NOTE: Do not use self.solver.to_smt2() even if args.cache_solver is unset, as self.solver may not include all constraints from self.conditions.
         query = tmp_solver.to_smt2()
         tmp_solver.reset()
 
@@ -931,6 +946,7 @@ class Path:
         # store the branching condition aside until the new path is activated.
         path.pending.append(cond)
 
+        # shallow copy because each entry references earlier entries thus remains unchanged later
         path.related = self.related.copy()
         path.var_to_conds = deepcopy(self.var_to_conds)
         # path.sliced = None
@@ -964,12 +980,14 @@ class Path:
         if cond in self.conditions:
             return
 
+        # determine the index for the new condition
         idx = len(self.conditions)
 
         self.solver.add(cond)
         self.conditions[cond] = branching
         self.concretization.process_cond(cond)
 
+        # update dependency relation
         var_set = get_vars(cond)
         self.related[idx] = self._get_related(var_set)
         for var in var_set:
@@ -985,11 +1003,13 @@ class Path:
         self.related = path.related.copy()
         self.var_to_conds = deepcopy(path.var_to_conds)
 
+        # if the parent path is not sliced, then add all constraints to the solver
         if path.sliced is None:
             for cond in self.conditions:
                 self.solver.add(cond)
             return
 
+        # if the parent path is sliced, add only sliced constraints to the solver
         for idx, cond in enumerate(self.conditions):
             if idx in path.sliced:
                 self.solver.add(cond)
@@ -1022,7 +1042,7 @@ class StorageData:
         For simplicity, all numbers are represented as 256-bit integers, regardless of their actual size.
         """
         m = xxhash.xxh3_128()
-        # todo: consider sorted items
+        # TODO: consider sorting items to ensure the digest is independent of the order of storage updates.
         for key, val in self._mapping.items():
             if isinstance(key, int):  # GenericStorage
                 m.update(int.to_bytes(key, length=32))
@@ -1097,24 +1117,6 @@ class Exec:  # an execution path
         assert_address(self.origin())
         assert_address(self.caller())
         assert_address(self.this())
-
-    def path_slice(self):
-        var_set = get_vars(self.balance)
-
-        # the keys of self.code are constant
-        for _contract in self.code.values():
-            _code = _contract._code
-            for _chunk in _code.chunks.values():
-                if isinstance(_chunk, SymbolicChunk):
-                    var_set = itertools.chain(var_set, get_vars(_chunk.data))
-
-        # the keys of self.storage are constant
-        for _storage in self.storage.values():
-            # the keys of _storage._mapping are constant
-            for _val in _storage._mapping.values():
-                var_set = itertools.chain(var_set, get_vars(_val))
-
-        self.path.slice(var_set)
 
     def context_str(self) -> str:
         opcode = self.current_opcode()
@@ -1522,6 +1524,29 @@ class Exec:  # an execution path
 
     def int_of(self, x: Any, err: str = None) -> int:
         return int_of(x, err, self.path.concretization.substitution)
+
+    def path_slice(self):
+        """
+        Identifies and slices constraints related to state variables.
+
+        Collects state variables from balance, code, and storage; then executes path.slice() with them.
+        """
+        var_set = get_vars(self.balance)
+
+        # the keys of self.code are constant
+        for _contract in self.code.values():
+            _code = _contract._code
+            for _chunk in _code.chunks.values():
+                if isinstance(_chunk, SymbolicChunk):
+                    var_set = itertools.chain(var_set, get_vars(_chunk.data))
+
+        # the keys of self.storage are constant
+        for _storage in self.storage.values():
+            # the keys of _storage._mapping are constant
+            for _val in _storage._mapping.values():
+                var_set = itertools.chain(var_set, get_vars(_val))
+
+        self.path.slice(var_set)
 
 
 class Storage:
@@ -2886,10 +2911,15 @@ class SEVM:
         return ZeroExt(248, gen_nested_ite(0))
 
     def run_message(self, pre_ex: Exec, message: Message, path: Path) -> Iterator[Exec]:
+        """
+        Executes the given transaction from the given input state.
+
+        Note: As this involves executing a new transaction, the transient storage is reset to empty instead of being inherited from the input state.
+        """
         ex0 = Exec(
             code=pre_ex.code.copy(),  # shallow copy
             storage=deepcopy(pre_ex.storage),
-            transient_storage=self.fresh_transient_storage(pre_ex),
+            transient_storage=self.fresh_transient_storage(pre_ex),  # empty
             balance=pre_ex.balance,
             #
             block=deepcopy(pre_ex.block),

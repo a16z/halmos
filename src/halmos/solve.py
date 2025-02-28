@@ -106,8 +106,10 @@ class InvariantContext:
     # backlink to the parent contract context
     contract_ctx: ContractContext
 
+    # set of visited states, to be updated during the invariant testing run
     visited: set
 
+    # test results, to be updated during the invariant testing run
     test_results_map: dict
 
 

@@ -409,32 +409,56 @@ def is_global_fail_set(context: CallContext) -> bool:
 
 
 def get_state_id(ex: Exec) -> bytes:
+    """
+    Computes the state snapshot hash, incorporating constraints on state variables.
+
+    Assumes constraints on state variables have been precomputed by running Exec.path_slice() after completing a transaction.
+    Do not use this during transaction execution.
+    """
     return snapshot_state(ex, include_path=True).unwrap()
 
 
-# execute invariant test functions in multiple depths
-# reuse states at each depth for all invariant functions
-def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, funsigs: list):
+def run_invariant_tests(
+    ctx: ContractContext, pre_ex: Exec, funsigs: list[str]
+) -> list[TestResult]:
+    """
+    Executes invariant test functions across multiple depths, reusing states at each depth for all invariant functions.
+
+    At each depth, starting from a given state, an arbitrary transaction is executed on every target contract, producing output states.
+    All invariant tests are then executed on each of these output states.
+    The process continues to the next depth, using these output states as the new input.
+
+    Args:
+        ctx: The context for the test contract.
+        pre_ex: The initial state from which invariant tests will be run.
+        funsigs: A list of invariant test function signatures to be executed.
+
+    Returns:
+        A list of test results.
+    """
     args = ctx.args
 
-    # check all invariants against the setup state
+    # check all invariants against the initial state
     test_results = run_tests(ctx, pre_ex, funsigs, terminal=False)
 
     # initial test results; to be updated later
     test_results_map = {r.name: r for r in test_results}
 
-    # remaining tests that have not failed yet
+    # Remaining tests that have not failed yet, to be executed in the next depth
     funsigs = [r.name for r in test_results if r.exitcode == PASS]
 
     # if no more invariant tests to run, stop
     if not funsigs:
         return test_results_map.values()
 
+    # dynamic set of visited states, initialized with the initial state
     visited = set()
     visited.add(get_state_id(pre_ex))
 
+    # dynamic list of frontier states
     exs = [pre_ex]
 
+    # mutable context for invariant testing loop over multiple depths
     inv_ctx = InvariantContext(
         contract_ctx=ctx,
         visited=visited,
@@ -444,7 +468,12 @@ def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, funsigs: list):
     depth = 0
     while True:
         depth += 1
+
+        # given the input states `exs`, generate output states and perform invariant tests `funsigs` on them.
+        # update `exs` with the new output states, and `funsigs` with remaining invariant tests for the next depth.
         exs, funsigs = step_invariant_tests(inv_ctx, exs, funsigs, depth)
+
+        # TODO: merge, simplify, or prioritize exs to mitigate path explosion
 
         if args.debug:
             print(f"{depth=}\n")
@@ -453,14 +482,13 @@ def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, funsigs: list):
                 print(ex)
                 render_trace(ex.context)
 
-        # todo: merge, simplify, or prioritize exs to mitigate path explosion
-
+        # stop if no new frontier states or remaining invariant tests
         if not exs or not funsigs:
             break
 
     test_results = test_results_map.values()
 
-    # print successful tests; failed tests have already been displayed
+    # print passed tests; failed tests have already been displayed during step_invariant_tests()
     for r in test_results:
         if r.exitcode == PASS:
             print(
@@ -470,15 +498,28 @@ def run_invariant_tests(ctx: ContractContext, pre_ex: Exec, funsigs: list):
     return test_results
 
 
-# call every contract (except the test contract itself) with each pre-state,
-# and check all invariants for each post-state.
-# return all post-states, and invariants that haven't failed.
 def step_invariant_tests(
     inv_ctx: InvariantContext,
-    pre_exs: list,
-    funsigs: list,
+    pre_exs: list[Exec],
+    funsigs: list[str],
     depth: int,
-) -> list[Exec]:
+) -> tuple[list[Exec], list[str]]:
+    """
+    Executes the next depth of the invariant testing run, which consists of:
+    1. Computing new frontier states by executing an arbitrary function of an arbitrary target contract from each of the given input states.
+    2. Executing invariant tests for each new frontier state.
+    3. Returning the new frontier states that have not been visited.
+
+    Args:
+        inv_ctx: The context for the invariant testing run.
+        pre_exs: A list of input states.
+        funsigs: A list of invariant test function signatures to be executed at this depth.
+        depth: The current depth of the invariant testing run.
+
+    Returns:
+        A list of new frontier states generated at this depth.
+        A list of invariant test function signatures remaining for the next depth.
+    """
     ctx = inv_ctx.contract_ctx
     test_results_map = inv_ctx.test_results_map
     visited = inv_ctx.visited
@@ -493,42 +534,44 @@ def step_invariant_tests(
             if eq(addr, con_addr(FOUNDRY_TEST)):
                 continue
 
-            # execute the target contract
+            # execute a target contract
             post_exs = run_target_contract(ctx, pre_ex, addr)
 
             for post_ex in post_exs:
                 subcall = post_ex.context
 
-                # ignore and report stuck
+                # ignore and report if halmos-errored
                 if subcall.is_stuck():
                     error(
                         f"{depth=}: addr={hexify(addr)}: {subcall.get_stuck_reason()}"
                     )
                     continue
 
-                # ignore revert
+                # ignore if reverted
                 if subcall.output.error:
                     continue
 
-                # skip states that already visited
-                # todo: check path feasibility
+                # skip if already visited
                 post_ex.path_slice()
                 post_id = get_state_id(post_ex)
                 if post_id in visited:
                     continue
-                else:
-                    visited.add(post_id)
+
+                # update visited set
+                # TODO: check path feasibility
+                visited.add(post_id)
 
                 # update call traces
                 post_ex.context = deepcopy(pre_ex.context)
                 post_ex.context.trace.append(subcall)
 
-                # check all invariants against the current state
+                # check all invariants against the current output state
                 test_results = run_tests(ctx, post_ex, funsigs, depth, terminal=False)
 
-                # update the accumulated results
+                # update the test results
                 test_results_map.update({r.name: r for r in test_results})
 
+                # update remaining invariant tests
                 funsigs = [r.name for r in test_results if r.exitcode == PASS]
 
                 # print call trace if failed, to provide additional info for counterexamples
@@ -539,31 +582,41 @@ def step_invariant_tests(
                     print("\nTrace:")
                     render_trace(post_ex.context)
 
-                # if all invariants failed, stop
+                # stop if no more invariants to test
                 if not funsigs:
                     return next_exs, funsigs
 
-                # note: any state changes made during invariant checking are excluded, to reduce path condition complexity
+                # update the frontier states to be returned.
+                # NOTE: this state excludes any changes made during the execution of invariant test functions to prevent unnecessary increases in path condition complexity.
                 next_exs.append(post_ex)
 
     return next_exs, funsigs
 
 
-# run the given contract `addr` from the given input state `ex`
-# return all output states.
 def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[Exec]:
+    """
+    Executes a given contract from a given input state and returns all output states.
+
+    Args:
+        ctx: The context of the test contract, which differs from the target contract to be executed.
+        ex: The input state.
+        addr: The address of the contract to be executed.
+
+    Returns:
+        A list of output states.
+
+    Raises:
+        ValueError: If the contract name cannot be found for the given address.
+    """
     args = ctx.args
 
+    # retrieve the contract name and metadata from the given address
     code = ex.code[addr]
     contract_name = code.contract_name
     filename = code.filename
 
     if not contract_name:
-        # if eq(addr, con_addr(FOUNDRY_TEST)):
-        #     debug_once(
-        #         f"{self.fun_info.sig}: couldn't find the contract name for: {hexify(selector)}"
-        #     )
-        raise ValueError(addr)
+        raise ValueError(f"couldn't find the contract name for: {addr}")
 
     contract_json = BuildOut().get_by_name(contract_name, filename)
     abi = get_abi(contract_json)
@@ -571,10 +624,12 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
 
     results = []
 
+    # iterate over each function in the target contract
     for fun_sig, fun_selector in method_identifiers.items():
         fun_name = fun_sig.split("(")[0]
         fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
 
+        # skip if 'pure' or 'view' function that doesn't change the state
         state_mutability = abi[fun_sig]["stateMutability"]
         if state_mutability in ["pure", "view"]:
             if args.debug:
@@ -582,22 +637,26 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
             continue
 
         try:
+            # initialize symbolic execution environment
             sevm = SEVM(args, fun_info)
-            # todo: reuse solver across functions
+            # TODO: reuse solver across different functions
             solver = mk_solver(args)
             path = Path(solver)
             path.extend_path(ex.path)
 
+            # prepare calldata and dynamic parameters
             cd, dyn_params = mk_calldata(
                 abi, fun_info, args, new_symbol_id=ex.new_symbol_id
             )
             path.process_dyn_params(dyn_params)
 
+            # create a symbolic message value
             msg_value = BitVec(
                 f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}",
                 BitVecSort256,
             )
 
+            # construct the transaction message
             message = Message(
                 target=addr,
                 caller=ex.this(),
@@ -607,6 +666,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 call_scheme=EVM.CALL,
             )
 
+            # execute the transaction and collect output states
             results.extend(sevm.run_message(ex, message, path))
 
         except Exception as err:
@@ -872,6 +932,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
     time_info = timer.report(include_subtimers=args.statistics)
 
     # print test result
+    # TODO: improve test result display logic for invariant tests
     if ctx.terminal or exitcode != PASS:
         print(
             f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
@@ -960,15 +1021,18 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
         return []
 
+    # separate regular and invariant tests
     test_funsigs, inv_funsigs = [], []
     for sig in ctx.funsigs:
         (inv_funsigs if sig.startswith("invariant_") else test_funsigs).append(sig)
 
     test_results = []
 
+    # execute regular tests
     if test_funsigs:
         test_results.extend(run_tests(ctx, setup_ex, test_funsigs))
 
+    # execute invariant tests
     if inv_funsigs:
         test_results.extend(run_invariant_tests(ctx, setup_ex, inv_funsigs))
 
@@ -981,10 +1045,24 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 def run_tests(
     ctx: ContractContext,
     pre_ex: Exec,
-    funsigs: list,
+    funsigs: list[str],
     depth: int = 0,
     terminal: bool = True,
 ) -> list[TestResult]:
+    """
+    Executes each of the given test functions on the given input state.
+    Used for both regular and invariant tests.
+
+    Args:
+        ctx: The context of the test contract.
+        pre_ex: The input state from which each test will be run.
+        funsigs: A list of test function signatures to execute.
+        depth (optional, only for invariant testing): The current depth of the invariant testing run.
+        terminal (optional, only for invariant testing): A flag indicating whether this testing run is final.
+
+    Returns:
+        A list of test results.
+    """
     args = ctx.args
 
     test_results = []
@@ -993,10 +1071,13 @@ def run_tests(
         fun_info = FunctionInfo(funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
-            # todo: reuse solver across functions
+            # TODO: reuse solver across different functions
             solver = mk_solver(test_config)
             debug(f"{test_config.formatted_layers()}")
 
+            # stop if the current depth exceeds the max depth for the test.
+            # note that the max depth may vary across tests.
+            # no-op for regular tests where depth is 0.
             if depth > test_config.inv_depth:
                 continue
 
