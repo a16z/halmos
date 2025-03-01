@@ -18,7 +18,6 @@ from z3 import (
     Or,
     eq,
     is_bv,
-    is_bv_value,
     is_false,
     simplify,
     unsat,
@@ -777,8 +776,7 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.etch_sig:
             who = uint160(arg.get_word(4))
 
-            # who must be concrete
-            if not is_bv_value(who):
+            if not who.is_concrete:
                 error_msg = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
                 raise HalmosException(error_msg)
 
@@ -788,10 +786,10 @@ class hevm_cheat_code:
 
             code_loc = 4 + code_offset + 32
             code_bytes = arg[code_loc : code_loc + code_length]
-            ex.set_code(who, code_bytes)
+            ex.set_code(who.wrapped(), code_bytes)
 
             # vm.etch() initializes but does not clear storage
-            ex.storage.setdefault(who, sevm.mk_storagedata())
+            ex.storage.setdefault(who.wrapped(), sevm.mk_storagedata())
 
             return ret
 
