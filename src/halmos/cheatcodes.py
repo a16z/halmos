@@ -790,6 +790,7 @@ class hevm_cheat_code:
 
             # vm.etch() initializes but does not clear storage
             ex.storage.setdefault(who.wrapped(), sevm.mk_storagedata())
+            ex.transient_storage.setdefault(who.wrapped(), sevm.mk_storagedata())
 
             return ret
 
