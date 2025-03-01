@@ -503,6 +503,7 @@ class State:
 
     def popi(self) -> BV:
         """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
+
         return BV(self.pop())
 
     def peek(self, n: int = 1) -> Word:
@@ -2652,7 +2653,7 @@ class SEVM:
             stack.push(new_ex_false)
 
     def jump(self, ex: Exec, stack: Worklist) -> None:
-        dst = ex.st.pop()
+        dst = ex.st.popi()
 
         # if dst is concrete, just jump
         if dst.is_concrete:
@@ -2662,7 +2663,7 @@ class SEVM:
         # otherwise, create a new execution for feasible targets
         elif self.options.symbolic_jump:
             for target in ex.pgm.valid_jump_destinations():
-                target_reachable = simplify(dst == target)
+                target_reachable = simplify(dst.wrapped() == target)
                 if ex.check(target_reachable) != unsat:  # jump
                     new_ex = self.create_branch(ex, target_reachable, target)
                     stack.push(new_ex)
@@ -3160,11 +3161,17 @@ class SEVM:
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.mloc(check_size=False)
-                    offset: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY offset")
+                    offset: int = ex.st.popi()
                     size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
 
                     if size:
-                        codeslice: ByteVec = ex.pgm.slice(offset, size)
+                        # TODO: hide symbolic support behind a feature flag?
+                        # if the offset is symbolic, create a symbolic slice
+                        codeslice = (
+                            ex.pgm.slice(int(offset), size)
+                            if offset.is_concrete
+                            else ByteVec(BV("codeslice", size=size * 8))
+                        )
                         ex.st.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.MCOPY:
