@@ -466,6 +466,7 @@ def run_invariant_tests(
     )
 
     depth = 0
+    # inv_depth can be overridden by specific test functions, so not checked here
     while True:
         depth += 1
 
