@@ -275,7 +275,7 @@ class Config:
     )
 
     inv_depth: int = arg(
-        help="set depth for invariant testing",
+        help="set depth for invariant testing (length of the stateful sequence of calls)",
         global_default=2,
         metavar="MAX_BOUND",
     )
