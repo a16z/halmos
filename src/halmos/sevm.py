@@ -20,6 +20,7 @@ from typing import (
 import xxhash
 from eth_hash.auto import keccak
 from z3 import (
+    is_const,
     UGE,
     UGT,
     ULE,
@@ -56,7 +57,7 @@ from z3 import (
     simplify,
     unsat,
 )
-from z3.z3util import get_vars, is_expr_var
+from z3.z3util import is_expr_var, is_expr_val
 
 from .bytevec import ByteVec, Chunk, ConcreteChunk, SymbolicChunk, UnwrappedBytes
 from .calldata import FunctionInfo
@@ -829,6 +830,8 @@ class Path:
     # constraints related to state variables
     sliced: set[int]
 
+    var_set_map: dict
+
     def __init__(self, solver: Solver):
         self.solver = solver
         self.num_scopes = 0
@@ -839,6 +842,7 @@ class Path:
         self.related = {}
         self.var_to_conds = defaultdict(set)
         self.sliced = None
+        self.var_set_map = {}
 
     def _get_related(self, var_set) -> set[int]:
         conds = set()
@@ -852,7 +856,7 @@ class Path:
         return result
 
     def get_related(self, cond) -> set[int]:
-        return self._get_related(get_vars(cond))
+        return self._get_related(self.get_vars(cond))
 
     def slice(self, var_set) -> None:
         if self.sliced is not None:
@@ -951,6 +955,8 @@ class Path:
         path.var_to_conds = deepcopy(self.var_to_conds)
         # path.sliced = None
 
+        path.var_set_map = self.var_set_map
+
         return path
 
     def is_activated(self) -> bool:
@@ -966,6 +972,30 @@ class Path:
 
         self.extend(self.pending, branching=True)
         self.pending = []
+
+    def _get_vars(self, cond, memo):
+        if cond.get_id() in memo:
+            return
+
+        result = set()
+
+        if is_const(cond):
+            if is_expr_val(cond):
+                pass
+            else:  # variable
+                result.add(cond)
+            memo[cond.get_id()] = result
+            return
+
+        for child in cond.children():
+            self._get_vars(child, memo)
+            result.update(memo[child.get_id()])
+
+        memo[cond.get_id()] = result
+
+    def get_vars(self, cond):
+        self._get_vars(cond, self.var_set_map)
+        return self.var_set_map[cond.get_id()]
 
     def append(self, cond, branching=False):
         cond = simplify(cond)
@@ -988,7 +1018,7 @@ class Path:
         self.concretization.process_cond(cond)
 
         # update dependency relation
-        var_set = get_vars(cond)
+        var_set = self.get_vars(cond)
         self.related[idx] = self._get_related(var_set)
         for var in var_set:
             self.var_to_conds[var].add(idx)
@@ -1002,6 +1032,7 @@ class Path:
         self.concretization = deepcopy(path.concretization)
         self.related = path.related.copy()
         self.var_to_conds = deepcopy(path.var_to_conds)
+        self.var_set_map = path.var_set_map
 
         # if the parent path is not sliced, then add all constraints to the solver
         if path.sliced is None:
@@ -1531,20 +1562,20 @@ class Exec:  # an execution path
 
         Collects state variables from balance, code, and storage; then executes path.slice() with them.
         """
-        var_set = get_vars(self.balance)
+        var_set = self.path.get_vars(self.balance)
 
         # the keys of self.code are constant
         for _contract in self.code.values():
             _code = _contract._code
             for _chunk in _code.chunks.values():
                 if isinstance(_chunk, SymbolicChunk):
-                    var_set = itertools.chain(var_set, get_vars(_chunk.data))
+                    var_set = itertools.chain(var_set, self.path.get_vars(_chunk.data))
 
         # the keys of self.storage are constant
         for _storage in self.storage.values():
             # the keys of _storage._mapping are constant
             for _val in _storage._mapping.values():
-                var_set = itertools.chain(var_set, get_vars(_val))
+                var_set = itertools.chain(var_set, self.path.get_vars(_val))
 
         self.path.slice(var_set)
 
