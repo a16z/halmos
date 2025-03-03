@@ -274,7 +274,7 @@ class Config:
         action=ParseErrorCodes,
     )
 
-    inv_depth: int = arg(
+    invariant_depth: int = arg(
         help="set depth for invariant testing (length of the stateful sequence of calls)",
         global_default=2,
         metavar="MAX_BOUND",

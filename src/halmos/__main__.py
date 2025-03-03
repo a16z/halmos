@@ -466,7 +466,7 @@ def run_invariant_tests(
     )
 
     depth = 0
-    # inv_depth can be overridden by specific test functions, so not checked here
+    # invariant_depth can be overridden by specific test functions, so not checked here
     while True:
         depth += 1
 
@@ -1079,7 +1079,7 @@ def run_tests(
             # stop if the current depth exceeds the max depth for the test.
             # note that the max depth may vary across tests.
             # no-op for regular tests where depth is 0.
-            if depth > test_config.inv_depth:
+            if depth > test_config.invariant_depth:
                 continue
 
             test_ctx = FunctionContext(
