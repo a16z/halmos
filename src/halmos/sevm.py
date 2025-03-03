@@ -20,7 +20,6 @@ from typing import (
 import xxhash
 from eth_hash.auto import keccak
 from z3 import (
-    is_const,
     UGE,
     UGT,
     ULE,
@@ -50,6 +49,7 @@ from z3 import (
     Xor,
     ZeroExt,
     eq,
+    is_const,
     is_eq,
     is_false,
     is_true,
@@ -57,7 +57,7 @@ from z3 import (
     simplify,
     unsat,
 )
-from z3.z3util import is_expr_var, is_expr_val
+from z3.z3util import is_expr_var
 
 from .bytevec import ByteVec, Chunk, ConcreteChunk, SymbolicChunk, UnwrappedBytes
 from .calldata import FunctionInfo
@@ -798,6 +798,24 @@ class Concretization:
             self.candidates[d.size_symbol] = d.size_choices
 
 
+class HashableTerm:
+    """
+    Thin wrapper around BitVecRef, ensuring that __eq__() returns bool instead of BoolRef.
+
+    This allows BitVecRef to be used as dict keys without issues related to generating equality constraints between non-comparable terms.
+    """
+
+    def __init__(self, term: BitVecRef):
+        self.term = term
+
+    def __eq__(self, other) -> bool:
+        """Checks structural equality instead of generating an equality constraint."""
+        return self.term.eq(other.term)
+
+    def __hash__(self):
+        return self.term.hash()
+
+
 class Path:
     """
     A Path object represents a prefix of the path currently being executed, where a path is defined by a sequence of branching conditions.
@@ -827,10 +845,10 @@ class Path:
     related: dict[int, set[int]]
     # a variable -> a set of conditions in which the variable appears
     var_to_conds: dict[any, set[int]]
+    # cache for get_var_set()
+    term_to_vars: dict
     # constraints related to state variables
     sliced: set[int]
-
-    var_set_map: dict
 
     def __init__(self, solver: Solver):
         self.solver = solver
@@ -841,8 +859,8 @@ class Path:
 
         self.related = {}
         self.var_to_conds = defaultdict(set)
+        self.term_to_vars = {}
         self.sliced = None
-        self.var_set_map = {}
 
     def _get_related(self, var_set) -> set[int]:
         conds = set()
@@ -856,7 +874,7 @@ class Path:
         return result
 
     def get_related(self, cond) -> set[int]:
-        return self._get_related(self.get_vars(cond))
+        return self._get_related(self.get_var_set(cond))
 
     def slice(self, var_set) -> None:
         if self.sliced is not None:
@@ -953,9 +971,9 @@ class Path:
         # shallow copy because each entry references earlier entries thus remains unchanged later
         path.related = self.related.copy()
         path.var_to_conds = deepcopy(self.var_to_conds)
+        # shared across different paths
+        path.term_to_vars = self.term_to_vars
         # path.sliced = None
-
-        path.var_set_map = self.var_set_map
 
         return path
 
@@ -973,29 +991,30 @@ class Path:
         self.extend(self.pending, branching=True)
         self.pending = []
 
-    def _get_vars(self, cond, memo):
-        if cond.get_id() in memo:
+    def collect_var_sets(self, hashable: HashableTerm):
+        if hashable in self.term_to_vars:
             return
 
         result = set()
 
-        if is_const(cond):
-            if is_expr_val(cond):
-                pass
-            else:  # variable
-                result.add(cond)
-            memo[cond.get_id()] = result
-            return
+        term = hashable.term
 
-        for child in cond.children():
-            self._get_vars(child, memo)
-            result.update(memo[child.get_id()])
+        if is_const(term):
+            if is_expr_var(term):
+                result.add(term)
 
-        memo[cond.get_id()] = result
+        else:
+            for child in term.children():
+                child = HashableTerm(child)
+                self.collect_var_sets(child)
+                result.update(self.term_to_vars[child])
 
-    def get_vars(self, cond):
-        self._get_vars(cond, self.var_set_map)
-        return self.var_set_map[cond.get_id()]
+        self.term_to_vars[hashable] = result
+
+    def get_var_set(self, term: BitVecRef):
+        term = HashableTerm(term)
+        self.collect_var_sets(term)
+        return self.term_to_vars[term]
 
     def append(self, cond, branching=False):
         cond = simplify(cond)
@@ -1018,7 +1037,7 @@ class Path:
         self.concretization.process_cond(cond)
 
         # update dependency relation
-        var_set = self.get_vars(cond)
+        var_set = self.get_var_set(cond)
         self.related[idx] = self._get_related(var_set)
         for var in var_set:
             self.var_to_conds[var].add(idx)
@@ -1032,7 +1051,7 @@ class Path:
         self.concretization = deepcopy(path.concretization)
         self.related = path.related.copy()
         self.var_to_conds = deepcopy(path.var_to_conds)
-        self.var_set_map = path.var_set_map
+        self.term_to_vars = path.term_to_vars
 
         # if the parent path is not sliced, then add all constraints to the solver
         if path.sliced is None:
@@ -1562,20 +1581,22 @@ class Exec:  # an execution path
 
         Collects state variables from balance, code, and storage; then executes path.slice() with them.
         """
-        var_set = self.path.get_vars(self.balance)
+        var_set = self.path.get_var_set(self.balance)
 
         # the keys of self.code are constant
         for _contract in self.code.values():
             _code = _contract._code
             for _chunk in _code.chunks.values():
                 if isinstance(_chunk, SymbolicChunk):
-                    var_set = itertools.chain(var_set, self.path.get_vars(_chunk.data))
+                    var_set = itertools.chain(
+                        var_set, self.path.get_var_set(_chunk.data)
+                    )
 
         # the keys of self.storage are constant
         for _storage in self.storage.values():
             # the keys of _storage._mapping are constant
             for _val in _storage._mapping.values():
-                var_set = itertools.chain(var_set, self.path.get_vars(_val))
+                var_set = itertools.chain(var_set, self.path.get_var_set(_val))
 
         self.path.slice(var_set)
 
