@@ -102,6 +102,18 @@ class SolvingContext:
 
 
 @dataclass(frozen=True)
+class InvariantContext:
+    # backlink to the parent contract context
+    contract_ctx: ContractContext
+
+    # set of visited states, to be updated during the invariant testing run
+    visited: set
+
+    # test results, to be updated during the invariant testing run
+    test_results_map: dict
+
+
+@dataclass(frozen=True)
 class FunctionContext:
     # config with function-specific overrides
     args: HalmosConfig
@@ -117,6 +129,9 @@ class FunctionContext:
 
     # optional starting state
     setup_ex: Exec | None = None
+
+    # optional terminal mode flag (default: true)
+    terminal: bool = True
 
     # function-level solving context
     # the FunctionContext initializes and owns the SolvingContext
