@@ -1262,10 +1262,13 @@ class Exec:  # an execution path
         # assert_address(addr)
         addr = uint160(addr).wrapped()
         value = self.select(self.balance, addr, self.balances)
+
         # generate emptyness axiom for each array index, instead of using quantified formula
         self.path.append(Select(EMPTY_BALANCE, addr) == ZERO)
+
         # practical assumption on the max balance per account
         self.path.append(ULT(value, con(2**96)))
+
         return value
 
     def balance_update(self, addr: Word, value: Word) -> None:
@@ -2045,19 +2048,23 @@ class SEVM:
         if value.is_concrete and value.value == 0:
             return
 
+        caller_balance: BitVecRef = ex.balance_of(caller)
+        to_balance: BitVecRef = ex.balance_of(to)
+
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
-        balance_cond = simplify(UGE(ex.balance_of(caller), value.wrapped()))
+        balance_cond = simplify(UGE(caller_balance, value.wrapped()))
         if is_false(balance_cond):
             raise InfeasiblePath("transfer_value: balance is not enough")
+
         ex.path.append(balance_cond)
 
         # conditional transfer
         if condition is not None:
-            value = If(condition, value, ZERO)
+            value = If(condition, value, Z3_ZERO)
 
-        ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value))
-        ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
+        ex.balance_update(caller, BV(caller_balance).sub(value).wrapped())
+        ex.balance_update(to, BV(to_balance).add(value).wrapped())
 
     def call(
         self,
