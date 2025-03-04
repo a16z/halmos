@@ -105,6 +105,7 @@ from .utils import (
     color_error,
     con,
     create_solver,
+    cyan,
     green,
     hexify,
     indent_text,
@@ -528,7 +529,13 @@ def step_invariant_tests(
     next_exs = []
 
     for idx, pre_ex in enumerate(pre_exs):
-        progress_status.update(f"{depth=} {len(visited)=} {idx=} {len(pre_exs)=}")
+        progress_status.update(
+            f"depth: {cyan(depth)} | "
+            f"starting states: {cyan(len(pre_exs))} | "
+            f"unique states: {cyan(len(visited))} | "
+            f"frontier states: {cyan(len(next_exs))} | "
+            f"completed paths: {cyan(idx)} "
+        )
 
         for addr in pre_ex.code:
             # skip the test contract
