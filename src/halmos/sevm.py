@@ -1591,11 +1591,11 @@ class SolidityStorage(Storage):
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
-            return cls.decode(base) + (offset, ZERO)
+            return cls.decode(base) + (offset, Z3_ZERO)
         # a[i] : hash(a) + i
         elif loc.decl().name() == f_sha3_256_name:
             base = loc.arg(0)
-            return cls.decode(base) + (ZERO,)
+            return cls.decode(base) + (Z3_ZERO,)
         # m[k] : hash(k.m)  where |k| != 256-bit
         elif is_f_sha3_name(loc.decl().name()):
             sha3_input = normalize(loc.arg(0))
@@ -1603,7 +1603,7 @@ class SolidityStorage(Storage):
                 offset = simplify(sha3_input.arg(0))
                 base = simplify(sha3_input.arg(1))
                 if offset.size() != 256 and base.size() == 256:
-                    return cls.decode(base) + (offset, ZERO)
+                    return cls.decode(base) + (offset, Z3_ZERO)
         elif loc.decl().name() == "bvadd":
             #   # when len(args) == 2
             #   arg0 = cls.decode(loc.arg(0))
