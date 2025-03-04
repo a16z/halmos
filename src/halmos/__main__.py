@@ -651,7 +651,17 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
             )
             path.process_dyn_params(dyn_params)
 
-            # create a symbolic message value
+            # create a symbolic tx.origin
+            tx_origin = mk_addr(
+                f"tx_origin_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
+            )
+
+            # create a symbolic msg.sender
+            msg_sender = mk_addr(
+                f"msg_sender_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
+            )
+
+            # create a symbolic msg.value
             msg_value = BitVec(
                 f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}",
                 BitVecSort256,
@@ -660,8 +670,8 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
             # construct the transaction message
             message = Message(
                 target=addr,
-                caller=ex.this(),
-                origin=ex.origin(),
+                caller=msg_sender,
+                origin=tx_origin,
                 value=msg_value,
                 data=cd,
                 call_scheme=EVM.CALL,
