@@ -8,8 +8,9 @@ from z3 import (
     eq,
 )
 
+from halmos.bitvec import HalmosBitVec as BV
 from halmos.calldata import str_abi
-from halmos.sevm import Contract, Instruction, con
+from halmos.sevm import Contract, Instruction
 from halmos.utils import EVM, hexify
 
 
@@ -107,12 +108,12 @@ def test_decode_mixed_bytecode():
 
 
 def test_instruction():
-    assert str(Instruction(con(0))) == "STOP"
-    assert str(Instruction(con(1))) == "ADD"
+    assert str(Instruction(0)) == "STOP"
+    assert str(Instruction(1)) == "ADD"
 
-    push32_1_str = "PUSH32 " + hexify(con(1))
-    assert str(Instruction(con(EVM.PUSH32), operand=con(1))) == push32_1_str
-    assert str(Instruction(con(EVM.BASEFEE))) == "BASEFEE"
+    push32_1_str = "PUSH32 " + hexify(BV(1))
+    assert str(Instruction(EVM.PUSH32, operand=BV(1))) == push32_1_str
+    assert str(Instruction(EVM.BASEFEE)) == "BASEFEE"
 
     # symbolic opcode is not supported
     # assert str(Instruction(BitVec('x', 8))) == 'x'
@@ -153,8 +154,11 @@ def test_decode():
     code = Contract(Concat(BitVecVal(EVM.PUSH3, 8), BitVec("x", 16)))
     operand = code.decode_instruction(0).operand
     assert operand.is_symbolic
-    assert operand.size == 24
-    assert eq(operand.value, Concat(BitVec("x", 16), con(0, 8)))
+    assert operand.size == 256  # operands are padded to 256 bits
+
+    # the last byte of the operand should be 0
+    last_byte = BV(operand, size=8)
+    assert last_byte.is_zero().is_true
 
 
 @pytest.mark.parametrize(

@@ -309,7 +309,10 @@ class Instruction:
     STOP: ClassVar["Instruction"] = None
 
     def __str__(self) -> str:
-        operand_str = f" {hexify(self.operand)}" if self.operand is not None else ""
+        operand_str = ""
+        if self.operand is not None:
+            operand_size_bytes = len(self) - 1
+            operand_str = f" {hexify(BV(self.operand, size=operand_size_bytes * 8))}"
         return f"{mnemonic(self.opcode)}{operand_str}"
 
     def __repr__(self) -> str:
