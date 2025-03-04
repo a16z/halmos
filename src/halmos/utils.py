@@ -603,7 +603,12 @@ def assert_address(x: Word) -> None:
             raise ValueError(x)
         return
 
-    if is_concrete(x) and not 0 <= int_of(x) < 2**160 or x.size() != 160:
+    if is_concrete(x):
+        if not 0 <= int_of(x) < 2**160:
+            raise ValueError(x)
+        return
+
+    if x.size() != 160:
         raise ValueError(x)
 
 
@@ -613,8 +618,10 @@ def assert_uint256(x: Word) -> None:
             raise ValueError(x)
         return
 
-    if is_concrete(x) and not 0 <= int_of(x) < 2**256:
-        raise ValueError(x)
+    if is_concrete(x):
+        if not 0 <= int_of(x) < 2**256:
+            raise ValueError(x)
+        return
 
     if x.size() != 256:
         raise ValueError(x)
