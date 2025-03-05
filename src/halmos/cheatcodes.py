@@ -16,7 +16,6 @@ from z3 import (
     Implies,
     Not,
     Or,
-    eq,
     is_bv,
     is_false,
     simplify,
@@ -43,7 +42,6 @@ from .utils import (
     Word,
     assert_address,
     con,
-    con_addr,
     decode_hex,
     extract_bytes,
     extract_funsig,
@@ -175,23 +173,15 @@ class Prank:
         fn_name = "startPrank" if self.keep else "prank"
         return f"{fn_name}({str(self.active)})"
 
-    def lookup(self, to: Address) -> PrankResult:
+    def lookup(self, to: BV) -> PrankResult:
         """
         If `to` is an eligible prank destination, return the active prank context.
 
         If `keep` is False, this resets the prank context.
         """
 
-        # TODO: avoid the extra wrapping/unwrapping
-        if isinstance(to, BV):
-            to = to.wrapped()
-
         assert_address(to)
-        if (
-            self
-            and not eq(to, hevm_cheat_code.address)
-            and not eq(to, halmos_cheat_code.address)
-        ):
+        if self and to not in [halmos_cheat_code.address, hevm_cheat_code.address]:
             result = self.active
             if not self.keep:
                 self.stopPrank()
@@ -481,7 +471,7 @@ def apply_vmaddr(ex, private_key: Word):
 class halmos_cheat_code:
     # address constant SVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('svm cheat code')))));
-    address: BitVecRef = con_addr(0xF3993A62377BCD56AE39D773740A5390411E8BC9)
+    address = BV(0xF3993A62377BCD56AE39D773740A5390411E8BC9, size=160)
 
     handlers = {
         0x66830DFA: create_uint,  # createUint(uint256,string)
@@ -519,7 +509,7 @@ class hevm_cheat_code:
 
     # address constant HEVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('hevm cheat code')))));
-    address: BitVecRef = con_addr(0x7109709ECFA91A80626FF3989D68F67F5B1DD12D)
+    address: BitVecRef = BV(0x7109709ECFA91A80626FF3989D68F67F5B1DD12D, size=160)
 
     # abi.encodePacked(
     #     bytes4(keccak256("store(address,bytes32,bytes32)")),

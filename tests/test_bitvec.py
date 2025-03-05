@@ -153,3 +153,15 @@ def test_bv_to_chunk():
     assert len(chunk) == 32
     assert chunk[0] == 0xFF
     assert chunk[31] == 0xFF
+
+
+def test_in_operator():
+    x = BV(42)
+    assert x in [BV(0), BV(42), BV(43)]
+
+    assert BV("x") not in [x, BV(43)]
+
+    assert BV("y") in [BV("x"), BV("y"), BV("z")]
+
+    # can not compare directly to ints
+    assert x not in [0, 42, 43]

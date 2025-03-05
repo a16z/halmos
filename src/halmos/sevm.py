@@ -140,6 +140,17 @@ Z3_ZERO, Z3_ONE = con(0), con(1)
 ZERO, ONE = BV(0), BV(1)
 MAX_CALL_DEPTH = 1024
 
+# Precompile addresses
+ECRECOVER_PRECOMPILE = BV(1, size=160)
+SHA256_PRECOMPILE = BV(2, size=160)
+RIPEMD160_PRECOMPILE = BV(3, size=160)
+IDENTITY_PRECOMPILE = BV(4, size=160)
+MODEXP_PRECOMPILE = BV(5, size=160)
+ECADD_PRECOMPILE = BV(6, size=160)
+ECMUL_PRECOMPILE = BV(7, size=160)
+ECPAIRING_PRECOMPILE = BV(8, size=160)
+BLAKE2F_PRECOMPILE = BV(9, size=160)
+POINT_EVALUATION_PRECOMPILE = BV(10, size=160)
 # bytes4(keccak256("Panic(uint256)"))
 PANIC_SELECTOR = bytes.fromhex("4E487B71")
 
@@ -152,6 +163,12 @@ PULSE_INTERVAL = 2**13
 FOUNDRY_CALLER = 0x1804C8AB1F12E6BBF3894D4083F33E07309D1F38
 FOUNDRY_ORIGIN = FOUNDRY_CALLER
 FOUNDRY_TEST = 0x7FA9385BE102AC3EAC297483DD6233D62B3E1496
+
+CHEATCODE_ADDRESSES = [
+    hevm_cheat_code.address,
+    halmos_cheat_code.address,
+    console.address,
+]
 
 # (pc, (jumpdest, ...))
 # the jumpdests are stored as strings to avoid the cost of converting bv values
@@ -1985,7 +2002,7 @@ class SEVM:
             target = target.wrapped()
 
         assert_bv(target)
-        assert_address(target)
+        assert target.size() == 160
 
         if target in ex.code:
             return target
@@ -2042,7 +2059,7 @@ class SEVM:
         caller: Address,
         to: Address,
         value: Word,
-        condition: Word = None,
+        condition: BoolRef | None = None,
     ) -> None:
         # no-op if value is zero
         if value.is_concrete and value.value == 0:
@@ -2079,10 +2096,8 @@ class SEVM:
 
         ex.st.pop()  # gas
 
-        # TODO: avoid the extra wrapping/unwrapping
-        to = uint160(ex.st.pop()).wrapped()
-
-        fund = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
+        to: BV = uint160(ex.st.pop())
+        fund: BV = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
 
         arg_loc: int = ex.mloc(check_size=False)
         arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
@@ -2099,7 +2114,7 @@ class SEVM:
         pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.mslice(arg_loc, arg_size)
 
-        def send_callvalue(condition=None) -> None:
+        def send_callvalue(condition: BoolRef | None = None) -> None:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
                 # TODO: revert if context is static
@@ -2155,7 +2170,7 @@ class SEVM:
 
                 # set status code on the stack
                 subcall_success = subcall.output.error is None
-                new_ex.st.push(1 if subcall_success else 0)
+                new_ex.st.push(ONE if subcall_success else ZERO)
 
                 if not subcall_success:
                     # revert network states
@@ -2199,7 +2214,7 @@ class SEVM:
 
         def call_unknown() -> None:
             # ecrecover
-            if eq(to, con_addr(1)):
+            if to == ECRECOVER_PRECOMPILE:
                 # TODO: explicitly return empty data in case of an error
                 # TODO: validate input and fork on error?
                 # - v in [27, 28]
@@ -2217,8 +2232,7 @@ class SEVM:
                 # TODO: empty returndata in error
                 ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
 
-            # sha256
-            elif eq(to, con_addr(2)):
+            elif to == SHA256_PRECOMPILE:
                 exit_code = ONE
                 f_sha256 = Function(
                     f"f_sha256_{arg_size}", BitVecSorts[arg_size], BitVecSort256
@@ -2230,8 +2244,7 @@ class SEVM:
                 )
                 ret = ByteVec(f_sha256(wrapped))
 
-            # ripemd160
-            elif eq(to, con_addr(3)):
+            elif to == RIPEMD160_PRECOMPILE:
                 exit_code = ONE
                 f_ripemd160 = Function(
                     f"f_ripemd160_{arg_size}", BitVecSorts[arg_size], BitVecSort160
@@ -2243,13 +2256,11 @@ class SEVM:
                 )
                 ret = ByteVec(uint256(f_ripemd160(wrapped)))
 
-            # identity
-            elif eq(to, con_addr(4)):
+            elif to == IDENTITY_PRECOMPILE:
                 exit_code = ONE
                 ret = arg
 
-            # modexp
-            elif eq(to, con_addr(5)):
+            elif to == MODEXP_PRECOMPILE:
                 exit_code = ONE
                 modulus_size = ex.int_of(extract_bytes(arg, 64, 32))
                 f_modexp = Function(
@@ -2264,8 +2275,7 @@ class SEVM:
                 )
                 ret = ByteVec(f_modexp(wrapped))
 
-            # ecadd
-            elif eq(to, con_addr(6)):
+            elif to == ECADD_PRECOMPILE:
                 exit_code = ONE
                 f_ecadd = Function("f_ecadd", BitVecSorts[1024], BitVecSorts[512])
 
@@ -2275,8 +2285,7 @@ class SEVM:
                 )
                 ret = ByteVec(f_ecadd(wrapped))
 
-            # ecmul
-            elif eq(to, con_addr(7)):
+            elif to == ECMUL_PRECOMPILE:
                 exit_code = ONE
                 f_ecmul = Function("f_ecmul", BitVecSorts[768], BitVecSorts[512])
 
@@ -2287,7 +2296,7 @@ class SEVM:
                 ret = ByteVec(f_ecmul(wrapped))
 
             # ecpairing
-            elif eq(to, con_addr(8)):
+            elif to == ECPAIRING_PRECOMPILE:
                 exit_code = ONE
                 f_ecpairing = Function("f_ecpairing", BitVecSorts[1536], BitVecSorts[1])
 
@@ -2298,7 +2307,7 @@ class SEVM:
                 ret = ByteVec(uint256(f_ecpairing(wrapped)))
 
             # blake2f
-            elif eq(to, con_addr(9)):
+            elif to == BLAKE2F_PRECOMPILE:
                 exit_code = ONE
                 f_blake2f = Function("f_blake2f", BitVecSorts[1704], BitVecSorts[512])
 
@@ -2308,8 +2317,7 @@ class SEVM:
                 )
                 ret = ByteVec(f_blake2f(wrapped))
 
-            # point_evaluation
-            elif eq(to, con_addr(10)):
+            elif to == POINT_EVALUATION_PRECOMPILE:
                 exit_code = ONE
                 f_point_evaluation = Function(
                     "f_point_evaluation", BitVecSorts[1544], BitVecSorts[512]
@@ -2322,17 +2330,17 @@ class SEVM:
                 ret = ByteVec(f_point_evaluation(wrapped))
 
             # halmos cheat code
-            elif eq(to, halmos_cheat_code.address):
+            elif to == halmos_cheat_code.address:
                 exit_code = ONE
                 ret = halmos_cheat_code.handle(self, ex, arg, stack)
 
             # vm cheat code
-            elif eq(to, hevm_cheat_code.address):
+            elif to == hevm_cheat_code.address:
                 exit_code = ONE
                 ret = hevm_cheat_code.handle(self, ex, arg, stack)
 
             # console
-            elif eq(to, console.address):
+            elif to == console.address:
                 exit_code = ONE
                 console.handle(ex, arg)
                 ret = ByteVec()
@@ -2356,7 +2364,7 @@ class SEVM:
                     f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
                 )
                 ex.path.append(exit_code_var == exit_code)
-                ex.st.push(exit_code_var)
+                ex.st.push(BV(exit_code_var))
 
                 # transfer msg.value
                 send_callvalue(exit_code_var != ZERO)
@@ -2401,11 +2409,9 @@ class SEVM:
         # precompiles or cheatcodes
         if (
             # precompile
-            (is_bv_value(to) and to.as_long() in range(1, 11))
+            (to.is_concrete and int(to) in range(1, 11))
             # cheatcode calls
-            or eq(to, halmos_cheat_code.address)
-            or eq(to, hevm_cheat_code.address)
-            or eq(to, console.address)
+            or to in CHEATCODE_ADDRESSES
             # non-existing contract call
             or to_alias is None
         ):
@@ -2451,9 +2457,14 @@ class SEVM:
 
             code_hash = ex.sha3_data(create_hexcode)
             hash_data = simplify(
-                Concat(con(0xFF, 8), uint160(pranked_caller), salt, code_hash)
+                Concat(
+                    con(0xFF, 8),
+                    uint160(pranked_caller).wrapped(),
+                    salt.wrapped(),
+                    code_hash,
+                )
             )
-            new_addr = uint160(ex.sha3_data(hash_data))
+            new_addr = uint160(ex.sha3_data(hash_data)).wrapped()
         else:
             raise HalmosException(f"Unknown CREATE opcode: {op}")
 
@@ -2469,7 +2480,7 @@ class SEVM:
 
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
-            ex.st.push(0)
+            ex.st.push(ZERO)
             ex.advance()
 
             # add a virtual subcontext to the trace for debugging purposes
@@ -2979,27 +2990,27 @@ class SEVM:
                     ex.st.push(uint256(ex.this()))
 
                 elif opcode == EVM.EXTCODESIZE:
-                    account = uint160(ex.st.peek()).wrapped()
+                    account: BV = uint160(ex.st.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
                     ex.st.pop()
 
                     if account_alias is not None:
                         codesize = len(ex.code[account_alias])
                     else:
+                        # NOTE: the codesize of halmos cheatcode should be non-zero to pass the extcodesize check
+                        # for external calls with non-empty return types. this behavior differs from foundry.
+                        # the codesize of console is considered zero in foundry
                         codesize = (
-                            1  # dummy arbitrary value, consistent with foundry
-                            if eq(account, hevm_cheat_code.address)
-                            # NOTE: the codesize of halmos cheatcode should be non-zero to pass the extcodesize check for external calls with non-empty return types. this behavior differs from foundry.
-                            or eq(account, halmos_cheat_code.address)
-                            # the codesize of console is considered zero in foundry
-                            # or eq(account, console.address)
-                            else 0
+                            ONE  # dummy arbitrary value, consistent with foundry
+                            if account
+                            in [hevm_cheat_code.address, halmos_cheat_code.address]
+                            else ZERO
                         )
 
                     ex.st.push(codesize)
 
                 elif opcode == EVM.EXTCODECOPY:
-                    account: Address = uint160(ex.st.peek())
+                    account: BV = uint160(ex.st.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
                     ex.st.pop()
 
@@ -3014,30 +3025,30 @@ class SEVM:
                                 "is assumed to have empty bytecode"
                             )
 
-                        account_code: Contract = ex.code.get(account_alias) or ByteVec()
+                        account_code: Contract | ByteVec = (
+                            ex.code.get(account_alias) or ByteVec()
+                        )
                         codeslice: ByteVec = account_code.slice(offset, size)
                         ex.st.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.EXTCODEHASH:
-                    account = uint160(ex.st.peek())
+                    account: BV = uint160(ex.st.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
                     ex.st.pop()
 
                     if account_alias is not None:
                         codehash = ex.sha3_data(ex.code[account_alias]._code.unwrap())
-                    elif (
-                        eq(account, hevm_cheat_code.address)
-                        or eq(account, halmos_cheat_code.address)
-                        or eq(account, console.address)
-                    ):
+                    elif account in CHEATCODE_ADDRESSES:
                         # dummy arbitrary value, consistent with foundry
                         codehash = (
-                            0xB0450508E5A2349057C3B4C9C84524D62BE4BB17E565DBE2DF34725A26872291
-                            if eq(account, hevm_cheat_code.address)
-                            else 0
+                            BV(
+                                0xB0450508E5A2349057C3B4C9C84524D62BE4BB17E565DBE2DF34725A26872291
+                            )
+                            if account == hevm_cheat_code.address
+                            else ZERO
                         )
                     else:
-                        codehash = 0  # vs EMPTY_KECCAK, see EIP-1052
+                        codehash = ZERO  # vs EMPTY_KECCAK, see EIP-1052
 
                     ex.st.push(codehash)
 

@@ -179,7 +179,7 @@ def uint8(x: Any) -> Byte:
     return uint(x, 8)
 
 
-def uint160(x: Word) -> Address:
+def uint160(x: Word) -> BV:
     return uint(x, 160)
 
 
