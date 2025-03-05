@@ -523,7 +523,7 @@ class State:
     def popi(self) -> BV:
         """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
 
-        return BV(self.pop())
+        return BV(self.pop(), size=256)
 
     def peek(self, n: int = 1) -> Word:
         return self.stack[-n]
@@ -1926,9 +1926,6 @@ class SEVM:
         return term
 
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
-        w1 = b2i(w1)
-        w2 = b2i(w2)
-
         if op == EVM.ADD:
             return w1.add(w2)
 
@@ -2891,7 +2888,7 @@ class SEVM:
                     pass
 
                 elif EVM.ADD <= opcode <= EVM.SMOD:  # ADD MUL SUB DIV SDIV MOD SMOD
-                    ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
+                    ex.st.push(self.arith(ex, opcode, ex.st.popi(), ex.st.popi()))
 
                 elif opcode == EVM.ADDMOD:
                     w1 = ex.st.popi()
@@ -2916,7 +2913,7 @@ class SEVM:
                     ex.st.push(result)
 
                 elif opcode == EVM.EXP:
-                    ex.st.push(self.arith(ex, opcode, ex.st.pop(), ex.st.pop()))
+                    ex.st.push(self.arith(ex, opcode, ex.st.popi(), ex.st.popi()))
 
                 elif opcode == EVM.LT:
                     w1 = ex.st.popi()
