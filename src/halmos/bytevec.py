@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, ForwardRef
+from typing import Any
 
 from sortedcontainers import SortedDict
 from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
@@ -21,8 +21,8 @@ from .utils import (
 )
 
 UnwrappedBytes = bytes | Byte
-WrappedBytes = ForwardRef("Chunk") | ForwardRef("ByteVec")
-Bytes = UnwrappedBytes | WrappedBytes
+WrappedBytes = "Chunk | ByteVec"
+Bytes = "UnwrappedBytes | WrappedBytes"
 
 
 def try_concat(lhs: Any, rhs: Any) -> Any | None:
@@ -126,7 +126,7 @@ class Chunk(ABC):
     def __iter__(self):
         raise TypeError("Chunk object is not iterable")
 
-    def __getitem__(self, key) -> Byte | ForwardRef("Chunk"):
+    def __getitem__(self, key) -> "Byte | Chunk":
         if isinstance(key, slice):
             start = key.start or 0
             stop = key.stop if key.stop is not None else self.length
@@ -744,7 +744,7 @@ class ByteVec:
         data = self.slice(offset, offset + 32).unwrap()
         return unbox_int(data)
 
-    def __getitem__(self, key) -> Byte | ForwardRef("ByteVec"):
+    def __getitem__(self, key) -> "Byte | ByteVec":
         if isinstance(key, slice):
             start = key.start or 0
             stop = key.stop if key.stop is not None else self.length
