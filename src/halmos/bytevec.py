@@ -94,10 +94,13 @@ class Chunk(ABC):
         if is_bv_value(data):
             data = bv_value_to_bytes(data)
 
-        if isinstance(data, BV):
-            data = data.unwrap()
+        elif isinstance(data, BV):
+            if data.is_concrete:
+                data = int.to_bytes(data.value, data.size // 8, "big")
+            else:
+                data = data.value
 
-        if isinstance(data, int):
+        elif isinstance(data, int):
             # assume a single byte, raises if value does not fit in a byte
             data = int.to_bytes(data, 1, "big")
 

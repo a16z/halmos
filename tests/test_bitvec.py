@@ -1,10 +1,9 @@
-from textwrap import dedent
-
 import pytest
 from z3 import BitVec, BitVecVal, BoolVal, Concat, eq, simplify
 
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bitvec import HalmosBool
+from halmos.bytevec import Chunk
 from halmos.exceptions import NotConcreteError
 
 
@@ -148,56 +147,9 @@ def test_bool_eq():
     assert x.eq(y) != y.eq(x)
 
 
-def timeme(*args, **kwargs) -> tuple[int, float]:
-    import timeit
-
-    # Set default value for 'number' if not provided
-    number = kwargs.pop("number", 1000000)
-
-    # Pass all arguments to timeit.repeat
-    times = timeit.repeat(*args, repeat=5, number=number, **kwargs)
-    best_time = min(times)
-    usec_per_loop = best_time / number * 1e6  # Convert seconds to microseconds
-    return number, usec_per_loop
-
-
-def timeme_report(*args, **kwargs):
-    number, usec_per_loop = timeme(*args, **kwargs)
-    print(f"{number} loops, best of 5: {usec_per_loop:.3f} usec per loop")
-
-
-def compare(stmts=None, *args, **kwargs):
-    results = [(stmt, timeme(*args, stmt=stmt, **kwargs)) for stmt in stmts]
-    results = sorted(results, key=lambda x: x[1][1])
-
-    print("Best: ", end="")
-    baseline = results[0][1][1]
-    for stmt, result in results:
-        print(stmt)
-        base_text = f"    {result[0]} loops, best of 5: {result[1]:.3f} usec per loop"
-        if result[1] == baseline:
-            print(base_text)
-        else:
-            print(f"{base_text} ({result[1] / baseline:.3f}x)")
-        print()
-
-
-compare(
-    setup=dedent("""
-        import random
-        from z3 import BitVec, BitVecRef, BitVecVal, URem, Extract, ZeroExt, simplify
-        from halmos.bitvec import HalmosBitVec as BV
-        from halmos.utils import con
-
-        def addmod(x, y, z):
-            r1 = simplify(ZeroExt(8, x)) + simplify(ZeroExt(8, y))
-            r2 = URem(r1, simplify(ZeroExt(8, z)))
-            return Extract(255, 0, r2)
-    """),
-    stmts=[
-        "BV(4).addmod(BV(1), BV(3)) == BV(2)",
-        "addmod(con(4), con(1), con(3)) == con(2)",
-        # "BV('x').mod(BV(2**3)) == BV('x', size=3)",
-    ],
-    number=10**4,
-)
+def test_bv_to_chunk():
+    hbv = BV(2**256 - 1)
+    chunk = Chunk.wrap(hbv)
+    assert len(chunk) == 32
+    assert chunk[0] == 0xFF
+    assert chunk[31] == 0xFF
