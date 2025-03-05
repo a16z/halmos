@@ -537,9 +537,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path_id = 0  # default value in case we don't enter the loop body
     submitted_futures = []
     for path_id, ex in enumerate(exs):
-        # with timed("gc.collect()"):
-        #     gc.collect()
-
         # check if early exit is triggered
         if ctx.solving_ctx.executor.is_shutdown():
             if args.debug:
@@ -1029,27 +1026,7 @@ def _main(_args=None) -> MainResult:
 
 # entrypoint for the `halmos` script
 def main() -> int:
-    # Save the stats at the beginning
-    initial_stats = gc.get_stats()  # Returns a list of 3 dicts (gens 0, 1, 2)
-
     exitcode = _main().exitcode
-
-    # Final stats
-    final_stats = gc.get_stats()
-
-    # Aggregate each generation's stats
-    initial_collections = sum(g["collections"] for g in initial_stats)
-    initial_collected = sum(g["collected"] for g in initial_stats)
-    initial_uncollect = sum(g["uncollectable"] for g in initial_stats)
-
-    final_collections = sum(g["collections"] for g in final_stats)
-    final_collected = sum(g["collected"] for g in final_stats)
-    final_uncollect = sum(g["uncollectable"] for g in final_stats)
-
-    print(f"GC collections:    {final_collections - initial_collections}")
-    print(f"GC collected:  {final_collected   - initial_collected}")
-    print(f"GC uncollectable:  {final_uncollect   - initial_uncollect}")
-
     return exitcode
 
 
