@@ -16,6 +16,7 @@ from z3 import (
     BitVecRef,
     BitVecSort,
     BitVecVal,
+    BoolRef,
     BoolVal,
     Concat,
     Extract,
@@ -232,17 +233,22 @@ def z3_bv(x: Any) -> BitVecRef:
 
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
-def test(x: Word, b: bool) -> Word:
+def test(x: Word, b: bool) -> BoolRef:
     if isinstance(x, int):
         return BoolVal(x != 0) if b else BoolVal(x == 0)
+
+    elif isinstance(x, BV):
+        return x.is_non_zero().wrapped() if b else x.is_zero().wrapped()
 
     elif is_bool(x):
         if b:
             return x
         else:
             return Not(x)
+
     elif is_bv(x):
         return x != con(0) if b else x == con(0)
+
     else:
         raise ValueError(x)
 
