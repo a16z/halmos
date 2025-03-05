@@ -59,6 +59,7 @@ from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
 from .console import console
+from .constants import MAX_MEMORY_SIZE
 from .exceptions import (
     AddressCollision,
     EvmException,
@@ -157,7 +158,6 @@ PANIC_SELECTOR = bytes.fromhex("4E487B71")
 EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
 
 # TODO: make this configurable
-MAX_MEMORY_SIZE = 2**20
 PULSE_INTERVAL = 2**13
 
 FOUNDRY_CALLER = 0x1804C8AB1F12E6BBF3894D4083F33E07309D1F38
@@ -1042,7 +1042,11 @@ class Exec:  # an execution path
         #
         self.pgm = kwargs["pgm"]
         self.pc = kwargs.get("pc") or 0
-        self.insn = self.pgm.decode_instruction(self.pc) if self.pgm else None
+
+        # pgm can have 0 length, which makes it falsey
+        self.insn = (
+            self.pgm.decode_instruction(self.pc) if self.pgm is not None else None
+        )
         self.st = kwargs["st"]
         self.jumpis = kwargs["jumpis"]
         self.addresses_to_delete = kwargs.get("addresses_to_delete") or set()

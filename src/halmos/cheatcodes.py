@@ -30,7 +30,14 @@ from .calldata import (
     get_abi,
     mk_calldata,
 )
-from .exceptions import FailCheatcode, HalmosException, InfeasiblePath, NotConcreteError
+from .constants import MAX_MEMORY_SIZE
+from .exceptions import (
+    FailCheatcode,
+    HalmosException,
+    InfeasiblePath,
+    NotConcreteError,
+    OutOfGasError,
+)
 from .logs import debug
 from .mapper import BuildOut
 from .utils import (
@@ -772,10 +779,16 @@ class hevm_cheat_code:
 
             # code must be concrete
             code_offset = int_of(arg.get_word(36), "symbolic code offset")
-            code_length = int_of(arg.get_word(4 + code_offset), "symbolic code length")
+            loc = 4 + code_offset + 32
+            size = int_of(arg.get_word(4 + code_offset), "symbolic code length")
 
-            code_loc = 4 + code_offset + 32
-            code_bytes = arg[code_loc : code_loc + code_length]
+            # check for max memory size
+            if loc + size > MAX_MEMORY_SIZE:
+                error_msg = f"memory read {loc=} {size=} > MAX_MEMORY_SIZE"
+                raise OutOfGasError(error_msg)
+
+            # note: size can be 0
+            code_bytes = arg[loc : loc + size]
             ex.set_code(who.wrapped(), code_bytes)
 
             # vm.etch() initializes but does not clear storage
