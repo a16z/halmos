@@ -2,6 +2,14 @@ import logging
 from dataclasses import dataclass
 
 from rich.logging import RichHandler
+from rich.status import Status
+
+#
+# Progress status
+#
+
+progress_status: Status = Status("")
+
 
 #
 # Basic logging

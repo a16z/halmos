@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import itertools
 import re
 from collections import defaultdict
 from collections.abc import Callable, Iterator
@@ -17,10 +18,8 @@ from typing import (
     Union,
 )
 
-import rich
 import xxhash
 from eth_hash.auto import keccak
-from rich.status import Status
 from z3 import (
     UGE,
     ULE,
@@ -43,6 +42,7 @@ from z3 import (
     Store,
     ZeroExt,
     eq,
+    is_const,
     is_eq,
     is_false,
     is_true,
@@ -81,6 +81,7 @@ from .logs import (
     LIBRARY_PLACEHOLDER,
     debug,
     debug_once,
+    progress_status,
     warn,
     warn_code,
 )
@@ -810,16 +811,57 @@ class Concretization:
             self.candidates[d.size_symbol] = d.size_choices
 
 
+class HashableTerm:
+    """
+    Thin wrapper around BitVecRef, ensuring that __eq__() returns bool instead of BoolRef.
+
+    This allows BitVecRef to be used as dict keys without issues related to generating equality constraints between non-comparable terms.
+    """
+
+    def __init__(self, term: BitVecRef):
+        self.term = term
+
+    def __eq__(self, other) -> bool:
+        """Checks structural equality instead of generating an equality constraint."""
+        return self.term.eq(other.term)
+
+    def __hash__(self):
+        return self.term.hash()
+
+
 class Path:
-    # a Path object represents a prefix of the path currently being executed
-    # initially, it's an empty path at the beginning of execution
+    """
+    A Path object represents a prefix of the path currently being executed, where a path is defined by a sequence of branching conditions.
+    A path may span internal contract calls and multiple transactions.
+
+    In addition to branching conditions, a Path object also maintains additional constraints over symbolic values, such as implicit assumptions like no hash collisions.
+
+    The `conditions` attribute contains both branching conditions and additional constraints.
+
+    The `solver` attribute is a Z3 Solver object that essentially mirrors the `conditions` attribute.
+    The Z3 solver is used to check whether a new branching condition is satisfiable, filtering out infeasible paths.
+
+    For regular tests, `solver` contains all constraints from `conditions`.
+    For invariant tests, however, `solver` excludes certain irrelevant constraints from `conditions`.
+    Specifically, after executing each transaction, constraints related to state variables are identified and stored in the `sliced` attribute.
+    Later, when a new Path object is created extending the previous path, only the `sliced` constraints are considered by the solver. This improves the performance of the solver as it handles fewer constraints.
+    """
 
     solver: Solver
     num_scopes: int
-    # path constraints include both explicit branching conditions and implicit assumptions (eg, no hash collisions)
+
     conditions: dict  # cond -> bool (true if explicit branching conditions)
     concretization: Concretization
     pending: list
+
+    # a condition -> a set of previous conditions that are related to the condition
+    related: dict[int, set[int]]
+    # a variable -> a set of conditions in which the variable appears
+    var_to_conds: dict[any, set[int]]
+    # cache for get_var_set()
+    term_to_vars: dict
+    # constraints related to state variables
+    sliced: set[int]
 
     def __init__(self, solver: Solver):
         self.solver = solver
@@ -827,6 +869,31 @@ class Path:
         self.conditions = {}
         self.concretization = Concretization()
         self.pending = []
+
+        self.related = {}
+        self.var_to_conds = defaultdict(set)
+        self.term_to_vars = {}
+        self.sliced = None
+
+    def _get_related(self, var_set) -> set[int]:
+        conds = set()
+        for var in var_set:
+            conds.update(self.var_to_conds[var])
+
+        result = set(conds)
+        for cond in conds:
+            result.update(self.related[cond])
+
+        return result
+
+    def get_related(self, cond) -> set[int]:
+        return self._get_related(self.get_var_set(cond))
+
+    def slice(self, var_set) -> None:
+        if self.sliced is not None:
+            raise ValueError("already sliced")
+
+        self.sliced = self._get_related(var_set)
 
     def __deepcopy__(self, memo):
         raise NotImplementedError("use the branch() method instead of deepcopy()")
@@ -870,17 +937,18 @@ class Path:
 
         ids = [str(cond.get_id()) for cond in self.conditions]
 
-        if args.cache_solver:
-            # TODO: investigate whether a separate context is necessary here
-            tmp_solver = create_solver(ctx=Context())
-            for cond in self.conditions:
-                tmp_solver.assert_and_track(
-                    cond.translate(tmp_solver.ctx), str(cond.get_id())
-                )
-            query = tmp_solver.to_smt2()
-            tmp_solver.reset()
-        else:
-            query = self.solver.to_smt2()
+        # TODO: investigate whether a separate context is necessary here
+        tmp_solver = create_solver(ctx=Context())
+        for cond in self.conditions:
+            cond_copied = cond.translate(tmp_solver.ctx)
+            if args.cache_solver:
+                tmp_solver.assert_and_track(cond_copied, str(cond.get_id()))
+            else:
+                tmp_solver.add(cond_copied)
+        # NOTE: Do not use self.solver.to_smt2() even if args.cache_solver is unset, as self.solver may not include all constraints from self.conditions.
+        query = tmp_solver.to_smt2()
+        tmp_solver.reset()
+
         query = query.replace("(check-sat)", "")  # see __main__.solve()
 
         return SMTQuery(query, ids)
@@ -917,6 +985,13 @@ class Path:
         # store the branching condition aside until the new path is activated.
         path.pending.append(cond)
 
+        # shallow copy because each entry references earlier entries thus remains unchanged later
+        path.related = self.related.copy()
+        path.var_to_conds = deepcopy(self.var_to_conds)
+        # shared across different paths
+        path.term_to_vars = self.term_to_vars
+        # path.sliced = None
+
         return path
 
     def is_activated(self) -> bool:
@@ -933,6 +1008,31 @@ class Path:
         self.extend(self.pending, branching=True)
         self.pending = []
 
+    def collect_var_sets(self, hashable: HashableTerm):
+        if hashable in self.term_to_vars:
+            return
+
+        result = set()
+
+        term = hashable.term
+
+        if is_const(term):
+            if is_expr_var(term):
+                result.add(term)
+
+        else:
+            for child in term.children():
+                child = HashableTerm(child)
+                self.collect_var_sets(child)
+                result.update(self.term_to_vars[child])
+
+        self.term_to_vars[hashable] = result
+
+    def get_var_set(self, term: BitVecRef):
+        term = HashableTerm(term)
+        self.collect_var_sets(term)
+        return self.term_to_vars[term]
+
     def append(self, cond: BoolRef, branching=False):
         cond = simplify(cond)
 
@@ -946,23 +1046,49 @@ class Path:
         if cond in self.conditions:
             return
 
+        # determine the index for the new condition
+        idx = len(self.conditions)
+
         self.solver.add(cond)
         self.conditions[cond] = branching
         self.concretization.process_cond(cond)
+
+        # update dependency relation
+        var_set = self.get_var_set(cond)
+        self.related[idx] = self._get_related(var_set)
+        for var in var_set:
+            self.var_to_conds[var].add(idx)
 
     def extend(self, conds, branching=False):
         for cond in conds:
             self.append(cond, branching=branching)
 
     def extend_path(self, path):
-        # branching conditions are not preserved
-        self.extend(path.conditions.keys())
+        self.conditions = path.conditions.copy()
+        self.concretization = deepcopy(path.concretization)
+        self.related = path.related.copy()
+        self.var_to_conds = deepcopy(path.var_to_conds)
+        self.term_to_vars = path.term_to_vars
+
+        # if the parent path is not sliced, then add all constraints to the solver
+        if path.sliced is None:
+            for cond in self.conditions:
+                self.solver.add(cond)
+            return
+
+        # if the parent path is sliced, add only sliced constraints to the solver
+        for idx, cond in enumerate(self.conditions):
+            if idx in path.sliced:
+                self.solver.add(cond)
 
 
 class StorageData:
     def __init__(self):
         self.symbolic = False
         self._mapping = {}
+
+    def __str__(self):
+        return f"{self._mapping}"
 
     def __getitem__(self, key) -> ArrayRef | BitVecRef:
         return self._mapping[key]
@@ -983,6 +1109,7 @@ class StorageData:
         For simplicity, all numbers are represented as 256-bit integers, regardless of their actual size.
         """
         m = xxhash.xxh3_128()
+        # TODO: consider sorting items to ensure the digest is independent of the order of storage updates.
         for key, val in self._mapping.items():
             if isinstance(key, int):  # GenericStorage
                 m.update(int.to_bytes(key, length=32))
@@ -1493,6 +1620,31 @@ class Exec:  # an execution path
     def int_of(self, x: Any, err: str = None) -> int:
         return int_of(x, err, self.path.concretization.substitution)
 
+    def path_slice(self):
+        """
+        Identifies and slices constraints related to state variables.
+
+        Collects state variables from balance, code, and storage; then executes path.slice() with them.
+        """
+        var_set = self.path.get_var_set(self.balance)
+
+        # the keys of self.code are constant
+        for _contract in self.code.values():
+            _code = _contract._code
+            for _chunk in _code.chunks.values():
+                if isinstance(_chunk, SymbolicChunk):
+                    var_set = itertools.chain(
+                        var_set, self.path.get_var_set(_chunk.data)
+                    )
+
+        # the keys of self.storage are constant
+        for _storage in self.storage.values():
+            # the keys of _storage._mapping are constant
+            for _val in _storage._mapping.values():
+                var_set = itertools.chain(var_set, self.path.get_var_set(_val))
+
+        self.path.slice(var_set)
+
 
 class Storage:
     pass
@@ -1871,22 +2023,15 @@ class SEVM:
     fun_info: FunctionInfo
     storage_model: type[SomeStorage]
     logs: HalmosLogs
-    status: Status
 
     def __init__(self, options: HalmosConfig, fun_info: FunctionInfo) -> None:
         self.options = options
         self.fun_info = fun_info
         self.logs = HalmosLogs()
-        self.status: Status = Status("")
 
         # init storage model
         is_generic = self.options.storage_layout == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
-
-    def status_start(self) -> None:
-        # clear any remaining live display before starting a new instance
-        rich.get_console().clear_live()
-        self.status.start()
 
     def div_xy_y(self, w1: Word, w2: Word) -> Word:
         # return the number of bits required to represent the given value. default = 256
@@ -1969,6 +2114,9 @@ class SEVM:
 
     def mk_storagedata(self) -> StorageData:
         return self.storage_model.mk_storagedata()
+
+    def fresh_transient_storage(self, ex: Exec) -> dict:
+        return {addr: self.mk_storagedata() for addr in ex.transient_storage}
 
     def sload(self, ex: Exec, addr: Any, loc: Word, transient: bool = False) -> Word:
         addr = z3_bv(addr)
@@ -2781,6 +2929,38 @@ class SEVM:
         # If(idx == 0, Extract(255, 248, w), If(idx == 1, Extract(247, 240, w), ..., If(idx == 31, Extract(7, 0, w), 0)...))
         return ZeroExt(248, gen_nested_ite(0))
 
+    def run_message(self, pre_ex: Exec, message: Message, path: Path) -> Iterator[Exec]:
+        """
+        Executes the given transaction from the given input state.
+
+        Note: As this involves executing a new transaction, the transient storage is reset to empty instead of being inherited from the input state.
+        """
+        ex0 = Exec(
+            code=pre_ex.code.copy(),  # shallow copy
+            storage=deepcopy(pre_ex.storage),
+            transient_storage=self.fresh_transient_storage(pre_ex),  # empty
+            balance=pre_ex.balance,
+            #
+            block=deepcopy(pre_ex.block),
+            #
+            context=CallContext(message=message),
+            callback=None,
+            #
+            pgm=pre_ex.code[message.target],
+            pc=0,
+            st=State(),
+            jumpis={},
+            #
+            path=path,
+            alias=pre_ex.alias.copy(),
+            #
+            cnts=deepcopy(pre_ex.cnts),
+            sha3s=pre_ex.sha3s.copy(),
+            storages=pre_ex.storages.copy(),
+            balances=pre_ex.balances.copy(),
+        )
+        yield from self.run(ex0)
+
     def run(self, ex0: Exec) -> Iterator[Exec]:
         stack: Worklist = Worklist()
         stack.push(ex0)
@@ -2824,7 +3004,7 @@ class SEVM:
                     # hh:mm:ss
                     elapsed_fmt = timedelta(seconds=int(elapsed))
 
-                    self.status.update(
+                    progress_status.update(
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"
                         f" | completed paths: {stack.completed_paths}"
                         f" | outstanding paths: {len(stack)}"

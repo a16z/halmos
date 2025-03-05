@@ -256,7 +256,7 @@ class Config:
 
     function: str = arg(
         help="run tests matching the given prefix. Shortcut for `--match-test '^{PREFIX}'`.",
-        global_default="check_",
+        global_default="(check|invariant)_",
         metavar="FUNCTION_NAME_PREFIX",
     )
 
@@ -272,6 +272,12 @@ class Config:
         global_default="0x01",
         metavar="ERROR_CODE1,ERROR_CODE2,...",
         action=ParseErrorCodes,
+    )
+
+    invariant_depth: int = arg(
+        help="set depth for invariant testing (length of the stateful sequence of calls)",
+        global_default=2,
+        metavar="MAX_BOUND",
     )
 
     loop: int = arg(
