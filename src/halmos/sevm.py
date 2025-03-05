@@ -98,7 +98,6 @@ from .utils import (
     Word,
     assert_address,
     assert_bv,
-    assert_uint256,
     bv_value_to_bytes,
     byte_length,
     bytes_to_bv_value,
@@ -1293,9 +1292,15 @@ class Exec:  # an execution path
         return value
 
     def balance_update(self, addr: Word, value: Word) -> None:
-        assert_address(addr)
-        assert_uint256(value)
-        addr = uint160(addr)
+        if not is_bv(addr):
+            addr = uint160(addr).wrapped()
+
+        if not is_bv(value):
+            value = uint256(value).wrapped()
+
+        assert addr.size() == 160
+        assert value.size() == 256
+
         new_balance_var = Array(
             f"balance_{uid()}_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
         )
@@ -2084,8 +2089,8 @@ class SEVM:
         if condition is not None:
             value = If(condition, value, Z3_ZERO)
 
-        ex.balance_update(caller, BV(caller_balance).sub(value).wrapped())
-        ex.balance_update(to, BV(to_balance).add(value).wrapped())
+        ex.balance_update(caller, BV(caller_balance).sub(value))
+        ex.balance_update(to, BV(to_balance).add(value))
 
     def call(
         self,
