@@ -159,7 +159,7 @@ def byte_of(i, x):
         (o(EVM.DIV), [BV(5), BV(3)], BV(1)),
         (o(EVM.DIV), [x, BV(0)], BV(0)),
         (o(EVM.DIV), [x, BV(1)], x),
-        (o(EVM.DIV), [x, BV(2**3)], BV(LShR(x.wrapped(), 3))),
+        (o(EVM.DIV), [x, BV(2**3)], BV(LShR(x.as_z3(), 3))),
         (o(EVM.SDIV), [x, y], x.sdiv(y, abstraction=f_sdiv)),
         (o(EVM.SDIV), [BV(5), BV(3)], BV(1)),
         (o(EVM.SDIV), [BV(-5), BV(3)], BV(-1)),
@@ -171,7 +171,7 @@ def byte_of(i, x):
         (o(EVM.MOD), [BV(5), BV(3)], BV(2)),
         (o(EVM.MOD), [x, BV(0)], BV(0)),
         (o(EVM.MOD), [x, BV(1)], BV(0)),
-        (o(EVM.MOD), [x, BV(2**3)], BV(ZeroExt(253, Extract(2, 0, x.wrapped())))),
+        (o(EVM.MOD), [x, BV(2**3)], BV(ZeroExt(253, Extract(2, 0, x.as_z3())))),
         (
             o(EVM.SMOD),
             [x, y],
@@ -192,7 +192,7 @@ def byte_of(i, x):
             BV(
                 ZeroExt(
                     253,
-                    Extract(2, 0, ZeroExt(8, x.wrapped()) + ZeroExt(8, y.wrapped())),
+                    Extract(2, 0, ZeroExt(8, x.as_z3()) + ZeroExt(8, y.as_z3())),
                 )
             ),
         ),
@@ -204,8 +204,8 @@ def byte_of(i, x):
                     255,
                     0,
                     f_mod[264](
-                        ZeroExt(8, x.wrapped()) + ZeroExt(8, y.wrapped()),
-                        ZeroExt(8, z.wrapped()),
+                        ZeroExt(8, x.as_z3()) + ZeroExt(8, y.as_z3()),
+                        ZeroExt(8, z.as_z3()),
                     ),
                 )
             ),
@@ -232,9 +232,7 @@ def byte_of(i, x):
                     Extract(
                         2,
                         0,
-                        f_mul[512](
-                            ZeroExt(256, x.wrapped()), ZeroExt(256, y.wrapped())
-                        ),
+                        f_mul[512](ZeroExt(256, x.as_z3()), ZeroExt(256, y.as_z3())),
                     ),
                 )
             ),
@@ -247,10 +245,8 @@ def byte_of(i, x):
                     255,
                     0,
                     f_mod[512](
-                        f_mul[512](
-                            ZeroExt(256, x.wrapped()), ZeroExt(256, y.wrapped())
-                        ),
-                        ZeroExt(256, z.wrapped()),
+                        f_mul[512](ZeroExt(256, x.as_z3()), ZeroExt(256, y.as_z3())),
+                        ZeroExt(256, z.as_z3()),
                     ),
                 )
             ),
@@ -270,9 +266,9 @@ def byte_of(i, x):
         (o(EVM.EXP), [x, BV(1)], x),
         (o(EVM.EXP), [x, BV(2)], x.mul(x, abstraction=f_mul[x.size])),
         (o(EVM.SIGNEXTEND), [BV(0), BV(0xFF)], BV(-1)),
-        (o(EVM.SIGNEXTEND), [BV(0), y], BV(SignExt(248, Extract(7, 0, y.wrapped())))),
-        (o(EVM.SIGNEXTEND), [BV(1), y], BV(SignExt(240, Extract(15, 0, y.wrapped())))),
-        (o(EVM.SIGNEXTEND), [BV(30), y], BV(SignExt(8, Extract(247, 0, y.wrapped())))),
+        (o(EVM.SIGNEXTEND), [BV(0), y], BV(SignExt(248, Extract(7, 0, y.as_z3())))),
+        (o(EVM.SIGNEXTEND), [BV(1), y], BV(SignExt(240, Extract(15, 0, y.as_z3())))),
+        (o(EVM.SIGNEXTEND), [BV(30), y], BV(SignExt(8, Extract(247, 0, y.as_z3())))),
         (o(EVM.SIGNEXTEND), [BV(31), y], y),
         (o(EVM.SIGNEXTEND), [BV(32), y], y),
         (o(EVM.SIGNEXTEND), [BV(33), y], y),
@@ -287,13 +283,13 @@ def byte_of(i, x):
         (o(EVM.OR), [x, y], x.bitwise_or(y)),
         (o(EVM.XOR), [x, y], x.bitwise_xor(y)),
         (o(EVM.NOT), [x], x.bitwise_not()),
-        (o(EVM.BYTE), [BV(0), y], BV(ZeroExt(248, Extract(255, 248, y.wrapped())))),
-        (o(EVM.BYTE), [BV(1), y], BV(ZeroExt(248, Extract(247, 240, y.wrapped())))),
-        (o(EVM.BYTE), [BV(31), y], BV(ZeroExt(248, Extract(7, 0, y.wrapped())))),
+        (o(EVM.BYTE), [BV(0), y], BV(ZeroExt(248, Extract(255, 248, y.as_z3())))),
+        (o(EVM.BYTE), [BV(1), y], BV(ZeroExt(248, Extract(247, 240, y.as_z3())))),
+        (o(EVM.BYTE), [BV(31), y], BV(ZeroExt(248, Extract(7, 0, y.as_z3())))),
         (o(EVM.BYTE), [BV(32), y], BV(0)),
         (o(EVM.BYTE), [BV(33), y], BV(0)),
         (o(EVM.BYTE), [BV(2**256 - 1), y], BV(0)),
-        (o(EVM.BYTE), [x, y], BV(byte_of(x.wrapped(), y.wrapped()))),
+        (o(EVM.BYTE), [x, y], BV(byte_of(x.as_z3(), y.as_z3()))),
         (o(EVM.SHL), [x, y], y.lshl(x)),
         (o(EVM.SHL), [BV(0), y], y),
         (o(EVM.SHL), [BV(255), y], y.lshl(BV(255))),
@@ -319,7 +315,7 @@ def byte_of(i, x):
         ),  # not necessarily 0; TODO: prove it is equal to y >> 255
         # TODO: SHA3
         (o(EVM.ADDRESS), [], uint256(this)),
-        (o(EVM.BALANCE), [x], BV(Select(balance, uint160(x).wrapped()))),
+        (o(EVM.BALANCE), [x], BV(Select(balance, uint160(x).as_z3()))),
         (o(EVM.ORIGIN), [], uint256(origin)),
         (o(EVM.CALLER), [], uint256(caller)),
         (o(EVM.CALLVALUE), [], BV(callvalue)),

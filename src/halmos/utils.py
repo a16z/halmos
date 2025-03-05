@@ -48,11 +48,11 @@ secp256k1n = (
     115792089237316195423570985008687907852837564279074904382605163141518161494337
 )
 
-Byte = int | BitVecRef  # uint8
-Bytes4 = int | BitVecRef  # uint32
-Address = int | BitVecRef  # uint160
+Byte = int | BitVecRef | BV  # uint8
+Bytes4 = int | BitVecRef | BV  # uint32
+Address = int | BitVecRef | BV  # uint160
 Word = int | BitVecRef | BV  # uint256
-Bytes = bytes | BitVecRef  # arbitrary-length sequence of bytes
+Bytes = "bytes | BitVecRef | ByteVec"  # arbitrary-length sequence of bytes
 
 
 # dynamic BitVecSort sizes
@@ -180,7 +180,7 @@ def uint8(x: Any) -> Byte:
     return uint(x, 8)
 
 
-def uint160(x: Word) -> BV:
+def uint160(x: Word) -> Address:
     return uint(x, 160)
 
 
@@ -213,10 +213,10 @@ def con(n: int, size_bits=256) -> Word:
 
 def z3_bv(x: Any) -> BitVecRef:
     if isinstance(x, BV):
-        return x.wrapped()
+        return x.as_z3()
 
     if isinstance(x, Bool):
-        return BV(x).wrapped()
+        return BV(x).as_z3()
 
     # must check before int because isinstance(True, int) is True
     if isinstance(x, bool):
@@ -238,7 +238,7 @@ def test(x: Word, b: bool) -> BoolRef:
         return BoolVal(x != 0) if b else BoolVal(x == 0)
 
     elif isinstance(x, BV):
-        return x.is_non_zero().wrapped() if b else x.is_zero().wrapped()
+        return x.is_non_zero().as_z3() if b else x.is_zero().as_z3()
 
     elif is_bool(x):
         if b:

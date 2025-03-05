@@ -461,7 +461,7 @@ def apply_vmaddr(ex, private_key: Word):
     known_keys = ex.known_keys
 
     if not is_bv(private_key):
-        private_key = uint256(private_key).wrapped()
+        private_key = uint256(private_key).as_z3()
 
     addr = known_keys.get(private_key, None)
     if addr is None:
@@ -623,7 +623,7 @@ class hevm_cheat_code:
 
         # vm.assume(bool)
         elif funsig == hevm_cheat_code.assume_sig:
-            assume_cond = simplify(is_non_zero(arg.get_word(4)).wrapped())
+            assume_cond = simplify(is_non_zero(arg.get_word(4)).as_z3())
             if is_false(assume_cond):
                 raise InfeasiblePath("vm.assume(false)")
             ex.path.append(assume_cond, branching=True)
@@ -653,7 +653,7 @@ class hevm_cheat_code:
 
         # vm.prank(address)
         elif funsig == hevm_cheat_code.prank_sig:
-            sender = uint160(arg.get_word(4)).wrapped()
+            sender = uint160(arg.get_word(4)).as_z3()
             result = ex.context.prank.prank(sender)
             if not result:
                 raise HalmosException(
@@ -663,8 +663,8 @@ class hevm_cheat_code:
 
         # vm.prank(address sender, address origin)
         elif funsig == hevm_cheat_code.prank_addr_addr_sig:
-            sender = uint160(arg.get_word(4)).wrapped()
-            origin = uint160(arg.get_word(36)).wrapped()
+            sender = uint160(arg.get_word(4)).as_z3()
+            origin = uint160(arg.get_word(36)).as_z3()
             result = ex.context.prank.prank(sender, origin)
             if not result:
                 raise HalmosException(
@@ -674,7 +674,7 @@ class hevm_cheat_code:
 
         # vm.startPrank(address)
         elif funsig == hevm_cheat_code.start_prank_sig:
-            address = uint160(arg.get_word(4)).wrapped()
+            address = uint160(arg.get_word(4)).as_z3()
             result = ex.context.prank.startPrank(address)
             if not result:
                 raise HalmosException(
@@ -684,8 +684,8 @@ class hevm_cheat_code:
 
         # vm.startPrank(address sender, address origin)
         elif funsig == hevm_cheat_code.start_prank_addr_addr_sig:
-            sender = uint160(arg.get_word(4)).wrapped()
-            origin = uint160(arg.get_word(36)).wrapped()
+            sender = uint160(arg.get_word(4)).as_z3()
+            origin = uint160(arg.get_word(36)).as_z3()
             result = ex.context.prank.startPrank(sender, origin)
             if not result:
                 raise HalmosException(
@@ -700,8 +700,8 @@ class hevm_cheat_code:
 
         # vm.deal(address,uint256)
         elif funsig == hevm_cheat_code.deal_sig:
-            who = uint160(arg.get_word(4)).wrapped()
-            amount = uint256(arg.get_word(36)).wrapped()
+            who = uint160(arg.get_word(4)).as_z3()
+            amount = uint256(arg.get_word(36)).as_z3()
             ex.balance_update(who, amount)
             return ret
 
@@ -714,9 +714,9 @@ class hevm_cheat_code:
                 # since HEVM_ADDRESS is an uninitialized account
                 raise FailCheatcode()
 
-            store_account = uint160(arg.get_word(4)).wrapped()
-            store_slot = uint256(arg.get_word(36)).wrapped()
-            store_value = uint256(arg.get_word(68)).wrapped()
+            store_account = uint160(arg.get_word(4)).as_z3()
+            store_slot = uint256(arg.get_word(36)).as_z3()
+            store_value = uint256(arg.get_word(68)).as_z3()
             store_account_alias = sevm.resolve_address_alias(
                 ex, store_account, stack, allow_branching=False
             )
@@ -730,8 +730,8 @@ class hevm_cheat_code:
 
         # vm.load(address,bytes32)
         elif funsig == hevm_cheat_code.load_sig:
-            load_account = uint160(arg.get_word(4)).wrapped()
-            load_slot = uint256(arg.get_word(36)).wrapped()
+            load_account = uint160(arg.get_word(4)).as_z3()
+            load_slot = uint256(arg.get_word(36)).as_z3()
             load_account_alias = sevm.resolve_address_alias(
                 ex, load_account, stack, allow_branching=False
             )
@@ -793,11 +793,11 @@ class hevm_cheat_code:
 
             # note: size can be 0
             code_bytes = arg[loc : loc + size]
-            ex.set_code(who.wrapped(), code_bytes)
+            ex.set_code(who.as_z3(), code_bytes)
 
             # vm.etch() initializes but does not clear storage
-            ex.storage.setdefault(who.wrapped(), sevm.mk_storagedata())
-            ex.transient_storage.setdefault(who.wrapped(), sevm.mk_storagedata())
+            ex.storage.setdefault(who.as_z3(), sevm.mk_storagedata())
+            ex.transient_storage.setdefault(who.as_z3(), sevm.mk_storagedata())
 
             return ret
 

@@ -82,7 +82,7 @@ class HalmosBool:
     - HalmosBool(halmos_bitvec) (same as halmos_bitvec.is_non_zero())
 
     Wrapping/unwrapping:
-    - halmos_bool.wrapped() always converts to a z3 BoolRef
+    - halmos_bool.as_z3() always converts to a z3 BoolRef
     - bool(halmos_bool) converts to a concrete bool, raises if symbolic
     - halmos_bool.value/unwrap() returns the underlying bool or z3 BoolRef
     """
@@ -143,7 +143,7 @@ class HalmosBool:
     def __deepcopy__(self, memo):
         return self
 
-    def wrapped(self) -> BoolRef:
+    def as_z3(self) -> BoolRef:
         if self._symbolic:
             return self._value
         return BoolVal(self._value)
@@ -213,7 +213,7 @@ class HalmosBool:
         elif self.is_false or other.is_false:
             return HalmosBool(False)
         else:
-            return HalmosBool(And(self.wrapped(), other.wrapped()))
+            return HalmosBool(And(self.as_z3(), other.as_z3()))
 
     def __or__(self, other: "HalmosBool") -> "HalmosBool":
         if self.is_true or other.is_true:
@@ -221,7 +221,7 @@ class HalmosBool:
         elif self.is_false and other.is_false:
             return HalmosBool(False)
         else:
-            return HalmosBool(Or(self.wrapped(), other.wrapped()))
+            return HalmosBool(Or(self.as_z3(), other.as_z3()))
 
     def __xor__(self, other: "HalmosBool") -> "HalmosBool":
         if self.is_true:
@@ -235,7 +235,7 @@ class HalmosBool:
             if other.is_false:
                 return HalmosBool(False)
 
-        return HalmosBool(self.wrapped() ^ other.wrapped())
+        return HalmosBool(self.as_z3() ^ other.as_z3())
 
     def as_bv(self, size: int = 1) -> BV:
         if self._symbolic:
@@ -272,7 +272,7 @@ class HalmosBitVec:
     - HalmosBool(halmos_bitvec) (same as halmos_bitvec.is_non_zero())
 
     Wrapping/unwrapping:
-    - halmos_bitvec.wrapped() always converts to a z3 BitVecRef
+    - halmos_bitvec.as_z3() always converts to a z3 BitVecRef
     - int(halmos_bitvec) converts to a concrete int, raises if symbolic
     - halmos_bitvec.value/unwrap() returns the underlying int or z3 BitVecRef
     """
@@ -372,7 +372,7 @@ class HalmosBitVec:
     def value(self) -> int | BitVecRef:
         return self._value
 
-    def wrapped(self) -> BitVecRef:
+    def as_z3(self) -> BitVecRef:
         return self._value if self._symbolic else BitVecVal(self._value, self._size)
 
     def unwrap(self) -> int | BitVecRef:
@@ -723,7 +723,7 @@ class HalmosBitVec:
 
         bl = (size + 1) * 8
         return HalmosBitVec(
-            SignExt(256 - bl, Extract(bl - 1, 0, self.wrapped())), size=256
+            SignExt(256 - bl, Extract(bl - 1, 0, self.as_z3())), size=256
         )
 
     def lshl(self, shift: BV) -> "HalmosBitVec":
@@ -761,7 +761,7 @@ class HalmosBitVec:
             if shift_amount >= size:
                 return HalmosBitVec(0, size=size)
 
-        return HalmosBitVec(LShR(self.wrapped(), shift.wrapped()), size=size)
+        return HalmosBitVec(LShR(self.as_z3(), shift.as_z3()), size=size)
 
     def ashr(self, shift: BV) -> "HalmosBitVec":
         """
@@ -772,13 +772,13 @@ class HalmosBitVec:
         if shift.is_concrete and shift.value == 0:
             return self
 
-        return HalmosBitVec(self.wrapped() >> shift.value, size=self.size)
+        return HalmosBitVec(self.as_z3() >> shift.value, size=self.size)
 
     def bitwise_not(self) -> BV:
         if self.is_concrete:
             return HalmosBitVec(~self._value & ((1 << self._size) - 1), size=self._size)
 
-        return HalmosBitVec(~self.wrapped(), size=self.size)
+        return HalmosBitVec(~self.as_z3(), size=self.size)
 
     def __and__(self, other: BV) -> BV:
         # bitwise and: keeping this to be compatible with HalmosBool
@@ -810,7 +810,7 @@ class HalmosBitVec:
         if self.is_concrete and other.is_concrete:
             return HalmosBool(self.value < other.value)
 
-        return HalmosBool(ULT(self.wrapped(), other.wrapped()))
+        return HalmosBool(ULT(self.as_z3(), other.as_z3()))
 
     def slt(self, other: BV) -> HalmosBool:
         assert self._size == other._size
@@ -820,7 +820,7 @@ class HalmosBitVec:
             right = to_signed(other._value, other._size)
             return HalmosBool(left < right)
 
-        return HalmosBool(self.wrapped() < other.wrapped())
+        return HalmosBool(self.as_z3() < other.as_z3())
 
     def ugt(self, other: BV) -> HalmosBool:
         assert self._size == other._size
@@ -834,7 +834,7 @@ class HalmosBitVec:
             right = to_signed(other._value, other._size)
             return HalmosBool(left > right)
 
-        return HalmosBool(self.wrapped() > other.wrapped())
+        return HalmosBool(self.as_z3() > other.as_z3())
 
     def ule(self, other: BV) -> HalmosBool:
         assert self._size == other._size

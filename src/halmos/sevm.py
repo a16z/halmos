@@ -350,7 +350,7 @@ class EventLog:
 
     address: Address
     topics: list[Word]
-    data: Bytes | None
+    data: "Bytes | None"
 
 
 @dataclass(frozen=True, slots=True, eq=False, order=False)
@@ -1280,7 +1280,7 @@ class Exec:  # an execution path
 
     def balance_of(self, addr: Word) -> Word:
         # assert_address(addr)
-        addr = uint160(addr).wrapped()
+        addr = uint160(addr).as_z3()
         value = self.select(self.balance, addr, self.balances)
 
         # generate emptyness axiom for each array index, instead of using quantified formula
@@ -1293,10 +1293,10 @@ class Exec:  # an execution path
 
     def balance_update(self, addr: Word, value: Word) -> None:
         if not is_bv(addr):
-            addr = uint160(addr).wrapped()
+            addr = uint160(addr).as_z3()
 
         if not is_bv(value):
-            value = uint256(value).wrapped()
+            value = uint256(value).as_z3()
 
         assert addr.size() == 160
         assert value.size() == 256
@@ -1940,7 +1940,7 @@ class SEVM:
 
             term = w1.div(w2, abstraction=f_div)
             if term.is_symbolic:
-                ex.path.append(ULE(term.wrapped(), w1.wrapped()))  # (x / y) <= x
+                ex.path.append(ULE(term.as_z3(), w1.as_z3()))  # (x / y) <= x
             return term
 
         if op == EVM.MOD:
@@ -1948,7 +1948,7 @@ class SEVM:
             if term.is_symbolic:
                 # (x % y) <= y
                 # not ULT, because y could be 0 and x % 0 = 0
-                ex.path.append(ULE(term.wrapped(), w2.wrapped()))
+                ex.path.append(ULE(term.as_z3(), w2.as_z3()))
             return term
 
         if op == EVM.SDIV:
@@ -2005,7 +2005,7 @@ class SEVM:
     ) -> Address:
         # TODO: avoid the extra wrapping/unwrapping
         if isinstance(target, BV):
-            target = target.wrapped()
+            target = target.as_z3()
 
         assert_bv(target)
         assert target.size() == 160
@@ -2076,7 +2076,7 @@ class SEVM:
 
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
-        balance_cond = simplify(UGE(caller_balance, value.wrapped()))
+        balance_cond = simplify(UGE(caller_balance, value.as_z3()))
         if is_false(balance_cond):
             raise InfeasiblePath("transfer_value: balance is not enough")
 
@@ -2230,10 +2230,10 @@ class SEVM:
                 exit_code = ONE
 
                 # wrapping guarantees that the arguments are bitvecs
-                digest = uint256(extract_bytes(arg, 0, 32)).wrapped()
-                v = uint8(extract_bytes(arg, 32, 32)).wrapped()
-                r = uint256(extract_bytes(arg, 64, 32)).wrapped()
-                s = uint256(extract_bytes(arg, 96, 32)).wrapped()
+                digest = uint256(extract_bytes(arg, 0, 32)).as_z3()
+                v = uint8(extract_bytes(arg, 32, 32)).as_z3()
+                r = uint256(extract_bytes(arg, 64, 32)).as_z3()
+                s = uint256(extract_bytes(arg, 96, 32)).as_z3()
 
                 # TODO: empty returndata in error
                 ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
@@ -2465,12 +2465,12 @@ class SEVM:
             hash_data = simplify(
                 Concat(
                     con(0xFF, 8),
-                    uint160(pranked_caller).wrapped(),
-                    salt.wrapped(),
+                    uint160(pranked_caller).as_z3(),
+                    salt.as_z3(),
                     code_hash,
                 )
             )
-            new_addr = uint160(ex.sha3_data(hash_data)).wrapped()
+            new_addr = uint160(ex.sha3_data(hash_data)).as_z3()
         else:
             raise HalmosException(f"Unknown CREATE opcode: {op}")
 
@@ -2613,8 +2613,8 @@ class SEVM:
             stack.push(ex)
             return
 
-        cond_true = simplify(cond.wrapped())
-        cond_false = simplify(cond.neg().wrapped())
+        cond_true = simplify(cond.as_z3())
+        cond_false = simplify(cond.neg().as_z3())
 
         potential_true: bool = ex.check(cond_true) != unsat
         potential_false: bool = ex.check(cond_false) != unsat
@@ -2690,7 +2690,7 @@ class SEVM:
         # otherwise, create a new execution for feasible targets
         elif self.options.symbolic_jump:
             for target in ex.pgm.valid_jump_destinations():
-                target_reachable = simplify(dst.wrapped() == target)
+                target_reachable = simplify(dst.as_z3() == target)
                 if ex.check(target_reachable) != unsat:  # jump
                     new_ex = self.create_branch(ex, target_reachable, target)
                     stack.push(new_ex)
@@ -3220,7 +3220,7 @@ class SEVM:
                             f"Warning: the use of symbolic BYTE indexing may potentially "
                             f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
                         )
-                        ex.st.push(BV(self.sym_byte_of(idx.value, w.wrapped())))
+                        ex.st.push(BV(self.sym_byte_of(idx.value, w.as_z3())))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     if ex.message().is_static:
