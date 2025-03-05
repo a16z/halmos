@@ -82,7 +82,6 @@ from .sevm import (
     Message,
     Path,
     SMTQuery,
-    State,
     con_addr,
     id_str,
     jumpid_str,
@@ -1100,7 +1099,7 @@ def run_tests(
 
     test_results = []
     debug_config = args.debug_config
-    
+
     for funsig in funsigs:
         selector = ctx.method_identifiers[funsig]
         fun_info = FunctionInfo(funsig.split("(")[0], funsig, selector)
