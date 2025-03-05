@@ -407,10 +407,10 @@ class HalmosBitVec:
         return self._value
 
     def __repr__(self) -> str:
-        return str(self._value) if not self._symbolic else f"⚠️ SYM {self._value}"
+        return str(self._value)
 
     def __str__(self) -> str:
-        return str(self._value) if not self._symbolic else f"⚠️ SYM {self._value}"
+        return str(self._value)
 
     def is_zero(self) -> HalmosBool:
         # works for both symbolic and concrete
