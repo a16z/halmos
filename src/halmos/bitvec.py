@@ -1,6 +1,9 @@
 from typing import Any, TypeAlias
 
 from z3 import (
+    UGE,
+    UGT,
+    ULE,
     ULT,
     And,
     BitVec,
@@ -812,6 +815,14 @@ class HalmosBitVec:
 
         return HalmosBool(ULT(self.as_z3(), other.as_z3()))
 
+    def ugt(self, other: BV) -> HalmosBool:
+        assert self._size == other._size
+
+        if self.is_concrete and other.is_concrete:
+            return HalmosBool(self.value > other.value)
+
+        return HalmosBool(UGT(self.as_z3(), other.as_z3()))
+
     def slt(self, other: BV) -> HalmosBool:
         assert self._size == other._size
 
@@ -821,10 +832,6 @@ class HalmosBitVec:
             return HalmosBool(left < right)
 
         return HalmosBool(self.as_z3() < other.as_z3())
-
-    def ugt(self, other: BV) -> HalmosBool:
-        assert self._size == other._size
-        return HalmosBool(self._value > other._value)
 
     def sgt(self, other: BV) -> HalmosBool:
         assert self._size == other._size
@@ -838,11 +845,19 @@ class HalmosBitVec:
 
     def ule(self, other: BV) -> HalmosBool:
         assert self._size == other._size
-        return HalmosBool(self._value <= other._value)
+
+        if self.is_concrete and other.is_concrete:
+            return HalmosBool(self.value <= other.value)
+
+        return HalmosBool(ULE(self.as_z3(), other.as_z3()))
 
     def uge(self, other: BV) -> HalmosBool:
         assert self._size == other._size
-        return HalmosBool(self._value >= other._value)
+
+        if self.is_concrete and other.is_concrete:
+            return HalmosBool(self.value >= other.value)
+
+        return HalmosBool(UGE(self.as_z3(), other.as_z3()))
 
     def eq(self, other: BV) -> HalmosBool:
         assert self._size == other._size
