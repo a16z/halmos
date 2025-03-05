@@ -1802,10 +1802,10 @@ SomeStorage = TypeVar("SomeStorage", bound=Storage)
 def bitwise(op, x: Word, y: Word) -> Word:
     # only convert to BV if one of the operands is a bool
     if isinstance(x, Bool) and isinstance(y, BV):
-        return bitwise(op, BV(x), y)
+        return bitwise(op, BV(x, size=256), y)
 
     elif isinstance(x, BV) and isinstance(y, Bool):
-        return bitwise(op, x, BV(y))
+        return bitwise(op, x, BV(y, size=256))
 
     # at this point, we expect x and y to be both Bool or both BV
 
