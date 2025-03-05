@@ -459,6 +459,10 @@ def create_bool(ex, arg, **kwargs):
 def apply_vmaddr(ex, private_key: Word):
     # check if this private key has an existing address associated with it
     known_keys = ex.known_keys
+
+    if not is_bv(private_key):
+        private_key = uint256(private_key).wrapped()
+
     addr = known_keys.get(private_key, None)
     if addr is None:
         # if not, create a new address
