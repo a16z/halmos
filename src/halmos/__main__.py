@@ -9,6 +9,7 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from collections import Counter
@@ -102,7 +103,6 @@ from .utils import (
     hexify,
     indent_text,
     red,
-    timed,
     unbox_int,
     yellow,
 )
@@ -120,9 +120,6 @@ sys.setrecursionlimit(1024 * 4)
 # sometimes defaults to cp1252 on Windows, which can cause UnicodeEncodeError
 if sys.stdout.encoding != "utf-8":
     sys.stdout.reconfigure(encoding="utf-8")
-
-print("disabling gc")
-gc.disable()
 
 
 @dataclass(frozen=True)
@@ -748,16 +745,11 @@ def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
 
 
 def reset(solver):
-    import threading
-
     if threading.current_thread() != threading.main_thread():
         # can't access z3 objects from other threads
-        warn(
-            "reset() called from a non-main thread, this may lead to undefined behavior"
-        )
+        warn("reset() called from a non-main thread")
 
-    with timed("solver.reset()"):
-        solver.reset()
+    solver.reset()
 
 
 def run_contract(ctx: ContractContext) -> list[TestResult]:
@@ -789,13 +781,16 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
         return []
 
     test_results = []
+    debug_config = args.debug_config
+
     for funsig in ctx.funsigs:
         selector = ctx.method_identifiers[funsig]
         fun_info = FunctionInfo(funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
             solver = mk_solver(test_config)
-            debug(f"{test_config.formatted_layers()}")
+            if debug_config:
+                debug(f"{test_config.formatted_layers()}")
 
             test_ctx = FunctionContext(
                 args=test_config,

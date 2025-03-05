@@ -358,6 +358,12 @@ class Config:
         group=debugging,
     )
 
+    debug_config: bool = arg(
+        help="debug config parsing (show all config values and their sources)",
+        global_default=False,
+        group=debugging,
+    )
+
     json_output: str = arg(
         help="output test results in JSON",
         global_default=None,
