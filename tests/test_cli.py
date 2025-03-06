@@ -60,7 +60,7 @@ def test_decode_concrete_bytecode():
     assert contract[11] == EVM.STOP
 
     # jump destination scanning
-    assert contract.valid_jump_destinations() == set([10])
+    assert contract.valid_jumpdests() == set([10])
 
 
 def test_decode_mixed_bytecode():
