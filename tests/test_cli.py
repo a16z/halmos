@@ -80,7 +80,7 @@ def test_decode_mixed_bytecode():
     assert contract[0] == EVM.PUSH20
     assert contract[27] == EVM.RETURN
     assert contract[28] == EVM.STOP  # past the end
-    assert contract.valid_jump_destinations() == set()
+    assert contract.valid_jumpdests() == set()
 
     # force decoding
     pc = 0
@@ -104,7 +104,7 @@ def test_decode_mixed_bytecode():
     assert disassembly == "PUSH20 x PUSH0 MSTORE PUSH1 0x14 PUSH1 0x0c RETURN"
 
     # jump destination scanning
-    assert contract.valid_jump_destinations() == set()
+    assert contract.valid_jumpdests() == set()
 
 
 def test_instruction():

@@ -207,7 +207,7 @@ new_address_offset: int = 1
 
 def jumpid_str(jumpid: JumpID) -> str:
     pc, jumpdests = jumpid
-    return f"{pc}:{','.join(jumpdests)}"
+    return f"{pc}:{','.join(str(j) for j in jumpdests)}"
 
 
 def insn_len(opcode: int) -> int:
@@ -641,7 +641,6 @@ class Contract:
     def __get_jumpdests(self):
         # quick scan, does not eagerly decode instructions
         jumpdests = set()
-        jumpdests_str = set()
         pc = 0
 
         # optimistically process fast path first
@@ -652,20 +651,19 @@ class Contract:
             N = len(bytecode)
             while pc < N:
                 try:
-                    opcode = int_of(bytecode[pc])
+                    opcode = bytecode[pc]
+                    if not isinstance(opcode, int):
+                        raise NotConcreteError(f"symbolic opcode at pc={pc}")
 
                     if opcode == EVM.JUMPDEST:
                         jumpdests.add(pc)
-
-                        # a little odd, but let's add the string representation of the pc as well
-                        # because it makes jumpi_id cheaper to compute
-                        jumpdests_str.add(str(pc))
-
-                    pc = pc + insn_len(opcode)
+                        pc += 1
+                    else:
+                        pc += insn_len(opcode)
                 except NotConcreteError:
                     break
 
-        return (jumpdests, jumpdests_str)
+        return jumpdests
 
     def from_hexcode(hexcode: str):
         """Create a contract from a hexcode string, e.g. "aabbccdd" """
@@ -755,19 +753,12 @@ class Contract:
         """Returns the length of the bytecode in bytes."""
         return len(self._code)
 
-    def valid_jump_destinations(self) -> set[int]:
+    def valid_jumpdests(self) -> set[int]:
         """Returns the set of valid jump destinations."""
         if self._jumpdests is None:
             self._jumpdests = self.__get_jumpdests()
 
-        return self._jumpdests[0]
-
-    def valid_jump_destinations_str(self) -> set[str]:
-        """Returns the set of valid jump destinations as strings."""
-        if self._jumpdests is None:
-            self._jumpdests = self.__get_jumpdests()
-
-        return self._jumpdests[1]
+        return self._jumpdests
 
 
 @dataclass(frozen=True)
@@ -1578,18 +1569,14 @@ class Exec:  # an execution path
         returndata = self.returndata()
         return len(returndata) if returndata is not None else 0
 
-    def jumpi_id(self) -> JumpID:
-        valid_jumpdests = self.pgm.valid_jump_destinations_str()
+    def jumpid(self) -> JumpID:
+        valid_jumpdests = self.pgm.valid_jumpdests()
 
-        # we call `as_string()` on each stack element to avoid the overhead of
-        # calling is_bv_val() followed by as_long() on each element
         jumpdest_tokens = tuple(
-            token
-            for x in self.st.stack
-            if (hasattr(x, "as_string") and (token := x.as_string())) in valid_jumpdests
+            value for x in self.st.stack if (value := x.value) in valid_jumpdests
         )
 
-        # no need to create a new string here, we can compare tuples efficiently
+        # tuples can be compared efficiently
         return (self.pc, jumpdest_tokens)
 
     # deploy libraries and resolve library placeholders in hexcode
@@ -2772,7 +2759,7 @@ class SEVM:
         follow_true = False
         follow_false = False
 
-        jid = ex.jumpi_id()
+        jid = ex.jumpid()
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
         if potential_true and potential_false:
@@ -2837,7 +2824,7 @@ class SEVM:
 
         # otherwise, create a new execution for feasible targets
         elif self.options.symbolic_jump:
-            for target in ex.pgm.valid_jump_destinations():
+            for target in ex.pgm.valid_jumpdests():
                 target_reachable = simplify(dst.as_z3() == target)
                 if ex.check(target_reachable) != unsat:  # jump
                     new_ex = self.create_branch(ex, target_reachable, target)
