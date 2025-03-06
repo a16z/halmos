@@ -1,3 +1,5 @@
+import binascii
+
 import pytest
 from z3 import (
     UGT,
@@ -18,7 +20,7 @@ from z3 import (
 
 from halmos.__main__ import mk_block
 from halmos.bytevec import ByteVec
-from halmos.exceptions import OutOfGasError, StackUnderflowError
+from halmos.exceptions import InvalidJumpDestError, OutOfGasError, StackUnderflowError
 from halmos.sevm import (
     SEVM,
     CallContext,
@@ -362,3 +364,85 @@ def test_large_memory_offset(sevm: SEVM, solver, storage):
 
     [output_ex] = exs
     assert isinstance(output_ex.context.output.error, OutOfGasError)
+
+
+def test_jump_into_push_data(sevm, solver, storage):
+    hexcode = binascii.unhexlify("60055663015b000000")  # Convert hex string to bytes
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+
+    execs = list(sevm.run(exec))
+
+    # Ensure execution halted due to an invalid jump
+    assert len(execs) == 1  # Only one execution path should exist
+    assert execs[0].context.output.error is not None  # Ensure an error occurred
+    assert isinstance(
+        execs[0].context.output.error, InvalidJumpDestError
+    )  # Check correct error type
+
+
+def test_jumpi_false_no_error(sevm, solver, storage):
+    hexcode = binascii.unhexlify(
+        "6000600657005b00"
+    )  # PUSH1 0x03; PUSH1 0x00; JUMPI; STOP
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+
+    execs = list(sevm.run(exec))  # Execution should continue without error
+    assert len(execs) == 1
+    assert execs[0].pc == 5  # PC should proceed to STOP without jumping
+
+
+def test_invalid_jumpi(sevm, solver, storage):
+    hexcode = binascii.unhexlify(
+        "60016005570100"
+    )  # PUSH1 0x03; PUSH1 0x01; JUMPI; STOP
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+
+    execs = list(sevm.run(exec))
+
+    assert len(execs) == 1  # Ensure only one execution path exists
+    assert (
+        execs[0].context.output.error is not None
+    )  # Verify execution halted with an error
+    assert isinstance(
+        execs[0].context.output.error, InvalidJumpDestError
+    )  # Ensure the correct error type was raised
+
+
+def test_valid_jumpi(sevm, solver, storage):
+    hexcode = binascii.unhexlify(
+        "60016005575b00"
+    )  # PUSH1 0x03; PUSH1 0x01; JUMPI; STOP
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+
+    execs = list(sevm.run(exec))
+
+    assert len(execs) == 1  # Ensure only one execution path exists
+    assert execs[0].pc == 6  # PC should move to the stop
+    assert execs[0].current_opcode() == EVM.STOP  # Should terminate cleanly
+
+
+def test_invalid_jump(sevm, solver, storage):
+    hexcode = binascii.unhexlify(
+        "60035601"
+    )  # PUSH1 0x03; JUMP (but no JUMPDEST at 0x03)
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+
+    execs = list(sevm.run(exec))
+
+    assert len(execs) == 1  # Ensure only one execution path exists
+    assert (
+        execs[0].context.output.error is not None
+    )  # Verify execution halted with an error
+    assert isinstance(
+        execs[0].context.output.error, InvalidJumpDestError
+    )  # Ensure the correct error type was raised
+
+
+def test_valid_jump(sevm, solver, storage):
+    hexcode = binascii.unhexlify("6003565B00")  # PUSH1 0x0A; JUMP; JUMPDEST; STOP
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+    execs = list(sevm.run(exec))
+
+    assert len(execs) == 1  # Only one valid path should execute
+    assert execs[0].pc == 4  # PC should move to the stop
+    assert execs[0].current_opcode() == EVM.STOP  # Should terminate cleanly
