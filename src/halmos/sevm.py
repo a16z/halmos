@@ -1508,7 +1508,7 @@ class Exec:  # an execution path
         else:
             return sha3_expr
 
-    def assume_sha3_distinct(self, sha3_expr) -> None:
+    def assume_sha3_distinct(self, sha3_expr: BitVecRef) -> None:
         # skip if already exist
         if sha3_expr in self.sha3s:
             return
@@ -3422,9 +3422,10 @@ class SEVM:
 
                     # Special handling for PUSH32 with concrete values
                     if val.is_concrete and opcode == EVM.PUSH32:
-                        if inverse := sha3_inv.get(val.value):
+                        if (inverse := sha3_inv.get(val.value)) is not None:
                             # restore precomputed hashes
                             ex.st.push(ex.sha3_data(con(inverse)))
+
                         # TODO: support more commonly used concrete keccak values
                         elif val.value == EMPTY_KECCAK:
                             ex.st.push(ex.sha3_data(b""))
