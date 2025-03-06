@@ -1,5 +1,3 @@
-import binascii
-
 import pytest
 from z3 import (
     UGT,
@@ -20,7 +18,12 @@ from z3 import (
 
 from halmos.__main__ import mk_block
 from halmos.bytevec import ByteVec
-from halmos.exceptions import InvalidJumpDestError, OutOfGasError, StackUnderflowError
+from halmos.exceptions import (
+    InvalidJumpDestError,
+    InvalidOpcode,
+    OutOfGasError,
+    StackUnderflowError,
+)
 from halmos.sevm import (
     SEVM,
     CallContext,
@@ -367,7 +370,8 @@ def test_large_memory_offset(sevm: SEVM, solver, storage):
 
 
 def test_jump_into_push_data(sevm, solver, storage):
-    hexcode = binascii.unhexlify("60055663015b000000")  # Convert hex string to bytes
+    hexcode = bytes.fromhex("60055663015b000000")  # PUSH1 0x05; JUMP; PUSH4 0x015B0000;
+
     exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
 
     execs = list(sevm.run(exec))
@@ -380,10 +384,10 @@ def test_jump_into_push_data(sevm, solver, storage):
     )  # Check correct error type
 
 
-def test_jumpi_false_no_error(sevm, solver, storage):
-    hexcode = binascii.unhexlify(
-        "6000600657005b00"
-    )  # PUSH1 0x03; PUSH1 0x00; JUMPI; STOP
+def test_jumpi_false_condition_no_error(sevm, solver, storage):
+    hexcode = bytes.fromhex(
+        "6000600657005BFE"
+    )  # PUSH1 0x00; PUSH1 0x06; JUMPI; STOP; JUMPDEST; INVALID;
     exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
 
     execs = list(sevm.run(exec))  # Execution should continue without error
@@ -391,10 +395,24 @@ def test_jumpi_false_no_error(sevm, solver, storage):
     assert execs[0].pc == 5  # PC should proceed to STOP without jumping
 
 
+def test_jumpi_false_condition_INVALID_error(sevm, solver, storage):
+    hexcode = bytes.fromhex(
+        "6000600657FE5B00"
+    )  # PUSH1 0x00; PUSH1 0x06; JUMPI; INVALID; JUMPDEST; STOP;
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+
+    execs = list(sevm.run(exec))  # Execution should continue without error
+    assert len(execs) == 1
+    assert (
+        execs[0].context.output.error is not None
+    )  # Verify execution halted with an error
+    assert isinstance(
+        execs[0].context.output.error, InvalidOpcode
+    )  # Ensure the correct error type was raised (PC did not jump, hence InvalidOpcode error is raised)
+
+
 def test_invalid_jumpi(sevm, solver, storage):
-    hexcode = binascii.unhexlify(
-        "60016005570100"
-    )  # PUSH1 0x03; PUSH1 0x01; JUMPI; STOP
+    hexcode = bytes.fromhex("6001600557FE")  # PUSH1 0x01; PUSH1 0x05; JUMPI; INVALID;
     exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
 
     execs = list(sevm.run(exec))
@@ -405,13 +423,13 @@ def test_invalid_jumpi(sevm, solver, storage):
     )  # Verify execution halted with an error
     assert isinstance(
         execs[0].context.output.error, InvalidJumpDestError
-    )  # Ensure the correct error type was raised
+    )  # Ensure the correct error type was raised (PC did jump, hence InvalidJumpDestError error is raised)
 
 
 def test_valid_jumpi(sevm, solver, storage):
-    hexcode = binascii.unhexlify(
-        "60016005575b00"
-    )  # PUSH1 0x03; PUSH1 0x01; JUMPI; STOP
+    hexcode = bytes.fromhex(
+        "60016005575B00"
+    )  # PUSH1 0x01; PUSH1 0x05; JUMPI; JUMPDEST;  STOP;
     exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
 
     execs = list(sevm.run(exec))
@@ -422,9 +440,9 @@ def test_valid_jumpi(sevm, solver, storage):
 
 
 def test_invalid_jump(sevm, solver, storage):
-    hexcode = binascii.unhexlify(
+    hexcode = bytes.fromhex(
         "60035601"
-    )  # PUSH1 0x03; JUMP (but no JUMPDEST at 0x03)
+    )  # PUSH1 0x03; JUMP; ADD; (but no JUMPDEST at 0x03)
     exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
 
     execs = list(sevm.run(exec))
@@ -439,7 +457,7 @@ def test_invalid_jump(sevm, solver, storage):
 
 
 def test_valid_jump(sevm, solver, storage):
-    hexcode = binascii.unhexlify("6003565B00")  # PUSH1 0x0A; JUMP; JUMPDEST; STOP
+    hexcode = bytes.fromhex("6003565B00")  # PUSH1 0x03; JUMP; JUMPDEST; STOP
     exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
     execs = list(sevm.run(exec))
 
