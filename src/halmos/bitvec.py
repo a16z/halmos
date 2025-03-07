@@ -195,10 +195,10 @@ class HalmosBool:
         )
 
     def is_zero(self) -> "HalmosBool":
-        return self
+        return self.neg()
 
     def is_non_zero(self) -> "HalmosBool":
-        return self.neg()
+        return self
 
     def neg(self) -> "HalmosBool":
         return (

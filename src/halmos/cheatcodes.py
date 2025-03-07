@@ -58,7 +58,6 @@ from .utils import (
     hexify,
     int256,
     int_of,
-    is_non_zero,
     red,
     secp256k1n,
     stripped,
@@ -634,7 +633,7 @@ class hevm_cheat_code:
 
         # vm.assume(bool)
         elif funsig == hevm_cheat_code.assume_sig:
-            assume_cond = simplify(is_non_zero(arg.get_word(4)).as_z3())
+            assume_cond = simplify(BV(arg.get_word(4)).is_non_zero().as_z3())
             if is_false(assume_cond):
                 raise InfeasiblePath("vm.assume(false)")
             ex.path.append(assume_cond, branching=True)

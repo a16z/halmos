@@ -121,7 +121,6 @@ from .utils import (
     is_bv_value,
     is_concrete,
     is_f_sha3_name,
-    is_zero,
     match_dynamic_array_overflow_condition,
     restore_precomputed_hashes,
     sha3_inv,
@@ -3115,7 +3114,7 @@ class SEVM:
                             ex.st.push(BV(w1, size=256).eq(BV(w2, size=256)))
 
                 elif opcode == EVM.ISZERO:
-                    ex.st.push(is_zero(ex.st.pop()))
+                    ex.st.push(ex.st.pop().is_zero())
 
                 elif opcode in [EVM.AND, EVM.OR, EVM.XOR]:
                     ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))

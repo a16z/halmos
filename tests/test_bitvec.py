@@ -2,7 +2,7 @@ import pytest
 from z3 import BitVec, BitVecVal, BoolVal, Concat, eq, simplify
 
 from halmos.bitvec import HalmosBitVec as BV
-from halmos.bitvec import HalmosBool
+from halmos.bitvec import HalmosBool as Bool
 from halmos.bytevec import Chunk
 from halmos.exceptions import NotConcreteError
 
@@ -72,19 +72,19 @@ def test_left_shift():
 
 def test_bitvec_to_bool_conversion():
     hbv = BV(42)
-    hbool = HalmosBool(hbv)
+    hbool = Bool(hbv)
     assert bool(hbool)
     assert bool(hbv.is_non_zero())
     assert not bool(hbv.is_zero())
 
     hbv = BV(0)
-    hbool = HalmosBool(hbv)
+    hbool = Bool(hbv)
     assert not bool(hbool)
     assert not bool(hbv.is_non_zero())
     assert bool(hbv.is_zero())
 
     hbv = BV(BitVec("x", 256))
-    hbool = HalmosBool(hbv)
+    hbool = Bool(hbv)
 
     with pytest.raises(NotConcreteError):
         bool(hbool)
@@ -94,41 +94,41 @@ def test_bitvec_to_bool_conversion():
 
 
 def test_bool_wrapping():
-    assert HalmosBool(True) == HalmosBool.TRUE
-    assert HalmosBool(False) == HalmosBool.FALSE
-    assert HalmosBool(True) is HalmosBool.TRUE
-    assert HalmosBool(False) is HalmosBool.FALSE
-    assert HalmosBool(True).is_true
-    assert not HalmosBool(True).is_false
-    assert HalmosBool(False).is_false
-    assert not HalmosBool(False).is_true
-    assert HalmosBool(True) == HalmosBool(HalmosBool(True))
-    assert HalmosBool(True) is HalmosBool(HalmosBool(True))
-    assert bool(HalmosBool(True))
-    assert not bool(HalmosBool(True).neg())
+    assert Bool(True) == Bool.TRUE
+    assert Bool(False) == Bool.FALSE
+    assert Bool(True) is Bool.TRUE
+    assert Bool(False) is Bool.FALSE
+    assert Bool(True).is_true
+    assert not Bool(True).is_false
+    assert Bool(False).is_false
+    assert not Bool(False).is_true
+    assert Bool(True) == Bool(Bool(True))
+    assert Bool(True) is Bool(Bool(True))
+    assert bool(Bool(True))
+    assert not bool(Bool(True).neg())
 
     # BoolVal is lowered to True/False
-    assert HalmosBool(True) == HalmosBool(BoolVal(True), do_simplify=True)
-    assert HalmosBool(True) == HalmosBool(BoolVal(True), do_simplify=False)
+    assert Bool(True) == Bool(BoolVal(True), do_simplify=True)
+    assert Bool(True) == Bool(BoolVal(True), do_simplify=False)
 
     x = BitVec("x", 256)
     tautology = x == x
 
     # tautology is lowered to True, but only when do_simplify is True
-    assert HalmosBool(True) == HalmosBool(tautology, do_simplify=True)
-    assert HalmosBool(True) != HalmosBool(tautology, do_simplify=False)
+    assert Bool(True) == Bool(tautology, do_simplify=True)
+    assert Bool(True) != Bool(tautology, do_simplify=False)
 
 
 def test_bool_to_bitvec_conversion():
-    hbool = HalmosBool(True)
+    hbool = Bool(True)
     hbv = BV(hbool)
     assert hbv.value == 1
 
-    hbool = HalmosBool(False)
+    hbool = Bool(False)
     hbv = BV(hbool)
     assert hbv.value == 0
 
-    hbool = HalmosBool(BitVec("x", 256) != 0)
+    hbool = Bool(BitVec("x", 256) != 0)
     hbv = BV(hbool)
     assert hbv.is_symbolic
     assert hbv.size == 1
@@ -142,9 +142,23 @@ def test_bool_eq():
     x = BV("x")
     y = BV("y")
     assert x.sgt(y) == x.sgt(y)
-    assert x.eq(x) == HalmosBool(True)
+    assert x.eq(x) == Bool(True)
     assert x.eq(y) == x.eq(y)
     assert x.eq(y) != y.eq(x)
+
+
+def test_bool_is_zero():
+    assert BV(0).is_zero().is_true
+    assert BV(0).is_non_zero().is_false
+
+    assert BV(1).is_zero().is_false
+    assert BV(1).is_non_zero().is_true
+
+    assert Bool(False).is_zero().is_true
+    assert Bool(False).is_non_zero().is_false
+
+    assert Bool(True).is_zero().is_false
+    assert Bool(True).is_non_zero().is_true
 
 
 def test_bv_to_chunk():

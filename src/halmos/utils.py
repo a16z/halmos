@@ -253,33 +253,8 @@ def test(x: Word, b: bool) -> BoolRef:
         raise ValueError(x)
 
 
-def is_non_zero(x: Word) -> Bool:
-    if isinstance(x, Bool):
-        return x
-
-    if isinstance(x, BV):
-        return x.is_non_zero()
-
-    return BV(x).is_non_zero()
-
-
-def is_zero(x: Word) -> Bool:
-    if isinstance(x, Bool):
-        return x.neg()
-
-    if isinstance(x, BV):
-        return x.is_zero()
-
-    return ValueError(f"Cannot test zero for {type(x)}")
-
-    # return test(x, False)
-
-
 def is_concrete(x: Any) -> bool:
-    if isinstance(x, BV):
-        return x.is_concrete
-
-    if isinstance(x, Bool):
+    if isinstance(x, BV | Bool):
         return x.is_concrete
 
     return isinstance(x, int | bytes) or is_bv_value(x)
