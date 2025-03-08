@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from typing import Any, ForwardRef, Optional
 
 from .exceptions import HalmosException
-from .logs import warn
 
 SELECTOR_FIELDS = {
     "VariableDeclaration": "functionSelector",
@@ -198,7 +197,8 @@ class BuildOut(metaclass=SingletonMeta):
             if eq_except_placeholders(hexcode, placeholders):
                 return (contract_name, filename)
 
-        warn(f"unknown deployed bytecode: {bytecode}")
+        # too big, too slow on large bytecode (can take 10s of seconds)
+        # warn(f"unknown deployed bytecode: {bytecode}")
         return (None, None)
 
     def get_by_name(self, contract_name: str, filename: str = None) -> dict:
