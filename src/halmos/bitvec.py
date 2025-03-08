@@ -9,6 +9,7 @@ from z3 import (
     BitVec,
     BitVecRef,
     BitVecVal,
+    Bool,
     BoolRef,
     BoolVal,
     Concat,
@@ -109,10 +110,15 @@ class HalmosBool:
         return super().__new__(cls)
 
     def __init__(self, value: AnyBool, *, do_simplify: bool = True):
+        # convenience, wrap a string as a named symbol
+        if isinstance(value, str):
+            value = Bool(value)
+
         if isinstance(value, bool):
             self._symbolic = False
             self._value = value
         elif isinstance(value, BoolRef):
+            print(f"simplifying {value=} {type(value)=}")
             simplified = simplify(value) if do_simplify else value
 
             if is_true(simplified):
@@ -195,57 +201,76 @@ class HalmosBool:
         )
 
     def is_zero(self) -> "HalmosBool":
-        return self.neg()
+        return self.bitwise_not()
 
     def is_non_zero(self) -> "HalmosBool":
         return self
 
-    def neg(self) -> "HalmosBool":
-        return (
-            HalmosBool(Not(self._value))
-            if self._symbolic
-            else HalmosBool(not self._value)
-        )
-
     def eq(self, other: "HalmosBool") -> "HalmosBool":
         return HalmosBool(self._value == other._value)
 
-    def __and__(self, other: "HalmosBool") -> "HalmosBool":
-        if self.is_true and other.is_true:
-            return HalmosBool(True)
-        elif self.is_false or other.is_false:
-            return HalmosBool(False)
-        else:
-            return HalmosBool(And(self.as_z3(), other.as_z3()))
+    def bitwise_not(self) -> "HalmosBool":
+        if self is HalmosBool.TRUE:
+            return HalmosBool.FALSE
 
-    def __or__(self, other: "HalmosBool") -> "HalmosBool":
-        if self.is_true or other.is_true:
-            return HalmosBool(True)
-        elif self.is_false and other.is_false:
-            return HalmosBool(False)
-        else:
-            return HalmosBool(Or(self.as_z3(), other.as_z3()))
+        if self is HalmosBool.FALSE:
+            return HalmosBool.TRUE
 
-    def __xor__(self, other: "HalmosBool") -> "HalmosBool":
+        return HalmosBool(Not(self._value))
+
+    def bitwise_and(self, other: "HalmosBool") -> "HalmosBool":
+        if self is HalmosBool.TRUE:
+            return other
+
+        if self is HalmosBool.FALSE:
+            return self
+
+        if other is HalmosBool.TRUE:
+            return self
+
+        if other is HalmosBool.FALSE:
+            return other
+
+        return HalmosBool(And(self.as_z3(), other.as_z3()))
+
+    def bitwise_or(self, other: "HalmosBool") -> "HalmosBool":
+        if self is HalmosBool.TRUE:
+            return self
+
+        if other is HalmosBool.TRUE:
+            return other
+
+        if self is HalmosBool.FALSE:
+            return other
+
+        if other is HalmosBool.FALSE:
+            return self
+
+        return HalmosBool(Or(self.as_z3(), other.as_z3()))
+
+    def bitwise_xor(self, other: "HalmosBool") -> "HalmosBool":
         if self.is_true:
             if other.is_true:
-                return HalmosBool(False)
+                return HalmosBool.FALSE
             if other.is_false:
-                return HalmosBool(True)
+                return HalmosBool.TRUE
         elif self.is_false:
             if other.is_true:
-                return HalmosBool(True)
+                return HalmosBool.TRUE
             if other.is_false:
-                return HalmosBool(False)
+                return HalmosBool.FALSE
 
         return HalmosBool(self.as_z3() ^ other.as_z3())
 
     def as_bv(self, size: int = 1) -> BV:
-        if self._symbolic:
-            expr = If(self._value, BitVecVal(1, size), BitVecVal(0, size))
-            return HalmosBitVec(expr, size=size)
+        if self is HalmosBool.TRUE:
+            return HalmosBitVec(1, size=size)
 
-        return HalmosBitVec(int(self._value), size)
+        if self is HalmosBool.FALSE:
+            return HalmosBitVec(0, size=size)
+
+        expr = If(self._value, BitVecVal(1, size), BitVecVal(0, size))
+        return HalmosBitVec(expr, size=size)
 
 
 # initialize class attributes
@@ -782,18 +807,6 @@ class HalmosBitVec:
             return HalmosBitVec(~self._value & ((1 << self._size) - 1), size=self._size)
 
         return HalmosBitVec(~self.as_z3(), size=self.size)
-
-    def __and__(self, other: BV) -> BV:
-        # bitwise and: keeping this to be compatible with HalmosBool
-        return self.bitwise_and(other)
-
-    def __or__(self, other: BV) -> BV:
-        # bitwise or: keeping this to be compatible with HalmosBool
-        return self.bitwise_or(other)
-
-    def __xor__(self, other: BV) -> BV:
-        # bitwise xor: keeping this to be compatible with HalmosBool
-        return self.bitwise_xor(other)
 
     def bitwise_and(self, other: BV) -> BV:
         assert self._size == other._size

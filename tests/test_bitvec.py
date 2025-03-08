@@ -1,10 +1,16 @@
 import pytest
-from z3 import BitVec, BitVecVal, BoolVal, Concat, eq, simplify
+from z3 import And, BitVec, BitVecVal, BoolVal, Concat, Or, eq, simplify
 
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bitvec import HalmosBool as Bool
 from halmos.bytevec import Chunk
 from halmos.exceptions import NotConcreteError
+
+TRUE = Bool(True)
+FALSE = Bool(False)
+
+a, b = Bool("a"), Bool("b")
+x, y = BV("x"), BV("y")
 
 
 @pytest.mark.parametrize("value", [0xFF00, 0xFFFF, -1, -2])
@@ -179,3 +185,33 @@ def test_in_operator():
 
     # can not compare directly to ints
     assert x not in [0, 42, 43]
+
+
+def test_bitwise_and():
+    assert TRUE.bitwise_and(TRUE) == TRUE
+    assert TRUE.bitwise_and(FALSE) == FALSE
+    assert FALSE.bitwise_and(TRUE) == FALSE
+    assert FALSE.bitwise_and(FALSE) == FALSE
+
+    assert TRUE.bitwise_and(x) == x
+    assert x.bitwise_and(TRUE) == x
+
+    assert FALSE.bitwise_and(x) == FALSE
+    assert x.bitwise_and(FALSE) == FALSE
+
+    assert x.bitwise_and(y) == Bool(And(x.as_z3(), y.as_z3()))
+
+
+def test_bitwise_or():
+    assert TRUE.bitwise_or(TRUE) == TRUE
+    assert TRUE.bitwise_or(FALSE) == TRUE
+    assert FALSE.bitwise_or(TRUE) == TRUE
+    assert FALSE.bitwise_or(FALSE) == FALSE
+
+    assert TRUE.bitwise_or(a) == TRUE
+    assert a.bitwise_or(TRUE) == TRUE
+
+    assert FALSE.bitwise_or(a) == a
+    assert a.bitwise_or(FALSE) == a
+
+    assert a.bitwise_or(b) == Bool(Or(a.as_z3(), b.as_z3()))
