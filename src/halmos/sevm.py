@@ -66,6 +66,7 @@ from .exceptions import (
     FailCheatcode,
     HalmosException,
     InfeasiblePath,
+    InvalidJumpDestError,
     InvalidOpcode,
     MessageDepthLimitError,
     NotConcreteError,
@@ -1419,7 +1420,9 @@ class Exec:  # an execution path
         assert value.size() == 256
 
         new_balance_var = Array(
-            f"balance_{uid()}_{1+len(self.balances):>02}", BitVecSort160, BitVecSort256
+            f"balance_{uid()}_{1 + len(self.balances):>02}",
+            BitVecSort160,
+            BitVecSort256,
         )
         new_balance = Store(self.balance, addr, value)
         self.path.append(new_balance_var == new_balance)
@@ -1727,7 +1730,7 @@ class SolidityStorage(Storage):
             return
 
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
+            f"storage_{id_str(addr)}_{slot}_{num_keys}_{size_keys}_{uid()}_{1 + len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
@@ -1872,7 +1875,7 @@ class GenericStorage(Storage):
         storage_addr = storage[addr]
 
         new_storage_var = Array(
-            f"storage_{id_str(addr)}_{size_keys}_{uid()}_{1+len(ex.storages):>02}",
+            f"storage_{id_str(addr)}_{size_keys}_{uid()}_{1 + len(ex.storages):>02}",
             BitVecSorts[size_keys],
             BitVecSort256,
         )
@@ -2767,6 +2770,9 @@ class SEVM:
         new_ex_false = None
 
         if follow_true:
+            if target not in ex.pgm.valid_jump_destinations():
+                raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
+
             if follow_false:
                 new_ex_true = self.create_branch(ex, cond_true, target)
             else:
@@ -2800,7 +2806,11 @@ class SEVM:
 
         # if dst is concrete, just jump
         if dst.is_concrete:
-            ex.advance(pc=dst.value)
+            target = dst.value
+            if target not in ex.pgm.valid_jumpdests():
+                raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
+            
+            ex.advance(pc=target)
             stack.push(ex)
 
         # otherwise, create a new execution for feasible targets
