@@ -118,7 +118,6 @@ class HalmosBool:
             self._symbolic = False
             self._value = value
         elif isinstance(value, BoolRef):
-            print(f"simplifying {value=} {type(value)=}")
             simplified = simplify(value) if do_simplify else value
 
             if is_true(simplified):
