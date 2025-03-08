@@ -100,37 +100,37 @@ def test_bitvec_to_bool_conversion():
 
 
 def test_bool_wrapping():
-    assert Bool(True) == Bool.TRUE
-    assert Bool(False) == Bool.FALSE
-    assert Bool(True) is Bool.TRUE
-    assert Bool(False) is Bool.FALSE
-    assert Bool(True).is_true
-    assert not Bool(True).is_false
-    assert Bool(False).is_false
-    assert not Bool(False).is_true
-    assert Bool(True) == Bool(Bool(True))
-    assert Bool(True) is Bool(Bool(True))
-    assert bool(Bool(True))
-    assert not bool(Bool(True).neg())
+    assert TRUE == Bool.TRUE
+    assert FALSE == Bool.FALSE
+    assert TRUE is Bool.TRUE
+    assert FALSE is Bool.FALSE
+    assert TRUE.is_true
+    assert not TRUE.is_false
+    assert FALSE.is_false
+    assert not FALSE.is_true
+    assert Bool(TRUE) == TRUE
+    assert TRUE is Bool(TRUE)
+    assert bool(TRUE)
+    assert not bool(TRUE.neg())
 
     # BoolVal is lowered to True/False
-    assert Bool(True) == Bool(BoolVal(True), do_simplify=True)
-    assert Bool(True) == Bool(BoolVal(True), do_simplify=False)
+    assert Bool(BoolVal(True), do_simplify=True) == TRUE
+    assert Bool(BoolVal(True), do_simplify=False) == TRUE
 
     x = BitVec("x", 256)
     tautology = x == x
 
     # tautology is lowered to True, but only when do_simplify is True
-    assert Bool(True) == Bool(tautology, do_simplify=True)
-    assert Bool(True) != Bool(tautology, do_simplify=False)
+    assert Bool(tautology, do_simplify=True) == TRUE
+    assert Bool(tautology, do_simplify=False) != TRUE
 
 
 def test_bool_to_bitvec_conversion():
-    hbool = Bool(True)
+    hbool = TRUE
     hbv = BV(hbool)
     assert hbv.value == 1
 
-    hbool = Bool(False)
+    hbool = FALSE
     hbv = BV(hbool)
     assert hbv.value == 0
 
@@ -148,7 +148,7 @@ def test_bool_eq():
     x = BV("x")
     y = BV("y")
     assert x.sgt(y) == x.sgt(y)
-    assert x.eq(x) == Bool(True)
+    assert x.eq(x) == TRUE
     assert x.eq(y) == x.eq(y)
     assert x.eq(y) != y.eq(x)
 
@@ -193,13 +193,13 @@ def test_bitwise_and():
     assert FALSE.bitwise_and(TRUE) == FALSE
     assert FALSE.bitwise_and(FALSE) == FALSE
 
-    assert TRUE.bitwise_and(x) == x
-    assert x.bitwise_and(TRUE) == x
+    assert TRUE.bitwise_and(a) == a
+    assert a.bitwise_and(TRUE) == a
 
-    assert FALSE.bitwise_and(x) == FALSE
-    assert x.bitwise_and(FALSE) == FALSE
+    assert FALSE.bitwise_and(a) == FALSE
+    assert a.bitwise_and(FALSE) == FALSE
 
-    assert x.bitwise_and(y) == Bool(And(x.as_z3(), y.as_z3()))
+    assert a.bitwise_and(b) == Bool(And(a.as_z3(), b.as_z3()))
 
 
 def test_bitwise_or():
@@ -215,3 +215,18 @@ def test_bitwise_or():
     assert a.bitwise_or(FALSE) == a
 
     assert a.bitwise_or(b) == Bool(Or(a.as_z3(), b.as_z3()))
+
+
+def test_bitwise_xor():
+    assert TRUE.bitwise_xor(TRUE) == FALSE
+    assert TRUE.bitwise_xor(FALSE) == TRUE
+    assert FALSE.bitwise_xor(TRUE) == TRUE
+    assert FALSE.bitwise_xor(FALSE) == FALSE
+
+    assert TRUE.bitwise_xor(a) == a.bitwise_not()
+    assert a.bitwise_xor(TRUE) == a.bitwise_not()
+
+    assert FALSE.bitwise_xor(a) == a
+    assert a.bitwise_xor(FALSE) == a
+
+    assert a.bitwise_xor(b) == Bool(a.as_z3() ^ b.as_z3())

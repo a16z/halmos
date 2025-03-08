@@ -209,6 +209,9 @@ class HalmosBool:
     def eq(self, other: "HalmosBool") -> "HalmosBool":
         return HalmosBool(self._value == other._value)
 
+    def neg(self) -> "HalmosBool":
+        return self.bitwise_not()
+
     def bitwise_not(self) -> "HalmosBool":
         if self is HalmosBool.TRUE:
             return HalmosBool.FALSE
@@ -249,16 +252,17 @@ class HalmosBool:
         return HalmosBool(Or(self.as_z3(), other.as_z3()))
 
     def bitwise_xor(self, other: "HalmosBool") -> "HalmosBool":
-        if self.is_true:
-            if other.is_true:
-                return HalmosBool.FALSE
-            if other.is_false:
-                return HalmosBool.TRUE
-        elif self.is_false:
-            if other.is_true:
-                return HalmosBool.TRUE
-            if other.is_false:
-                return HalmosBool.FALSE
+        if self is HalmosBool.TRUE:
+            return other.bitwise_not()
+
+        if other is HalmosBool.TRUE:
+            return self.bitwise_not()
+
+        if self is HalmosBool.FALSE:
+            return other
+
+        if other is HalmosBool.FALSE:
+            return self
 
         return HalmosBool(self.as_z3() ^ other.as_z3())
 

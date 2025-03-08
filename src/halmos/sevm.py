@@ -1942,36 +1942,18 @@ def bitwise(op, x: Word, y: Word) -> Word:
     if isinstance(x, Bool) and isinstance(y, BV):
         return bitwise(op, BV(x, size=256), y)
 
-    elif isinstance(x, BV) and isinstance(y, Bool):
+    if isinstance(x, BV) and isinstance(y, Bool):
         return bitwise(op, x, BV(y, size=256))
 
     # at this point, we expect x and y to be both Bool or both BV
-
+    if op == EVM.AND:
+        return x.bitwise_and(y)
+    elif op == EVM.OR:
+        return x.bitwise_or(y)
+    elif op == EVM.XOR:
+        return x.bitwise_xor(y)
     else:
-        if op == EVM.AND:
-            return x & y
-        elif op == EVM.OR:
-            return x | y
-        elif op == EVM.XOR:
-            return x ^ y
-        else:
-            raise ValueError(op, x, y)
-
-
-def b2i(w: BitVecRef | BoolRef) -> BV:
-    """
-    Convert a boolean or bitvector to a bitvector.
-    """
-
-    return BV(w)
-
-    # if is_true(w):
-    #     return BV_ONE
-    # if is_false(w):
-    #     return BV_ZERO
-    # if is_bool(w):
-    #     return If(w, ONE, ZERO)
-    # return w
+        raise ValueError(op, x, y)
 
 
 class HalmosLogs:
