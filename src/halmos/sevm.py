@@ -2723,6 +2723,9 @@ class SEVM:
         cond = Bool(ex.st.pop())
 
         if cond.is_true:
+            if target not in ex.pgm.valid_jumpdests():
+                raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
+
             ex.advance(pc=target)
             stack.push(ex)
             return
@@ -2770,7 +2773,7 @@ class SEVM:
         new_ex_false = None
 
         if follow_true:
-            if target not in ex.pgm.valid_jump_destinations():
+            if target not in ex.pgm.valid_jumpdests():
                 raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
 
             if follow_false:
@@ -2809,7 +2812,7 @@ class SEVM:
             target = dst.value
             if target not in ex.pgm.valid_jumpdests():
                 raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
-            
+
             ex.advance(pc=target)
             stack.push(ex)
 
