@@ -2,7 +2,7 @@
 
 import itertools
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -2958,6 +2958,8 @@ class SEVM:
         max_depth = self.options.depth
         print_steps = self.options.print_steps
         print_mem = self.options.print_mem
+        profile_instructions = self.options.profile_instructions
+        profiler = Profiler()
         start_time = timer()
 
         step_id = 0
@@ -3000,6 +3002,10 @@ class SEVM:
 
                 insn: Instruction = ex.insn
                 opcode: int = insn.opcode
+
+                # Profile instruction if enabled
+                if profile_instructions:
+                    profiler.increment(opcode)
 
                 if max_depth and step_id > max_depth:
                     warn(
@@ -3493,3 +3499,31 @@ class SEVM:
             storages={},
             balances={},
         )
+
+
+# Instruction profiler singleton
+class Profiler:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not self._initialized:
+            self.counters = Counter()
+            self._initialized = True
+
+    def increment(self, opcode: int) -> None:
+        self.counters[opcode] += 1
+
+    def get_top_instructions(self, n: int = 20) -> list[tuple[str, int]]:
+        """Returns the top n most executed instructions as (mnemonic, count) tuples"""
+        return [
+            (mnemonic(opcode), count) for opcode, count in self.counters.most_common(n)
+        ]
+
+    def reset(self) -> None:
+        raise NotImplementedError("Resetting the profiler is not supported")
