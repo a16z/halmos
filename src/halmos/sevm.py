@@ -495,26 +495,13 @@ class State:
             + "\n"
         )
 
-    def push(self, v: Word) -> None:
-        if isinstance(v, BV | Bool):
-            self.stack.append(v)
-        elif isinstance(v, bool):
-            self.stack.append(Bool(v))
-        elif isinstance(v, int):
-            # TODO: support native types on the stack
-            # if not (0 <= v < 2**256):
-            #     raise ValueError(v)
-            # self.stack.append(v)
+    def push(self, v: BV | Bool) -> None:
+        assert isinstance(v, BV) and v.size == 256 or isinstance(v, Bool)
+        self.stack.append(v)
 
-            # for now, wrap ints in a BitVec
-            # self.stack.append(con(v))
-            self.stack.append(BV(v))
-        elif isinstance(v, BitVecRef):
-            if not (eq(v.sort(), BitVecSort256)):
-                raise ValueError(v)
-            self.stack.append(BV(v))
-        else:
-            raise TypeError(f"Cannot push {type(v)} onto the stack")
+    def push_any(self, v: Any) -> None:
+        # wraps any value in a 256-bit BitVec
+        self.stack.append(BV(v, size=256))
 
     def pop(self) -> Word:
         if not self.stack:
@@ -1434,7 +1421,7 @@ class Exec:  # an execution path
         size: int = self.int_of(self.st.pop(), "symbolic SHA3 data size")
         data = self.st.mslice(loc, size).unwrap() if size else b""
         sha3_image = self.sha3_data(data)
-        self.st.push(sha3_image)
+        self.st.push_any(sha3_image)
 
     def sha3_hash(self, data: Bytes) -> bytes | None:
         """return concrete bytes if the hash can be evaluated, otherwise None"""
@@ -2489,7 +2476,7 @@ class SEVM:
                     f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
                 )
                 ex.path.append(exit_code_var == exit_code)
-                ex.st.push(BV(exit_code_var))
+                ex.st.push_any(exit_code_var)
 
                 # transfer msg.value
                 send_callvalue(exit_code_var != ZERO)
@@ -2669,11 +2656,11 @@ class SEVM:
                 new_ex.set_code(new_addr, new_code)
 
                 # push new address to stack
-                new_ex.st.push(uint256(new_addr))
+                new_ex.st.push_any(new_addr)
 
             else:
                 # creation failed
-                new_ex.st.push(0)
+                new_ex.st.push(ZERO)
 
                 # revert network states
                 new_ex.code = orig_code.copy()
@@ -2894,12 +2881,12 @@ class SEVM:
 
                 for candidate in ex.path.concretization.candidates[loaded]:
                     new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
-                    new_ex.st.push(candidate)
+                    new_ex.st.push_any(candidate)
                     new_ex.advance()
                     stack.push(new_ex)
                 return
 
-        ex.st.push(loaded)
+        ex.st.push_any(loaded)
         ex.advance()
         stack.push(ex)
 
@@ -3124,7 +3111,7 @@ class SEVM:
                     ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
 
                 elif opcode == EVM.NOT:
-                    ex.st.push(ex.st.popi().bitwise_not())
+                    ex.st.push(ex.st.pop().bitwise_not())
 
                 elif opcode == EVM.SHL:
                     w1 = ex.st.popi()
@@ -3151,19 +3138,19 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.CALLDATASIZE:
-                    ex.st.push(len(ex.calldata()))
+                    ex.st.push_any(len(ex.calldata()))
 
                 elif opcode == EVM.CALLVALUE:
-                    ex.st.push(ex.callvalue())
+                    ex.st.push_any(ex.callvalue())
 
                 elif opcode == EVM.CALLER:
-                    ex.st.push(uint256(ex.caller()))
+                    ex.st.push_any(ex.caller())
 
                 elif opcode == EVM.ORIGIN:
-                    ex.st.push(uint256(ex.origin()))
+                    ex.st.push_any(ex.origin())
 
                 elif opcode == EVM.ADDRESS:
-                    ex.st.push(uint256(ex.this()))
+                    ex.st.push_any(ex.this())
 
                 elif opcode == EVM.EXTCODESIZE:
                     account: BV = uint160(ex.st.peek())
@@ -3171,7 +3158,7 @@ class SEVM:
                     ex.st.pop()
 
                     if account_alias is not None:
-                        codesize = len(ex.code[account_alias])
+                        codesize = BV(len(ex.code[account_alias]))
                     else:
                         # NOTE: the codesize of halmos cheatcode should be non-zero to pass the extcodesize check
                         # for external calls with non-empty return types. this behavior differs from foundry.
@@ -3213,7 +3200,9 @@ class SEVM:
                     ex.st.pop()
 
                     if account_alias is not None:
-                        codehash = ex.sha3_data(ex.code[account_alias]._code.unwrap())
+                        codehash = BV(
+                            ex.sha3_data(ex.code[account_alias]._code.unwrap())
+                        )
                     elif account in CHEATCODE_ADDRESSES:
                         # dummy arbitrary value, consistent with foundry
                         codehash = (
@@ -3229,46 +3218,46 @@ class SEVM:
                     ex.st.push(codehash)
 
                 elif opcode == EVM.CODESIZE:
-                    ex.st.push(len(ex.pgm))
+                    ex.st.push_any(len(ex.pgm))
 
                 elif opcode == EVM.GAS:
-                    ex.st.push(f_gas(con(ex.new_gas_id())))
+                    ex.st.push_any(f_gas(con(ex.new_gas_id())))
 
                 elif opcode == EVM.GASPRICE:
-                    ex.st.push(f_gasprice())
+                    ex.st.push_any(f_gasprice())
 
                 elif opcode == EVM.BASEFEE:
-                    ex.st.push(ex.block.basefee)
+                    ex.st.push_any(ex.block.basefee)
 
                 elif opcode == EVM.CHAINID:
-                    ex.st.push(ex.block.chainid)
+                    ex.st.push_any(ex.block.chainid)
 
                 elif opcode == EVM.COINBASE:
-                    ex.st.push(uint256(ex.block.coinbase))
+                    ex.st.push_any(ex.block.coinbase)
 
                 elif opcode == EVM.DIFFICULTY:
-                    ex.st.push(ex.block.difficulty)
+                    ex.st.push_any(ex.block.difficulty)
 
                 elif opcode == EVM.GASLIMIT:
-                    ex.st.push(ex.block.gaslimit)
+                    ex.st.push_any(ex.block.gaslimit)
 
                 elif opcode == EVM.NUMBER:
-                    ex.st.push(ex.block.number)
+                    ex.st.push_any(ex.block.number)
 
                 elif opcode == EVM.TIMESTAMP:
-                    ex.st.push(ex.block.timestamp)
+                    ex.st.push_any(ex.block.timestamp)
 
                 elif opcode == EVM.PC:
-                    ex.st.push(ex.pc)
+                    ex.st.push_any(ex.pc)
 
                 elif opcode == EVM.BLOCKHASH:
-                    ex.st.push(f_blockhash(ex.st.pop()))
+                    ex.st.push_any(f_blockhash(ex.st.pop()))
 
                 elif opcode == EVM.BALANCE:
-                    ex.st.push(ex.balance_of(uint160(ex.st.pop())))
+                    ex.st.push_any(ex.balance_of(uint160(ex.st.pop())))
 
                 elif opcode == EVM.SELFBALANCE:
-                    ex.st.push(ex.balance_of(ex.this()))
+                    ex.st.push_any(ex.balance_of(ex.this()))
 
                 elif opcode in [
                     EVM.CALL,
@@ -3294,7 +3283,7 @@ class SEVM:
 
                 elif opcode == EVM.MLOAD:
                     loc: int = ex.mloc(check_size=True)
-                    ex.st.push(ex.st.memory.get_word(loc))
+                    ex.st.push_any(ex.st.memory.get_word(loc))
 
                 elif opcode == EVM.MSTORE:
                     loc: int = ex.mloc(check_size=True)
@@ -3310,11 +3299,11 @@ class SEVM:
                     size: int = len(ex.st.memory)
                     # round up to the next multiple of 32
                     size = ((size + 31) // 32) * 32
-                    ex.st.push(size)
+                    ex.st.push_any(size)
 
                 elif opcode == EVM.SLOAD:
                     slot: Word = ex.st.pop()
-                    ex.st.push(self.sload(ex, ex.this(), slot))
+                    ex.st.push_any(self.sload(ex, ex.this(), slot))
 
                 elif opcode == EVM.SSTORE:
                     slot: Word = ex.st.pop()
@@ -3323,7 +3312,7 @@ class SEVM:
 
                 elif opcode == EVM.TLOAD:
                     slot: Word = ex.st.popi()
-                    ex.st.push(self.sload(ex, ex.this(), slot, transient=True))
+                    ex.st.push_any(self.sload(ex, ex.this(), slot, transient=True))
 
                 elif opcode == EVM.TSTORE:
                     slot: Word = ex.st.popi()
@@ -3331,7 +3320,7 @@ class SEVM:
                     self.sstore(ex, ex.this(), slot, value, transient=True)
 
                 elif opcode == EVM.RETURNDATASIZE:
-                    ex.st.push(ex.returndatasize())
+                    ex.st.push_any(ex.returndatasize())
 
                 elif opcode == EVM.RETURNDATACOPY:
                     loc: int = ex.mloc(check_size=False)
@@ -3392,7 +3381,7 @@ class SEVM:
                             f"Warning: the use of symbolic BYTE indexing may potentially "
                             f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
                         )
-                        ex.st.push(BV(self.sym_byte_of(idx.value, w.as_z3())))
+                        ex.st.push_any(self.sym_byte_of(idx.value, w.as_z3()))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     if ex.message().is_static:
@@ -3406,7 +3395,7 @@ class SEVM:
                     ex.emit_log(EventLog(ex.this(), topics, data))
 
                 elif opcode == EVM.PUSH0:
-                    ex.st.push(0)
+                    ex.st.push(ZERO)
 
                 elif EVM.PUSH1 <= opcode <= EVM.PUSH32:
                     val = insn.operand
@@ -3416,11 +3405,11 @@ class SEVM:
                     if val.is_concrete and opcode == EVM.PUSH32:
                         if (inverse := sha3_inv.get(val.value)) is not None:
                             # restore precomputed hashes
-                            ex.st.push(ex.sha3_data(con(inverse)))
+                            ex.st.push_any(ex.sha3_data(con(inverse)))
 
                         # TODO: support more commonly used concrete keccak values
                         elif val.value == EMPTY_KECCAK:
-                            ex.st.push(ex.sha3_data(b""))
+                            ex.st.push_any(ex.sha3_data(b""))
                         else:
                             ex.st.push(val)
                     else:

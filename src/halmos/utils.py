@@ -159,21 +159,6 @@ def uint(x: Any, n: int) -> Word:
     """
 
     return BV(x, size=n)
-    # if isinstance(x, bytes):
-    #     x = int.from_bytes(x, "big")
-
-    # if isinstance(x, int):
-    #     return con(x, size_bits=n)
-
-    # if is_bool(x):
-    #     return If(x, con(1, size_bits=n), con(0, size_bits=n))
-
-    # bitsize = x.size()
-    # if bitsize == n:
-    #     return x
-    # if bitsize > n:
-    #     return simplify(Extract(n - 1, 0, x))
-    # return simplify(ZeroExt(n - bitsize, x))
 
 
 def uint8(x: Any) -> Byte:
