@@ -503,10 +503,23 @@ class State:
         # wraps any value in a 256-bit BitVec
         self.stack.append(BV(v, size=256))
 
+    def set_top(self, v: Word) -> None:
+        try:
+            self.stack[-1] = v
+        except IndexError as e:
+            raise StackUnderflowError() from e
+
+    def top(self) -> Word:
+        try:
+            return self.stack[-1]
+        except IndexError as e:
+            raise StackUnderflowError() from e
+
     def pop(self) -> Word:
-        if not self.stack:
-            raise StackUnderflowError()
-        return self.stack.pop()
+        try:
+            return self.stack.pop()
+        except IndexError as e:
+            raise StackUnderflowError() from e
 
     def popi(self) -> BV:
         """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
@@ -514,19 +527,23 @@ class State:
         return BV(self.pop(), size=256)
 
     def peek(self, n: int = 1) -> Word:
-        return self.stack[-n]
+        try:
+            return self.stack[-n]
+        except IndexError as e:
+            raise StackUnderflowError() from e
 
     def dup(self, n: int) -> None:
-        if len(self.stack) < n:
-            raise StackUnderflowError()
-
-        self.stack.append(self.stack[-n])
+        try:
+            self.stack.append(self.stack[-n])
+        except IndexError as e:
+            raise StackUnderflowError() from e
 
     def swap(self, n: int) -> None:
-        if len(self.stack) < n + 1:
-            raise StackUnderflowError()
-
-        self.stack[-(n + 1)], self.stack[-1] = self.stack[-1], self.stack[-(n + 1)]
+        try:
+            stack = self.stack
+            stack[-(n + 1)], stack[-1] = stack[-1], stack[-(n + 1)]
+        except IndexError as e:
+            raise StackUnderflowError() from e
 
     def mloc(self, subst: dict = None, check_size: bool = True) -> int:
         loc: int = int_of(self.popi(), "symbolic memory offset", subst)
@@ -3017,43 +3034,45 @@ class SEVM:
                 if print_steps:
                     print(ex.dump(print_mem=print_mem))
 
-                # Reordered based on frequency data
-                if opcode == EVM.PUSH1 or opcode == EVM.PUSH2:
-                    ex.st.push(insn.operand)
+                state: State = ex.st
 
-                elif EVM.PUSH3 <= opcode <= EVM.PUSH32:
+                # Reordered based on frequency data
+                if EVM.PUSH1 <= opcode <= EVM.PUSH31:
+                    state.push(insn.operand)
+
+                elif opcode == EVM.PUSH32:
                     val = insn.operand
                     assert val.size == 256
 
                     # Special handling for PUSH32 with concrete values
-                    if val.is_concrete and opcode == EVM.PUSH32:
+                    if val.is_concrete:
                         if (inverse := sha3_inv.get(val.value)) is not None:
                             # restore precomputed hashes
-                            ex.st.push_any(ex.sha3_data(con(inverse)))
+                            state.push_any(ex.sha3_data(con(inverse)))
 
                         # TODO: support more commonly used concrete keccak values
                         elif val.value == EMPTY_KECCAK:
-                            ex.st.push_any(ex.sha3_data(b""))
+                            state.push_any(ex.sha3_data(b""))
                         else:
-                            ex.st.push(val)
+                            state.push(val)
                     else:
-                        # Handle all other cases (non-PUSH32 or non-concrete values)
-                        ex.st.push(val)
+                        # Symbolic value
+                        state.push(val)
 
                 elif opcode == EVM.POP:
-                    ex.st.pop()
+                    state.pop()
 
                 elif opcode == EVM.JUMPDEST:
                     pass
 
                 elif opcode == EVM.ADD:
-                    ex.st.push(self.arith(ex, opcode, ex.st.popi(), ex.st.popi()))
+                    state.push(self.arith(ex, opcode, state.popi(), state.popi()))
 
                 elif EVM.DUP1 <= opcode <= EVM.DUP16:
-                    ex.st.dup(opcode - EVM.DUP1 + 1)
+                    state.dup(opcode - EVM.DUP1 + 1)
 
                 elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
-                    ex.st.swap(opcode - EVM.SWAP1 + 1)
+                    state.swap(opcode - EVM.SWAP1 + 1)
 
                 elif opcode == EVM.JUMP:
                     self.jump(ex, stack)
@@ -3064,59 +3083,61 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.ISZERO:
-                    ex.st.push(ex.st.pop().is_zero())
+                    state.push(state.pop().is_zero())
 
                 elif opcode == EVM.MSTORE:
                     loc: int = ex.mloc(check_size=True)
-                    val: Word = ex.st.pop()
-                    ex.st.memory.set_word(loc, uint256(val))
+                    val: Word = state.pop()
+                    state.memory.set_word(loc, uint256(val))
 
                 elif opcode == EVM.MLOAD:
                     loc: int = ex.mloc(check_size=True)
-                    ex.st.push_any(ex.st.memory.get_word(loc))
+                    state.push_any(state.memory.get_word(loc))
 
                 elif opcode == EVM.PUSH0:
-                    ex.st.push(ZERO)
+                    state.push(ZERO)
 
                 elif opcode == EVM.SUB:
-                    ex.st.push(self.arith(ex, opcode, ex.st.popi(), ex.st.popi()))
+                    w1 = state.popi()
+                    w2 = state.popi()
+                    state.push(w1.sub(w2))
 
                 elif opcode == EVM.SHL:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
-                    ex.st.push(w2.lshl(w1))
+                    w1 = state.popi()
+                    w2 = state.popi()
+                    state.push(w2.lshl(w1))
 
                 elif opcode == EVM.AND:
-                    ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
+                    state.push(bitwise(opcode, state.pop(), state.pop()))
 
                 # Rest of the less frequent opcodes
 
                 elif opcode == EVM.SHR:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
-                    ex.st.push(w2.lshr(w1))
+                    w1 = state.popi()
+                    w2 = state.popi()
+                    state.push(w2.lshr(w1))
 
                 elif opcode == EVM.GT:
-                    w1: BV = ex.st.popi()
-                    w2: BV = ex.st.popi()
-                    ex.st.push(w1.ugt(w2))  # bvugt
+                    w1: BV = state.popi()
+                    w2: BV = state.popi()
+                    state.push(w1.ugt(w2))  # bvugt
 
                 elif opcode == EVM.EQ:
-                    w1: BV = ex.st.pop()
-                    w2: BV = ex.st.pop()
+                    w1: BV = state.pop()
+                    w2: BV = state.pop()
 
                     match (w1, w2):
                         case (Bool(), Bool()):
-                            ex.st.push(w1.eq(w2))
+                            state.push(w1.eq(w2))
                         case (BV(), BV()):
-                            ex.st.push(w1.eq(w2))
+                            state.push(w1.eq(w2))
                         case (_, _):
-                            ex.st.push(BV(w1, size=256).eq(BV(w2, size=256)))
+                            state.push(BV(w1, size=256).eq(BV(w2, size=256)))
 
                 elif opcode == EVM.LT:
-                    w1: BV = ex.st.popi()
-                    w2: BV = ex.st.popi()
-                    ex.st.push(w1.ult(w2))  # bvult
+                    w1: BV = state.popi()
+                    w2: BV = state.popi()
+                    state.push(w1.ult(w2))  # bvult
 
                 elif opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
@@ -3141,65 +3162,65 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.OR or opcode == EVM.XOR:
-                    ex.st.push(bitwise(opcode, ex.st.pop(), ex.st.pop()))
+                    state.push(bitwise(opcode, state.pop(), state.pop()))
 
                 elif opcode == EVM.NOT:
-                    ex.st.push(ex.st.pop().bitwise_not())
+                    state.push(state.pop().bitwise_not())
 
                 elif EVM.MUL <= opcode <= EVM.SMOD:  # MUL SUB DIV SDIV MOD SMOD
-                    ex.st.push(self.arith(ex, opcode, ex.st.popi(), ex.st.popi()))
+                    state.push(self.arith(ex, opcode, state.popi(), state.popi()))
 
                 elif opcode == EVM.SLOAD:
-                    slot: Word = ex.st.pop()
-                    ex.st.push_any(self.sload(ex, ex.this(), slot))
+                    slot: Word = state.pop()
+                    state.push_any(self.sload(ex, ex.this(), slot))
 
                 elif opcode == EVM.SSTORE:
-                    slot: Word = ex.st.pop()
-                    value: Word = ex.st.pop()
+                    slot: Word = state.pop()
+                    value: Word = state.pop()
                     self.sstore(ex, ex.this(), slot, value)
 
                 elif opcode == EVM.SHA3:
                     ex.sha3()
 
                 elif opcode == EVM.ADDRESS:
-                    ex.st.push_any(ex.this())
+                    state.push_any(ex.this())
 
                 elif opcode == EVM.BALANCE:
-                    ex.st.push_any(ex.balance_of(uint160(ex.st.pop())))
+                    state.push_any(ex.balance_of(uint160(state.pop())))
 
                 elif opcode == EVM.ORIGIN:
-                    ex.st.push_any(ex.origin())
+                    state.push_any(ex.origin())
 
                 elif opcode == EVM.CALLER:
-                    ex.st.push_any(ex.caller())
+                    state.push_any(ex.caller())
 
                 elif opcode == EVM.CALLVALUE:
-                    ex.st.push_any(ex.callvalue())
+                    state.push_any(ex.callvalue())
 
                 elif opcode == EVM.CALLDATALOAD:
                     self.calldataload(ex, stack)
                     continue
 
                 elif opcode == EVM.CALLDATASIZE:
-                    ex.st.push_any(len(ex.calldata()))
+                    state.push_any(len(ex.calldata()))
 
                 elif opcode == EVM.CALLDATACOPY:
                     loc: int = ex.mloc(check_size=False)
-                    offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY offset")
-                    size: int = ex.int_of(ex.st.pop(), "symbolic CALLDATACOPY size")
+                    offset: int = ex.int_of(state.pop(), "symbolic CALLDATACOPY offset")
+                    size: int = ex.int_of(state.pop(), "symbolic CALLDATACOPY size")
 
                     if size:
                         data: ByteVec = ex.message().calldata_slice(offset, size)
                         data = data.concretize(ex.path.concretization.substitution)
-                        ex.st.set_mslice(loc, data)
+                        state.set_mslice(loc, data)
 
                 elif opcode == EVM.CODESIZE:
-                    ex.st.push_any(len(ex.pgm))
+                    state.push_any(len(ex.pgm))
 
                 elif opcode == EVM.CODECOPY:
                     loc: int = ex.mloc(check_size=False)
-                    offset: int = ex.st.popi()
-                    size: int = ex.int_of(ex.st.pop(), "symbolic CODECOPY size")
+                    offset: int = state.popi()
+                    size: int = ex.int_of(state.pop(), "symbolic CODECOPY size")
 
                     if size:
                         # TODO: hide symbolic support behind a feature flag?
@@ -3211,10 +3232,10 @@ class SEVM:
                                 BV(f"codeslice_uint{size * 8}_{uid()}", size=size * 8)
                             )
                         )
-                        ex.st.set_mslice(loc, codeslice)
+                        state.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.GAS:
-                    ex.st.push_any(f_gas(con(ex.new_gas_id())))
+                    state.push_any(f_gas(con(ex.new_gas_id())))
 
                 elif EVM.LOG0 <= opcode <= EVM.LOG4:
                     if ex.message().is_static:
@@ -3222,9 +3243,9 @@ class SEVM:
 
                     num_topics: int = opcode - EVM.LOG0
                     loc: int = ex.mloc()
-                    size: int = ex.int_of(ex.st.pop(), "symbolic LOG data size")
-                    topics = list(ex.st.pop() for _ in range(num_topics))
-                    data = ex.st.mslice(loc, size)
+                    size: int = ex.int_of(state.pop(), "symbolic LOG data size")
+                    topics = list(state.pop() for _ in range(num_topics))
+                    data = state.mslice(loc, size)
                     ex.emit_log(EventLog(ex.this(), topics, data))
 
                 elif opcode in [
@@ -3233,7 +3254,7 @@ class SEVM:
                     EVM.DELEGATECALL,
                     EVM.STATICCALL,
                 ]:
-                    to = uint160(ex.st.peek(2))
+                    to = uint160(state.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack)
 
                     self.call(ex, opcode, to_alias, stack)
@@ -3244,12 +3265,12 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.RETURNDATASIZE:
-                    ex.st.push_any(ex.returndatasize())
+                    state.push_any(ex.returndatasize())
 
                 elif opcode == EVM.RETURNDATACOPY:
                     loc: int = ex.mloc(check_size=False)
-                    offset = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY offset")
-                    size: int = ex.int_of(ex.st.pop(), "symbolic RETURNDATACOPY size")
+                    offset = ex.int_of(state.pop(), "symbolic RETURNDATACOPY offset")
+                    size: int = ex.int_of(state.pop(), "symbolic RETURNDATACOPY size")
 
                     if size:
                         # no need to check for a huge size because reading out of bounds reverts
@@ -3257,27 +3278,27 @@ class SEVM:
                             raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
 
                         data: ByteVec = ex.returndata().slice(offset, offset + size)
-                        ex.st.set_mslice(loc, data)
+                        state.set_mslice(loc, data)
 
                 elif opcode == EVM.BYTE:
-                    idx = ex.st.popi()
-                    w: BV = ex.st.popi()
+                    idx = state.popi()
+                    w: BV = state.popi()
                     if idx.is_concrete:
-                        ex.st.push(w.byte(idx.value, output_size=256))
+                        state.push(w.byte(idx.value, output_size=256))
                     else:
                         debug_once(
                             f"Warning: the use of symbolic BYTE indexing may potentially "
                             f"impact the performance of symbolic reasoning: BYTE {idx} {w}"
                         )
-                        ex.st.push_any(self.sym_byte_of(idx.value, w.as_z3()))
+                        state.push_any(self.sym_byte_of(idx.value, w.as_z3()))
 
                 elif opcode == EVM.GASPRICE:
-                    ex.st.push_any(f_gasprice())
+                    state.push_any(f_gasprice())
 
                 elif opcode == EVM.EXTCODESIZE:
-                    account: BV = uint160(ex.st.peek())
+                    account: BV = uint160(state.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
-                    ex.st.pop()
+                    state.pop()
 
                     if account_alias is not None:
                         codesize = BV(len(ex.code[account_alias]))
@@ -3292,16 +3313,16 @@ class SEVM:
                             else ZERO
                         )
 
-                    ex.st.push(codesize)
+                    state.push(codesize)
 
                 elif opcode == EVM.EXTCODECOPY:
-                    account: BV = uint160(ex.st.peek())
+                    account: BV = uint160(state.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
-                    ex.st.pop()
+                    state.pop()
 
-                    loc: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
-                    offset: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY offset")
-                    size: int = ex.int_of(ex.st.pop(), "symbolic EXTCODECOPY size")
+                    loc: int = ex.int_of(state.pop(), "symbolic EXTCODECOPY offset")
+                    offset: int = ex.int_of(state.pop(), "symbolic EXTCODECOPY offset")
+                    size: int = ex.int_of(state.pop(), "symbolic EXTCODECOPY size")
 
                     if size:
                         if account_alias is None:
@@ -3314,12 +3335,12 @@ class SEVM:
                             ex.code.get(account_alias) or ByteVec()
                         )
                         codeslice: ByteVec = account_code.slice(offset, size)
-                        ex.st.set_mslice(loc, codeslice)
+                        state.set_mslice(loc, codeslice)
 
                 elif opcode == EVM.EXTCODEHASH:
-                    account: BV = uint160(ex.st.peek())
+                    account: BV = uint160(state.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
-                    ex.st.pop()
+                    state.pop()
 
                     if account_alias is not None:
                         codehash = BV(
@@ -3337,94 +3358,94 @@ class SEVM:
                     else:
                         codehash = ZERO  # vs EMPTY_KECCAK, see EIP-1052
 
-                    ex.st.push(codehash)
+                    state.push(codehash)
 
                 elif opcode == EVM.BLOCKHASH:
-                    ex.st.push_any(f_blockhash(ex.st.pop()))
+                    state.push_any(f_blockhash(state.pop()))
 
                 elif opcode == EVM.COINBASE:
-                    ex.st.push_any(ex.block.coinbase)
+                    state.push_any(ex.block.coinbase)
 
                 elif opcode == EVM.TIMESTAMP:
-                    ex.st.push_any(ex.block.timestamp)
+                    state.push_any(ex.block.timestamp)
 
                 elif opcode == EVM.NUMBER:
-                    ex.st.push_any(ex.block.number)
+                    state.push_any(ex.block.number)
 
                 elif opcode == EVM.DIFFICULTY:
-                    ex.st.push_any(ex.block.difficulty)
+                    state.push_any(ex.block.difficulty)
 
                 elif opcode == EVM.GASLIMIT:
-                    ex.st.push_any(ex.block.gaslimit)
+                    state.push_any(ex.block.gaslimit)
 
                 elif opcode == EVM.CHAINID:
-                    ex.st.push_any(ex.block.chainid)
+                    state.push_any(ex.block.chainid)
 
                 elif opcode == EVM.SELFBALANCE:
-                    ex.st.push_any(ex.balance_of(ex.this()))
+                    state.push_any(ex.balance_of(ex.this()))
 
                 elif opcode == EVM.BASEFEE:
-                    ex.st.push_any(ex.block.basefee)
+                    state.push_any(ex.block.basefee)
 
                 elif opcode == EVM.PC:
-                    ex.st.push_any(ex.pc)
+                    state.push_any(ex.pc)
 
                 elif opcode == EVM.MSIZE:
-                    size: int = len(ex.st.memory)
+                    size: int = len(state.memory)
                     # round up to the next multiple of 32
                     size = ((size + 31) // 32) * 32
-                    ex.st.push_any(size)
+                    state.push_any(size)
 
                 elif opcode == EVM.MCOPY:
-                    dst_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY dstOffset")
-                    src_offset = ex.int_of(ex.st.pop(), "symbolic MCOPY srcOffset")
-                    size = ex.int_of(ex.st.pop(), "symbolic MCOPY size")
+                    dst_offset = ex.int_of(state.pop(), "symbolic MCOPY dstOffset")
+                    src_offset = ex.int_of(state.pop(), "symbolic MCOPY srcOffset")
+                    size = ex.int_of(state.pop(), "symbolic MCOPY size")
 
                     if size:
-                        data = ex.st.mslice(src_offset, size)
-                        ex.st.set_mslice(dst_offset, data)
+                        data = state.mslice(src_offset, size)
+                        state.set_mslice(dst_offset, data)
 
                 elif opcode == EVM.MSTORE8:
                     loc: int = ex.mloc(check_size=True)
-                    val: Word = ex.st.pop()
-                    ex.st.memory.set_byte(loc, uint8(val))
+                    val: Word = state.pop()
+                    state.memory.set_byte(loc, uint8(val))
 
                 elif opcode == EVM.TLOAD:
-                    slot: Word = ex.st.popi()
-                    ex.st.push_any(self.sload(ex, ex.this(), slot, transient=True))
+                    slot: Word = state.popi()
+                    state.push_any(self.sload(ex, ex.this(), slot, transient=True))
 
                 elif opcode == EVM.TSTORE:
-                    slot: Word = ex.st.popi()
-                    value: Word = ex.st.popi()
+                    slot: Word = state.popi()
+                    value: Word = state.popi()
                     self.sstore(ex, ex.this(), slot, value, transient=True)
 
                 elif opcode == EVM.SLT:
-                    w1: BV = ex.st.popi()
-                    w2: BV = ex.st.popi()
-                    ex.st.push(w1.slt(w2))  # bvslt
+                    w1: BV = state.popi()
+                    w2: BV = state.popi()
+                    state.push(w1.slt(w2))  # bvslt
 
                 elif opcode == EVM.SGT:
-                    w1: BV = ex.st.popi()
-                    w2: BV = ex.st.popi()
-                    ex.st.push(w1.sgt(w2))  # bvsgt
+                    w1: BV = state.popi()
+                    w2: BV = state.popi()
+                    state.push(w1.sgt(w2))  # bvsgt
 
                 elif opcode == EVM.SAR:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
-                    ex.st.push(w2.ashr(w1))  # bvashr
+                    w1 = state.popi()
+                    w2 = state.popi()
+                    state.push(w2.ashr(w1))  # bvashr
 
                 elif opcode == EVM.ADDMOD:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
-                    w3 = ex.st.popi()
+                    w1 = state.popi()
+                    w2 = state.popi()
+                    w3 = state.popi()
 
                     result = w1.addmod(w2, w3, abstraction=f_mod[w1.size + 8])
-                    ex.st.push(result)
+                    state.push(result)
 
                 elif opcode == EVM.MULMOD:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
-                    w3 = ex.st.popi()
+                    w1 = state.popi()
+                    w2 = state.popi()
+                    w3 = state.popi()
 
                     newsize = 2 * w1.size
                     result = w1.mulmod(
@@ -3433,15 +3454,15 @@ class SEVM:
                         mul_abstraction=f_mul[newsize],
                         mod_abstraction=f_mod[newsize],
                     )
-                    ex.st.push(result)
+                    state.push(result)
 
                 elif opcode == EVM.EXP:
-                    ex.st.push(self.arith(ex, opcode, ex.st.popi(), ex.st.popi()))
+                    state.push(self.arith(ex, opcode, state.popi(), state.popi()))
 
                 elif opcode == EVM.SIGNEXTEND:
-                    w1 = ex.int_of(ex.st.popi(), "symbolic SIGNEXTEND size")
-                    w2 = ex.st.popi()
-                    ex.st.push(w2.signextend(w1))
+                    w1 = ex.int_of(state.popi(), "symbolic SIGNEXTEND size")
+                    w2 = state.popi()
+                    state.push(w2.signextend(w1))
 
                 else:
                     # TODO: switch to InvalidOpcode when we have full opcode coverage
