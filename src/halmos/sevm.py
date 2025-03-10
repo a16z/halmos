@@ -2818,11 +2818,20 @@ class SEVM:
 
         # otherwise, create a new execution for feasible targets
         elif self.options.symbolic_jump:
-            for target in ex.pgm.valid_jumpdests():
-                target_reachable = simplify(dst.as_z3() == target)
-                if ex.check(target_reachable) != unsat:  # jump
-                    new_ex = self.create_branch(ex, target_reachable, target)
-                    stack.push(new_ex)
+            reachable_targets = [
+                target
+                for target in ex.pgm.valid_jumpdests()
+                if ex.check(dst.as_z3() == target) != unsat
+            ]
+
+            if not reachable_targets:
+                raise InvalidJumpDestError(
+                    f"Could not find reachable jump destination for {dst}"
+                )
+
+            for target in reachable_targets:
+                new_ex = self.create_branch(ex, dst.as_z3() == target, target)
+                stack.push(new_ex)
         else:
             raise NotConcreteError(f"symbolic JUMP target: {dst}")
 
@@ -3077,28 +3086,28 @@ class SEVM:
                     ex.st.push(self.arith(ex, opcode, ex.st.popi(), ex.st.popi()))
 
                 elif opcode == EVM.LT:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
+                    w1: BV = ex.st.popi()
+                    w2: BV = ex.st.popi()
                     ex.st.push(w1.ult(w2))  # bvult
 
                 elif opcode == EVM.GT:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
+                    w1: BV = ex.st.popi()
+                    w2: BV = ex.st.popi()
                     ex.st.push(w1.ugt(w2))  # bvugt
 
                 elif opcode == EVM.SLT:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
+                    w1: BV = ex.st.popi()
+                    w2: BV = ex.st.popi()
                     ex.st.push(w1.slt(w2))  # bvslt
 
                 elif opcode == EVM.SGT:
-                    w1 = ex.st.popi()
-                    w2 = ex.st.popi()
+                    w1: BV = ex.st.popi()
+                    w2: BV = ex.st.popi()
                     ex.st.push(w1.sgt(w2))  # bvsgt
 
                 elif opcode == EVM.EQ:
-                    w1 = ex.st.pop()
-                    w2 = ex.st.pop()
+                    w1: BV = ex.st.pop()
+                    w2: BV = ex.st.pop()
 
                     match (w1, w2):
                         case (Bool(), Bool()):
@@ -3358,7 +3367,9 @@ class SEVM:
                         codeslice = (
                             ex.pgm.slice(int(offset), size)
                             if offset.is_concrete
-                            else ByteVec(BV("codeslice", size=size * 8))
+                            else ByteVec(
+                                BV(f"codeslice_uint{size * 8}_{uid()}", size=size * 8)
+                            )
                         )
                         ex.st.set_mslice(loc, codeslice)
 
