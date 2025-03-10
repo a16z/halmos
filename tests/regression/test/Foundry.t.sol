@@ -147,6 +147,18 @@ contract NotEtchFriendly {
         console2.log("owner is", owner);
         require(msg.sender == owner, "NotEtchFriendly: only owner can beep boop");
     }
+
+    function tstore(uint256 slot, uint256 value) public {
+        assembly {
+            tstore(slot, value)
+        }
+    }
+
+    function tload(uint256 slot) public view returns (uint256 value) {
+        assembly {
+            value := tload(slot)
+        }
+    }
 }
 
 contract TestNotEtchFriendly is Test {
@@ -180,5 +192,14 @@ contract TestNotEtchFriendly is Test {
 
     function check_etch_then_load() external {
         assertEq(target.owner(), address(0));
+    }
+
+    function check_etch_then_sload() external {
+        assertEq(target.tload(0), 0);
+    }
+
+    function check_etch_then_tstore() external {
+        target.tstore(0, 42);
+        assertEq(target.tload(0), 42);
     }
 }
