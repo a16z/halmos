@@ -3159,10 +3159,14 @@ class SEVM:
 
                 insn: Instruction = ex.insn
                 opcode: int = insn.opcode
+                state: State = ex.st
 
                 # Profile instruction if enabled
                 if profile_instructions:
-                    profiler.increment(opcode)
+                    extra = ""
+                    if opcode == OP_ISZERO:
+                        extra = "Bool" if "Bool" in type(state.top()).__name__ else "BV"
+                    profiler.increment(opcode, extra)
 
                 if max_depth and step_id > max_depth:
                     warn(
@@ -3173,8 +3177,6 @@ class SEVM:
 
                 if print_steps:
                     print(ex.dump(print_mem=print_mem))
-
-                state: State = ex.st
 
                 # Reordered based on frequency data
                 if OP_PUSH1 <= opcode <= OP_PUSH31:
@@ -3745,14 +3747,13 @@ class Profiler:
             self.counters = Counter()
             self._initialized = True
 
-    def increment(self, opcode: int) -> None:
-        self.counters[opcode] += 1
+    def increment(self, opcode: int, extra: str = "") -> None:
+        key = f"{mnemonic(opcode)}-{extra}" if extra else mnemonic(opcode)
+        self.counters[key] += 1
 
     def get_top_instructions(self, n: int = 20) -> list[tuple[str, int]]:
         """Returns the top n most executed instructions as (mnemonic, count) tuples"""
-        return [
-            (mnemonic(opcode), count) for opcode, count in self.counters.most_common(n)
-        ]
+        return [(key, count) for key, count in self.counters.most_common(n)]
 
     def reset(self) -> None:
         raise NotImplementedError("Resetting the profiler is not supported")
