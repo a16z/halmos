@@ -3277,8 +3277,8 @@ class SEVM:
                     state.set_top(state.topi().lshl(w1))
 
                 elif opcode == OP_AND:
-                    w1 = state.popi()
-                    state.set_top(state.topi().bitwise_and(w1))
+                    w1 = state.pop()
+                    state.set_top(bitwise(OP_AND, w1, state.top()))
 
                 # Rest of the less frequent opcodes
 
@@ -3329,8 +3329,8 @@ class SEVM:
                     continue
 
                 elif opcode == OP_OR:
-                    w1 = state.popi()
-                    state.set_top(w1.bitwise_or(state.topi()))
+                    w1 = state.pop()
+                    state.set_top(bitwise(OP_OR, w1, state.top()))
 
                 elif opcode == OP_XOR:
                     w1 = state.popi()

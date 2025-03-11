@@ -67,7 +67,6 @@ from .mapper import BuildOut, DeployAddressMapper
 from .processes import ExecutorRegistry, ShutdownError
 from .sevm import (
     EMPTY_BALANCE,
-    EVM,
     FOUNDRY_CALLER,
     FOUNDRY_ORIGIN,
     FOUNDRY_TEST,
@@ -99,6 +98,7 @@ from .solve import (
 )
 from .traces import render_trace, rendered_trace
 from .utils import (
+    EVM,
     Address,
     BitVecSort256,
     NamedTimer,
