@@ -829,8 +829,8 @@ class HalmosBitVec:
     def ugt(self, other: BV) -> HalmosBool:
         assert self._size == other._size
 
-        if self.is_concrete and other.is_concrete:
-            return HalmosBool(self.value > other.value)
+        if not self._symbolic and not other._symbolic:
+            return TRUE if self.value > other.value else FALSE
 
         return HalmosBool(UGT(self.as_z3(), other.as_z3()))
 
