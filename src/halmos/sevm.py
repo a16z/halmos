@@ -3099,8 +3099,10 @@ class SEVM:
         yield from self.run(ex0)
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
+        next_ex: Exec | None = ex0
+
         stack: Worklist = Worklist()
-        stack.push(ex0)
+        # stack.push(ex0)
 
         def finalize(ex: Exec):
             # if it's at the top-level, there is no callback; yield the current execution state
@@ -3131,8 +3133,9 @@ class SEVM:
         # not strictly necessary, but helps type checking
         ex: Exec | None = None
 
-        while (ex := stack.pop()) is not None:
+        while (ex := next_ex or stack.pop()) is not None:
             try:
+                next_ex = None
                 step_id += 1
 
                 # display progress
@@ -3643,7 +3646,7 @@ class SEVM:
                     raise HalmosException(f"Unsupported opcode {mnemonic(opcode)}")
 
                 ex.advance(pc=insn.next_pc)
-                stack.push(ex)
+                next_ex = ex
 
             except InfeasiblePath:
                 # ignore infeasible path
@@ -3670,8 +3673,8 @@ class SEVM:
 
         if self.options.statistics and self.options.verbose:
             elapsed = timer() - start_time
-            speed = step_id // elapsed
-            print(f"[speed] {speed:,} ops/s")
+            speed = step_id / elapsed
+            print(f"[speed] {int(speed):,} ops/s")
 
     def mk_exec(
         self,
