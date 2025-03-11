@@ -170,6 +170,26 @@ CHEATCODE_ADDRESSES: tuple[BV, ...] = (
     console.address,
 )
 
+CALL_OPCODES = (
+    EVM.CALL,
+    EVM.CALLCODE,
+    EVM.DELEGATECALL,
+    EVM.STATICCALL,
+)
+
+CREATE_OPCODES = (
+    EVM.CREATE,
+    EVM.CREATE2,
+)
+
+TERMINATING_OPCODES = (
+    EVM.STOP,
+    EVM.RETURN,
+    EVM.REVERT,
+    EVM.INVALID,
+)
+
+
 # (pc, (jumpdest, ...))
 # the jumpdests are stored as strings to avoid the cost of converting bv values
 JumpID = tuple[int, tuple[str]]
@@ -3139,7 +3159,7 @@ class SEVM:
                     w1: BV = state.popi()
                     state.set_top(w1.ult(state.topi()))  # bvult
 
-                elif opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
+                elif opcode in TERMINATING_OPCODES:
                     if opcode == EVM.STOP:
                         ex.halt(data=ByteVec())
 
@@ -3255,19 +3275,14 @@ class SEVM:
                     data = state.mslice(loc, size)
                     ex.emit_log(EventLog(ex.this(), topics, data))
 
-                elif opcode in [
-                    EVM.CALL,
-                    EVM.CALLCODE,
-                    EVM.DELEGATECALL,
-                    EVM.STATICCALL,
-                ]:
+                elif opcode in CALL_OPCODES:
                     to = uint160(state.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack)
 
                     self.call(ex, opcode, to_alias, stack)
                     continue
 
-                elif opcode in [EVM.CREATE, EVM.CREATE2]:
+                elif opcode in CREATE_OPCODES:
                     self.create(ex, opcode, stack)
                     continue
 
