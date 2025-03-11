@@ -3668,6 +3668,11 @@ class SEVM:
                 yield ex  # early exit; do not call finalize()
                 continue
 
+        if self.options.statistics and self.options.verbose:
+            elapsed = timer() - start_time
+            speed = step_id // elapsed
+            print(f"[speed] {speed:,} ops/s")
+
     def mk_exec(
         self,
         #
