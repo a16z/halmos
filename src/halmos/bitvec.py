@@ -92,13 +92,9 @@ class HalmosBool:
 
     __slots__ = ("_value", "_symbolic")
 
-    # class attributes
-    TRUE = None
-    FALSE = None
-
     def __new__(cls, value, *, do_simplify: bool = True):
         if isinstance(value, bool):
-            return cls.TRUE if value else cls.FALSE
+            return TRUE if value else FALSE
 
         if isinstance(value, HalmosBool):
             return value
@@ -173,12 +169,12 @@ class HalmosBool:
     @property
     def is_true(self) -> bool:
         """checks if it is the literal True"""
-        return self is HalmosBool.TRUE
+        return self is TRUE
 
     @property
     def is_false(self) -> bool:
         """checks if it is the literal False"""
-        return self is HalmosBool.FALSE
+        return self is FALSE
 
     def __eq__(self, other: Any) -> bool:
         """
@@ -199,7 +195,13 @@ class HalmosBool:
         )
 
     def is_zero(self) -> "HalmosBool":
-        return self.bitwise_not()
+        if self is TRUE:
+            return FALSE
+
+        if self is FALSE:
+            return TRUE
+
+        return HalmosBool(Not(self._value))
 
     def is_non_zero(self) -> "HalmosBool":
         return self
@@ -208,67 +210,61 @@ class HalmosBool:
         return HalmosBool(self._value == other._value)
 
     def neg(self) -> "HalmosBool":
-        return self.bitwise_not()
+        return self.is_zero()
 
     def bitwise_not(self) -> "HalmosBool":
-        if self is HalmosBool.TRUE:
-            return HalmosBool.FALSE
-
-        if self is HalmosBool.FALSE:
-            return HalmosBool.TRUE
-
-        return HalmosBool(Not(self._value))
+        return self.is_zero()
 
     def bitwise_and(self, other: "HalmosBool") -> "HalmosBool":
-        if self is HalmosBool.TRUE:
+        if self is TRUE:
             return other
 
-        if self is HalmosBool.FALSE:
+        if self is FALSE:
             return self
 
-        if other is HalmosBool.TRUE:
+        if other is TRUE:
             return self
 
-        if other is HalmosBool.FALSE:
+        if other is FALSE:
             return other
 
         return HalmosBool(And(self.as_z3(), other.as_z3()))
 
     def bitwise_or(self, other: "HalmosBool") -> "HalmosBool":
-        if self is HalmosBool.TRUE:
+        if self is TRUE:
             return self
 
-        if other is HalmosBool.TRUE:
+        if other is TRUE:
             return other
 
-        if self is HalmosBool.FALSE:
+        if self is FALSE:
             return other
 
-        if other is HalmosBool.FALSE:
+        if other is FALSE:
             return self
 
         return HalmosBool(Or(self.as_z3(), other.as_z3()))
 
     def bitwise_xor(self, other: "HalmosBool") -> "HalmosBool":
-        if self is HalmosBool.TRUE:
+        if self is TRUE:
             return other.bitwise_not()
 
-        if other is HalmosBool.TRUE:
+        if other is TRUE:
             return self.bitwise_not()
 
-        if self is HalmosBool.FALSE:
+        if self is FALSE:
             return other
 
-        if other is HalmosBool.FALSE:
+        if other is FALSE:
             return self
 
         return HalmosBool(self.as_z3() ^ other.as_z3())
 
     def as_bv(self, size: int = 1) -> BV:
-        if self is HalmosBool.TRUE:
+        if self is TRUE:
             return HalmosBitVec(1, size=size)
 
-        if self is HalmosBool.FALSE:
+        if self is FALSE:
             return HalmosBitVec(0, size=size)
 
         expr = If(self._value, BitVecVal(1, size), BitVecVal(0, size))
@@ -276,12 +272,12 @@ class HalmosBool:
 
 
 # initialize class attributes
-HalmosBool.TRUE = object.__new__(HalmosBool)
-HalmosBool.FALSE = object.__new__(HalmosBool)
-HalmosBool.TRUE._value = True
-HalmosBool.FALSE._value = False
-HalmosBool.TRUE._symbolic = False
-HalmosBool.FALSE._symbolic = False
+TRUE = object.__new__(HalmosBool)
+FALSE = object.__new__(HalmosBool)
+TRUE._value = True
+FALSE._value = False
+TRUE._symbolic = False
+FALSE._symbolic = False
 
 
 class HalmosBitVec:
