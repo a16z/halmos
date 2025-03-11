@@ -664,7 +664,8 @@ class State:
         )
 
     def push(self, v: Bool | BV) -> None:
-        assert isinstance(v, BV) and v.size == 256 or isinstance(v, Bool)
+        type_v = type(v)
+        assert type_v is BV and v.size == 256 or type_v is Bool
         self.stack.append(v)
 
     def push_any(self, v: Any) -> None:
@@ -838,7 +839,7 @@ class Contract:
             while pc < N:
                 try:
                     opcode = bytecode[pc]
-                    if not isinstance(opcode, int):
+                    if type(opcode) is not int:
                         raise NotConcreteError(f"symbolic opcode at pc={pc}")
 
                     if opcode == OP_JUMPDEST:
@@ -2129,12 +2130,8 @@ SomeStorage = TypeVar("SomeStorage", bound=Storage)
 
 
 def bitwise(op, x: Word, y: Word) -> Word:
-    # only convert to BV if one of the operands is a bool
-    if isinstance(x, Bool) and isinstance(y, BV):
-        return bitwise(op, BV(x, size=256), y)
-
-    if isinstance(x, BV) and isinstance(y, Bool):
-        return bitwise(op, x, BV(y, size=256))
+    if type(x) is not type(y):
+        return bitwise(op, BV(x, size=256), BV(y, size=256))
 
     # at this point, we expect x and y to be both Bool or both BV
     if op == OP_AND:
@@ -2311,7 +2308,7 @@ class SEVM:
         self, ex: Exec, target: Address, stack, allow_branching=True
     ) -> Address:
         # TODO: avoid the extra wrapping/unwrapping
-        if isinstance(target, BV):
+        if type(target) is BV:
             target = target.as_z3()
 
         assert_bv(target)
