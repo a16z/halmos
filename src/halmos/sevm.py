@@ -694,7 +694,8 @@ class State:
     def popi(self) -> BV:
         """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
 
-        return BV(self.pop(), size=256)
+        val = self.pop()
+        return val if isinstance(val, BV) else BV(val, size=256)
 
     def peek(self, n: int = 1) -> Word:
         try:
