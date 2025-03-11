@@ -2980,40 +2980,6 @@ class SEVM:
                 }
             stack.push(new_ex_false)
 
-    def jump(self, ex: Exec, stack: Worklist) -> None:
-        # no need to explicitly convert to BV
-        dst = ex.st.pop()
-
-        # if dst is concrete, just jump
-        if dst.is_concrete:
-            # target can be an int or bool here, the membership check works for both
-            target = dst.value
-            if target not in ex.pgm.valid_jumpdests():
-                raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
-
-            # we just validated that this is indeed a JUMPDEST so we can safely skip it
-            ex.advance(pc=target + 1)
-            stack.push(ex)
-
-        # otherwise, create a new execution for feasible targets
-        elif self.options.symbolic_jump:
-            reachable_targets = [
-                target
-                for target in ex.pgm.valid_jumpdests()
-                if ex.check(dst.as_z3() == target) != unsat
-            ]
-
-            if not reachable_targets:
-                raise InvalidJumpDestError(
-                    f"Could not find reachable jump destination for {dst}"
-                )
-
-            for target in reachable_targets:
-                new_ex = self.create_branch(ex, dst.as_z3() == target, target)
-                stack.push(new_ex)
-        else:
-            raise NotConcreteError(f"symbolic JUMP target: {dst}")
-
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
         new_path = ex.path.branch(cond)
         new_ex = Exec(
@@ -3251,7 +3217,38 @@ class SEVM:
                     state.swap(opcode - OP_SWAP1 + 1)
 
                 elif opcode == OP_JUMP:
-                    self.jump(ex, stack)
+                    # no need to explicitly convert to BV
+                    dst = state.pop()
+
+                    # if dst is concrete, just jump
+                    if dst.is_concrete:
+                        # target can be an int or bool here, the membership check works for both
+                        target = dst.value
+                        if target not in ex.pgm.valid_jumpdests():
+                            raise InvalidJumpDestError(target)
+
+                        # we just validated that this is indeed a JUMPDEST so we can safely skip it
+                        ex.advance(pc=target + 1)
+                        stack.push(ex)
+
+                    # otherwise, create a new execution for feasible targets
+                    elif self.options.symbolic_jump:
+                        reachable_targets = [
+                            target
+                            for target in ex.pgm.valid_jumpdests()
+                            if ex.check(dst.as_z3() == target) != unsat
+                        ]
+
+                        if not reachable_targets:
+                            raise InvalidJumpDestError(dst)
+
+                        for target in reachable_targets:
+                            cond = dst.as_z3() == target
+                            new_ex = self.create_branch(ex, cond, target)
+                            stack.push(new_ex)
+                    else:
+                        raise NotConcreteError(f"symbolic JUMP target: {dst}")
+
                     continue
 
                 elif opcode == OP_JUMPI:
@@ -3643,7 +3640,7 @@ class SEVM:
                     # this halts the path, but we should only halt the current context
                     raise HalmosException(f"Unsupported opcode {mnemonic(opcode)}")
 
-                ex.advance(insn.next_pc)
+                ex.advance(pc=insn.next_pc)
                 stack.push(ex)
 
             except InfeasiblePath:
