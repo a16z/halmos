@@ -37,6 +37,7 @@ from z3 import (
     Extract,
     Function,
     If,
+    Not,
     Select,
     Solver,
     Store,
@@ -2895,26 +2896,12 @@ class SEVM:
         self,
         ex: Exec,
         stack: Worklist,
+        target: int,
+        cond: Bool,
     ) -> None:
-        target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
-        cond = Bool(ex.st.pop())
-
-        if cond.is_true:
-            if target not in ex.pgm.valid_jumpdests():
-                raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
-
-            # we just validated that this is indeed a JUMPDEST so we can safely skip it
-            ex.advance(pc=target + 1)
-            stack.push(ex)
-            return
-
-        if cond.is_false:
-            ex.advance()
-            stack.push(ex)
-            return
-
-        cond_true = simplify(cond.as_z3())
-        cond_false = simplify(cond.neg().as_z3())
+        cond_z3 = cond.as_z3()
+        cond_true = simplify(cond_z3)
+        cond_false = simplify(Not(cond_z3))
 
         potential_true: bool = ex.check(cond_true) != unsat
         potential_false: bool = ex.check(cond_false) != unsat
@@ -3257,7 +3244,25 @@ class SEVM:
                     continue
 
                 elif opcode == OP_JUMPI:
-                    self.jumpi(ex, stack)
+                    target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
+                    cond = Bool(ex.st.pop())
+
+                    if cond.is_true:
+                        if target not in ex.pgm.valid_jumpdests():
+                            raise InvalidJumpDestError(target)
+
+                        # we just validated that this is indeed a JUMPDEST so we can safely skip it
+                        ex.advance(pc=target + 1)
+                        next_ex = ex
+                        continue
+
+                    if cond.is_false:
+                        ex.advance(pc=insn.next_pc)
+                        next_ex = ex
+                        continue
+
+                    # handle symbolic conditions
+                    self.jumpi(ex, stack, target, cond)
                     continue
 
                 elif opcode == OP_ISZERO:
