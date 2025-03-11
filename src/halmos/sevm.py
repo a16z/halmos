@@ -2981,10 +2981,12 @@ class SEVM:
             stack.push(new_ex_false)
 
     def jump(self, ex: Exec, stack: Worklist) -> None:
-        dst = ex.st.popi()
+        # no need to explicitly convert to BV
+        dst = ex.st.pop()
 
         # if dst is concrete, just jump
         if dst.is_concrete:
+            # target can be an int or bool here, the membership check works for both
             target = dst.value
             if target not in ex.pgm.valid_jumpdests():
                 raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
