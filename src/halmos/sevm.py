@@ -873,15 +873,15 @@ class Contract:
     def decode_instruction(self, pc: int) -> Instruction:
         """decode instruction at pc and cache the result"""
 
-        # Return None if pc is out of bounds
-        if pc < 0:
-            raise ValueError(f"invalid {pc=}")
+        try:
+            if (insn := self._insn[pc]) is not None:
+                return insn
+        except IndexError as e:
+            if pc < 0:
+                raise ValueError(f"invalid {pc=}") from e
 
-        if pc >= len(self._insn):
-            return Instruction.STOP
-
-        if (insn := self._insn[pc]) is not None:
-            return insn
+            if pc >= len(self._insn):
+                return Instruction.STOP
 
         insn = self._decode_instruction(pc)
         self._insn[pc] = insn
@@ -3640,7 +3640,7 @@ class SEVM:
                     # this halts the path, but we should only halt the current context
                     raise HalmosException(f"Unsupported opcode {mnemonic(opcode)}")
 
-                ex.advance()
+                ex.advance(insn.next_pc)
                 stack.push(ex)
 
             except InfeasiblePath:
