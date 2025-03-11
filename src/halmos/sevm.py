@@ -678,14 +678,23 @@ class State:
             raise StackUnderflowError() from e
 
     def top(self) -> Bool | BV:
+        """
+        Returns the top element without popping it from the stack.
+        """
         try:
             return self.stack[-1]
         except IndexError as e:
             raise StackUnderflowError() from e
 
     def topi(self) -> BV:
+        """
+        The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs
+
+        Returns the top element without popping it from the stack.
+        """
+
         val = self.top()
-        return val if isinstance(val, BV) else BV(val, size=256)
+        return val if type(val) is BV else BV(val, size=256)
 
     def pop(self) -> Word:
         try:
@@ -697,7 +706,7 @@ class State:
         """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
 
         val = self.pop()
-        return val if isinstance(val, BV) else BV(val, size=256)
+        return val if type(val) is BV else BV(val, size=256)
 
     def peek(self, n: int = 1) -> Word:
         try:
