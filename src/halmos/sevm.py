@@ -3234,7 +3234,7 @@ class SEVM:
 
                         # we just validated that this is indeed a JUMPDEST so we can safely skip it
                         ex.advance(pc=target + 1)
-                        stack.push(ex)
+                        next_ex = ex
 
                     # otherwise, create a new execution for feasible targets
                     elif self.options.symbolic_jump:
