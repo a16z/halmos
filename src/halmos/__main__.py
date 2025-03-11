@@ -148,6 +148,7 @@ class Exitcode(Enum):
 
 
 PASS = Exitcode.PASS.value
+COUNTEREXAMPLE = Exitcode.COUNTEREXAMPLE.value
 
 
 def with_devdoc(args: HalmosConfig, fn_sig: str, contract_json: dict) -> HalmosConfig:
@@ -446,7 +447,7 @@ def run_invariant_tests(
     test_results_map = {r.name: r for r in test_results}
 
     # Remaining tests that have not failed yet, to be executed in the next depth
-    funsigs = [r.name for r in test_results if r.exitcode == PASS]
+    funsigs = [r.name for r in test_results if r.exitcode != COUNTEREXAMPLE]
 
     # if no more invariant tests to run, stop
     if not funsigs:
@@ -580,10 +581,10 @@ def step_invariant_tests(
                 test_results_map.update({r.name: r for r in test_results})
 
                 # update remaining invariant tests
-                funsigs = [r.name for r in test_results if r.exitcode == PASS]
+                funsigs = [r.name for r in test_results if r.exitcode != COUNTEREXAMPLE]
 
                 # print call trace if failed, to provide additional info for counterexamples
-                if any(r.exitcode != PASS for r in test_results):
+                if any(r.exitcode == COUNTEREXAMPLE for r in test_results):
                     print("Path:")
                     print(indent_text(hexify(post_ex.path)))
 
