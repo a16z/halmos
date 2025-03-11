@@ -684,7 +684,8 @@ class State:
             raise StackUnderflowError() from e
 
     def topi(self) -> BV:
-        return BV(self.top(), size=256)
+        val = self.top()
+        return val if isinstance(val, BV) else BV(val, size=256)
 
     def pop(self) -> Word:
         try:
