@@ -88,7 +88,6 @@ from .logs import (
 )
 from .mapper import BuildOut
 from .utils import (
-    EVM,
     Address,
     BitVecSort160,
     BitVecSort256,
@@ -170,23 +169,171 @@ CHEATCODE_ADDRESSES: tuple[BV, ...] = (
     console.address,
 )
 
+OP_STOP = 0x00
+OP_ADD = 0x01
+OP_MUL = 0x02
+OP_SUB = 0x03
+OP_DIV = 0x04
+OP_SDIV = 0x05
+OP_MOD = 0x06
+OP_SMOD = 0x07
+OP_ADDMOD = 0x08
+OP_MULMOD = 0x09
+OP_EXP = 0x0A
+OP_SIGNEXTEND = 0x0B
+OP_LT = 0x10
+OP_GT = 0x11
+OP_SLT = 0x12
+OP_SGT = 0x13
+OP_EQ = 0x14
+OP_ISZERO = 0x15
+OP_AND = 0x16
+OP_OR = 0x17
+OP_XOR = 0x18
+OP_NOT = 0x19
+OP_BYTE = 0x1A
+OP_SHL = 0x1B
+OP_SHR = 0x1C
+OP_SAR = 0x1D
+OP_SHA3 = 0x20
+OP_ADDRESS = 0x30
+OP_BALANCE = 0x31
+OP_ORIGIN = 0x32
+OP_CALLER = 0x33
+OP_CALLVALUE = 0x34
+OP_CALLDATALOAD = 0x35
+OP_CALLDATASIZE = 0x36
+OP_CALLDATACOPY = 0x37
+OP_CODESIZE = 0x38
+OP_CODECOPY = 0x39
+OP_GASPRICE = 0x3A
+OP_EXTCODESIZE = 0x3B
+OP_EXTCODECOPY = 0x3C
+OP_RETURNDATASIZE = 0x3D
+OP_RETURNDATACOPY = 0x3E
+OP_EXTCODEHASH = 0x3F
+OP_BLOCKHASH = 0x40
+OP_COINBASE = 0x41
+OP_TIMESTAMP = 0x42
+OP_NUMBER = 0x43
+OP_DIFFICULTY = 0x44
+OP_GASLIMIT = 0x45
+OP_CHAINID = 0x46
+OP_SELFBALANCE = 0x47
+OP_BASEFEE = 0x48
+OP_POP = 0x50
+OP_MLOAD = 0x51
+OP_MSTORE = 0x52
+OP_MSTORE8 = 0x53
+OP_SLOAD = 0x54
+OP_SSTORE = 0x55
+OP_JUMP = 0x56
+OP_JUMPI = 0x57
+OP_PC = 0x58
+OP_MSIZE = 0x59
+OP_GAS = 0x5A
+OP_JUMPDEST = 0x5B
+OP_TLOAD = 0x5C
+OP_TSTORE = 0x5D
+OP_MCOPY = 0x5E
+OP_PUSH0 = 0x5F
+OP_PUSH1 = 0x60
+OP_PUSH2 = 0x61
+OP_PUSH3 = 0x62
+OP_PUSH4 = 0x63
+OP_PUSH5 = 0x64
+OP_PUSH6 = 0x65
+OP_PUSH7 = 0x66
+OP_PUSH8 = 0x67
+OP_PUSH9 = 0x68
+OP_PUSH10 = 0x69
+OP_PUSH11 = 0x6A
+OP_PUSH12 = 0x6B
+OP_PUSH13 = 0x6C
+OP_PUSH14 = 0x6D
+OP_PUSH15 = 0x6E
+OP_PUSH16 = 0x6F
+OP_PUSH17 = 0x70
+OP_PUSH18 = 0x71
+OP_PUSH19 = 0x72
+OP_PUSH20 = 0x73
+OP_PUSH21 = 0x74
+OP_PUSH22 = 0x75
+OP_PUSH23 = 0x76
+OP_PUSH24 = 0x77
+OP_PUSH25 = 0x78
+OP_PUSH26 = 0x79
+OP_PUSH27 = 0x7A
+OP_PUSH28 = 0x7B
+OP_PUSH29 = 0x7C
+OP_PUSH30 = 0x7D
+OP_PUSH31 = 0x7E
+OP_PUSH32 = 0x7F
+OP_DUP1 = 0x80
+OP_DUP2 = 0x81
+OP_DUP3 = 0x82
+OP_DUP4 = 0x83
+OP_DUP5 = 0x84
+OP_DUP6 = 0x85
+OP_DUP7 = 0x86
+OP_DUP8 = 0x87
+OP_DUP9 = 0x88
+OP_DUP10 = 0x89
+OP_DUP11 = 0x8A
+OP_DUP12 = 0x8B
+OP_DUP13 = 0x8C
+OP_DUP14 = 0x8D
+OP_DUP15 = 0x8E
+OP_DUP16 = 0x8F
+OP_SWAP1 = 0x90
+OP_SWAP2 = 0x91
+OP_SWAP3 = 0x92
+OP_SWAP4 = 0x93
+OP_SWAP5 = 0x94
+OP_SWAP6 = 0x95
+OP_SWAP7 = 0x96
+OP_SWAP8 = 0x97
+OP_SWAP9 = 0x98
+OP_SWAP10 = 0x99
+OP_SWAP11 = 0x9A
+OP_SWAP12 = 0x9B
+OP_SWAP13 = 0x9C
+OP_SWAP14 = 0x9D
+OP_SWAP15 = 0x9E
+OP_SWAP16 = 0x9F
+OP_LOG0 = 0xA0
+OP_LOG1 = 0xA1
+OP_LOG2 = 0xA2
+OP_LOG3 = 0xA3
+OP_LOG4 = 0xA4
+OP_CREATE = 0xF0
+OP_CALL = 0xF1
+OP_CALLCODE = 0xF2
+OP_RETURN = 0xF3
+OP_DELEGATECALL = 0xF4
+OP_CREATE2 = 0xF5
+OP_STATICCALL = 0xFA
+OP_REVERT = 0xFD
+OP_INVALID = 0xFE
+OP_SELFDESTRUCT = 0xFF
+
 CALL_OPCODES = (
-    EVM.CALL,
-    EVM.CALLCODE,
-    EVM.DELEGATECALL,
-    EVM.STATICCALL,
+    OP_CALL,
+    OP_CALLCODE,
+    OP_DELEGATECALL,
+    OP_STATICCALL,
 )
 
 CREATE_OPCODES = (
-    EVM.CREATE,
-    EVM.CREATE2,
+    OP_CREATE,
+    OP_CREATE2,
 )
 
 TERMINATING_OPCODES = (
-    EVM.STOP,
-    EVM.RETURN,
-    EVM.REVERT,
-    EVM.INVALID,
+    OP_STOP,
+    OP_RETURN,
+    OP_REVERT,
+    OP_INVALID,
 )
 
 
@@ -231,7 +378,7 @@ def jumpid_str(jumpid: JumpID) -> str:
 
 
 def insn_len(opcode: int) -> int:
-    return 1 + (opcode - EVM.PUSH0) * (EVM.PUSH1 <= opcode <= EVM.PUSH32)
+    return 1 + (opcode - OP_PUSH0) * (OP_PUSH1 <= opcode <= OP_PUSH32)
 
 
 def id_str(x: Any) -> str:
@@ -360,7 +507,7 @@ class Instruction:
 
 
 # Initialize the STOP singleton
-Instruction.STOP = Instruction(EVM.STOP)
+Instruction.STOP = Instruction(OP_STOP)
 
 
 @dataclass(frozen=True, slots=True, eq=False, order=False)
@@ -405,7 +552,7 @@ class Message:
     gas: Word | None = None
 
     def is_create(self) -> bool:
-        return self.call_scheme in (EVM.CREATE, EVM.CREATE2)
+        return self.call_scheme in (OP_CREATE, OP_CREATE2)
 
     def calldata_slice(self, start: int, size: int) -> ByteVec:
         """Wrapper around calldata access with a size check."""
@@ -682,7 +829,7 @@ class Contract:
                     if not isinstance(opcode, int):
                         raise NotConcreteError(f"symbolic opcode at pc={pc}")
 
-                    if opcode == EVM.JUMPDEST:
+                    if opcode == OP_JUMPDEST:
                         jumpdests.add(pc)
                         pc += 1
                     else:
@@ -1976,11 +2123,11 @@ def bitwise(op, x: Word, y: Word) -> Word:
         return bitwise(op, x, BV(y, size=256))
 
     # at this point, we expect x and y to be both Bool or both BV
-    if op == EVM.AND:
+    if op == OP_AND:
         return x.bitwise_and(y)
-    elif op == EVM.OR:
+    elif op == OP_OR:
         return x.bitwise_or(y)
-    elif op == EVM.XOR:
+    elif op == OP_XOR:
         return x.bitwise_xor(y)
     else:
         raise ValueError(op, x, y)
@@ -2069,16 +2216,16 @@ class SEVM:
         return term
 
     def arith(self, ex: Exec, op: int, w1: Word, w2: Word) -> Word:
-        if op == EVM.ADD:
+        if op == OP_ADD:
             return w1.add(w2)
 
-        if op == EVM.SUB:
+        if op == OP_SUB:
             return w1.sub(w2)
 
-        if op == EVM.MUL:
+        if op == OP_MUL:
             return w1.mul(w2, abstraction=f_mul[w1.size])
 
-        if op == EVM.DIV:
+        if op == OP_DIV:
             # TODO: div_xy_y
 
             term = w1.div(w2, abstraction=f_div)
@@ -2086,7 +2233,7 @@ class SEVM:
                 ex.path.append(ULE(term.as_z3(), w1.as_z3()))  # (x / y) <= x
             return term
 
-        if op == EVM.MOD:
+        if op == OP_MOD:
             term = w1.mod(w2, abstraction=f_mod[w1.size])
             if term.is_symbolic:
                 # (x % y) <= y
@@ -2094,13 +2241,13 @@ class SEVM:
                 ex.path.append(ULE(term.as_z3(), w2.as_z3()))
             return term
 
-        if op == EVM.SDIV:
+        if op == OP_SDIV:
             return w1.sdiv(w2, abstraction=f_sdiv)
 
-        if op == EVM.SMOD:
+        if op == OP_SMOD:
             return w1.smod(w2, abstraction=f_smod)
 
-        if op == EVM.EXP:
+        if op == OP_EXP:
             return w1.exp(
                 w2,
                 exp_abstraction=f_exp,
@@ -2249,7 +2396,7 @@ class SEVM:
         ex.st.pop()  # gas
 
         to: BV = uint160(ex.st.pop())
-        fund: BV = ZERO if op in [EVM.STATICCALL, EVM.DELEGATECALL] else ex.st.pop()
+        fund: BV = ZERO if op in [OP_STATICCALL, OP_DELEGATECALL] else ex.st.pop()
 
         arg_loc: int = ex.mloc(check_size=False)
         arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
@@ -2268,7 +2415,7 @@ class SEVM:
 
         def send_callvalue(condition: BoolRef | None = None) -> None:
             # no balance update for CALLCODE which transfers to itself
-            if op == EVM.CALL:
+            if op == OP_CALL:
                 # TODO: revert if context is static
                 # NOTE: we cannot use `to_alias` here because it could be None
                 self.transfer_value(ex, pranked_caller, to, fund, condition)
@@ -2284,12 +2431,12 @@ class SEVM:
             send_callvalue()
 
             message = Message(
-                target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this(),
-                caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
+                target=to if op in [OP_CALL, OP_STATICCALL] else ex.this(),
+                caller=pranked_caller if op != OP_DELEGATECALL else ex.caller(),
                 origin=pranked_origin,
-                value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
+                value=fund if op != OP_DELEGATECALL else ex.callvalue(),
                 data=arg,
-                is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
+                is_static=(ex.context.message.is_static or op == OP_STATICCALL),
                 call_scheme=op,
             )
 
@@ -2585,7 +2732,7 @@ class SEVM:
         loc: int = ex.int_of(ex.st.pop(), "symbolic CREATE offset")
         size: int = ex.int_of(ex.st.pop(), "symbolic CREATE size")
 
-        if op == EVM.CREATE2:
+        if op == OP_CREATE2:
             salt = ex.st.pop()
 
         # check if there is an active prank
@@ -2596,9 +2743,9 @@ class SEVM:
         create_code = Contract(create_hexcode)
 
         # new account address
-        if op == EVM.CREATE:
+        if op == OP_CREATE:
             new_addr = ex.new_address()
-        elif op == EVM.CREATE2:  # EVM.CREATE2
+        elif op == OP_CREATE2:  # OP_CREATE2
             # create_hexcode must be z3 expression to be passed into sha3_data
             create_hexcode = create_hexcode.unwrap()
 
@@ -3060,10 +3207,10 @@ class SEVM:
                 state: State = ex.st
 
                 # Reordered based on frequency data
-                if EVM.PUSH1 <= opcode <= EVM.PUSH31:
+                if OP_PUSH1 <= opcode <= OP_PUSH31:
                     state.push(insn.operand)
 
-                elif opcode == EVM.PUSH32:
+                elif opcode == OP_PUSH32:
                     val = insn.operand
                     assert val.size == 256
 
@@ -3082,68 +3229,68 @@ class SEVM:
                         # Symbolic value
                         state.push(val)
 
-                elif opcode == EVM.POP:
+                elif opcode == OP_POP:
                     state.pop()
 
-                elif opcode == EVM.JUMPDEST:
+                elif opcode == OP_JUMPDEST:
                     pass
 
-                elif opcode == EVM.ADD:
+                elif opcode == OP_ADD:
                     w1 = state.popi()
                     state.set_top(w1.add(state.topi()))
 
-                elif EVM.DUP1 <= opcode <= EVM.DUP16:
-                    state.dup(opcode - EVM.DUP1 + 1)
+                elif OP_DUP1 <= opcode <= OP_DUP16:
+                    state.dup(opcode - OP_DUP1 + 1)
 
-                elif EVM.SWAP1 <= opcode <= EVM.SWAP16:
-                    state.swap(opcode - EVM.SWAP1 + 1)
+                elif OP_SWAP1 <= opcode <= OP_SWAP16:
+                    state.swap(opcode - OP_SWAP1 + 1)
 
-                elif opcode == EVM.JUMP:
+                elif opcode == OP_JUMP:
                     self.jump(ex, stack)
                     continue
 
-                elif opcode == EVM.JUMPI:
+                elif opcode == OP_JUMPI:
                     self.jumpi(ex, stack)
                     continue
 
-                elif opcode == EVM.ISZERO:
+                elif opcode == OP_ISZERO:
                     state.set_top(state.top().is_zero())
 
-                elif opcode == EVM.MSTORE:
+                elif opcode == OP_MSTORE:
                     loc: int = ex.mloc(check_size=True)
                     val: BV = state.popi()
                     state.memory.set_word(loc, val)
 
-                elif opcode == EVM.MLOAD:
+                elif opcode == OP_MLOAD:
                     loc: int = ex.mloc(check_size=True)
                     state.push_any(state.memory.get_word(loc))
 
-                elif opcode == EVM.PUSH0:
+                elif opcode == OP_PUSH0:
                     state.push(ZERO)
 
-                elif opcode == EVM.SUB:
+                elif opcode == OP_SUB:
                     w1 = state.popi()
                     state.set_top(w1.sub(state.topi()))
 
-                elif opcode == EVM.SHL:
+                elif opcode == OP_SHL:
                     w1 = state.popi()
                     state.set_top(state.topi().lshl(w1))
 
-                elif opcode == EVM.AND:
+                elif opcode == OP_AND:
                     w1 = state.popi()
                     state.set_top(state.topi().bitwise_and(w1))
 
                 # Rest of the less frequent opcodes
 
-                elif opcode == EVM.SHR:
+                elif opcode == OP_SHR:
                     w1 = state.popi()
                     state.set_top(state.topi().lshr(w1))
 
-                elif opcode == EVM.GT:
+                elif opcode == OP_GT:
                     w1: BV = state.popi()
                     state.set_top(w1.ugt(state.topi()))  # bvugt
 
-                elif opcode == EVM.EQ:
+                elif opcode == OP_EQ:
                     w1: BV = state.pop()
                     w2: BV = state.pop()
 
@@ -3155,24 +3302,24 @@ class SEVM:
                         case (_, _):
                             state.push(BV(w1, size=256).eq(BV(w2, size=256)))
 
-                elif opcode == EVM.LT:
+                elif opcode == OP_LT:
                     w1: BV = state.popi()
                     state.set_top(w1.ult(state.topi()))  # bvult
 
                 elif opcode in TERMINATING_OPCODES:
-                    if opcode == EVM.STOP:
+                    if opcode == OP_STOP:
                         ex.halt(data=ByteVec())
 
-                    elif opcode == EVM.INVALID:
+                    elif opcode == OP_INVALID:
                         ex.halt(
                             data=ByteVec(),
                             error=InvalidOpcode(opcode),
                         )
 
-                    elif opcode == EVM.REVERT:
+                    elif opcode == OP_REVERT:
                         ex.halt(data=ex.ret(), error=Revert())
 
-                    elif opcode == EVM.RETURN:
+                    elif opcode == OP_RETURN:
                         ex.halt(data=ex.ret())
 
                     else:
@@ -3181,57 +3328,57 @@ class SEVM:
                     yield from finalize(ex)
                     continue
 
-                elif opcode == EVM.OR:
+                elif opcode == OP_OR:
                     w1 = state.popi()
                     state.set_top(w1.bitwise_or(state.topi()))
 
-                elif opcode == EVM.XOR:
+                elif opcode == OP_XOR:
                     w1 = state.popi()
                     state.set_top(w1.bitwise_xor(state.topi()))
 
-                elif opcode == EVM.NOT:
+                elif opcode == OP_NOT:
                     state.set_top(state.top().bitwise_not())
 
-                elif EVM.MUL <= opcode <= EVM.SMOD:  # MUL SUB DIV SDIV MOD SMOD
+                elif OP_MUL <= opcode <= OP_SMOD:  # MUL SUB DIV SDIV MOD SMOD
                     w1 = state.popi()
                     state.set_top(self.arith(ex, opcode, w1, state.topi()))
 
-                elif opcode == EVM.SLOAD:
+                elif opcode == OP_SLOAD:
                     slot: Word = state.top()
                     value = self.sload(ex, ex.this(), slot)
                     state.set_top(BV(value, size=256))
 
-                elif opcode == EVM.SSTORE:
+                elif opcode == OP_SSTORE:
                     slot: Word = state.pop()
                     value: Word = state.pop()
                     self.sstore(ex, ex.this(), slot, value)
 
-                elif opcode == EVM.SHA3:
+                elif opcode == OP_SHA3:
                     ex.sha3()
 
-                elif opcode == EVM.ADDRESS:
+                elif opcode == OP_ADDRESS:
                     state.push_any(ex.this())
 
-                elif opcode == EVM.BALANCE:
+                elif opcode == OP_BALANCE:
                     state.push_any(ex.balance_of(uint160(state.pop())))
 
-                elif opcode == EVM.ORIGIN:
+                elif opcode == OP_ORIGIN:
                     state.push_any(ex.origin())
 
-                elif opcode == EVM.CALLER:
+                elif opcode == OP_CALLER:
                     state.push_any(ex.caller())
 
-                elif opcode == EVM.CALLVALUE:
+                elif opcode == OP_CALLVALUE:
                     state.push_any(ex.callvalue())
 
-                elif opcode == EVM.CALLDATALOAD:
+                elif opcode == OP_CALLDATALOAD:
                     self.calldataload(ex, stack)
                     continue
 
-                elif opcode == EVM.CALLDATASIZE:
+                elif opcode == OP_CALLDATASIZE:
                     state.push_any(len(ex.calldata()))
 
-                elif opcode == EVM.CALLDATACOPY:
+                elif opcode == OP_CALLDATACOPY:
                     loc: int = ex.mloc(check_size=False)
                     offset: int = ex.int_of(state.pop(), "symbolic CALLDATACOPY offset")
                     size: int = ex.int_of(state.pop(), "symbolic CALLDATACOPY size")
@@ -3241,10 +3388,10 @@ class SEVM:
                         data = data.concretize(ex.path.concretization.substitution)
                         state.set_mslice(loc, data)
 
-                elif opcode == EVM.CODESIZE:
+                elif opcode == OP_CODESIZE:
                     state.push_any(len(ex.pgm))
 
-                elif opcode == EVM.CODECOPY:
+                elif opcode == OP_CODECOPY:
                     loc: int = ex.mloc(check_size=False)
                     offset: int = state.popi()
                     size: int = ex.int_of(state.pop(), "symbolic CODECOPY size")
@@ -3261,14 +3408,14 @@ class SEVM:
                         )
                         state.set_mslice(loc, codeslice)
 
-                elif opcode == EVM.GAS:
+                elif opcode == OP_GAS:
                     state.push_any(f_gas(con(ex.new_gas_id())))
 
-                elif EVM.LOG0 <= opcode <= EVM.LOG4:
+                elif OP_LOG0 <= opcode <= OP_LOG4:
                     if ex.message().is_static:
                         raise WriteInStaticContext(ex.context_str())
 
-                    num_topics: int = opcode - EVM.LOG0
+                    num_topics: int = opcode - OP_LOG0
                     loc: int = ex.mloc()
                     size: int = ex.int_of(state.pop(), "symbolic LOG data size")
                     topics = list(state.pop() for _ in range(num_topics))
@@ -3286,10 +3433,10 @@ class SEVM:
                     self.create(ex, opcode, stack)
                     continue
 
-                elif opcode == EVM.RETURNDATASIZE:
+                elif opcode == OP_RETURNDATASIZE:
                     state.push_any(ex.returndatasize())
 
-                elif opcode == EVM.RETURNDATACOPY:
+                elif opcode == OP_RETURNDATACOPY:
                     loc: int = ex.mloc(check_size=False)
                     offset = ex.int_of(state.pop(), "symbolic RETURNDATACOPY offset")
                     size: int = ex.int_of(state.pop(), "symbolic RETURNDATACOPY size")
@@ -3302,7 +3449,7 @@ class SEVM:
                         data: ByteVec = ex.returndata().slice(offset, offset + size)
                         state.set_mslice(loc, data)
 
-                elif opcode == EVM.BYTE:
+                elif opcode == OP_BYTE:
                     idx = state.popi()
                     w: BV = state.popi()
                     if idx.is_concrete:
@@ -3314,10 +3461,10 @@ class SEVM:
                         )
                         state.push_any(self.sym_byte_of(idx.value, w.as_z3()))
 
-                elif opcode == EVM.GASPRICE:
+                elif opcode == OP_GASPRICE:
                     state.push_any(f_gasprice())
 
-                elif opcode == EVM.EXTCODESIZE:
+                elif opcode == OP_EXTCODESIZE:
                     account: BV = uint160(state.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
                     state.pop()
@@ -3337,7 +3484,7 @@ class SEVM:
 
                     state.push(codesize)
 
-                elif opcode == EVM.EXTCODECOPY:
+                elif opcode == OP_EXTCODECOPY:
                     account: BV = uint160(state.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
                     state.pop()
@@ -3359,7 +3506,7 @@ class SEVM:
                         codeslice: ByteVec = account_code.slice(offset, size)
                         state.set_mslice(loc, codeslice)
 
-                elif opcode == EVM.EXTCODEHASH:
+                elif opcode == OP_EXTCODEHASH:
                     account: BV = uint160(state.peek())
                     account_alias = self.resolve_address_alias(ex, account, stack)
                     state.pop()
@@ -3382,43 +3529,43 @@ class SEVM:
 
                     state.push(codehash)
 
-                elif opcode == EVM.BLOCKHASH:
+                elif opcode == OP_BLOCKHASH:
                     state.push_any(f_blockhash(state.pop()))
 
-                elif opcode == EVM.COINBASE:
+                elif opcode == OP_COINBASE:
                     state.push_any(ex.block.coinbase)
 
-                elif opcode == EVM.TIMESTAMP:
+                elif opcode == OP_TIMESTAMP:
                     state.push_any(ex.block.timestamp)
 
-                elif opcode == EVM.NUMBER:
+                elif opcode == OP_NUMBER:
                     state.push_any(ex.block.number)
 
-                elif opcode == EVM.DIFFICULTY:
+                elif opcode == OP_DIFFICULTY:
                     state.push_any(ex.block.difficulty)
 
-                elif opcode == EVM.GASLIMIT:
+                elif opcode == OP_GASLIMIT:
                     state.push_any(ex.block.gaslimit)
 
-                elif opcode == EVM.CHAINID:
+                elif opcode == OP_CHAINID:
                     state.push_any(ex.block.chainid)
 
-                elif opcode == EVM.SELFBALANCE:
+                elif opcode == OP_SELFBALANCE:
                     state.push_any(ex.balance_of(ex.this()))
 
-                elif opcode == EVM.BASEFEE:
+                elif opcode == OP_BASEFEE:
                     state.push_any(ex.block.basefee)
 
-                elif opcode == EVM.PC:
+                elif opcode == OP_PC:
                     state.push_any(ex.pc)
 
-                elif opcode == EVM.MSIZE:
+                elif opcode == OP_MSIZE:
                     size: int = len(state.memory)
                     # round up to the next multiple of 32
                     size = ((size + 31) // 32) * 32
                     state.push_any(size)
 
-                elif opcode == EVM.MCOPY:
+                elif opcode == OP_MCOPY:
                     dst_offset = ex.int_of(state.pop(), "symbolic MCOPY dstOffset")
                     src_offset = ex.int_of(state.pop(), "symbolic MCOPY srcOffset")
                     size = ex.int_of(state.pop(), "symbolic MCOPY size")
@@ -3427,36 +3574,36 @@ class SEVM:
                         data = state.mslice(src_offset, size)
                         state.set_mslice(dst_offset, data)
 
-                elif opcode == EVM.MSTORE8:
+                elif opcode == OP_MSTORE8:
                     loc: int = ex.mloc(check_size=True)
                     val: Word = state.pop()
                     state.memory.set_byte(loc, uint8(val))
 
-                elif opcode == EVM.TLOAD:
+                elif opcode == OP_TLOAD:
                     slot: Word = state.popi()
                     state.push_any(self.sload(ex, ex.this(), slot, transient=True))
 
-                elif opcode == EVM.TSTORE:
+                elif opcode == OP_TSTORE:
                     slot: Word = state.popi()
                     value: Word = state.popi()
                     self.sstore(ex, ex.this(), slot, value, transient=True)
 
-                elif opcode == EVM.SLT:
+                elif opcode == OP_SLT:
                     w1: BV = state.popi()
                     w2: BV = state.popi()
                     state.push(w1.slt(w2))  # bvslt
 
-                elif opcode == EVM.SGT:
+                elif opcode == OP_SGT:
                     w1: BV = state.popi()
                     w2: BV = state.popi()
                     state.push(w1.sgt(w2))  # bvsgt
 
-                elif opcode == EVM.SAR:
+                elif opcode == OP_SAR:
                     w1 = state.popi()
                     w2 = state.popi()
                     state.push(w2.ashr(w1))  # bvashr
 
-                elif opcode == EVM.ADDMOD:
+                elif opcode == OP_ADDMOD:
                     w1 = state.popi()
                     w2 = state.popi()
                     w3 = state.popi()
@@ -3464,7 +3611,7 @@ class SEVM:
                     result = w1.addmod(w2, w3, abstraction=f_mod[w1.size + 8])
                     state.push(result)
 
-                elif opcode == EVM.MULMOD:
+                elif opcode == OP_MULMOD:
                     w1 = state.popi()
                     w2 = state.popi()
                     w3 = state.popi()
@@ -3478,10 +3625,10 @@ class SEVM:
                     )
                     state.push(result)
 
-                elif opcode == EVM.EXP:
+                elif opcode == OP_EXP:
                     state.push(self.arith(ex, opcode, state.popi(), state.popi()))
 
-                elif opcode == EVM.SIGNEXTEND:
+                elif opcode == OP_SIGNEXTEND:
                     w1 = ex.int_of(state.popi(), "symbolic SIGNEXTEND size")
                     w2 = state.popi()
                     state.push(w2.signextend(w1))
