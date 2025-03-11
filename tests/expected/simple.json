@@ -81,6 +81,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Vat.t.sol:VatTest": [
+            {
+                "name": "invariant_dai()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Multicaller.t.sol:MulticallerWithSenderSymTest": [
             {
                 "name": "check_0_0_0_1()",

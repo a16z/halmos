@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-
 pragma solidity ^0.8.17;
 
 /// @notice from https://github.com/baolean/symexec-bench/blob/main/Vat/MiniVat.sol
-
 
 contract MiniVat {
     uint256 public debt;
