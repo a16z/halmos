@@ -9,7 +9,6 @@ from z3 import (
     BitVec,
     BitVecRef,
     BitVecVal,
-    Bool,
     BoolRef,
     BoolVal,
     Concat,
@@ -109,11 +108,7 @@ class HalmosBool:
 
         return super().__new__(cls)
 
-    def __init__(self, value: AnyBool, *, do_simplify: bool = True):
-        # convenience, wrap a string as a named symbol
-        if isinstance(value, str):
-            value = Bool(value)
-
+    def __init__(self, value: AnyBool | str, *, do_simplify: bool = True):
         if isinstance(value, bool):
             self._symbolic = False
             self._value = value
@@ -129,6 +124,10 @@ class HalmosBool:
             else:
                 self._symbolic = True
                 self._value = simplified
+        elif isinstance(value, str):
+            # convenience, wrap a string as a named symbol
+            self._symbolic = True
+            self._value = BoolVal(value)
         elif isinstance(value, HalmosBool | HalmosBitVec):
             return
         else:
