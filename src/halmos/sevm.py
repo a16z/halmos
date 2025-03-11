@@ -495,7 +495,7 @@ class State:
             + "\n"
         )
 
-    def push(self, v: BV | Bool) -> None:
+    def push(self, v: Bool | BV) -> None:
         assert isinstance(v, BV) and v.size == 256 or isinstance(v, Bool)
         self.stack.append(v)
 
@@ -503,17 +503,20 @@ class State:
         # wraps any value in a 256-bit BitVec
         self.stack.append(BV(v, size=256))
 
-    def set_top(self, v: Word) -> None:
+    def set_top(self, v: Bool | BV) -> None:
         try:
             self.stack[-1] = v
         except IndexError as e:
             raise StackUnderflowError() from e
 
-    def top(self) -> Word:
+    def top(self) -> Bool | BV:
         try:
             return self.stack[-1]
         except IndexError as e:
             raise StackUnderflowError() from e
+
+    def topi(self) -> BV:
+        return BV(self.top(), size=256)
 
     def pop(self) -> Word:
         try:
@@ -3066,7 +3069,8 @@ class SEVM:
                     pass
 
                 elif opcode == EVM.ADD:
-                    state.push(self.arith(ex, opcode, state.popi(), state.popi()))
+                    w1 = state.popi()
+                    state.set_top(w1.add(state.topi()))
 
                 elif EVM.DUP1 <= opcode <= EVM.DUP16:
                     state.dup(opcode - EVM.DUP1 + 1)
@@ -3083,12 +3087,12 @@ class SEVM:
                     continue
 
                 elif opcode == EVM.ISZERO:
-                    state.push(state.pop().is_zero())
+                    state.set_top(state.top().is_zero())
 
                 elif opcode == EVM.MSTORE:
                     loc: int = ex.mloc(check_size=True)
-                    val: Word = state.pop()
-                    state.memory.set_word(loc, uint256(val))
+                    val: BV = state.popi()
+                    state.memory.set_word(loc, val)
 
                 elif opcode == EVM.MLOAD:
                     loc: int = ex.mloc(check_size=True)
@@ -3099,28 +3103,25 @@ class SEVM:
 
                 elif opcode == EVM.SUB:
                     w1 = state.popi()
-                    w2 = state.popi()
-                    state.push(w1.sub(w2))
+                    state.set_top(w1.sub(state.topi()))
 
                 elif opcode == EVM.SHL:
                     w1 = state.popi()
-                    w2 = state.popi()
-                    state.push(w2.lshl(w1))
+                    state.set_top(state.topi().lshl(w1))
 
                 elif opcode == EVM.AND:
-                    state.push(bitwise(opcode, state.pop(), state.pop()))
+                    w1 = state.popi()
+                    state.set_top(state.topi().bitwise_and(w1))
 
                 # Rest of the less frequent opcodes
 
                 elif opcode == EVM.SHR:
                     w1 = state.popi()
-                    w2 = state.popi()
-                    state.push(w2.lshr(w1))
+                    state.set_top(state.topi().lshr(w1))
 
                 elif opcode == EVM.GT:
                     w1: BV = state.popi()
-                    w2: BV = state.popi()
-                    state.push(w1.ugt(w2))  # bvugt
+                    state.set_top(w1.ugt(state.topi()))  # bvugt
 
                 elif opcode == EVM.EQ:
                     w1: BV = state.pop()
@@ -3136,8 +3137,7 @@ class SEVM:
 
                 elif opcode == EVM.LT:
                     w1: BV = state.popi()
-                    w2: BV = state.popi()
-                    state.push(w1.ult(w2))  # bvult
+                    state.set_top(w1.ult(state.topi()))  # bvult
 
                 elif opcode in [EVM.STOP, EVM.INVALID, EVM.REVERT, EVM.RETURN]:
                     if opcode == EVM.STOP:
@@ -3161,18 +3161,25 @@ class SEVM:
                     yield from finalize(ex)
                     continue
 
-                elif opcode == EVM.OR or opcode == EVM.XOR:
-                    state.push(bitwise(opcode, state.pop(), state.pop()))
+                elif opcode == EVM.OR:
+                    w1 = state.popi()
+                    state.set_top(w1.bitwise_or(state.topi()))
+
+                elif opcode == EVM.XOR:
+                    w1 = state.popi()
+                    state.set_top(w1.bitwise_xor(state.topi()))
 
                 elif opcode == EVM.NOT:
-                    state.push(state.pop().bitwise_not())
+                    state.set_top(state.top().bitwise_not())
 
                 elif EVM.MUL <= opcode <= EVM.SMOD:  # MUL SUB DIV SDIV MOD SMOD
-                    state.push(self.arith(ex, opcode, state.popi(), state.popi()))
+                    w1 = state.popi()
+                    state.set_top(self.arith(ex, opcode, w1, state.topi()))
 
                 elif opcode == EVM.SLOAD:
-                    slot: Word = state.pop()
-                    state.push_any(self.sload(ex, ex.this(), slot))
+                    slot: Word = state.top()
+                    value = self.sload(ex, ex.this(), slot)
+                    state.set_top(BV(value, size=256))
 
                 elif opcode == EVM.SSTORE:
                     slot: Word = state.pop()
