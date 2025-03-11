@@ -916,13 +916,15 @@ class Contract:
 
     def __getitem__(self, key: int) -> Byte:
         """Returns the byte at the given offset."""
-        offset = int_of(key, "symbolic index into contract bytecode {offset!r}")
-
         # fast path for offsets in the concrete prefix
-        if self._fastcode and offset < len(self._fastcode):
-            return self._fastcode[offset]
+        if (_fastcode := self._fastcode) is not None:
+            try:
+                return _fastcode[key]
+            except IndexError:
+                # out of bounds, fall back to the slow path
+                pass
 
-        return self._code.get_byte(offset)
+        return self._code.get_byte(key)
 
     def __len__(self) -> int:
         """Returns the length of the bytecode in bytes."""
