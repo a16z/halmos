@@ -2900,7 +2900,8 @@ class SEVM:
             if target not in ex.pgm.valid_jumpdests():
                 raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
 
-            ex.advance(pc=target)
+            # we just validated that this is indeed a JUMPDEST so we can safely skip it
+            ex.advance(pc=target + 1)
             stack.push(ex)
             return
 
@@ -2955,7 +2956,7 @@ class SEVM:
             else:
                 new_ex_true = ex
                 new_ex_true.path.append(cond_true, branching=True)
-                new_ex_true.advance(pc=target)
+                new_ex_true.advance(pc=target + 1)
 
         if follow_false:
             new_ex_false = ex
@@ -2987,7 +2988,8 @@ class SEVM:
             if target not in ex.pgm.valid_jumpdests():
                 raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
 
-            ex.advance(pc=target)
+            # we just validated that this is indeed a JUMPDEST so we can safely skip it
+            ex.advance(pc=target + 1)
             stack.push(ex)
 
         # otherwise, create a new execution for feasible targets
