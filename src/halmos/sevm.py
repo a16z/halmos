@@ -53,9 +53,9 @@ from z3 import (
 )
 from z3.z3util import is_expr_var
 
+from .bitvec import ONE, ZERO, is_power_of_two
 from .bitvec import HalmosBitVec as BV
 from .bitvec import HalmosBool as Bool
-from .bitvec import is_power_of_two
 from .bytevec import ByteVec, ConcreteChunk, SymbolicChunk
 from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
@@ -139,7 +139,6 @@ from .utils import (
 EMPTY_BYTES = ByteVec()
 EMPTY_KECCAK = 0xC5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470
 Z3_ZERO, Z3_ONE = con(0), con(1)
-ZERO, ONE = BV(0), BV(1)
 MAX_CALL_DEPTH = 1024
 
 # Precompile addresses
@@ -697,7 +696,7 @@ class State:
         """
 
         val = self.top()
-        return val if type(val) is BV else BV(val, size=256)
+        return val.as_bv(size=256) if type(val) is Bool else val
 
     def pop(self) -> Word:
         try:
@@ -709,7 +708,7 @@ class State:
         """The stack can contain BitVecs or Bools -- this function converts Bools to BitVecs"""
 
         val = self.pop()
-        return val if type(val) is BV else BV(val, size=256)
+        return val.as_bv(size=256) if type(val) is Bool else val
 
     def peek(self, n: int = 1) -> Word:
         try:

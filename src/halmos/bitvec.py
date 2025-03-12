@@ -289,22 +289,13 @@ class HalmosBool:
 
     def as_bv(self, size: int = 1) -> BV:
         if self is TRUE:
-            return HalmosBitVec(1, size=size)
+            return ONE if size == 256 else HalmosBitVec(1, size=size)
 
         if self is FALSE:
-            return HalmosBitVec(0, size=size)
+            return ZERO if size == 256 else HalmosBitVec(0, size=size)
 
         expr = If(self.sym_val, BitVecVal(1, size), BitVecVal(0, size))
         return HalmosBitVec(expr, size=size)
-
-
-# initialize class attributes
-TRUE = object.__new__(HalmosBool)
-FALSE = object.__new__(HalmosBool)
-TRUE.con_val = True
-TRUE.sym_val = None
-FALSE.con_val = False
-FALSE.sym_val = None
 
 
 class HalmosBitVec:
@@ -937,3 +928,15 @@ class HalmosBitVec:
             Extract(hi, lo, self._value),
             size=output_size,
         )
+
+
+# initialize global constants
+TRUE = object.__new__(HalmosBool)
+FALSE = object.__new__(HalmosBool)
+TRUE.con_val = True
+TRUE.sym_val = None
+FALSE.con_val = False
+FALSE.sym_val = None
+
+ZERO = HalmosBitVec(0, size=256)
+ONE = HalmosBitVec(1, size=256)
