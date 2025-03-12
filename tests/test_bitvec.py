@@ -120,6 +120,7 @@ def test_bool_wrapping():
 
     # tautology is lowered to True, but only when do_simplify is True
     assert Bool(tautology, do_simplify=True) == TRUE
+    assert Bool(tautology, do_simplify=True) is TRUE
     assert Bool(tautology, do_simplify=False) != TRUE
 
 

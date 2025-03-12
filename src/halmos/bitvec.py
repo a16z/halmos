@@ -106,6 +106,16 @@ class HalmosBool:
         if type_value is HalmosBitVec:
             return value.is_non_zero()
 
+        if type_value is BoolRef:
+            if do_simplify:
+                value = simplify(value)
+
+            if is_true(value):
+                return TRUE
+
+            if is_false(value):
+                return FALSE
+
         return super().__new__(cls)
 
     def __init__(self, value: AnyBool | str, *, do_simplify: bool = True):
@@ -115,16 +125,10 @@ class HalmosBool:
                 self.sym_val = None
 
             case BoolRef():
+                # TODO: avoid double simplification
                 simplified = simplify(value) if do_simplify else value
-                if is_true(simplified):
-                    self.con_val = True
-                    self.sym_val = None
-                elif is_false(simplified):
-                    self.con_val = False
-                    self.sym_val = None
-                else:
-                    self.con_val = None
-                    self.sym_val = simplified
+                self.sym_val = simplified
+                self.con_val = None
 
             case str():
                 self.sym_val = BoolVal(value)
@@ -230,7 +234,7 @@ class HalmosBool:
         return self
 
     def eq(self, other: "HalmosBool") -> "HalmosBool":
-        return HalmosBool(self._value == other._value)
+        return HalmosBool(self.value == other.value)
 
     def neg(self) -> "HalmosBool":
         return self.is_zero()
@@ -290,7 +294,7 @@ class HalmosBool:
         if self is FALSE:
             return HalmosBitVec(0, size=size)
 
-        expr = If(self._value, BitVecVal(1, size), BitVecVal(0, size))
+        expr = If(self.sym_val, BitVecVal(1, size), BitVecVal(0, size))
         return HalmosBitVec(expr, size=size)
 
 
@@ -349,7 +353,9 @@ class HalmosBitVec:
         If do_simplify is True, z3's simplify function will be applied to the value.
         """
 
-        if isinstance(value, HalmosBitVec):
+        type_value = type(value)
+
+        if type_value is HalmosBitVec:
             # avoid reinitializing HalmosBitVec because of __new__ shortcut if same size
             if size == value.size:
                 return
@@ -358,11 +364,11 @@ class HalmosBitVec:
             value = value.unwrap()
 
         # unwrap HalmosBool
-        elif isinstance(value, HalmosBool):
+        elif type_value is HalmosBool:
             value = value.unwrap()
 
         # convenience, wrap a string as a named symbol
-        elif isinstance(value, str):
+        elif type_value is str:
             value = BitVec(value, size or 256)
 
         # coerce int-like values to int
