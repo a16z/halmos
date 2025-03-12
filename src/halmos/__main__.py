@@ -23,6 +23,7 @@ from importlib import metadata
 import rich
 from z3 import (
     BitVec,
+    ZeroExt,
     eq,
     set_option,
     unsat,
@@ -572,6 +573,11 @@ def step_invariant_tests(
                 # update call traces
                 post_ex.context = deepcopy(pre_ex.context)
                 post_ex.context.trace.append(subcall)
+
+                # update timestamp
+                timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
+                post_ex.block.timestamp = ZeroExt(192, BitVec(timestamp_name, 64))
+                post_ex.path.append(post_ex.block.timestamp >= pre_ex.block.timestamp)
 
                 # check all invariants against the current output state
                 test_results = run_tests(ctx, post_ex, funsigs, depth, terminal=False)
