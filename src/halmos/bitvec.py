@@ -90,55 +90,68 @@ class HalmosBool:
     - halmos_bool.value/unwrap() returns the underlying bool or z3 BoolRef
     """
 
-    __slots__ = ("_value", "_symbolic")
+    __slots__ = ("con_val", "sym_val")
+    con_val: bool | None
+    sym_val: BoolRef | None
 
     def __new__(cls, value, *, do_simplify: bool = True):
-        if isinstance(value, bool):
+        type_value = type(value)
+
+        if type_value is bool:
             return TRUE if value else FALSE
 
-        if isinstance(value, HalmosBool):
+        if type_value is HalmosBool:
             return value
 
-        if isinstance(value, HalmosBitVec):
+        if type_value is HalmosBitVec:
             return value.is_non_zero()
 
         return super().__new__(cls)
 
     def __init__(self, value: AnyBool | str, *, do_simplify: bool = True):
-        if isinstance(value, bool):
-            self._symbolic = False
-            self._value = value
-        elif isinstance(value, BoolRef):
-            simplified = simplify(value) if do_simplify else value
+        match value:
+            case bool():
+                self.con_val = value
+                self.sym_val = None
 
-            if is_true(simplified):
-                self._symbolic = False
-                self._value = True
-            elif is_false(simplified):
-                self._symbolic = False
-                self._value = False
-            else:
-                self._symbolic = True
-                self._value = simplified
-        elif isinstance(value, str):
-            # convenience, wrap a string as a named symbol
-            self._symbolic = True
-            self._value = BoolVal(value)
-        elif isinstance(value, HalmosBool | HalmosBitVec):
-            return
-        else:
-            raise TypeError(f"Cannot create HalmosBool from {type(value)}")
+            case BoolRef():
+                simplified = simplify(value) if do_simplify else value
+                if is_true(simplified):
+                    self.con_val = True
+                    self.sym_val = None
+                elif is_false(simplified):
+                    self.con_val = False
+                    self.sym_val = None
+                else:
+                    self.con_val = None
+                    self.sym_val = simplified
+
+            case str():
+                self.sym_val = BoolVal(value)
+                self.con_val = None
+
+            case HalmosBool():
+                return
+
+            case HalmosBitVec():
+                return
+
+            case _:
+                raise TypeError(f"Cannot create HalmosBool from {type(value)}")
+
+        assert self.con_val is None or self.sym_val is None
+        assert self.con_val is not None or self.sym_val is not None
 
     def __bool__(self) -> bool:
-        if self._symbolic:
+        if self.is_symbolic:
             raise NotConcreteError("Cannot convert symbolic bool to bool")
-        return self._value
+        return self.con_val
 
     def __repr__(self) -> str:
-        return str(self._value) if not self._symbolic else f"⚠️ SYM {self._value}"
+        return str(self.con_val) if self.is_concrete else f"⚠️ SYM {self.sym_val}"
 
     def __str__(self) -> str:
-        return str(self._value) if not self._symbolic else f"⚠️ SYM {self._value}"
+        return str(self.con_val) if self.is_concrete else f"⚠️ SYM {self.sym_val}"
 
     def __int__(self) -> int:
         return int(bool(self))
@@ -147,33 +160,39 @@ class HalmosBool:
         return self
 
     def as_z3(self) -> BoolRef:
-        if self._symbolic:
-            return self._value
-        return BoolVal(self._value)
+        return BoolVal(self.con_val) if self.is_concrete else self.sym_val
 
     def unwrap(self) -> AnyBool:
-        return self._value
-
-    @property
-    def is_symbolic(self) -> bool:
-        return self._symbolic
-
-    @property
-    def is_concrete(self) -> bool:
-        return not self._symbolic
+        return self.value
 
     @property
     def value(self) -> AnyBool:
-        return self._value
+        if self is TRUE:
+            return True
+
+        if self is FALSE:
+            return False
+
+        return self.sym_val
+
+    @property
+    def is_symbolic(self) -> bool:
+        return self.sym_val is not None
+
+    @property
+    def is_concrete(self) -> bool:
+        return self.sym_val is None
 
     @property
     def is_true(self) -> bool:
         """checks if it is the literal True"""
+
         return self is TRUE
 
     @property
     def is_false(self) -> bool:
         """checks if it is the literal False"""
+
         return self is FALSE
 
     def __eq__(self, other: Any) -> bool:
@@ -185,14 +204,18 @@ class HalmosBool:
         if not isinstance(other, HalmosBool):
             return False
 
-        if self._symbolic != other._symbolic:
-            return False
+        match (self.con_val, other.con_val):
+            case (True, True):
+                return True
 
-        return (
-            eq(self._value, other._value)
-            if self._symbolic
-            else self._value == other._value
-        )
+            case (False, False):
+                return True
+
+            case (None, None):
+                return eq(self.sym_val, other.sym_val)
+
+            case _:
+                return False
 
     def is_zero(self) -> "HalmosBool":
         if self is TRUE:
@@ -201,7 +224,7 @@ class HalmosBool:
         if self is FALSE:
             return TRUE
 
-        return HalmosBool(Not(self._value))
+        return HalmosBool(Not(self.sym_val))
 
     def is_non_zero(self) -> "HalmosBool":
         return self
@@ -274,10 +297,10 @@ class HalmosBool:
 # initialize class attributes
 TRUE = object.__new__(HalmosBool)
 FALSE = object.__new__(HalmosBool)
-TRUE._value = True
-FALSE._value = False
-TRUE._symbolic = False
-FALSE._symbolic = False
+TRUE.con_val = True
+TRUE.sym_val = None
+FALSE.con_val = False
+FALSE.sym_val = None
 
 
 class HalmosBitVec:
