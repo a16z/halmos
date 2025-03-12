@@ -55,6 +55,7 @@ from z3.z3util import is_expr_var
 
 from .bitvec import HalmosBitVec as BV
 from .bitvec import HalmosBool as Bool
+from .bitvec import is_power_of_two
 from .bytevec import ByteVec, ConcreteChunk, SymbolicChunk
 from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
@@ -159,6 +160,7 @@ EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
 
 # TODO: make this configurable
 PULSE_INTERVAL = 2**13
+assert is_power_of_two(PULSE_INTERVAL)
 
 FOUNDRY_CALLER = 0x1804C8AB1F12E6BBF3894D4083F33E07309D1F38
 FOUNDRY_ORIGIN = FOUNDRY_CALLER
@@ -3119,6 +3121,7 @@ class SEVM:
         start_time = timer()
 
         step_id = 0
+        step_interval_mask = PULSE_INTERVAL - 1
 
         # make sure the initial instruction has been fetched
         if not ex0.insn:
@@ -3133,7 +3136,7 @@ class SEVM:
                 step_id += 1
 
                 # display progress
-                if not no_status and step_id % PULSE_INTERVAL == 0:
+                if not no_status and step_id & step_interval_mask == 0:
                     elapsed = timer() - start_time
                     speed = step_id / elapsed
 
