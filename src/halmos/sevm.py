@@ -467,7 +467,6 @@ class CallContext:
             return last_subcall.get_stuck_reason()
 
 
-# TODO: support frozen=True
 @dataclass(frozen=True, slots=True, eq=False, order=False)
 class State:
     stack: list[Word] = field(default_factory=list)
@@ -948,10 +947,6 @@ class Path:
         # create a new scope within the solver, and save the current scope
         # the solver will roll back to this scope later when the new path is activated
         path.num_scopes = self.solver.num_scopes()
-
-        # import threading
-        # is_main_thread = threading.current_thread() == threading.main_thread()
-        # print(f"[tid={hex(threading.get_ident())} {is_main_thread=}] pushing solver scope {path.solver.num_scopes()}")
         self.solver.push()
 
         # shallow copy because existing conditions won't change
@@ -1279,55 +1274,53 @@ class Exec:  # an execution path
         return self.dump()
 
     def dump(self, print_mem=False) -> str:
-        # output = self.context.output.data
+        output = self.context.output.data
         return hexify(
             "".join(
                 [
                     f"PC: {self.this()} {self.pc} {mnemonic(self.current_opcode())}\n",
                     self.st.dump(print_mem=print_mem),
-                    # f"\nBalance: {self.balance}\n",
-                    # "Storage:\n",
-                    # "".join(
-                    #     map(
-                    #         lambda x: f"- {x}: {self.storage[x]}\n",
-                    #         self.storage,
-                    #     )
-                    # ),
-                    # "Transient Storage:\n",
-                    # "".join(
-                    #     map(
-                    #         lambda x: f"- {x}: {self.transient_storage[x]}\n",
-                    #         self.transient_storage,
-                    #     )
-                    # ),
-                    # f"Path:\n{self.path}",
-                    # "Aliases:\n",
-                    # "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
-                    # f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
-                    # "Balance updates:\n",
-                    # "".join(
-                    #     map(
-                    #         lambda x: f"- {x}\n",
-                    #         sorted(self.balances.items(), key=lambda x: str(x[0])),
-                    #     )
-                    # ),
-                    # "Storage updates:\n",
-                    # "".join(
-                    #     map(
-                    #         lambda x: f"- {x}\n",
-                    #         sorted(self.storages.items(), key=lambda x: str(x[0])),
-                    #     )
-                    # ),
-                    # "SHA3 hashes:\n",
-                    # "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
+                    f"\nBalance: {self.balance}\n",
+                    "Storage:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}: {self.storage[x]}\n",
+                            self.storage,
+                        )
+                    ),
+                    "Transient Storage:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}: {self.transient_storage[x]}\n",
+                            self.transient_storage,
+                        )
+                    ),
+                    f"Path:\n{self.path}",
+                    "Aliases:\n",
+                    "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
+                    f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
+                    "Balance updates:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}\n",
+                            sorted(self.balances.items(), key=lambda x: str(x[0])),
+                        )
+                    ),
+                    "Storage updates:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}\n",
+                            sorted(self.storages.items(), key=lambda x: str(x[0])),
+                        )
+                    ),
+                    "SHA3 hashes:\n",
+                    "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
                 ]
             )
         )
 
     def advance(self, pc: int | None = None) -> None:
         next_pc = pc or self.insn.next_pc
-
-        # updating pc will also trigger an insn fetch
         self.pc = next_pc
         self.insn = self.pgm.decode_instruction(next_pc)
 
@@ -1384,7 +1377,6 @@ class Exec:  # an execution path
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
-        # assert_address(addr)
         addr = uint160(addr).as_z3()
         value = self.select(self.balance, addr, self.balances)
 
