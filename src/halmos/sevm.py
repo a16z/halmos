@@ -3254,7 +3254,9 @@ class SEVM:
 
                 elif opcode == OP_JUMPI:
                     target: int = ex.int_of(ex.st.pop(), "symbolic JUMPI target")
-                    cond = Bool(ex.st.pop())
+
+                    cond_val = ex.st.pop()
+                    cond = Bool(cond_val) if type(cond_val) is BV else cond_val
 
                     if cond.is_true:
                         if target not in ex.pgm.valid_jumpdests():
