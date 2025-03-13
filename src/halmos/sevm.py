@@ -1164,6 +1164,9 @@ class Exec:  # an execution path
     known_keys: dict[Any, Any]  # maps address to private key
     known_sigs: dict[Any, Any]  # maps (private_key, digest) to (v, r, s)
 
+    # call sequence tracking
+    call_sequence: CallSequence | None = None
+
     def __init__(self, **kwargs) -> None:
         self.code = kwargs["code"]
         self.storage = kwargs["storage"]
@@ -1190,6 +1193,8 @@ class Exec:  # an execution path
         self.balances = kwargs["balances"]
         self.known_keys = kwargs.get("known_keys", {})
         self.known_sigs = kwargs.get("known_sigs", {})
+        #
+        self.call_sequence = kwargs.get("call_sequence")
 
         assert_address(self.origin())
         assert_address(self.caller())
@@ -2474,6 +2479,8 @@ class SEVM:
                 balances=ex.balances,
                 known_keys=ex.known_keys,
                 known_sigs=ex.known_sigs,
+                #
+                call_sequence=ex.call_sequence,
             )
 
             stack.push(sub_ex, step_id)
@@ -2809,6 +2816,8 @@ class SEVM:
             balances=ex.balances,
             known_keys=ex.known_keys,
             known_sigs=ex.known_sigs,
+            #
+            call_sequence=ex.call_sequence,
         )
 
         stack.push(sub_ex, step_id)
@@ -2940,6 +2949,8 @@ class SEVM:
             balances=ex.balances.copy(),
             known_keys=ex.known_keys,  # pass by reference, not need to copy
             known_sigs=ex.known_sigs,  # pass by reference, not need to copy
+            #
+            call_sequence=ex.call_sequence,  # pass by reference
         )
         return new_ex
 
@@ -3027,6 +3038,8 @@ class SEVM:
             sha3s=pre_ex.sha3s.copy(),
             storages=pre_ex.storages.copy(),
             balances=pre_ex.balances.copy(),
+            #
+            call_sequence=pre_ex.call_sequence,  # pass by reference
         )
         yield from self.run(ex0)
 
@@ -3576,4 +3589,6 @@ class SEVM:
             sha3s={},
             storages={},
             balances={},
+            #
+            call_sequence=None,  # initialize as None
         )
