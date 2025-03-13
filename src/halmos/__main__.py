@@ -526,6 +526,7 @@ def step_invariant_tests(
     ctx = inv_ctx.contract_ctx
     test_results_map = inv_ctx.test_results_map
     visited = inv_ctx.visited
+    panic_error_codes = ctx.args.panic_error_codes
 
     next_exs = []
 
@@ -537,6 +538,14 @@ def step_invariant_tests(
             f"frontier states: {cyan(len(next_exs))} | "
             f"completed paths: {cyan(idx)} "
         )
+
+        # print("### Running some target contract, starting from pre_ex:")
+        # print("Path:")
+        # print(indent_text(hexify(pre_ex.path)))
+
+        # print("\nTrace:")
+        # render_trace(pre_ex.context)
+        # print("###")
 
         for addr in pre_ex.code:
             # skip the test contract
@@ -556,8 +565,29 @@ def step_invariant_tests(
                     )
                     continue
 
-                # ignore if reverted
+                # ignore reverts that are not due to assertion failures
+                # or panics in contract code (e.g. probes)
                 if subcall.output.error:
+                    if not post_ex.is_panic_of(panic_error_codes):
+                        # ignore normal reverts
+                        continue
+
+                    # TODO: check funsig in invariant context
+                    already_reported = False
+                    if already_reported:
+                        continue
+
+                    # TODO: save funsig in invariant context
+                    already_reported = True
+
+                    # print error trace
+                    # TODO: fix this hackery
+                    post_ex.context = deepcopy(pre_ex.context)
+                    post_ex.context.trace.append(subcall)
+                    print(render_trace(post_ex.context))
+                    # print(f"\nProbe in contract code triggered!\nTrace:\n{trace}")
+
+                    # because this is a reverted state, we don't need to explore it further
                     continue
 
                 # skip if already visited

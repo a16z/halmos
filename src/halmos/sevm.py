@@ -411,6 +411,16 @@ TraceElement = Union["CallContext", EventLog, StorageRead, StorageWrite]
 
 @dataclass
 class CallContext:
+    """
+    Represents a single, atomic call to an address (typically a contract, but not necessarily).
+    It is started by a Message, and has a mutable (initially empty) output.
+
+    The trace field represents events that occurred during the execution of the call:
+    - storage reads and writes
+    - logs
+    - subcalls (making this a recursive data structure)
+    """
+
     message: Message
     output: CallOutput = field(default_factory=CallOutput)
     depth: int = 1
@@ -457,6 +467,22 @@ class CallContext:
 
         if (last_subcall := self.last_subcall()) is not None:
             return last_subcall.get_stuck_reason()
+
+
+@dataclass(frozen=True)
+class CallSequence:
+    """
+    Represents a sequence of calls, from any senders to any addresses.
+
+    The order matters, because it represents a chronologic sequence of execution. That is to say,
+    the output state of one call is the input state of the next call in the sequence.
+    """
+
+    target: CallContext
+    calls: list[CallContext] = field(default_factory=list)
+
+    def __str__(self) -> str:
+        return "\n".join(str(c) for c in self.calls)
 
 
 class State:

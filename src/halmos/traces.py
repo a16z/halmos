@@ -190,6 +190,8 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
     for trace_element in context.trace:
         match trace_element:
             case CallContext():
+                # print(f"rendering call context id={hex(id(trace_element))}")
+                # print(f"{trace_element=}")
                 render_trace(trace_element, file=file)
             case EventLog():
                 if TraceEvent.LOG in config.trace_events:
