@@ -3294,12 +3294,12 @@ class SEVM:
                     ex.st.push_any(size)
 
                 elif opcode == EVM.SLOAD:
-                    slot: Word = ex.st.pop()
+                    slot: Word = ex.st.popi()
                     ex.st.push_any(self.sload(ex, ex.this(), slot))
 
                 elif opcode == EVM.SSTORE:
-                    slot: Word = ex.st.pop()
-                    value: Word = ex.st.pop()
+                    slot: Word = ex.st.popi()
+                    value: Word = ex.st.popi()
                     self.sstore(ex, ex.this(), slot, value)
 
                 elif opcode == EVM.TLOAD:
