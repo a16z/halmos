@@ -98,6 +98,7 @@ class DynamicParam:
 
 @dataclass(frozen=True)
 class FunctionInfo:
+    contract_name: str | None = None
     name: str | None = None
     sig: str | None = None
     selector: str | None = None

@@ -378,6 +378,9 @@ class Message:
     is_static: bool = False
     gas: Word | None = None
 
+    # optional human-readable function information (name, signature, selector, etc.)
+    fun_info: FunctionInfo | None = None
+
     def is_create(self) -> bool:
         return self.call_scheme in (EVM.CREATE, EVM.CREATE2)
 

@@ -572,18 +572,16 @@ def step_invariant_tests(
                         # ignore normal reverts
                         continue
 
-                    # TODO: check funsig in invariant context
-                    already_reported = False
-                    if already_reported:
+                    fun_info = post_ex.context.message.fun_info
+                    if fun_info in inv_ctx.probes_reported:
                         continue
 
-                    # TODO: save funsig in invariant context
-                    already_reported = True
+                    inv_ctx.probes_reported.add(fun_info)
 
                     # print error trace
                     sequence = rendered_call_sequence(post_ex.call_sequence)
                     trace = rendered_trace(post_ex.context)
-                    msg = "Assertion failure detected in contract code."
+                    msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
                     print(f"\n{msg}\nSequence:\n{sequence}Trace:\n{trace}")
 
                     # because this is a reverted state, we don't need to explore it further
@@ -673,7 +671,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
     # iterate over each function in the target contract
     for fun_sig, fun_selector in method_identifiers.items():
         fun_name = fun_sig.split("(")[0]
-        fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
+        fun_info = FunctionInfo(contract_name, fun_name, fun_sig, fun_selector)
 
         # skip if 'pure' or 'view' function that doesn't change the state
         state_mutability = abi[fun_sig]["stateMutability"]
@@ -720,6 +718,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 value=msg_value,
                 data=cd,
                 call_scheme=EVM.CALL,
+                fun_info=fun_info,
             )
 
             # execute the transaction and collect output states
@@ -1031,7 +1030,8 @@ def run_test(ctx: FunctionContext) -> TestResult:
         )
 
 
-def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
+def extract_setup(ctx: ContractContext) -> FunctionInfo:
+    methodIdentifiers = ctx.method_identifiers
     setup_sigs = sorted(
         [
             (k, v)
@@ -1045,14 +1045,14 @@ def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
 
     (setup_sig, setup_selector) = setup_sigs[-1]
     setup_name = setup_sig.split("(")[0]
-    return FunctionInfo(setup_name, setup_sig, setup_selector)
+    return FunctionInfo(ctx.name, setup_name, setup_sig, setup_selector)
 
 
 def run_contract(ctx: ContractContext) -> list[TestResult]:
     BuildOut().set_build_out(ctx.build_out_map)
 
     args = ctx.args
-    setup_info = extract_setup(ctx.method_identifiers)
+    setup_info = extract_setup(ctx)
 
     try:
         setup_config = with_devdoc(args, setup_info.sig, ctx.contract_json)
@@ -1124,7 +1124,7 @@ def run_tests(
     test_results = []
     for funsig in funsigs:
         selector = ctx.method_identifiers[funsig]
-        fun_info = FunctionInfo(funsig.split("(")[0], funsig, selector)
+        fun_info = FunctionInfo(ctx.name, funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
             # TODO: reuse solver across different functions
