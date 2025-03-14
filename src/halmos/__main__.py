@@ -12,7 +12,7 @@ import time
 import traceback
 from collections import Counter
 from concurrent.futures import Future
-from copy import deepcopy
+from copy import copy
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
@@ -97,7 +97,7 @@ from .solve import (
     solve_end_to_end,
     solve_low_level,
 )
-from .traces import render_trace, rendered_trace
+from .traces import render_trace, rendered_call_sequence, rendered_trace
 from .utils import (
     Address,
     BitVecSort256,
@@ -581,11 +581,10 @@ def step_invariant_tests(
                     already_reported = True
 
                     # print error trace
-                    # TODO: fix this hackery
-                    post_ex.context = deepcopy(pre_ex.context)
-                    post_ex.context.trace.append(subcall)
-                    print(render_trace(post_ex.context))
-                    # print(f"\nProbe in contract code triggered!\nTrace:\n{trace}")
+                    sequence = rendered_call_sequence(post_ex.call_sequence)
+                    trace = rendered_trace(post_ex.context)
+                    msg = "Assertion failure detected in contract code."
+                    print(f"\n{msg}\nSequence:\n{sequence}Trace:\n{trace}")
 
                     # because this is a reverted state, we don't need to explore it further
                     continue
@@ -601,8 +600,9 @@ def step_invariant_tests(
                 visited.add(post_id)
 
                 # update call traces
-                post_ex.context = deepcopy(pre_ex.context)
-                post_ex.context.trace.append(subcall)
+                post_ex.context = copy(pre_ex.context)
+                post_ex.context.trace = copy(pre_ex.context.trace)
+                post_ex.call_sequence = pre_ex.call_sequence + [subcall]
 
                 # update timestamp
                 timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
@@ -620,11 +620,13 @@ def step_invariant_tests(
 
                 # print call trace if failed, to provide additional info for counterexamples
                 if any(r.exitcode != PASS for r in test_results):
-                    print("Path:")
-                    print(indent_text(hexify(post_ex.path)))
+                    print(f"\nPath:\n{indent_text(hexify(post_ex.path))}")
 
-                    print("\nTrace:")
-                    render_trace(post_ex.context)
+                    sequence = rendered_call_sequence(post_ex.call_sequence)
+                    print(f"\nSequence:\n{sequence}")
+
+                    # the trace for the invariant_test function is rendered separately,
+                    # downstream in run_test()
 
                 # stop if no more invariants to test
                 if not funsigs:

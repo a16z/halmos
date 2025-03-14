@@ -13,6 +13,7 @@ from typing import (
     Any,
     ForwardRef,
     Optional,
+    TypeAlias,
     TypeVar,
     Union,
 )
@@ -469,20 +470,13 @@ class CallContext:
             return last_subcall.get_stuck_reason()
 
 
-@dataclass(frozen=True)
-class CallSequence:
-    """
-    Represents a sequence of calls, from any senders to any addresses.
+"""
+Represents a sequence of calls, from any senders to any addresses.
 
-    The order matters, because it represents a chronologic sequence of execution. That is to say,
-    the output state of one call is the input state of the next call in the sequence.
-    """
-
-    target: CallContext
-    calls: list[CallContext] = field(default_factory=list)
-
-    def __str__(self) -> str:
-        return "\n".join(str(c) for c in self.calls)
+The order matters, because it represents a chronologic sequence of execution. That is to say,
+the output state of one call is the input state of the next call in the sequence.
+"""
+CallSequence: TypeAlias = list[CallContext]
 
 
 class State:
@@ -1164,8 +1158,8 @@ class Exec:  # an execution path
     known_keys: dict[Any, Any]  # maps address to private key
     known_sigs: dict[Any, Any]  # maps (private_key, digest) to (v, r, s)
 
-    # call sequence tracking
-    call_sequence: CallSequence | None = None
+    # the sequence of calls leading to the state at the start of this execution
+    call_sequence: CallSequence
 
     def __init__(self, **kwargs) -> None:
         self.code = kwargs["code"]
@@ -1194,7 +1188,7 @@ class Exec:  # an execution path
         self.known_keys = kwargs.get("known_keys", {})
         self.known_sigs = kwargs.get("known_sigs", {})
         #
-        self.call_sequence = kwargs.get("call_sequence")
+        self.call_sequence = kwargs.get("call_sequence") or []
 
         assert_address(self.origin())
         assert_address(self.caller())
