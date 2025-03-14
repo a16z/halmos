@@ -495,7 +495,7 @@ class State:
         )
 
     def push(self, v: BV | Bool) -> None:
-        assert isinstance(v, BV) and v.size == 256 or isinstance(v, Bool)
+        assert (isinstance(v, BV) and v.size == 256) or isinstance(v, Bool)
         self.stack.append(v)
 
     def push_any(self, v: Any) -> None:
