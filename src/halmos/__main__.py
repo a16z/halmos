@@ -579,10 +579,12 @@ def step_invariant_tests(
                     inv_ctx.probes_reported.add(fun_info)
 
                     # print error trace
-                    sequence = rendered_call_sequence(post_ex.call_sequence)
+                    sequence = (
+                        rendered_call_sequence(post_ex.call_sequence) or "    (empty)\n"
+                    )
                     trace = rendered_trace(post_ex.context)
                     msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
-                    print(f"\n{msg}\nSequence:\n{sequence}Trace:\n{trace}")
+                    print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
 
                     # because this is a reverted state, we don't need to explore it further
                     continue
@@ -618,10 +620,10 @@ def step_invariant_tests(
 
                 # print call trace if failed, to provide additional info for counterexamples
                 if any(r.exitcode != PASS for r in test_results):
-                    print(f"\nPath:\n{indent_text(hexify(post_ex.path))}")
+                    print(f"Path:\n{indent_text(hexify(post_ex.path))}\n")
 
                     sequence = rendered_call_sequence(post_ex.call_sequence)
-                    print(f"\nSequence:\n{sequence}")
+                    print(f"Sequence:\n{sequence}")
 
                     # the trace for the invariant_test function is rendered separately,
                     # downstream in run_test()

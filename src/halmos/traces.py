@@ -215,7 +215,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
     render_output(context, file=file)
 
     if context.depth == 1:
-        print(file=file)
+        print(file=file, end="")
 
 
 def render_call_sequence(call_sequence: CallSequence, file=sys.stdout) -> None:
