@@ -559,7 +559,8 @@ class HalmosBitVec:
                 return self  # div by one is identity
 
             if self.is_concrete:
-                # rely on z3 to handle the signed division
+                # TODO: handle concrete signed division
+                # rely on z3 to handle the signed division for now
                 return HalmosBitVec(
                     BitVecVal(lhs, size) / BitVecVal(rhs, size),
                     size=size,
