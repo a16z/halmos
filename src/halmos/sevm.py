@@ -473,13 +473,13 @@ class CallContext:
             return last_subcall.get_stuck_reason()
 
 
+CallSequence: TypeAlias = list[CallContext]
 """
 Represents a sequence of calls, from any senders to any addresses.
 
 The order matters, because it represents a chronologic sequence of execution. That is to say,
 the output state of one call is the input state of the next call in the sequence.
 """
-CallSequence: TypeAlias = list[CallContext]
 
 
 class State:
@@ -1173,6 +1173,7 @@ class Exec:  # an execution path
         self.block = kwargs["block"]
         #
         self.context = kwargs["context"]
+        self.call_sequence = kwargs.get("call_sequence") or []
         self.callback = kwargs["callback"]
         #
         self.pgm = kwargs["pgm"]
@@ -1190,8 +1191,6 @@ class Exec:  # an execution path
         self.balances = kwargs["balances"]
         self.known_keys = kwargs.get("known_keys", {})
         self.known_sigs = kwargs.get("known_sigs", {})
-        #
-        self.call_sequence = kwargs.get("call_sequence") or []
 
         assert_address(self.origin())
         assert_address(self.caller())
@@ -2460,6 +2459,7 @@ class SEVM:
                 block=ex.block,
                 #
                 context=CallContext(message=message, depth=ex.context.depth + 1),
+                call_sequence=ex.call_sequence,
                 callback=callback,
                 #
                 pgm=ex.code[to],
@@ -2476,8 +2476,6 @@ class SEVM:
                 balances=ex.balances,
                 known_keys=ex.known_keys,
                 known_sigs=ex.known_sigs,
-                #
-                call_sequence=ex.call_sequence,
             )
 
             stack.push(sub_ex, step_id)
@@ -2797,6 +2795,7 @@ class SEVM:
             block=ex.block,
             #
             context=CallContext(message=message, depth=ex.context.depth + 1),
+            call_sequence=ex.call_sequence,
             callback=callback,
             #
             pgm=create_code,
@@ -2813,8 +2812,6 @@ class SEVM:
             balances=ex.balances,
             known_keys=ex.known_keys,
             known_sigs=ex.known_sigs,
-            #
-            call_sequence=ex.call_sequence,
         )
 
         stack.push(sub_ex, step_id)
@@ -3021,6 +3018,7 @@ class SEVM:
             block=deepcopy(pre_ex.block),
             #
             context=CallContext(message=message),
+            call_sequence=pre_ex.call_sequence,  # pass by reference
             callback=None,
             #
             pgm=pre_ex.code[message.target],
@@ -3035,8 +3033,6 @@ class SEVM:
             sha3s=pre_ex.sha3s.copy(),
             storages=pre_ex.storages.copy(),
             balances=pre_ex.balances.copy(),
-            #
-            call_sequence=pre_ex.call_sequence,  # pass by reference
         )
         yield from self.run(ex0)
 
@@ -3571,6 +3567,7 @@ class SEVM:
             block=block,
             #
             context=context,
+            call_sequence=[],
             callback=None,  # top-level; no callback
             #
             pgm=pgm,
@@ -3586,6 +3583,4 @@ class SEVM:
             sha3s={},
             storages={},
             balances={},
-            #
-            call_sequence=None,  # initialize as None
         )

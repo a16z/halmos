@@ -593,7 +593,6 @@ def step_invariant_tests(
 
                 # update call traces
                 post_ex.context = copy(pre_ex.context)
-                post_ex.context.trace = copy(pre_ex.context.trace)
                 post_ex.call_sequence = pre_ex.call_sequence + [subcall]
 
                 # update timestamp
@@ -617,8 +616,7 @@ def step_invariant_tests(
                     sequence = rendered_call_sequence(post_ex.call_sequence)
                     print(f"Sequence:\n{sequence}")
 
-                    # the trace for the invariant_test function is rendered separately,
-                    # downstream in run_test()
+                    # note: the trace for the invariant_test function is rendered in run_tests()
 
                 # stop if no more invariants to test
                 if not funsigs:
