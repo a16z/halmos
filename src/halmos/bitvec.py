@@ -488,6 +488,8 @@ class HalmosBitVec:
                 if is_power_of_two(lhs):
                     return other.lshl(HalmosBitVec(lhs.bit_length() - 1, size=size))
 
+                return HalmosBitVec(lhs * rhs, size=size)
+
             case (False, True):
                 if rhs == 0:
                     return other
@@ -497,6 +499,9 @@ class HalmosBitVec:
 
                 if is_power_of_two(rhs):
                     return self.lshl(HalmosBitVec(rhs.bit_length() - 1, size=size))
+
+                # simplify(x * val) returns val * x
+                return HalmosBitVec(rhs * lhs, size=size)
 
         return (
             HalmosBitVec(lhs * rhs, size=size)
