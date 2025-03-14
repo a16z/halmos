@@ -539,14 +539,6 @@ def step_invariant_tests(
             f"completed paths: {cyan(idx)} "
         )
 
-        # print("### Running some target contract, starting from pre_ex:")
-        # print("Path:")
-        # print(indent_text(hexify(pre_ex.path)))
-
-        # print("\nTrace:")
-        # render_trace(pre_ex.context)
-        # print("###")
-
         for addr in pre_ex.code:
             # skip the test contract
             if eq(addr, con_addr(FOUNDRY_TEST)):
@@ -565,14 +557,14 @@ def step_invariant_tests(
                     )
                     continue
 
-                # ignore reverts that are not due to assertion failures
-                # or panics in contract code (e.g. probes)
                 if subcall.output.error:
+                    # ignore normal reverts
                     if not post_ex.is_panic_of(panic_error_codes):
-                        # ignore normal reverts
                         continue
 
                     fun_info = post_ex.context.message.fun_info
+
+                    # ignore if the probe has already been reported
                     if fun_info in inv_ctx.probes_reported:
                         continue
 
