@@ -35,7 +35,7 @@ contract WithProbes {
     }
 }
 
-contract InvariantTest is Test {
+contract InvariantProbesTest is Test {
     WithProbes c;
 
     function setUp() public {

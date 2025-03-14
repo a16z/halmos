@@ -1607,7 +1607,7 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/InvariantProbes.t.sol:InvariantTest": [
+        "test/InvariantProbes.t.sol:InvariantProbesTest": [
             {
                 "name": "invariant_probes_found()",
                 "exitcode": 0,

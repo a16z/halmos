@@ -12,23 +12,6 @@ contract C {
     }
 }
 
-contract WithProbes {
-    uint public num;
-
-    function probe0() public {
-        assert(false);
-    }
-
-    function probe1() public {
-        if (num == 1) {
-            assert(false);
-        }
-    }
-
-    function inc() public {
-        num += 1;
-    }
-}
 
 contract InvariantTest is Test {
     C c;
