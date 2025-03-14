@@ -12,7 +12,6 @@ import time
 import traceback
 from collections import Counter
 from concurrent.futures import Future
-from copy import copy
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
@@ -591,8 +590,11 @@ def step_invariant_tests(
                 # TODO: check path feasibility
                 visited.add(post_id)
 
+                # transfer the setup_ex message to the post_ex message
+                # (so that invariant tests run against the test contract)
+                post_ex.context.message = pre_ex.context.message
+
                 # update call traces
-                post_ex.context = copy(pre_ex.context)
                 post_ex.call_sequence = pre_ex.call_sequence + [subcall]
 
                 # update timestamp
