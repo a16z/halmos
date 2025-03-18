@@ -259,7 +259,7 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
     )
 
     # foundry default balance for the test contract
-    ex.balance_update(this, con(0xffffffffffffffffffffffff))
+    ex.balance_update(this, con(0xFFFFFFFFFFFFFFFFFFFFFFFF))
 
     # deploy libraries and resolve library placeholders in hexcode
     contract_ctx = ctx.contract_ctx
@@ -498,7 +498,7 @@ def run_invariant_tests(
     for r in test_results:
         if r.exitcode == PASS:
             print(
-                f"{green('[PASS]')} {r.name} (depth: {depth-1}, paths: {len(visited)})"
+                f"{green('[PASS]')} {r.name} (depth: {depth - 1}, paths: {len(visited)})"
             )
 
     return test_results
