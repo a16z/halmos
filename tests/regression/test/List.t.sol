@@ -50,9 +50,9 @@ contract ListTestTest is SymTest, Test {
         vm.assume(oldSize < type(uint).max);
         list.add(x);
         uint newSize = list.size();
-        assert(oldSize < newSize);
-        assert(oldSize + 1 == newSize);
-        assert(list.arr(newSize-1) == x);
+        assertLt(oldSize, newSize, "oldSize < newSize");
+        assertEq(oldSize + 1, newSize, "oldSize + 1 == newSize");
+        assertEq(list.arr(newSize - 1), x, "list.arr(newSize - 1) == x");
     }
 
     function check_remove() public {

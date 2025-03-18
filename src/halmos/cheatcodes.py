@@ -16,22 +16,28 @@ from z3 import (
     Implies,
     Not,
     Or,
-    eq,
     is_bv,
-    is_bv_value,
     is_false,
     simplify,
     unsat,
 )
 
 from .assertions import assert_cheatcode_handler
+from .bitvec import HalmosBitVec as BV
 from .bytevec import ByteVec
 from .calldata import (
     FunctionInfo,
     get_abi,
     mk_calldata,
 )
-from .exceptions import FailCheatcode, HalmosException, InfeasiblePath, NotConcreteError
+from .constants import MAX_MEMORY_SIZE
+from .exceptions import (
+    FailCheatcode,
+    HalmosException,
+    InfeasiblePath,
+    NotConcreteError,
+    OutOfGasError,
+)
 from .logs import debug
 from .mapper import BuildOut
 from .utils import (
@@ -43,7 +49,6 @@ from .utils import (
     Word,
     assert_address,
     con,
-    con_addr,
     decode_hex,
     extract_bytes,
     extract_funsig,
@@ -53,7 +58,6 @@ from .utils import (
     hexify,
     int256,
     int_of,
-    is_non_zero,
     red,
     secp256k1n,
     stripped,
@@ -175,7 +179,7 @@ class Prank:
         fn_name = "startPrank" if self.keep else "prank"
         return f"{fn_name}({str(self.active)})"
 
-    def lookup(self, to: Address) -> PrankResult:
+    def lookup(self, to: BV) -> PrankResult:
         """
         If `to` is an eligible prank destination, return the active prank context.
 
@@ -183,11 +187,7 @@ class Prank:
         """
 
         assert_address(to)
-        if (
-            self
-            and not eq(to, hevm_cheat_code.address)
-            and not eq(to, halmos_cheat_code.address)
-        ):
+        if self and to not in [halmos_cheat_code.address, hevm_cheat_code.address]:
             result = self.active
             if not self.keep:
                 self.stopPrank()
@@ -216,10 +216,10 @@ class Prank:
         return True
 
 
-def symbolic_storage(ex, arg, sevm, stack, step_id):
+def symbolic_storage(ex, arg, sevm, stack):
     account = uint160(arg.get_word(4))
     account_alias = sevm.resolve_address_alias(
-        ex, account, stack, step_id, allow_branching=False
+        ex, account, stack, allow_branching=False
     )
 
     if account_alias is None:
@@ -231,10 +231,10 @@ def symbolic_storage(ex, arg, sevm, stack, step_id):
     return ByteVec()  # empty return data
 
 
-def snapshot_storage(ex, arg, sevm, stack, step_id):
+def snapshot_storage(ex, arg, sevm, stack):
     account = uint160(arg.get_word(4))
     account_alias = sevm.resolve_address_alias(
-        ex, account, stack, step_id, allow_branching=False
+        ex, account, stack, allow_branching=False
     )
 
     if account_alias is None:
@@ -285,12 +285,12 @@ def snapshot_state(
     return ByteVec(balance_hash + code_hash + storage_hash + path_hash)
 
 
-def create_calldata_contract(ex, arg, sevm, stack, step_id):
+def create_calldata_contract(ex, arg, sevm, stack):
     contract_name = name_of(extract_string_argument(arg, 0))
     return create_calldata_generic(ex, sevm, contract_name)
 
 
-def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
+def create_calldata_contract_bool(ex, arg, sevm, stack):
     contract_name = name_of(extract_string_argument(arg, 0))
     include_view = int_of(
         extract_bytes(arg, 4 + 32 * 1, 32),
@@ -301,13 +301,13 @@ def create_calldata_contract_bool(ex, arg, sevm, stack, step_id):
     )
 
 
-def create_calldata_file_contract(ex, arg, sevm, stack, step_id):
+def create_calldata_file_contract(ex, arg, sevm, stack):
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     return create_calldata_generic(ex, sevm, contract_name, filename)
 
 
-def create_calldata_file_contract_bool(ex, arg, sevm, stack, step_id):
+def create_calldata_file_contract_bool(ex, arg, sevm, stack):
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     include_view = int_of(
@@ -469,6 +469,10 @@ def create_bool(ex, arg, **kwargs):
 def apply_vmaddr(ex, private_key: Word):
     # check if this private key has an existing address associated with it
     known_keys = ex.known_keys
+
+    if not is_bv(private_key):
+        private_key = uint256(private_key).as_z3()
+
     addr = known_keys.get(private_key, None)
     if addr is None:
         # if not, create a new address
@@ -488,7 +492,7 @@ def apply_vmaddr(ex, private_key: Word):
 class halmos_cheat_code:
     # address constant SVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('svm cheat code')))));
-    address: BitVecRef = con_addr(0xF3993A62377BCD56AE39D773740A5390411E8BC9)
+    address = BV(0xF3993A62377BCD56AE39D773740A5390411E8BC9, size=160)
 
     handlers = {
         0x66830DFA: create_uint,  # createUint(uint256,string)
@@ -511,10 +515,10 @@ class halmos_cheat_code:
     }
 
     @staticmethod
-    def handle(sevm, ex, arg: BitVecRef, stack, step_id) -> list[BitVecRef]:
+    def handle(sevm, ex, arg: BitVecRef, stack) -> list[BitVecRef]:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
-            result = handler(ex, arg, sevm=sevm, stack=stack, step_id=step_id)
+            result = handler(ex, arg, sevm=sevm, stack=stack)
             return result if isinstance(result, list) else [result]
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
@@ -526,7 +530,7 @@ class hevm_cheat_code:
 
     # address constant HEVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('hevm cheat code')))));
-    address: BitVecRef = con_addr(0x7109709ECFA91A80626FF3989D68F67F5B1DD12D)
+    address: BitVecRef = BV(0x7109709ECFA91A80626FF3989D68F67F5B1DD12D, size=160)
 
     # abi.encodePacked(
     #     bytes4(keccak256("store(address,bytes32,bytes32)")),
@@ -611,7 +615,7 @@ class hevm_cheat_code:
     snapshot_state_sig: int = 0x9CD23835
 
     @staticmethod
-    def handle(sevm, ex, arg: ByteVec, stack, step_id) -> ByteVec | None:
+    def handle(sevm, ex, arg: ByteVec, stack) -> ByteVec | None:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
 
@@ -623,13 +627,13 @@ class hevm_cheat_code:
             if ex.check(not_cond) != unsat:
                 new_ex = sevm.create_branch(ex, not_cond, ex.pc)
                 new_ex.halt(data=ByteVec(), error=FailCheatcode(f"{vm_assert}"))
-                stack.push(new_ex, step_id)
+                stack.push(new_ex)
 
             return ret
 
         # vm.assume(bool)
         elif funsig == hevm_cheat_code.assume_sig:
-            assume_cond = simplify(is_non_zero(arg.get_word(4)))
+            assume_cond = simplify(BV(arg.get_word(4)).is_non_zero().as_z3())
             if is_false(assume_cond):
                 raise InfeasiblePath("vm.assume(false)")
             ex.path.append(assume_cond, branching=True)
@@ -659,7 +663,7 @@ class hevm_cheat_code:
 
         # vm.prank(address)
         elif funsig == hevm_cheat_code.prank_sig:
-            sender = uint160(arg.get_word(4))
+            sender = uint160(arg.get_word(4)).as_z3()
             result = ex.context.prank.prank(sender)
             if not result:
                 raise HalmosException(
@@ -669,8 +673,8 @@ class hevm_cheat_code:
 
         # vm.prank(address sender, address origin)
         elif funsig == hevm_cheat_code.prank_addr_addr_sig:
-            sender = uint160(arg.get_word(4))
-            origin = uint160(arg.get_word(36))
+            sender = uint160(arg.get_word(4)).as_z3()
+            origin = uint160(arg.get_word(36)).as_z3()
             result = ex.context.prank.prank(sender, origin)
             if not result:
                 raise HalmosException(
@@ -680,7 +684,7 @@ class hevm_cheat_code:
 
         # vm.startPrank(address)
         elif funsig == hevm_cheat_code.start_prank_sig:
-            address = uint160(arg.get_word(4))
+            address = uint160(arg.get_word(4)).as_z3()
             result = ex.context.prank.startPrank(address)
             if not result:
                 raise HalmosException(
@@ -690,8 +694,8 @@ class hevm_cheat_code:
 
         # vm.startPrank(address sender, address origin)
         elif funsig == hevm_cheat_code.start_prank_addr_addr_sig:
-            sender = uint160(arg.get_word(4))
-            origin = uint160(arg.get_word(36))
+            sender = uint160(arg.get_word(4)).as_z3()
+            origin = uint160(arg.get_word(36)).as_z3()
             result = ex.context.prank.startPrank(sender, origin)
             if not result:
                 raise HalmosException(
@@ -706,8 +710,8 @@ class hevm_cheat_code:
 
         # vm.deal(address,uint256)
         elif funsig == hevm_cheat_code.deal_sig:
-            who = uint160(arg.get_word(4))
-            amount = uint256(arg.get_word(36))
+            who = uint160(arg.get_word(4)).as_z3()
+            amount = uint256(arg.get_word(36)).as_z3()
             ex.balance_update(who, amount)
             return ret
 
@@ -720,11 +724,11 @@ class hevm_cheat_code:
                 # since HEVM_ADDRESS is an uninitialized account
                 raise FailCheatcode()
 
-            store_account = uint160(arg.get_word(4))
-            store_slot = uint256(arg.get_word(36))
-            store_value = uint256(arg.get_word(68))
+            store_account = uint160(arg.get_word(4)).as_z3()
+            store_slot = uint256(arg.get_word(36)).as_z3()
+            store_value = uint256(arg.get_word(68)).as_z3()
             store_account_alias = sevm.resolve_address_alias(
-                ex, store_account, stack, step_id, allow_branching=False
+                ex, store_account, stack, allow_branching=False
             )
 
             if store_account_alias is None:
@@ -736,10 +740,10 @@ class hevm_cheat_code:
 
         # vm.load(address,bytes32)
         elif funsig == hevm_cheat_code.load_sig:
-            load_account = uint160(arg.get_word(4))
-            load_slot = uint256(arg.get_word(36))
+            load_account = uint160(arg.get_word(4)).as_z3()
+            load_slot = uint256(arg.get_word(36)).as_z3()
             load_account_alias = sevm.resolve_address_alias(
-                ex, load_account, stack, step_id, allow_branching=False
+                ex, load_account, stack, allow_branching=False
             )
 
             if load_account_alias is None:
@@ -783,21 +787,27 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.etch_sig:
             who = uint160(arg.get_word(4))
 
-            # who must be concrete
-            if not is_bv_value(who):
+            if not who.is_concrete:
                 error_msg = f"vm.etch(address who, bytes code) must have concrete argument `who` but received {who}"
                 raise HalmosException(error_msg)
 
             # code must be concrete
             code_offset = int_of(arg.get_word(36), "symbolic code offset")
-            code_length = int_of(arg.get_word(4 + code_offset), "symbolic code length")
+            loc = 4 + code_offset + 32
+            size = int_of(arg.get_word(4 + code_offset), "symbolic code length")
 
-            code_loc = 4 + code_offset + 32
-            code_bytes = arg[code_loc : code_loc + code_length]
-            ex.set_code(who, code_bytes)
+            # check for max memory size
+            if loc + size > MAX_MEMORY_SIZE:
+                error_msg = f"memory read {loc=} {size=} > MAX_MEMORY_SIZE"
+                raise OutOfGasError(error_msg)
+
+            # note: size can be 0
+            code_bytes = arg[loc : loc + size]
+            ex.set_code(who.as_z3(), code_bytes)
 
             # vm.etch() initializes but does not clear storage
-            ex.storage.setdefault(who, sevm.mk_storagedata())
+            ex.storage.setdefault(who.as_z3(), sevm.mk_storagedata())
+            ex.transient_storage.setdefault(who.as_z3(), sevm.mk_storagedata())
 
             return ret
 
@@ -914,7 +924,7 @@ class hevm_cheat_code:
 
         # vm.snapshotState() return (uint256)
         elif funsig == hevm_cheat_code.snapshot_state_sig:
-            return snapshot_state(ex, arg, sevm, stack, step_id)
+            return snapshot_state(ex, arg, sevm, stack)
 
         else:
             # TODO: support other cheat codes

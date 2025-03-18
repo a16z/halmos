@@ -16,6 +16,7 @@ from z3 import (
     BitVecRef,
     BitVecSort,
     BitVecVal,
+    BoolRef,
     BoolVal,
     Concat,
     Extract,
@@ -24,7 +25,6 @@ from z3 import (
     Not,
     SignExt,
     SolverFor,
-    ZeroExt,
     eq,
     is_app,
     is_app_of,
@@ -37,6 +37,8 @@ from z3 import (
     substitute,
 )
 
+from .bitvec import HalmosBitVec as BV
+from .bitvec import HalmosBool as Bool
 from .exceptions import HalmosException, NotConcreteError
 from .logs import warn
 from .mapper import Mapper
@@ -46,11 +48,11 @@ secp256k1n = (
     115792089237316195423570985008687907852837564279074904382605163141518161494337
 )
 
-Byte = int | BitVecRef  # uint8
-Bytes4 = int | BitVecRef  # uint32
-Address = int | BitVecRef  # uint160
-Word = int | BitVecRef  # uint256
-Bytes = bytes | BitVecRef  # arbitrary-length sequence of bytes
+Byte = int | BitVecRef | BV  # uint8
+Bytes4 = int | BitVecRef | BV  # uint32
+Address = int | BitVecRef | BV  # uint160
+Word = int | BitVecRef | BV  # uint256
+Bytes = "bytes | BitVecRef | ByteVec"  # arbitrary-length sequence of bytes
 
 
 # dynamic BitVecSort sizes
@@ -156,28 +158,14 @@ def uint(x: Any, n: int) -> Word:
     Truncates or zero-extends x to n bits
     """
 
-    if isinstance(x, bytes):
-        x = int.from_bytes(x, "big")
-
-    if isinstance(x, int):
-        return con(x, size_bits=n)
-
-    if is_bool(x):
-        return If(x, con(1, size_bits=n), con(0, size_bits=n))
-
-    bitsize = x.size()
-    if bitsize == n:
-        return x
-    if bitsize > n:
-        return simplify(Extract(n - 1, 0, x))
-    return simplify(ZeroExt(n - bitsize, x))
+    return BV(x, size=n)
 
 
 def uint8(x: Any) -> Byte:
     return uint(x, 8)
 
 
-def uint160(x: BitVecRef) -> BitVecRef:
+def uint160(x: Word) -> Address:
     return uint(x, 160)
 
 
@@ -208,32 +196,52 @@ def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, BitVecSorts[size_bits])
 
 
+def z3_bv(x: Any) -> BitVecRef:
+    if isinstance(x, BV):
+        return x.as_z3()
+
+    if isinstance(x, Bool):
+        return BV(x).as_z3()
+
+    # must check before int because isinstance(True, int) is True
+    if isinstance(x, bool):
+        return BoolVal(x)
+
+    if isinstance(x, int):
+        return con(x, size_bits=256)
+
+    if is_bv(x) or is_bool(x):
+        return x
+
+    raise ValueError(x)
+
+
 #             x  == b   if sort(x) = bool
 # int_to_bool(x) == b   if sort(x) = int
-def test(x: Word, b: bool) -> Word:
+def test(x: Word, b: bool) -> BoolRef:
     if isinstance(x, int):
         return BoolVal(x != 0) if b else BoolVal(x == 0)
+
+    elif isinstance(x, BV):
+        return x.is_non_zero().as_z3() if b else x.is_zero().as_z3()
 
     elif is_bool(x):
         if b:
             return x
         else:
             return Not(x)
+
     elif is_bv(x):
         return x != con(0) if b else x == con(0)
+
     else:
         raise ValueError(x)
 
 
-def is_non_zero(x: Word) -> Word:
-    return test(x, True)
-
-
-def is_zero(x: Word) -> Word:
-    return test(x, False)
-
-
 def is_concrete(x: Any) -> bool:
+    if isinstance(x, BV | Bool):
+        return x.is_concrete
+
     return isinstance(x, int | bytes) or is_bv_value(x)
 
 
@@ -365,6 +373,9 @@ def int_of(x: Any, err: str = None, subst: dict = None) -> int:
     """
     Converts int-like objects to int or raises NotConcreteError
     """
+
+    if hasattr(x, "unwrap"):
+        x = x.unwrap()
 
     # attempt to replace symbolic (sub-)terms with their concrete values
     if subst and is_bv(x) and not is_bv_value(x):
@@ -553,18 +564,33 @@ def assert_bv(x) -> None:
 
 
 def assert_address(x: Word) -> None:
+    if isinstance(x, BV):
+        if x.size != 160:
+            raise ValueError(x)
+        return
+
     if is_concrete(x):
         if not 0 <= int_of(x) < 2**160:
             raise ValueError(x)
+        return
 
-    elif x.size() != 160:
+    if x.size() != 160:
         raise ValueError(x)
 
 
-def assert_uint256(x: BitVecRef) -> None:
+def assert_uint256(x: Word) -> None:
+    if isinstance(x, BV):
+        if x.size != 256:
+            raise ValueError(x)
+        return
+
+    if is_concrete(x):
+        if not 0 <= int_of(x) < 2**256:
+            raise ValueError(x)
+        return
+
     if x.size() != 256:
         raise ValueError(x)
-    pass
 
 
 def con_addr(n: int) -> BitVecRef:
@@ -808,6 +834,7 @@ str_opcode: dict[int, str] = {
     EVM.SELFBALANCE: "SELFBALANCE",
     EVM.BASEFEE: "BASEFEE",
     EVM.POP: "POP",
+    EVM.MCOPY: "MCOPY",
     EVM.MLOAD: "MLOAD",
     EVM.MSTORE: "MSTORE",
     EVM.MSTORE8: "MSTORE8",
@@ -1249,3 +1276,36 @@ class NamedTimer:
             f"NamedTimer(name={self.name}, start_time={self.start_time}, "
             f"end_time={self.end_time}, sub_timers={self.sub_timers})"
         )
+
+
+def format_time(seconds: float) -> str:
+    """
+    Return a pretty string for an elapsed time in seconds.
+    Automatically choose a relevant time unit among s, ms, µs, ns.
+    """
+    if seconds >= 1:
+        # 1 second or more
+        return f"{seconds:.3f}s"
+    elif seconds >= 1e-3:
+        # 1 millisecond or more
+        return f"{seconds * 1e3:.3f}ms"
+    elif seconds >= 1e-6:
+        # 1 microsecond or more
+        return f"{seconds * 1e6:.3f}µs"
+    else:
+        # Otherwise, display in nanoseconds
+        return f"{seconds * 1e9:.3f}ns"
+
+
+class timed:
+    def __init__(self, label="Block"):
+        self.label = label
+
+    def __enter__(self):
+        self.start = timer()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        end = timer()
+        elapsed = end - self.start
+        print(f"{self.label} took {format_time(elapsed)}")
