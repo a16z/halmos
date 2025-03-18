@@ -258,6 +258,9 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
         path=Path(ctx.solver),
     )
 
+    # foundry default balance for the test contract
+    ex.balance_update(this, con(0xffffffffffffffffffffffff))
+
     # deploy libraries and resolve library placeholders in hexcode
     contract_ctx = ctx.contract_ctx
     (creation_hexcode, _) = ex.resolve_libs(

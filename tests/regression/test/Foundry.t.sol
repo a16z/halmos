@@ -45,6 +45,26 @@ contract EarlyFailTest is Test {
 }
 
 contract FoundryTest is Test {
+    address payable rcpt = payable(address(42));
+
+    constructor() {
+        // would fail if starting balance was 0
+        rcpt.transfer(1 ether);
+    }
+
+    function check_initial_balance(address addr) external view {
+        if (addr == address(this)) {
+            // checks that the transfer in the constructor worked as expected
+            assertEq(addr.balance, 0xffffffffffffffffffffffff - 1 ether);
+        } else if (addr == rcpt) {
+            // check that the recipient got the ether
+            assertEq(addr.balance, 1 ether);
+        } else {
+            // check that every other address has a starting balance of 0
+            assertEq(addr.balance, 0);
+        }
+    }
+
     /* TODO: support checkFail prefix
     function checkFail() public {
         assertTrue(false);
