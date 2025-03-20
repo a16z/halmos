@@ -100,6 +100,14 @@ class OutOfGasError(ExceptionalHalt):
     pass
 
 
+class InsufficientFunds(ExceptionalHalt):
+    """
+    Occurs when an account is trying to send more value than its balance.
+    """
+
+    pass
+
+
 class InvalidOpcode(ExceptionalHalt):
     """
     Raised when an invalid opcode is encountered.

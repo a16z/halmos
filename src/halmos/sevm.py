@@ -70,6 +70,7 @@ from .exceptions import (
     FailCheatcode,
     HalmosException,
     InfeasiblePath,
+    InsufficientFunds,
     InvalidJumpDestError,
     InvalidOpcode,
     MessageDepthLimitError,
@@ -2305,16 +2306,23 @@ class SEVM:
         to: Address,
         value: Word,
         condition: Word = None,
-    ) -> None:
+    ) -> BoolRef:
+        """
+        Returns the condition "balance_of(caller) >= value".
+
+        Handling is left to the caller.
+        """
+
         # no-op if value is zero
         if is_bv_value(value) and value.as_long() == 0:
-            return
+            return BoolVal(True)
 
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
         if is_false(balance_cond):
-            raise InfeasiblePath("transfer_value: balance is not enough")
+            return balance_cond
+
         ex.path.append(balance_cond)
 
         # conditional transfer
@@ -2323,6 +2331,7 @@ class SEVM:
 
         ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value))
         ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
+        return balance_cond
 
     def call(
         self,
@@ -2355,12 +2364,14 @@ class SEVM:
         pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.mslice(arg_loc, arg_size)
 
-        def send_callvalue(condition=None) -> None:
+        def send_callvalue(condition=None) -> BoolRef:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
                 # TODO: revert if context is static
                 # NOTE: we cannot use `to_alias` here because it could be None
-                self.transfer_value(ex, pranked_caller, to, fund, condition)
+                return self.transfer_value(ex, pranked_caller, to, fund, condition)
+            else:
+                return BoolVal(True)
 
         def call_known(to: Address) -> None:
             # backup current state
@@ -2370,7 +2381,7 @@ class SEVM:
             orig_balance = ex.balance
 
             # transfer msg.value
-            send_callvalue()
+            sufficient_funds: BoolRef = send_callvalue()
 
             message = Message(
                 target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this(),
@@ -2381,6 +2392,22 @@ class SEVM:
                 is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
                 call_scheme=op,
             )
+
+            # TODO: handle symbolic sufficient_funds condition
+            if is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
+                ex.st.push(0)
+
+                # this is a "virtual" call context to make the trace more readable
+                # in reality, we never enter this context
+                ex.context.trace.append(
+                    CallContext(
+                        message=message,
+                        output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                    )
+                )
+                ex.advance_pc()
+                stack.push(ex, step_id)
+                return
 
             def callback(new_ex: Exec, stack, step_id):
                 # continue execution in the context of the parent

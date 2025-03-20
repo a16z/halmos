@@ -47,7 +47,7 @@ from .constants import (
     VERBOSITY_TRACE_PATHS,
     VERBOSITY_TRACE_SETUP,
 )
-from .exceptions import HalmosException
+from .exceptions import FailCheatcode, HalmosException
 from .logs import (
     COUNTEREXAMPLE_INVALID,
     COUNTEREXAMPLE_UNKNOWN,
@@ -78,7 +78,6 @@ from .sevm import (
     CallOutput,
     Contract,
     Exec,
-    FailCheatcode,
     Message,
     Path,
     SMTQuery,

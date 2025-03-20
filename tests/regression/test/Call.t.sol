@@ -59,6 +59,19 @@ contract CallTest is Test {
         d = new D();
     }
 
+    receive() external payable {}
+
+    function check_call_insufficient_funds(uint256 balance, uint256 callvalue) public payable {
+        vm.assume(callvalue > balance);
+        vm.deal(address(this), balance);
+
+        (bool success, bytes memory retdata) = address(this).call{ value: callvalue }("");
+        
+        assert(!success);
+        assertEq(retdata.length, 0);
+        assertEq(address(this).balance, balance);
+    }
+
     function check_call(uint x, uint fund) public payable {
         vm.deal(address(this), fund);
         vm.deal(address(d), 0);
