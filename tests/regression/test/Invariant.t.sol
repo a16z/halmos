@@ -12,6 +12,7 @@ contract C {
     }
 }
 
+
 contract InvariantTest is Test {
     C c;
 

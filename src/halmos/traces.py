@@ -8,7 +8,14 @@ from halmos.bytevec import ByteVec
 from halmos.config import Config, TraceEvent
 from halmos.exceptions import HalmosException
 from halmos.mapper import DeployAddressMapper, Mapper
-from halmos.sevm import CallContext, EventLog, StorageRead, StorageWrite, mnemonic
+from halmos.sevm import (
+    CallContext,
+    CallSequence,
+    EventLog,
+    StorageRead,
+    StorageWrite,
+    mnemonic,
+)
 from halmos.utils import (
     Address,
     byte_length,
@@ -206,4 +213,15 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
     render_output(context, file=file)
 
     if context.depth == 1:
-        print(file=file)
+        print(file=file, end="")
+
+
+def render_call_sequence(call_sequence: CallSequence, file=sys.stdout) -> None:
+    for call in call_sequence:
+        render_trace(call, file=file)
+
+
+def rendered_call_sequence(call_sequence: CallSequence) -> str:
+    with io.StringIO() as output:
+        render_call_sequence(call_sequence, file=output)
+        return output.getvalue()

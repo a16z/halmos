@@ -13,7 +13,7 @@ def args():
 
 @pytest.fixture
 def fun_info():
-    return FunctionInfo("test", "test()", "f8a8fd6d")
+    return FunctionInfo("TestContract", "test", "test()", "f8a8fd6d")
 
 
 @pytest.fixture
