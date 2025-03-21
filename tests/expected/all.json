@@ -1587,6 +1587,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Invariant.t.sol:InvariantProxyTest": [
+            {
+                "name": "invariant_proxy_1()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_proxy_2()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Invariant.t.sol:InvariantTest": [
             {
                 "name": "invariant_1()",
