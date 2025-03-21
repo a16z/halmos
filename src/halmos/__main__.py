@@ -21,6 +21,7 @@ from importlib import metadata
 import rich
 from z3 import (
     BitVec,
+    ZeroExt,
     eq,
     set_option,
     unsat,
@@ -257,6 +258,9 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
         pgm=None,  # to be added
         path=Path(ctx.solver),
     )
+
+    # foundry default balance for the test contract
+    ex.balance_update(this, con(0xFFFFFFFFFFFFFFFFFFFFFFFF))
 
     # deploy libraries and resolve library placeholders in hexcode
     contract_ctx = ctx.contract_ctx
@@ -495,7 +499,7 @@ def run_invariant_tests(
     for r in test_results:
         if r.exitcode == PASS:
             print(
-                f"{green('[PASS]')} {r.name} (depth: {depth-1}, paths: {len(visited)})"
+                f"{green('[PASS]')} {r.name} (depth: {depth - 1}, paths: {len(visited)})"
             )
 
     return test_results
@@ -573,6 +577,11 @@ def step_invariant_tests(
                 # update call traces
                 post_ex.context = deepcopy(pre_ex.context)
                 post_ex.context.trace.append(subcall)
+
+                # update timestamp
+                timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
+                post_ex.block.timestamp = ZeroExt(192, BitVec(timestamp_name, 64))
+                post_ex.path.append(post_ex.block.timestamp >= pre_ex.block.timestamp)
 
                 # check all invariants against the current output state
                 test_results = run_tests(ctx, post_ex, funsigs, depth, terminal=False)

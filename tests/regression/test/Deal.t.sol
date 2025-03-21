@@ -6,10 +6,6 @@ import "forge-std/Test.sol";
 contract DealTest is Test {
     C c;
 
-    function check_initial_balance(address addr) public {
-        assertEq(addr.balance, 0);
-    }
-
     function check_deal_1(address payable receiver, uint amount) public {
         vm.deal(receiver, amount);
         assert(receiver.balance == amount);
