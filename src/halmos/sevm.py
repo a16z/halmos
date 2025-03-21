@@ -163,6 +163,9 @@ FOUNDRY_CALLER = 0x1804C8AB1F12E6BBF3894D4083F33E07309D1F38
 FOUNDRY_ORIGIN = FOUNDRY_CALLER
 FOUNDRY_TEST = 0x7FA9385BE102AC3EAC297483DD6233D62B3E1496
 
+ERC1167_PREFIX = ByteVec(bytes.fromhex("363d3d373d3d3d363d73"))
+ERC1167_SUFFIX = ByteVec(bytes.fromhex("5af43d82803e903d91602b57fd5bf3"))
+
 # (pc, (jumpdest, ...))
 # the jumpdests are stored as strings to avoid the cost of converting bv values
 JumpID = tuple[int, tuple[str]]
@@ -603,7 +606,7 @@ class Contract:
     filename: str | None
 
     def __init__(
-        self, code: ByteVec | None = None, contract_name=None, filename=None
+        self, code: ByteVec | None = None, *, contract_name=None, filename=None
     ) -> None:
         if not isinstance(code, ByteVec):
             code = ByteVec(code)
@@ -757,6 +760,33 @@ class Contract:
             self._jumpdests = self.__get_jumpdests()
 
         return self._jumpdests[1]
+
+    def extract_erc1167_target(self) -> Address | None:
+        """
+        Extracts the target address from an ERC-1167 minimal proxy contract.
+
+        Returns:
+            Address: The target contract address if this is an ERC-1167 proxy
+            None: If this is not an ERC-1167 proxy
+        """
+
+        # Check if bytecode matches ERC-1167 pattern
+        m = len(ERC1167_PREFIX)
+        n = len(ERC1167_SUFFIX)
+        erc1167_len = m + 20 + n
+
+        if (
+            len(self._code) == erc1167_len
+            and self.slice(0, m) == ERC1167_PREFIX
+            and self.slice(m + 20, n) == ERC1167_SUFFIX
+        ):
+            # Extract the 20-byte address between prefix and suffix
+            target: ByteVec = self.slice(m, 20)
+            unwrapped = target.unwrap()
+            if isinstance(unwrapped, bytes):
+                return con_addr(int.from_bytes(unwrapped, "big"))
+
+        return None
 
 
 @dataclass(frozen=True)
@@ -1603,6 +1633,47 @@ class Exec:  # an execution path
                 var_set = itertools.chain(var_set, self.path.get_var_set(_val))
 
         self.path.slice(var_set)
+
+    def try_resolve_contract_info(
+        self, contract: Contract
+    ) -> tuple[str | None, str | None]:
+        """
+        Resolves and sets contract information for a newly deployed contract.
+
+        This method attempts to determine the contract name and filename in two ways:
+        1. Direct lookup using the contract's bytecode
+        2. If that fails and the contract is an ERC-1167 proxy, lookup using the target's bytecode
+
+        Args:
+            contract: The Contract object representing the newly deployed contract
+        """
+        bytecode = contract._code
+        contract_name, filename = BuildOut().get_by_code(bytecode)
+
+        if contract_name is None:
+            contract_name, filename = self._try_resolve_proxy_info(contract)
+
+        if contract_name is None:
+            warn(f"unknown deployed bytecode: {hexify(bytecode.unwrap())}")
+
+        contract.contract_name = contract_name
+        contract.filename = filename
+
+        return contract_name, filename
+
+    def _try_resolve_proxy_info(
+        self, contract: Contract
+    ) -> tuple[str | None, str | None]:
+        """Helper method to resolve contract info for ERC-1167 proxies."""
+        target = contract.extract_erc1167_target()
+        if target is None:
+            return None, None
+
+        target_contract = self.code.get(target)
+        if target_contract is None:
+            return None, None
+
+        return BuildOut().get_by_code(target_contract._code)
 
 
 class Storage:
@@ -2761,11 +2832,10 @@ class SEVM:
             elif subcall.output.error is None:
                 deployed_bytecode = subcall.output.data
 
-                # retrieve contract name
-                (contract_name, filename) = BuildOut().get_by_code(deployed_bytecode)
-
                 # new contract code, will revert if data is None
-                new_code = Contract(deployed_bytecode, contract_name, filename)
+                new_code = Contract(deployed_bytecode)
+                new_ex.try_resolve_contract_info(new_code)
+
                 new_ex.set_code(new_addr, new_code)
 
                 # push new address to stack
