@@ -1,5 +1,9 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+from itertools import tee
+
+from collections.abc import Iterator
+
 import gc
 import json
 import logging
@@ -709,6 +713,107 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
     return results
 
 
+def compute_pre_exs(
+    ctx: ContractContext,
+    depth: int,
+) -> Iterator[Exec]:
+    pre_exs = ctx.pre_exs_cache[depth - 1]
+
+    visited = ctx.visited
+
+    for idx, pre_ex in enumerate(pre_exs):
+        progress_status.update(
+            f"depth: {cyan(depth)} | "
+            f"starting states: {cyan(len(pre_exs))} | "
+            f"unique states: {cyan(len(visited))} | "
+#           f"frontier states: {cyan(len(next_exs))} | "
+            f"completed paths: {cyan(idx)} "
+        )
+
+        for addr in pre_ex.code:
+            # skip the test contract
+            if eq(addr, con_addr(FOUNDRY_TEST)):
+                continue
+
+            # execute a target contract
+            post_exs = run_target_contract(ctx, pre_ex, addr)
+
+            for post_ex in post_exs:
+                subcall = post_ex.context
+
+                # ignore and report if halmos-errored
+                if subcall.is_stuck():
+                    error(
+                        f"{depth=}: addr={hexify(addr)}: {subcall.get_stuck_reason()}"
+                    )
+                    continue
+
+                # ignore if reverted
+                if subcall.output.error:
+                    continue
+
+                # skip if already visited
+                post_ex.path_slice()
+                post_id = get_state_id(post_ex)
+                if post_id in visited:
+                    continue
+
+                # update visited set
+                # TODO: check path feasibility
+                visited.add(post_id)
+
+                # update call traces
+                post_ex.context = deepcopy(pre_ex.context)
+                post_ex.context.trace.append(subcall)
+
+                # update timestamp
+                timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
+                post_ex.block.timestamp = ZeroExt(192, BitVec(timestamp_name, 64))
+                post_ex.path.append(post_ex.block.timestamp >= pre_ex.block.timestamp)
+
+                yield post_ex
+
+
+def get_pre_exs(ctx: ContractContext, depth: int):
+    pre_exs_cache = ctx.pre_exs_cache
+
+    if depth in pre_exs_cache:
+        return pre_exs_cache[depth]
+
+    results = []
+    pre_exs_cache[depth] = results
+    for pre_ex in compute_pre_exs(ctx, depth):
+        results.append(pre_ex)
+        yield pre_ex
+
+
+def run_message(ctx: FunctionContext, sevm, cd, dyn_params):
+
+    for depth in range(ctx.max_depth + 1):
+
+        for setup_ex in get_pre_exs(ctx.contract_ctx, depth):
+    #       sevm = SEVM(args, fun_info)
+
+            ctx.solver.reset()
+
+            path = Path(ctx.solver)
+            path.extend_path(setup_ex.path)
+
+    #       cd, dyn_params = mk_calldata(ctx.contract_ctx.abi, fun_info, args)
+            path.process_dyn_params(dyn_params)
+
+            message = Message(
+                target=setup_ex.this(),
+                caller=setup_ex.caller(),
+                origin=setup_ex.origin(),
+                value=0,
+                data=cd,
+                call_scheme=EVM.CALL,
+            )
+
+            yield from sevm.run_message(setup_ex, message, path)
+
+
 def run_test(ctx: FunctionContext) -> TestResult:
     args = ctx.args
     fun_info = ctx.info
@@ -723,22 +828,22 @@ def run_test(ctx: FunctionContext) -> TestResult:
     # prepare calldata
     #
 
-    setup_ex = ctx.setup_ex
+#   setup_ex = ctx.setup_ex
     sevm = SEVM(args, fun_info)
-    path = Path(ctx.solver)
-    path.extend_path(setup_ex.path)
+#   path = Path(ctx.solver)
+#   path.extend_path(setup_ex.path)
 
     cd, dyn_params = mk_calldata(ctx.contract_ctx.abi, fun_info, args)
-    path.process_dyn_params(dyn_params)
+#   path.process_dyn_params(dyn_params)
 
-    message = Message(
-        target=setup_ex.this(),
-        caller=setup_ex.caller(),
-        origin=setup_ex.origin(),
-        value=0,
-        data=cd,
-        call_scheme=EVM.CALL,
-    )
+#   message = Message(
+#       target=setup_ex.this(),
+#       caller=setup_ex.caller(),
+#       origin=setup_ex.origin(),
+#       value=0,
+#       data=cd,
+#       call_scheme=EVM.CALL,
+#   )
 
     #
     # run
@@ -747,7 +852,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     timer = NamedTimer("time")
     timer.create_subtimer("paths")
 
-    exs = sevm.run_message(setup_ex, message, path)
+#   exs = sevm.run_message(setup_ex, message, path)
+
+    exs = run_message(ctx, sevm, cd, dyn_params)
 
     normal = 0
     potential = 0
@@ -1049,20 +1156,25 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
         return []
 
-    # separate regular and invariant tests
-    test_funsigs, inv_funsigs = [], []
-    for sig in ctx.funsigs:
-        (inv_funsigs if sig.startswith("invariant_") else test_funsigs).append(sig)
+    ctx.pre_exs_cache[0] = [setup_ex]
+    ctx.visited.add(get_state_id(setup_ex))
 
-    test_results = []
+    test_results = run_tests(ctx, setup_ex, ctx.funsigs)
 
-    # execute regular tests
-    if test_funsigs:
-        test_results.extend(run_tests(ctx, setup_ex, test_funsigs))
+#   # separate regular and invariant tests
+#   test_funsigs, inv_funsigs = [], []
+#   for sig in ctx.funsigs:
+#       (inv_funsigs if sig.startswith("invariant_") else test_funsigs).append(sig)
 
-    # execute invariant tests
-    if inv_funsigs:
-        test_results.extend(run_invariant_tests(ctx, setup_ex, inv_funsigs))
+#   test_results = []
+
+#   # execute regular tests
+#   if test_funsigs:
+#       test_results.extend(run_tests(ctx, setup_ex, test_funsigs))
+
+#   # execute invariant tests
+#   if inv_funsigs:
+#       test_results.extend(run_invariant_tests(ctx, setup_ex, inv_funsigs))
 
     # reset any remaining solver states from the default context
     setup_solver.reset()
@@ -1103,11 +1215,13 @@ def run_tests(
             solver = mk_solver(test_config)
             debug(f"{test_config.formatted_layers()}")
 
-            # stop if the current depth exceeds the max depth for the test.
-            # note that the max depth may vary across tests.
-            # no-op for regular tests where depth is 0.
-            if depth > test_config.invariant_depth:
-                continue
+            max_depth = test_config.invariant_depth if funsig.startswith("invariant_") else 0
+
+#           # stop if the current depth exceeds the max depth for the test.
+#           # note that the max depth may vary across tests.
+#           # no-op for regular tests where depth is 0.
+#           if depth > test_config.invariant_depth:
+#               continue
 
             test_ctx = FunctionContext(
                 args=test_config,
@@ -1116,6 +1230,7 @@ def run_tests(
                 contract_ctx=ctx,
                 setup_ex=pre_ex,
                 terminal=terminal,
+                max_depth=max_depth,
             )
 
             test_result = run_test(test_ctx)
@@ -1307,6 +1422,8 @@ def _main(_args=None) -> MainResult:
             contract_json=contract_json,
             libs=libs,
             build_out_map=build_out_map,
+            pre_exs_cache={},
+            visited=set(),
         )
 
         test_results = run_contract(contract_ctx)
