@@ -2434,6 +2434,16 @@ class SEVM:
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.mslice(arg_loc, arg_size)
+        resolved_to = to_alias if to_alias is not None else to
+        message = Message(
+            target=(resolved_to if op in [EVM.CALL, EVM.STATICCALL] else ex.this()),
+            caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
+            origin=pranked_origin,
+            value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
+            data=arg,
+            is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
+            call_scheme=op,
+        )
 
         def send_callvalue(condition=None) -> BoolRef:
             # no balance update for CALLCODE which transfers to itself
@@ -2454,20 +2464,8 @@ class SEVM:
             # transfer msg.value
             sufficient_funds: BoolRef = send_callvalue()
 
-            message = Message(
-                target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this(),
-                caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
-                origin=pranked_origin,
-                value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
-                data=arg,
-                is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
-                call_scheme=op,
-            )
-
             # TODO: handle symbolic sufficient_funds condition
             if is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
-                ex.st.push(0)
-
                 # this is a "virtual" call context to make the trace more readable
                 # in reality, we never enter this context
                 ex.context.trace.append(
@@ -2476,6 +2474,7 @@ class SEVM:
                         output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
                     )
                 )
+                ex.st.push(0)
                 ex.advance_pc()
                 stack.push(ex, step_id)
                 return
@@ -2551,6 +2550,24 @@ class SEVM:
             stack.push(sub_ex, step_id)
 
         def call_unknown() -> None:
+            # transfer msg.value
+            sufficient_funds: BoolRef = send_callvalue()
+
+            # TODO: handle symbolic sufficient_funds condition
+            if is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
+                # this is a "virtual" call context to make the trace more readable
+                # in reality, we never enter this context
+                ex.context.trace.append(
+                    CallContext(
+                        message=message,
+                        output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                    )
+                )
+                ex.st.push(0)
+                ex.advance_pc()
+                stack.push(ex, step_id)
+                return
+
             # ecrecover
             if eq(to, con_addr(1)):
                 # TODO: explicitly return empty data in case of an error
@@ -2665,8 +2682,7 @@ class SEVM:
             ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
-            # transfer msg.value
-            send_callvalue(exit_code_var != ZERO)
+            # TODO: revert fund transfer if exit code is not zero
 
             ret_lst = ret if isinstance(ret, list) else [ret]
 
@@ -2685,19 +2701,8 @@ class SEVM:
 
                 new_ex.context.trace.append(
                     CallContext(
-                        # TODO: refactor this message to be shared with call_known()
-                        message=Message(
-                            target=to,
-                            caller=pranked_caller,
-                            origin=pranked_origin,
-                            value=fund,
-                            data=new_ex.st.mslice(arg_loc, arg_size),
-                            call_scheme=op,
-                        ),
-                        output=CallOutput(
-                            data=ret_,
-                            error=None,
-                        ),
+                        message=message,
+                        output=CallOutput(data=ret_),
                         depth=new_ex.context.depth + 1,
                     )
                 )

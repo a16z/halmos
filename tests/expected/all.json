@@ -4718,7 +4718,7 @@
             },
             {
                 "name": "check_unknown_send_fail(address)",
-                "exitcode": 4,
+                "exitcode": 0,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
