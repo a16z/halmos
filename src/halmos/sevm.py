@@ -2457,13 +2457,10 @@ class SEVM:
         # transfer msg.value
         sufficient_funds: BoolRef = send_callvalue()
 
-        if (
-            is_true(sufficient_funds)
-            or (funds_check := ex.check(sufficient_funds)) == sat
-        ):
+        if is_true(sufficient_funds) or (ex.check(~sufficient_funds) == unsat):
             # transfer is done, continue execution
             ex.path.append(sufficient_funds)
-        elif is_false(sufficient_funds) or (funds_check == unsat):
+        elif is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
             # funds are definitely insufficient, revert
             ex.path.append(~sufficient_funds)
 
