@@ -2454,30 +2454,32 @@ class SEVM:
             else:
                 return BoolVal(True)
 
+        # keep a reference to the original balance in case of a revert
+        orig_balance = ex.balance
+
+        # transfer msg.value
+        sufficient_funds: BoolRef = send_callvalue()
+
+        # TODO: handle symbolic sufficient_funds condition
+        if is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
+            # this is a "virtual" call context to make the trace more readable
+            # in reality, we never enter this context
+            ex.context.trace.append(
+                CallContext(
+                    message=message,
+                    output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                )
+            )
+            ex.st.push(0)
+            ex.advance_pc()
+            stack.push(ex, step_id)
+            return
+
         def call_known(to: Address) -> None:
             # backup current state
             orig_code = ex.code.copy()
             orig_storage = deepcopy(ex.storage)
             orig_transient_storage = deepcopy(ex.transient_storage)
-            orig_balance = ex.balance
-
-            # transfer msg.value
-            sufficient_funds: BoolRef = send_callvalue()
-
-            # TODO: handle symbolic sufficient_funds condition
-            if is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
-                # this is a "virtual" call context to make the trace more readable
-                # in reality, we never enter this context
-                ex.context.trace.append(
-                    CallContext(
-                        message=message,
-                        output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
-                    )
-                )
-                ex.st.push(0)
-                ex.advance_pc()
-                stack.push(ex, step_id)
-                return
 
             def callback(new_ex: Exec, stack, step_id):
                 # continue execution in the context of the parent
@@ -2550,24 +2552,6 @@ class SEVM:
             stack.push(sub_ex, step_id)
 
         def call_unknown() -> None:
-            # transfer msg.value
-            sufficient_funds: BoolRef = send_callvalue()
-
-            # TODO: handle symbolic sufficient_funds condition
-            if is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
-                # this is a "virtual" call context to make the trace more readable
-                # in reality, we never enter this context
-                ex.context.trace.append(
-                    CallContext(
-                        message=message,
-                        output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
-                    )
-                )
-                ex.st.push(0)
-                ex.advance_pc()
-                stack.push(ex, step_id)
-                return
-
             # ecrecover
             if eq(to, con_addr(1)):
                 # TODO: explicitly return empty data in case of an error
