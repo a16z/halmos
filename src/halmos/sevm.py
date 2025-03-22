@@ -2468,6 +2468,7 @@ class SEVM:
                 CallContext(
                     message=message,
                     output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                    depth=ex.context.depth + 1,
                 )
             )
             ex.st.push(0)

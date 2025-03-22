@@ -2662,6 +2662,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_RevertBalance_Unknown(uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_RevertCode(address)",
                 "exitcode": 0,
                 "num_models": 0,

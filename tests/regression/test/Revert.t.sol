@@ -68,6 +68,17 @@ contract CTest is Test {
         }
     }
 
+    function check_RevertBalance_Unknown(uint256 balance, uint256 amount) public {
+        vm.deal(address(this), balance);
+        vm.assume(amount > balance);
+
+        (bool result, ) = address(42).call{value: amount}("");
+
+        assert(!result);
+        assertEq(address(this).balance, balance);
+        assertEq(address(42).balance, 0);
+    }
+
     function codesize(address x) internal view returns (uint256 size) {
         assembly { size := extcodesize(x) }
     }
