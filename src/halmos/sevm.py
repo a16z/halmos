@@ -2388,13 +2388,10 @@ class SEVM:
         if is_bv_value(value) and value.as_long() == 0:
             return BoolVal(True)
 
-        # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
         if is_false(balance_cond):
             return balance_cond
-
-        ex.path.append(balance_cond)
 
         # conditional transfer
         if condition is not None:
@@ -2460,8 +2457,16 @@ class SEVM:
         # transfer msg.value
         sufficient_funds: BoolRef = send_callvalue()
 
-        # TODO: handle symbolic sufficient_funds condition
-        if is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
+        if (
+            is_true(sufficient_funds)
+            or (funds_check := ex.check(sufficient_funds)) == sat
+        ):
+            # transfer is done, continue execution
+            ex.path.append(sufficient_funds)
+        elif is_false(sufficient_funds) or (funds_check == unsat):
+            # funds are definitely insufficient, revert
+            ex.path.append(~sufficient_funds)
+
             # this is a "virtual" call context to make the trace more readable
             # in reality, we never enter this context
             ex.context.trace.append(
@@ -2471,10 +2476,29 @@ class SEVM:
                     depth=ex.context.depth + 1,
                 )
             )
+            ex.balance = orig_balance
             ex.st.push(0)
             ex.advance_pc()
             stack.push(ex, step_id)
             return
+        else:
+            # we need to case split, the funds could be sufficient or not
+            fail_ex = self.create_branch(ex, ~sufficient_funds, ex.pc)
+            fail_ex.context.trace.append(
+                CallContext(
+                    message=message,
+                    output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                    depth=ex.context.depth + 1,
+                )
+            )
+
+            fail_ex.balance = orig_balance
+            fail_ex.st.push(0)
+            fail_ex.advance_pc()
+            stack.push(fail_ex, step_id)
+
+            # update the path condition in the successful branch
+            ex.path.append(sufficient_funds)
 
         def call_known(to: Address) -> None:
             # backup current state

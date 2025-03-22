@@ -90,20 +90,24 @@ contract SendTest {
         }
         require(receiver == address(c));
 
-        assert(oldBalanceSender >= amount);
 
         uint newBalanceSender = address(this).balance;
         uint newBalanceReceiver = receiver.balance;
         uint newBalanceOthers = others.balance;
 
-        unchecked {
-            assert(receiver != address(this)); // new address cannot be equal to the deployer
-            assert(newBalanceSender == oldBalanceSender - amount);
-            assert(newBalanceSender <= oldBalanceSender);
-            assert(newBalanceReceiver == oldBalanceReceiver + amount);
-            assert(newBalanceReceiver >= oldBalanceReceiver);
-            assert(oldBalanceSender + oldBalanceReceiver == newBalanceSender + newBalanceReceiver);
-            assert(oldBalanceOthers == newBalanceOthers);
+        if (oldBalanceSender >= amount) {
+            unchecked {
+                assert(receiver != address(this)); // new address cannot be equal to the deployer
+                assert(newBalanceSender == oldBalanceSender - amount);
+                assert(newBalanceSender <= oldBalanceSender);
+                assert(newBalanceReceiver == oldBalanceReceiver + amount);
+                assert(newBalanceReceiver >= oldBalanceReceiver);
+                assert(oldBalanceSender + oldBalanceReceiver == newBalanceSender + newBalanceReceiver);
+                assert(oldBalanceOthers == newBalanceOthers);
+            }
+        } else {
+            assert(newBalanceSender == oldBalanceSender);
+            assert(newBalanceReceiver == oldBalanceReceiver);
         }
     }
 

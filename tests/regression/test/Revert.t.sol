@@ -51,7 +51,7 @@ contract CTest is Test {
         assert(c.num() != x);
     }
 
-    function check_RevertBalance(bool paused, uint256 amount) public {
+    function check_RevertBalance_Known(bool paused, uint256 amount) public {
         vm.deal(address(this), amount);
         vm.deal(address(c), 0);
 
@@ -77,6 +77,28 @@ contract CTest is Test {
         assert(!result);
         assertEq(address(this).balance, balance);
         assertEq(address(42).balance, 0);
+    }
+
+    function check_BalanceTransfer_Known(uint256 balance, uint256 amount) public {
+        // balance and amount are unconstrained, so could fail, could succeed
+        vm.deal(address(this), balance);
+
+        (bool success, ) = address(c).call{value: amount}(abi.encodeWithSignature("deposit(bool)", false));
+
+        // we are looking for a counterexample here
+        // i.e., halmos should find the case amount > balance
+        assert(success);
+    }
+
+    function check_BalanceTransfer_Unknown(uint256 balance, uint256 amount) public {
+        // balance and amount are unconstrained, so could fail, could succeed
+        vm.deal(address(this), balance);
+
+        (bool success, ) = address(42).call{value: amount}("");
+
+        // we are looking for a counterexample here
+        // i.e., halmos should find the case amount > balance
+        assert(success);
     }
 
     function codesize(address x) internal view returns (uint256 size) {
