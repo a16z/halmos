@@ -88,6 +88,9 @@ class ContractContext:
     # so in principle, we could consider having another context, say CompileUnitContext, and put build_out_map there
     build_out_map: dict
 
+    pre_exs_cache: dict
+    visited: set
+
 
 @dataclass(frozen=True)
 class SolvingContext:
@@ -132,6 +135,8 @@ class FunctionContext:
 
     # optional terminal mode flag (default: true)
     terminal: bool = True
+
+    max_depth: int = 0
 
     # function-level solving context
     # the FunctionContext initializes and owns the SolvingContext
