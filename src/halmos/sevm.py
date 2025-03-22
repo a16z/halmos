@@ -70,6 +70,7 @@ from .exceptions import (
     FailCheatcode,
     HalmosException,
     InfeasiblePath,
+    InsufficientFunds,
     InvalidJumpDestError,
     InvalidOpcode,
     MessageDepthLimitError,
@@ -2376,17 +2377,21 @@ class SEVM:
         to: Address,
         value: Word,
         condition: Word = None,
-    ) -> None:
+    ) -> BoolRef:
+        """
+        Returns the condition "balance_of(caller) >= value".
+
+        Handling is left to the caller.
+        """
+
         # no-op if value is zero
         if is_bv_value(value) and value.as_long() == 0:
-            return
+            return BoolVal(True)
 
-        # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
         if is_false(balance_cond):
-            raise InfeasiblePath("transfer_value: balance is not enough")
-        ex.path.append(balance_cond)
+            return balance_cond
 
         # conditional transfer
         if condition is not None:
@@ -2394,6 +2399,7 @@ class SEVM:
 
         ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value))
         ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
+        return balance_cond
 
     def call(
         self,
@@ -2425,33 +2431,80 @@ class SEVM:
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.mslice(arg_loc, arg_size)
+        resolved_to = to_alias if to_alias is not None else to
+        message = Message(
+            target=(resolved_to if op in [EVM.CALL, EVM.STATICCALL] else ex.this()),
+            caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
+            origin=pranked_origin,
+            value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
+            data=arg,
+            is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
+            call_scheme=op,
+        )
 
-        def send_callvalue(condition=None) -> None:
+        def send_callvalue(condition=None) -> BoolRef:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
                 # TODO: revert if context is static
                 # NOTE: we cannot use `to_alias` here because it could be None
-                self.transfer_value(ex, pranked_caller, to, fund, condition)
+                return self.transfer_value(ex, pranked_caller, to, fund, condition)
+            else:
+                return BoolVal(True)
+
+        # keep a reference to the original balance in case of a revert
+        orig_balance = ex.balance
+
+        # transfer msg.value
+        sufficient_funds: BoolRef = send_callvalue()
+
+        if (
+            is_true(sufficient_funds)
+            or (funds_check := ex.check(sufficient_funds)) == sat
+        ):
+            # transfer is done, continue execution
+            ex.path.append(sufficient_funds)
+        elif is_false(sufficient_funds) or (funds_check == unsat):
+            # funds are definitely insufficient, revert
+            ex.path.append(~sufficient_funds)
+
+            # this is a "virtual" call context to make the trace more readable
+            # in reality, we never enter this context
+            ex.context.trace.append(
+                CallContext(
+                    message=message,
+                    output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                    depth=ex.context.depth + 1,
+                )
+            )
+            ex.balance = orig_balance
+            ex.st.push(0)
+            ex.advance_pc()
+            stack.push(ex, step_id)
+            return
+        else:
+            # we need to case split, the funds could be sufficient or not
+            fail_ex = self.create_branch(ex, ~sufficient_funds, ex.pc)
+            fail_ex.context.trace.append(
+                CallContext(
+                    message=message,
+                    output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                    depth=ex.context.depth + 1,
+                )
+            )
+
+            fail_ex.balance = orig_balance
+            fail_ex.st.push(0)
+            fail_ex.advance_pc()
+            stack.push(fail_ex, step_id)
+
+            # update the path condition in the successful branch
+            ex.path.append(sufficient_funds)
 
         def call_known(to: Address) -> None:
             # backup current state
             orig_code = ex.code.copy()
             orig_storage = deepcopy(ex.storage)
             orig_transient_storage = deepcopy(ex.transient_storage)
-            orig_balance = ex.balance
-
-            # transfer msg.value
-            send_callvalue()
-
-            message = Message(
-                target=to if op in [EVM.CALL, EVM.STATICCALL] else ex.this(),
-                caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
-                origin=pranked_origin,
-                value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
-                data=arg,
-                is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
-                call_scheme=op,
-            )
 
             def callback(new_ex: Exec, stack, step_id):
                 # continue execution in the context of the parent
@@ -2638,8 +2691,7 @@ class SEVM:
             ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
-            # transfer msg.value
-            send_callvalue(exit_code_var != ZERO)
+            # TODO: revert fund transfer if exit code is not zero
 
             ret_lst = ret if isinstance(ret, list) else [ret]
 
@@ -2658,19 +2710,8 @@ class SEVM:
 
                 new_ex.context.trace.append(
                     CallContext(
-                        # TODO: refactor this message to be shared with call_known()
-                        message=Message(
-                            target=to,
-                            caller=pranked_caller,
-                            origin=pranked_origin,
-                            value=fund,
-                            data=new_ex.st.mslice(arg_loc, arg_size),
-                            call_scheme=op,
-                        ),
-                        output=CallOutput(
-                            data=ret_,
-                            error=None,
-                        ),
+                        message=message,
+                        output=CallOutput(data=ret_),
                         depth=new_ex.context.depth + 1,
                     )
                 )

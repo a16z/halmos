@@ -59,6 +59,38 @@ contract CallTest is Test {
         d = new D();
     }
 
+    receive() external payable {}
+
+    function some_calltarget() public returns (uint256) {
+        return 42;
+    }
+
+    function returndatasize() internal returns (uint256 size) {
+        assembly {
+            size := returndatasize()
+        }
+    }
+
+    function transfer(address to, uint256 amount) public returns (bool success) {
+        (success, ) = to.call{ value: amount }("");
+    }
+
+    function check_call_insufficient_funds(uint256 balance, uint256 callvalue) public payable {
+        vm.assume(callvalue > balance);
+        vm.deal(address(this), balance);
+
+        // make some call to fill returndata
+        this.some_calltarget();
+        assertGt(returndatasize(), 0);
+
+        // the balance check is done even for self-transfers
+        bool success = transfer(address(this), callvalue);
+
+        assert(!success);
+        assertEq(returndatasize(), 0);
+        assertEq(address(this).balance, balance);
+    }
+
     function check_call(uint x, uint fund) public payable {
         vm.deal(address(this), fund);
         vm.deal(address(d), 0);
