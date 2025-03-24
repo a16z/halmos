@@ -1,11 +1,12 @@
 # SPDX-License-Identifier: AGPL-3.0
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, ForwardRef
+from typing import Any
 
 from sortedcontainers import SortedDict
 from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
 
+from .bitvec import HalmosBitVec as BV
 from .logs import warn
 from .utils import (
     Byte,
@@ -20,8 +21,8 @@ from .utils import (
 )
 
 UnwrappedBytes = bytes | Byte
-WrappedBytes = ForwardRef("Chunk") | ForwardRef("ByteVec")
-Bytes = UnwrappedBytes | WrappedBytes
+WrappedBytes = "Chunk | ByteVec"
+Bytes = "UnwrappedBytes | WrappedBytes"
 
 
 def try_concat(lhs: Any, rhs: Any) -> Any | None:
@@ -93,7 +94,13 @@ class Chunk(ABC):
         if is_bv_value(data):
             data = bv_value_to_bytes(data)
 
-        if isinstance(data, int):
+        elif isinstance(data, BV):
+            if data.is_concrete:
+                data = int.to_bytes(data.value, data.size // 8, "big")
+            else:
+                data = data.value
+
+        elif isinstance(data, int):
             # assume a single byte, raises if value does not fit in a byte
             data = int.to_bytes(data, 1, "big")
 
@@ -119,7 +126,7 @@ class Chunk(ABC):
     def __iter__(self):
         raise TypeError("Chunk object is not iterable")
 
-    def __getitem__(self, key) -> Byte | ForwardRef("Chunk"):
+    def __getitem__(self, key) -> "Byte | Chunk":
         if isinstance(key, slice):
             start = key.start or 0
             stop = key.stop if key.stop is not None else self.length
@@ -627,11 +634,15 @@ class ByteVec:
         """
 
         # convert to concrete value when possible
+        if isinstance(value, BV):
+            value = value.unwrap()
+
         if is_bv_value(value):
             value = value.as_long()
 
         if isinstance(value, int):
             value = int.to_bytes(value, 32, "big")
+
         elif is_bool(value):
             value = If(value, con(1), con(0))
 
@@ -733,7 +744,7 @@ class ByteVec:
         data = self.slice(offset, offset + 32).unwrap()
         return unbox_int(data)
 
-    def __getitem__(self, key) -> Byte | ForwardRef("ByteVec"):
+    def __getitem__(self, key) -> "Byte | ByteVec":
         if isinstance(key, slice):
             start = key.start or 0
             stop = key.stop if key.stop is not None else self.length

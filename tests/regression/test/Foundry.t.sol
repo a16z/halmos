@@ -45,6 +45,26 @@ contract EarlyFailTest is Test {
 }
 
 contract FoundryTest is Test {
+    address payable rcpt = payable(address(42));
+
+    constructor() {
+        // would fail if starting balance was 0
+        rcpt.transfer(1 ether);
+    }
+
+    function check_initial_balance(address addr) external view {
+        if (addr == address(this)) {
+            // checks that the transfer in the constructor worked as expected
+            assertEq(addr.balance, 0xffffffffffffffffffffffff - 1 ether);
+        } else if (addr == rcpt) {
+            // check that the recipient got the ether
+            assertEq(addr.balance, 1 ether);
+        } else {
+            // check that every other address has a starting balance of 0
+            assertEq(addr.balance, 0);
+        }
+    }
+
     /* TODO: support checkFail prefix
     function checkFail() public {
         assertTrue(false);
@@ -147,6 +167,18 @@ contract NotEtchFriendly {
         console2.log("owner is", owner);
         require(msg.sender == owner, "NotEtchFriendly: only owner can beep boop");
     }
+
+    function tstore(uint256 slot, uint256 value) public {
+        assembly {
+            tstore(slot, value)
+        }
+    }
+
+    function tload(uint256 slot) public view returns (uint256 value) {
+        assembly {
+            value := tload(slot)
+        }
+    }
 }
 
 contract TestNotEtchFriendly is Test {
@@ -180,5 +212,14 @@ contract TestNotEtchFriendly is Test {
 
     function check_etch_then_load() external {
         assertEq(target.owner(), address(0));
+    }
+
+    function check_etch_then_sload() external {
+        assertEq(target.tload(0), 0);
+    }
+
+    function check_etch_then_tstore() external {
+        target.tstore(0, 42);
+        assertEq(target.tload(0), 42);
     }
 }

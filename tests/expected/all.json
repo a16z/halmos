@@ -876,15 +876,6 @@
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
-            },
-            {
-                "name": "check_initial_balance(address)",
-                "exitcode": 0,
-                "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
             }
         ],
         "test/Extcodehash.t.sol:ExtcodehashTest": [
@@ -1147,6 +1138,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_initial_balance(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_origin()",
                 "exitcode": 0,
                 "num_models": 0,
@@ -1185,7 +1185,25 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_etch_then_sload()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_etch_then_store()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_etch_then_tstore()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1581,6 +1599,26 @@
                 "name": "check_createCalldata_NestedArrays_1_pass()",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Invariant.t.sol:InvariantProxyTest": [
+            {
+                "name": "invariant_proxy_1()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_proxy_2()",
+                "exitcode": 1,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,
