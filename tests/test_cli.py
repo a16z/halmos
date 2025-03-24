@@ -5,10 +5,12 @@ from z3 import (
     BitVec,
     BitVecVal,
     Concat,
+    eq,
 )
 
+from halmos.bitvec import HalmosBitVec as BV
 from halmos.calldata import str_abi
-from halmos.sevm import Contract, Instruction, con
+from halmos.sevm import Contract, Instruction
 from halmos.utils import EVM, hexify
 
 
@@ -58,7 +60,7 @@ def test_decode_concrete_bytecode():
     assert contract[11] == EVM.STOP
 
     # jump destination scanning
-    assert contract.valid_jump_destinations() == set([10])
+    assert contract.valid_jumpdests() == set([10])
 
 
 def test_decode_mixed_bytecode():
@@ -78,7 +80,7 @@ def test_decode_mixed_bytecode():
     assert contract[0] == EVM.PUSH20
     assert contract[27] == EVM.RETURN
     assert contract[28] == EVM.STOP  # past the end
-    assert contract.valid_jump_destinations() == set()
+    assert contract.valid_jumpdests() == set()
 
     # force decoding
     pc = 0
@@ -86,9 +88,7 @@ def test_decode_mixed_bytecode():
         contract.decode_instruction(pc)
         pc = contract.next_pc(pc)
 
-    pcs, insns = zip(
-        *((pc, insn) for (pc, insn) in contract._insn.items()), strict=False
-    )
+    insns = [insn for insn in contract._insn if insn is not None]
     opcodes = tuple(insn.opcode for insn in insns)
 
     assert opcodes == (
@@ -104,16 +104,16 @@ def test_decode_mixed_bytecode():
     assert disassembly == "PUSH20 x PUSH0 MSTORE PUSH1 0x14 PUSH1 0x0c RETURN"
 
     # jump destination scanning
-    assert contract.valid_jump_destinations() == set()
+    assert contract.valid_jumpdests() == set()
 
 
 def test_instruction():
-    assert str(Instruction(con(0))) == "STOP"
-    assert str(Instruction(con(1))) == "ADD"
+    assert str(Instruction(0)) == "STOP"
+    assert str(Instruction(1)) == "ADD"
 
-    push32_1_str = "PUSH32 " + hexify(con(1))
-    assert str(Instruction(con(EVM.PUSH32), operand=con(1))) == push32_1_str
-    assert str(Instruction(con(EVM.BASEFEE))) == "BASEFEE"
+    push32_1_str = "PUSH32 " + hexify(BV(1))
+    assert str(Instruction(EVM.PUSH32, operand=BV(1))) == push32_1_str
+    assert str(Instruction(EVM.BASEFEE)) == "BASEFEE"
 
     # symbolic opcode is not supported
     # assert str(Instruction(BitVec('x', 8))) == 'x'
@@ -139,19 +139,26 @@ def test_decode_hex():
 
 
 def test_decode():
-    code = Contract(Concat(BitVecVal(EVM.PUSH32, 8), BitVec("x", 256)))
+    x = BitVec("x", 256)
+    code = Contract(Concat(BitVecVal(EVM.PUSH32, 8), x))
     assert len(code) == 33
-    assert str(code.decode_instruction(0)) == "PUSH32 x"
+    insn0 = code.decode_instruction(0)
+    assert insn0.opcode == EVM.PUSH32
+    assert eq(insn0.operand.value, x)
     assert str(code.decode_instruction(33)) == "STOP"
 
-    code = Contract(BitVec("x", 256))
+    code = Contract(x)
     assert len(code) == 32
     assert str(code[31]) == "Extract(7, 0, x)"
 
     code = Contract(Concat(BitVecVal(EVM.PUSH3, 8), BitVec("x", 16)))
-    assert (
-        str(code.decode_instruction(0)) == "PUSH3 Concat(x, 0x00)"
-    )  # 'PUSH3 ERROR x (1 bytes missed)'
+    operand = code.decode_instruction(0).operand
+    assert operand.is_symbolic
+    assert operand.size == 256  # operands are padded to 256 bits
+
+    # the last byte of the operand should be 0
+    last_byte = BV(operand, size=8)
+    assert last_byte.is_zero().is_true
 
 
 @pytest.mark.parametrize(
