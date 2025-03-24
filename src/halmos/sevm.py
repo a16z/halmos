@@ -170,7 +170,7 @@ CHEATCODE_ADDRESSES: tuple[BV, ...] = (
     halmos_cheat_code.address,
     console.address,
 )
-  
+
 ERC1167_PREFIX = ByteVec(bytes.fromhex("363d3d373d3d3d363d73"))
 ERC1167_SUFFIX = ByteVec(bytes.fromhex("5af43d82803e903d91602b57fd5bf3"))
 
@@ -684,7 +684,7 @@ class State:
         """
         Returns the top element without popping it from the stack.
         """
-        
+
         try:
             return self.stack[-1]
         except IndexError as e:
@@ -739,7 +739,7 @@ class State:
 
     def mslice(self, loc: int, size: int) -> ByteVec:
         """Wraps a memory slice read with a size check."""
-        
+
         if not size:
             return ByteVec()
 
@@ -751,7 +751,7 @@ class State:
 
     def set_mslice(self, loc: int, data: ByteVec) -> None:
         """Wraps a memory slice write with a size check."""
-        
+
         size = len(data)
 
         if not size:
@@ -1834,7 +1834,7 @@ class Exec:  # an execution path
 
         Collects state variables from balance, code, and storage; then executes path.slice() with them.
         """
-        
+
         var_set = self.path.get_var_set(self.balance)
 
         # the keys of self.code are constant
@@ -1867,7 +1867,7 @@ class Exec:  # an execution path
         Args:
             contract: The Contract object representing the newly deployed contract
         """
-        
+
         bytecode = contract._code
         contract_name, filename = BuildOut().get_by_code(bytecode)
 
@@ -1886,7 +1886,7 @@ class Exec:  # an execution path
         self, contract: Contract
     ) -> tuple[str | None, str | None]:
         """Helper method to resolve contract info for ERC-1167 proxies."""
-        
+
         target = contract.extract_erc1167_target()
         if target is None:
             return None, None
@@ -1934,7 +1934,7 @@ class SolidityStorage(Storage):
         - case size_keys == 0: scalar type: initialized with zero or symbolic value
         - case size_keys != 0: mapping type: initialized with empty array or symbolic array
         """
-        
+
         assert_address(addr)
         storage_addr = storage[addr]
 
@@ -2104,7 +2104,7 @@ class GenericStorage(Storage):
         NOTE: unlike SolidityStorage, size_keys > 0 in GenericStorage.
               thus it is of mapping type, and initialized with empty array or symbolic array.
         """
-        
+
         assert_address(addr)
         storage_addr = storage[addr]
 
