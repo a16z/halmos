@@ -2370,6 +2370,28 @@ class SEVM:
         ex.alias[target] = addr
         return addr
 
+    def handle_insufficient_fund_case(self, caller, value, message, ex, stack, step_id):
+        if is_bv_value(value) and value.as_long() == 0:
+            return
+
+        insufficiency_cond = simplify(ULT(ex.balance_of(caller), value))
+
+        # note: although creating a new branch is unnecessary when insufficiency_cond is true,
+        # such definite insufficiency is rare, and this logic is simpler to maintain.
+        # the definite insufficiency is handled later by transfer_value().
+        if ex.check(insufficiency_cond) != unsat:
+            fail_ex = self.create_branch(ex, insufficiency_cond, ex.pc)
+            fail_ex.context.trace.append(
+                CallContext(
+                    message=message,
+                    output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                    depth=ex.context.depth + 1,
+                )
+            )
+            fail_ex.st.push(0)
+            fail_ex.advance_pc()
+            stack.push(fail_ex, step_id)
+
     def transfer_value(
         self,
         ex: Exec,
@@ -2377,21 +2399,17 @@ class SEVM:
         to: Address,
         value: Word,
         condition: Word = None,
-    ) -> BoolRef:
-        """
-        Returns the condition "balance_of(caller) >= value".
-
-        Handling is left to the caller.
-        """
-
+    ) -> None:
         # no-op if value is zero
         if is_bv_value(value) and value.as_long() == 0:
-            return BoolVal(True)
+            return
 
+        # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(ex.balance_of(caller), value))
         if is_false(balance_cond):
-            return balance_cond
+            raise InfeasiblePath("transfer_value: balance is not enough")
+        ex.path.append(balance_cond)
 
         # conditional transfer
         if condition is not None:
@@ -2399,7 +2417,6 @@ class SEVM:
 
         ex.balance_update(caller, self.arith(ex, EVM.SUB, ex.balance_of(caller), value))
         ex.balance_update(to, self.arith(ex, EVM.ADD, ex.balance_of(to), value))
-        return balance_cond
 
     def call(
         self,
@@ -2431,9 +2448,10 @@ class SEVM:
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.mslice(arg_loc, arg_size)
+
         resolved_to = to_alias if to_alias is not None else to
         message = Message(
-            target=(resolved_to if op in [EVM.CALL, EVM.STATICCALL] else ex.this()),
+            target=resolved_to if op in [EVM.CALL, EVM.STATICCALL] else ex.this(),
             caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
             origin=pranked_origin,
             value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
@@ -2442,66 +2460,26 @@ class SEVM:
             call_scheme=op,
         )
 
-        def send_callvalue(condition=None) -> BoolRef:
+        self.handle_insufficient_fund_case(
+            pranked_caller, fund, message, ex, stack, step_id
+        )
+
+        def send_callvalue(condition=None) -> None:
             # no balance update for CALLCODE which transfers to itself
             if op == EVM.CALL:
                 # TODO: revert if context is static
                 # NOTE: we cannot use `to_alias` here because it could be None
-                return self.transfer_value(ex, pranked_caller, to, fund, condition)
-            else:
-                return BoolVal(True)
-
-        # keep a reference to the original balance in case of a revert
-        orig_balance = ex.balance
-
-        # transfer msg.value
-        sufficient_funds: BoolRef = send_callvalue()
-
-        if is_true(sufficient_funds) or (ex.check(~sufficient_funds) == unsat):
-            # transfer is done, continue execution
-            ex.path.append(sufficient_funds)
-        elif is_false(sufficient_funds) or (ex.check(sufficient_funds) == unsat):
-            # funds are definitely insufficient, revert
-            ex.path.append(~sufficient_funds)
-
-            # this is a "virtual" call context to make the trace more readable
-            # in reality, we never enter this context
-            ex.context.trace.append(
-                CallContext(
-                    message=message,
-                    output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
-                    depth=ex.context.depth + 1,
-                )
-            )
-            ex.balance = orig_balance
-            ex.st.push(0)
-            ex.advance_pc()
-            stack.push(ex, step_id)
-            return
-        else:
-            # we need to case split, the funds could be sufficient or not
-            fail_ex = self.create_branch(ex, ~sufficient_funds, ex.pc)
-            fail_ex.context.trace.append(
-                CallContext(
-                    message=message,
-                    output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
-                    depth=ex.context.depth + 1,
-                )
-            )
-
-            fail_ex.balance = orig_balance
-            fail_ex.st.push(0)
-            fail_ex.advance_pc()
-            stack.push(fail_ex, step_id)
-
-            # update the path condition in the successful branch
-            ex.path.append(sufficient_funds)
+                self.transfer_value(ex, pranked_caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
             # backup current state
             orig_code = ex.code.copy()
             orig_storage = deepcopy(ex.storage)
             orig_transient_storage = deepcopy(ex.transient_storage)
+            orig_balance = ex.balance
+
+            # transfer msg.value
+            send_callvalue()
 
             def callback(new_ex: Exec, stack, step_id):
                 # continue execution in the context of the parent
@@ -2688,7 +2666,8 @@ class SEVM:
             ex.path.append(exit_code_var == exit_code)
             ex.st.push(exit_code if is_bv_value(exit_code) else exit_code_var)
 
-            # TODO: revert fund transfer if exit code is not zero
+            # transfer msg.value
+            send_callvalue(exit_code_var != ZERO)
 
             ret_lst = ret if isinstance(ret, list) else [ret]
 
@@ -2784,6 +2763,10 @@ class SEVM:
             data=create_hexcode,
             is_static=False,
             call_scheme=op,
+        )
+
+        self.handle_insufficient_fund_case(
+            pranked_caller, value, message, ex, stack, step_id
         )
 
         if new_addr in ex.code:
