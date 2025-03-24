@@ -1,12 +1,22 @@
 import pytest
-from z3 import And, BitVec, BitVecVal, BoolVal, Concat, Or, eq, simplify
+from z3 import (
+    And,
+    BitVec,
+    BitVecSort,
+    BitVecVal,
+    BoolVal,
+    Concat,
+    Function,
+    Or,
+    eq,
+    simplify,
+)
 
 from halmos.bitvec import FALSE, TRUE
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bitvec import HalmosBool as Bool
 from halmos.bytevec import Chunk
 from halmos.exceptions import NotConcreteError
-
 
 a, b = Bool("a"), Bool("b")
 x, y = BV("x"), BV("y")
