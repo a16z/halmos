@@ -170,6 +170,9 @@ CHEATCODE_ADDRESSES: tuple[BV, ...] = (
     halmos_cheat_code.address,
     console.address,
 )
+  
+ERC1167_PREFIX = ByteVec(bytes.fromhex("363d3d373d3d3d363d73"))
+ERC1167_SUFFIX = ByteVec(bytes.fromhex("5af43d82803e903d91602b57fd5bf3"))
 
 OP_STOP = 0x00
 OP_ADD = 0x01
@@ -337,7 +340,6 @@ TERMINATING_OPCODES = (
     OP_REVERT,
     OP_INVALID,
 )
-
 
 # (pc, (jumpdest, ...))
 # the jumpdests are stored as strings to avoid the cost of converting bv values
@@ -636,7 +638,6 @@ class CallContext:
             return last_subcall.get_stuck_reason()
 
 
-# TODO: support frozen=True
 @dataclass(frozen=True, slots=True, eq=False, order=False)
 class State:
     stack: list[Word] = field(default_factory=list)
@@ -683,6 +684,7 @@ class State:
         """
         Returns the top element without popping it from the stack.
         """
+        
         try:
             return self.stack[-1]
         except IndexError as e:
@@ -737,6 +739,7 @@ class State:
 
     def mslice(self, loc: int, size: int) -> ByteVec:
         """Wraps a memory slice read with a size check."""
+        
         if not size:
             return ByteVec()
 
@@ -748,6 +751,7 @@ class State:
 
     def set_mslice(self, loc: int, data: ByteVec) -> None:
         """Wraps a memory slice write with a size check."""
+        
         size = len(data)
 
         if not size:
@@ -799,7 +803,7 @@ class Contract:
     filename: str | None
 
     def __init__(
-        self, code: ByteVec | None = None, contract_name=None, filename=None
+        self, code: ByteVec | None = None, *, contract_name=None, filename=None
     ) -> None:
         if not isinstance(code, ByteVec):
             code = ByteVec(code)
@@ -949,6 +953,33 @@ class Contract:
             self._jumpdests = self.__get_jumpdests()
 
         return self._jumpdests
+
+    def extract_erc1167_target(self) -> Address | None:
+        """
+        Extracts the target address from an ERC-1167 minimal proxy contract.
+
+        Returns:
+            Address: The target contract address if this is an ERC-1167 proxy
+            None: If this is not an ERC-1167 proxy
+        """
+
+        # Check if bytecode matches ERC-1167 pattern
+        m = len(ERC1167_PREFIX)
+        n = len(ERC1167_SUFFIX)
+        erc1167_len = m + 20 + n
+
+        if (
+            len(self._code) == erc1167_len
+            and self.slice(0, m) == ERC1167_PREFIX
+            and self.slice(m + 20, n) == ERC1167_SUFFIX
+        ):
+            # Extract the 20-byte address between prefix and suffix
+            target: ByteVec = self.slice(m, 20)
+            unwrapped = target.unwrap()
+            if isinstance(unwrapped, bytes):
+                return con_addr(int.from_bytes(unwrapped, "big"))
+
+        return None
 
 
 @dataclass(frozen=True)
@@ -1529,8 +1560,6 @@ class Exec:  # an execution path
 
     def advance(self, pc: int | None = None) -> None:
         next_pc = pc or self.insn.next_pc
-
-        # updating pc will also trigger an insn fetch
         self.pc = next_pc
         self.insn = self.pgm.decode_instruction(next_pc)
 
@@ -1546,6 +1575,7 @@ class Exec:  # an execution path
             unsat if the condition is unsatisfiable
             None if the condition requires full SMT solving
         """
+
         if is_true(cond):
             return sat
 
@@ -1587,7 +1617,6 @@ class Exec:  # an execution path
         return Select(array, key)
 
     def balance_of(self, addr: Word) -> Word:
-        # assert_address(addr)
         addr = uint160(addr).as_z3()
         value = self.select(self.balance, addr, self.balances)
 
@@ -1805,6 +1834,7 @@ class Exec:  # an execution path
 
         Collects state variables from balance, code, and storage; then executes path.slice() with them.
         """
+        
         var_set = self.path.get_var_set(self.balance)
 
         # the keys of self.code are constant
@@ -1823,6 +1853,49 @@ class Exec:  # an execution path
                 var_set = itertools.chain(var_set, self.path.get_var_set(_val))
 
         self.path.slice(var_set)
+
+    def try_resolve_contract_info(
+        self, contract: Contract
+    ) -> tuple[str | None, str | None]:
+        """
+        Resolves and sets contract information for a newly deployed contract.
+
+        This method attempts to determine the contract name and filename in two ways:
+        1. Direct lookup using the contract's bytecode
+        2. If that fails and the contract is an ERC-1167 proxy, lookup using the target's bytecode
+
+        Args:
+            contract: The Contract object representing the newly deployed contract
+        """
+        
+        bytecode = contract._code
+        contract_name, filename = BuildOut().get_by_code(bytecode)
+
+        if contract_name is None:
+            contract_name, filename = self._try_resolve_proxy_info(contract)
+
+        if contract_name is None:
+            warn(f"unknown deployed bytecode: {hexify(bytecode.unwrap())}")
+
+        contract.contract_name = contract_name
+        contract.filename = filename
+
+        return contract_name, filename
+
+    def _try_resolve_proxy_info(
+        self, contract: Contract
+    ) -> tuple[str | None, str | None]:
+        """Helper method to resolve contract info for ERC-1167 proxies."""
+        
+        target = contract.extract_erc1167_target()
+        if target is None:
+            return None, None
+
+        target_contract = self.code.get(target)
+        if target_contract is None:
+            return None, None
+
+        return BuildOut().get_by_code(target_contract._code)
 
 
 class Storage:
@@ -1861,8 +1934,8 @@ class SolidityStorage(Storage):
         - case size_keys == 0: scalar type: initialized with zero or symbolic value
         - case size_keys != 0: mapping type: initialized with empty array or symbolic array
         """
+        
         assert_address(addr)
-
         storage_addr = storage[addr]
 
         if (slot, num_keys, size_keys) in storage_addr:
@@ -2031,8 +2104,8 @@ class GenericStorage(Storage):
         NOTE: unlike SolidityStorage, size_keys > 0 in GenericStorage.
               thus it is of mapping type, and initialized with empty array or symbolic array.
         """
+        
         assert_address(addr)
-
         storage_addr = storage[addr]
 
         if size_keys not in storage_addr:
@@ -2847,11 +2920,10 @@ class SEVM:
             elif subcall.output.error is None:
                 deployed_bytecode = subcall.output.data
 
-                # retrieve contract name
-                (contract_name, filename) = BuildOut().get_by_code(deployed_bytecode)
-
                 # new contract code, will revert if data is None
-                new_code = Contract(deployed_bytecode, contract_name, filename)
+                new_code = Contract(deployed_bytecode)
+                new_ex.try_resolve_contract_info(new_code)
+
                 new_ex.set_code(new_addr, new_code)
 
                 # push new address to stack
@@ -3095,9 +3167,7 @@ class SEVM:
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
         next_ex: Exec | None = ex0
-
         stack: Worklist = Worklist()
-        # stack.push(ex0)
 
         def finalize(ex: Exec):
             # if it's at the top-level, there is no callback; yield the current execution state
@@ -3163,7 +3233,6 @@ class SEVM:
                 opcode: int = insn.opcode
                 state: State = ex.st
 
-                # Profile instruction if enabled
                 if profile_instructions:
                     extra = ""
                     if opcode == OP_ISZERO:
@@ -3551,7 +3620,6 @@ class SEVM:
                         )
                     else:
                         codehash = ZERO  # vs EMPTY_KECCAK, see EIP-1052
-
                     state.push(codehash)
 
                 elif opcode == OP_BLOCKHASH:

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+
 import "forge-std/Test.sol";
 
 contract C {
@@ -25,6 +27,23 @@ contract InvariantTest is Test {
     }
 
     function invariant_2() public {
+        assert(c.num() != 3);
+    }
+}
+
+contract InvariantProxyTest is Test {
+    C impl = new C();
+    C c;
+
+    function setUp() public {
+        c = C(Clones.clone(address(impl)));
+    }
+
+    function invariant_proxy_1() public {
+        console.log(c.num());
+    }
+
+    function invariant_proxy_2() public {
         assert(c.num() != 3);
     }
 }

@@ -168,7 +168,7 @@ class BuildOut(metaclass=SingletonMeta):
                 code_data = (hexcode, placeholders, contract_name, filename)
                 self._build_out_map_code[size].append(code_data)
 
-    def get_by_code(self, bytecode: ForwardRef("ByteVec")) -> tuple:
+    def get_by_code(self, bytecode: ForwardRef("ByteVec")) -> tuple[str, str]:
         """
         Return the contract name and file name of the given deployed bytecode.
         """
@@ -197,8 +197,6 @@ class BuildOut(metaclass=SingletonMeta):
             if eq_except_placeholders(hexcode, placeholders):
                 return (contract_name, filename)
 
-        # too big, too slow on large bytecode (can take 10s of seconds)
-        # warn(f"unknown deployed bytecode: {bytecode}")
         return (None, None)
 
     def get_by_name(self, contract_name: str, filename: str = None) -> dict:

@@ -7,6 +7,7 @@ from halmos.bitvec import HalmosBool as Bool
 from halmos.bytevec import Chunk
 from halmos.exceptions import NotConcreteError
 
+
 a, b = Bool("a"), Bool("b")
 x, y = BV("x"), BV("y")
 
@@ -229,3 +230,20 @@ def test_bitwise_xor():
     assert a.bitwise_xor(FALSE) == a
 
     assert a.bitwise_xor(b) == Bool(a.as_z3() ^ b.as_z3())
+
+
+def test_bitvec_mul():
+    assert BV(42).mul(BV(2)) == BV(84)
+    assert BV(42).mul(BV(0)) == BV(0)
+    assert BV(42).mul(BV(1)) == BV(42)
+
+    assert x.mul(BV(0)) == BV(0)
+    assert x.mul(BV(1)) == x
+    assert x.mul(y) == BV(x.unwrap() * y.unwrap())
+
+    # with abstraction
+    f_mul = Function("f_mul", BitVecSort(256), BitVecSort(256), BitVecSort(256))
+    assert x.mul(BV(0), abstraction=f_mul) == BV(0)
+    assert x.mul(BV(1), abstraction=f_mul) == x
+    assert x.mul(BV(123), abstraction=f_mul) == BV(123 * x.as_z3())
+    assert x.mul(y, abstraction=f_mul) == BV(f_mul(x.as_z3(), y.as_z3()))

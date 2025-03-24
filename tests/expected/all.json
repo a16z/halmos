@@ -876,15 +876,6 @@
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
-            },
-            {
-                "name": "check_initial_balance(address)",
-                "exitcode": 0,
-                "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
             }
         ],
         "test/Extcodehash.t.sol:ExtcodehashTest": [
@@ -1139,6 +1130,15 @@
             },
             {
                 "name": "check_etch_emptyBytecode()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_initial_balance(address)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1605,6 +1605,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Invariant.t.sol:InvariantProxyTest": [
+            {
+                "name": "invariant_proxy_1()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_proxy_2()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Invariant.t.sol:InvariantTest": [
             {
                 "name": "invariant_1()",
@@ -1617,6 +1637,71 @@
             },
             {
                 "name": "invariant_2()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/InvariantTimestamp.t.sol:InvariantTimestampTest": [
+            {
+                "name": "check_timestamp_setup()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_timestamp_can_change()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_timestamp_can_only_move_forward()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_timestamp_does_not_have_to_change()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_timestamp_is_bounded()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_timestamp_setup()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_timestamp_timekeeper(address)",
                 "exitcode": 1,
                 "num_models": 1,
                 "models": null,

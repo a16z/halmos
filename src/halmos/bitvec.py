@@ -9,6 +9,7 @@ from z3 import (
     BitVec,
     BitVecRef,
     BitVecVal,
+    Bool,
     BoolRef,
     BoolVal,
     Concat,
@@ -190,7 +191,7 @@ class HalmosBool:
     @property
     def is_true(self) -> bool:
         """checks if it is the literal True"""
-
+        
         return self is TRUE
 
     @property
@@ -205,6 +206,7 @@ class HalmosBool:
 
         note: this is not the same as z3's comparison, which returns a constraint
         """
+
         if not isinstance(other, HalmosBool):
             return False
 
