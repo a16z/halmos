@@ -12,13 +12,11 @@ from z3 import (
     simplify,
 )
 
+from halmos.bitvec import FALSE, TRUE
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bitvec import HalmosBool as Bool
 from halmos.bytevec import Chunk
 from halmos.exceptions import NotConcreteError
-
-TRUE = Bool(True)
-FALSE = Bool(False)
 
 a, b = Bool("a"), Bool("b")
 x, y = BV("x"), BV("y")
@@ -111,10 +109,10 @@ def test_bitvec_to_bool_conversion():
 
 
 def test_bool_wrapping():
-    assert TRUE == Bool.TRUE
-    assert FALSE == Bool.FALSE
-    assert TRUE is Bool.TRUE
-    assert FALSE is Bool.FALSE
+    assert Bool(True) == TRUE
+    assert Bool(False) == FALSE
+    assert TRUE is Bool(True)
+    assert FALSE is Bool(False)
     assert TRUE.is_true
     assert not TRUE.is_false
     assert FALSE.is_false
@@ -133,6 +131,7 @@ def test_bool_wrapping():
 
     # tautology is lowered to True, but only when do_simplify is True
     assert Bool(tautology, do_simplify=True) == TRUE
+    assert Bool(tautology, do_simplify=True) is TRUE
     assert Bool(tautology, do_simplify=False) != TRUE
 
 

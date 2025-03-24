@@ -68,7 +68,6 @@ from .mapper import BuildOut, DeployAddressMapper
 from .processes import ExecutorRegistry, ShutdownError
 from .sevm import (
     EMPTY_BALANCE,
-    EVM,
     FOUNDRY_CALLER,
     FOUNDRY_ORIGIN,
     FOUNDRY_TEST,
@@ -82,6 +81,7 @@ from .sevm import (
     FailCheatcode,
     Message,
     Path,
+    Profiler,
     SMTQuery,
     con_addr,
     id_str,
@@ -99,6 +99,7 @@ from .solve import (
 )
 from .traces import render_trace, rendered_trace
 from .utils import (
+    EVM,
     Address,
     BitVecSort256,
     NamedTimer,
@@ -1351,6 +1352,19 @@ def _main(_args=None) -> MainResult:
 
     if args.statistics:
         print(f"\n[time] {timer.report()}")
+
+    if args.profile_instructions:
+        profiler = Profiler()
+        top_instructions = profiler.get_top_instructions()
+        separator = "-" * 26
+        print(separator)
+        print(f"{'Instruction':<12} {'Count':>12}")
+        print(separator)
+        for instruction, count in top_instructions:
+            print(f"{instruction:<12} {count:>12,}")
+        print(separator)
+        print(f"{'Total':<12} {profiler.counters.total():>12,}")
+        print(separator)
 
     if total_found == 0:
         error(

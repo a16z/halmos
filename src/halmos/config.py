@@ -370,6 +370,12 @@ class Config:
         group=debugging,
     )
 
+    profile_instructions: bool = arg(
+        help="profile instruction execution frequencies",
+        global_default=False,
+        group=debugging,
+    )
+
     json_output: str = arg(
         help="output test results in JSON",
         global_default=None,
