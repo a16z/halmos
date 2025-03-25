@@ -135,7 +135,6 @@ from .utils import (
     uint160,
     uint256,
     unbox_int,
-    z3_bv,
 )
 
 EMPTY_BYTES = ByteVec()
@@ -2377,9 +2376,8 @@ class SEVM:
     def fresh_transient_storage(self, ex: Exec) -> dict:
         return {addr: self.mk_storagedata() for addr in ex.transient_storage}
 
-    def sload(self, ex: Exec, addr: Any, loc: Word, transient: bool = False) -> Word:
-        addr = z3_bv(addr)
-        loc = z3_bv(loc)
+    def sload(self, ex: Exec, addr: Address, loc: BV, transient: bool = False) -> Word:
+        loc = loc.as_z3()
 
         storage = ex.transient_storage if transient else ex.storage
 
@@ -2389,11 +2387,10 @@ class SEVM:
         return val
 
     def sstore(
-        self, ex: Exec, addr: Any, loc: Any, val: Any, transient: bool = False
+        self, ex: Exec, addr: Address, loc: BV, val: BV, transient: bool = False
     ) -> None:
-        addr = z3_bv(addr)
-        loc = z3_bv(loc)
-        val = z3_bv(val)
+        loc = loc.as_z3()
+        val = val.as_z3()
 
         storage = ex.transient_storage if transient else ex.storage
 
@@ -3490,13 +3487,13 @@ class SEVM:
                     state.set_top(self.arith(ex, opcode, w1, state.topi()))
 
                 elif opcode == OP_SLOAD:
-                    slot: Word = state.top()
+                    slot: Word = state.topi()
                     value = self.sload(ex, ex.this(), slot)
                     state.set_top(BV(value, size=256))
 
                 elif opcode == OP_SSTORE:
-                    slot: Word = state.pop()
-                    value: Word = state.pop()
+                    slot: Word = state.popi()
+                    value: Word = state.popi()
                     self.sstore(ex, ex.this(), slot, value)
 
                 elif opcode == OP_SHA3:
