@@ -1678,7 +1678,7 @@
             {
                 "name": "invariant_timestamp_can_change()",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 2,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -1696,7 +1696,7 @@
             {
                 "name": "invariant_timestamp_does_not_have_to_change()",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 2,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -1714,7 +1714,7 @@
             {
                 "name": "invariant_timestamp_setup()",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -1723,7 +1723,7 @@
             {
                 "name": "invariant_timestamp_timekeeper(address)",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 2,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -4706,7 +4706,7 @@
             {
                 "name": "invariant_storage()",
                 "exitcode": 1,
-                "num_models": 1,
+                "num_models": 3,
                 "models": null,
                 "num_paths": null,
                 "time": null,
