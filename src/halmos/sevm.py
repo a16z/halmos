@@ -69,6 +69,7 @@ from .exceptions import (
     FailCheatcode,
     HalmosException,
     InfeasiblePath,
+    InsufficientFunds,
     InvalidJumpDestError,
     InvalidOpcode,
     MessageDepthLimitError,
@@ -2465,6 +2466,30 @@ class SEVM:
         ex.alias[target] = addr
         return addr
 
+    def handle_insufficient_fund_case(
+        self, caller: Address, value: BV, message: Message, ex: Exec, stack: Worklist
+    ):
+        if value == ZERO:
+            return
+
+        insufficiency_cond = simplify(ULT(ex.balance_of(caller), value.as_z3()))
+
+        # note: although creating a new branch is unnecessary when insufficiency_cond is true,
+        # such definite insufficiency is rare, and this logic is simpler to maintain.
+        # the definite insufficiency is handled later by transfer_value().
+        if ex.check(insufficiency_cond) != unsat:
+            fail_ex = self.create_branch(ex, insufficiency_cond, ex.pc)
+            fail_ex.context.trace.append(
+                CallContext(
+                    message=message,
+                    output=CallOutput(data=ByteVec(), error=InsufficientFunds()),
+                    depth=ex.context.depth + 1,
+                )
+            )
+            fail_ex.st.push(ZERO)
+            fail_ex.advance()
+            stack.push(fail_ex)
+
     def transfer_value(
         self,
         ex: Exec,
@@ -2509,7 +2534,7 @@ class SEVM:
         ex.st.pop()  # gas
 
         to: BV = uint160(ex.st.pop())
-        fund: BV = ZERO if op in [OP_STATICCALL, OP_DELEGATECALL] else ex.st.pop()
+        fund: BV = ZERO if op in [OP_STATICCALL, OP_DELEGATECALL] else ex.st.popi()
 
         arg_loc: int = ex.mloc(check_size=False)
         arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
@@ -2525,6 +2550,19 @@ class SEVM:
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.mslice(arg_loc, arg_size)
+
+        resolved_to = to_alias if to_alias is not None else to
+        message = Message(
+            target=resolved_to if op in [OP_CALL, OP_STATICCALL] else ex.this(),
+            caller=pranked_caller if op != OP_DELEGATECALL else ex.caller(),
+            origin=pranked_origin,
+            value=fund if op != OP_DELEGATECALL else ex.callvalue(),
+            data=arg,
+            is_static=(ex.context.message.is_static or op == OP_STATICCALL),
+            call_scheme=op,
+        )
+
+        self.handle_insufficient_fund_case(pranked_caller, fund, message, ex, stack)
 
         def send_callvalue(condition: BoolRef | None = None) -> None:
             # no balance update for CALLCODE which transfers to itself
@@ -2542,16 +2580,6 @@ class SEVM:
 
             # transfer msg.value
             send_callvalue()
-
-            message = Message(
-                target=to if op in [OP_CALL, OP_STATICCALL] else ex.this(),
-                caller=pranked_caller if op != OP_DELEGATECALL else ex.caller(),
-                origin=pranked_origin,
-                value=fund if op != OP_DELEGATECALL else ex.callvalue(),
-                data=arg,
-                is_static=(ex.context.message.is_static or op == OP_STATICCALL),
-                call_scheme=op,
-            )
 
             def callback(new_ex: Exec, stack):
                 # continue execution in the context of the parent
@@ -2799,19 +2827,8 @@ class SEVM:
 
                 new_ex.context.trace.append(
                     CallContext(
-                        # TODO: refactor this message to be shared with call_known()
-                        message=Message(
-                            target=to,
-                            caller=pranked_caller,
-                            origin=pranked_origin,
-                            value=fund,
-                            data=new_ex.st.mslice(arg_loc, arg_size),
-                            call_scheme=op,
-                        ),
-                        output=CallOutput(
-                            data=ret_,
-                            error=None,
-                        ),
+                        message=message,
+                        output=CallOutput(data=ret_),
                         depth=new_ex.context.depth + 1,
                     )
                 )
@@ -2842,7 +2859,7 @@ class SEVM:
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())
 
-        value: Word = ex.st.pop()
+        value: BV = ex.st.popi()
         loc: int = ex.int_of(ex.st.pop(), "symbolic CREATE offset")
         size: int = ex.int_of(ex.st.pop(), "symbolic CREATE size")
 
@@ -2890,6 +2907,8 @@ class SEVM:
             is_static=False,
             call_scheme=op,
         )
+
+        self.handle_insufficient_fund_case(pranked_caller, value, message, ex, stack)
 
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
