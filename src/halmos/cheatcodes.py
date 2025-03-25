@@ -725,8 +725,6 @@ class hevm_cheat_code:
                 raise FailCheatcode()
 
             store_account = uint160(arg.get_word(4)).as_z3()
-            store_slot = uint256(arg.get_word(36)).as_z3()
-            store_value = uint256(arg.get_word(68)).as_z3()
             store_account_alias = sevm.resolve_address_alias(
                 ex, store_account, stack, allow_branching=False
             )
@@ -735,13 +733,15 @@ class hevm_cheat_code:
                 error_msg = f"vm.store() is not allowed for a nonexistent account: {hexify(store_account)}"
                 raise HalmosException(error_msg)
 
+            store_slot = uint256(arg.get_word(36))
+            store_value = uint256(arg.get_word(68))
             sevm.sstore(ex, store_account_alias, store_slot, store_value)
+
             return ret
 
         # vm.load(address,bytes32)
         elif funsig == hevm_cheat_code.load_sig:
             load_account = uint160(arg.get_word(4)).as_z3()
-            load_slot = uint256(arg.get_word(36)).as_z3()
             load_account_alias = sevm.resolve_address_alias(
                 ex, load_account, stack, allow_branching=False
             )
@@ -750,6 +750,8 @@ class hevm_cheat_code:
                 # since load_account doesn't exist, its storage is empty.
                 # note: the storage cannot be symbolic, as the symbolic storage cheatcode fails for nonexistent addresses.
                 return ByteVec(con(0))
+
+            load_slot = uint256(arg.get_word(36))
 
             return ByteVec(sevm.sload(ex, load_account_alias, load_slot))
 
