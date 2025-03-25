@@ -1,10 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-from itertools import tee
 
-from collections.abc import Iterator, Iterable
-
-from copy import deepcopy
 import faulthandler
 import gc
 import json
@@ -18,6 +14,7 @@ import threading
 import time
 import traceback
 from collections import Counter
+from collections.abc import Iterable, Iterator
 from concurrent.futures import Future
 from dataclasses import asdict, dataclass
 from datetime import timedelta
@@ -99,7 +96,7 @@ from .solve import (
     solve_end_to_end,
     solve_low_level,
 )
-from .traces import render_trace, rendered_call_sequence, rendered_trace, rendered_calldata, render_call_sequence
+from .traces import render_trace, rendered_call_sequence, rendered_trace
 from .utils import (
     EVM,
     Address,
@@ -435,7 +432,9 @@ def get_state_id(ex: Exec) -> bytes:
     return snapshot_state(ex, include_path=True).unwrap()
 
 
-def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> Iterator[Exec]:
+def run_target_contract(
+    ctx: ContractContext, ex: Exec, addr: Address
+) -> Iterator[Exec]:
     """
     Executes a given contract from a given input state and returns all output states.
 
@@ -534,18 +533,20 @@ def compute_pre_exs(
     ctx: ContractContext,
     depth: int,
 ) -> Iterator[Exec]:
-    pre_exs = ctx.pre_exs_cache[depth - 1]
+    curr_exs = ctx.pre_exs_cache[depth - 1]
+
+    next_exs = ctx.pre_exs_cache[depth]
 
     visited = ctx.visited
 
     panic_error_codes = ctx.args.panic_error_codes
 
-    for idx, pre_ex in enumerate(pre_exs):
+    for idx, pre_ex in enumerate(curr_exs):
         progress_status.update(
             f"depth: {cyan(depth)} | "
-            f"starting states: {cyan(len(pre_exs))} | "
+            f"starting states: {cyan(len(curr_exs))} | "
             f"unique states: {cyan(len(visited))} | "
-#           f"frontier states: {cyan(len(next_exs))} | "
+            f"frontier states: {cyan(len(next_exs))} | "
             f"completed paths: {cyan(idx)} "
         )
 
@@ -610,7 +611,7 @@ def compute_pre_exs(
                 post_ex.block.timestamp = ZeroExt(192, BitVec(timestamp_name, 64))
                 post_ex.path.append(post_ex.block.timestamp >= pre_ex.block.timestamp)
 
-                ctx.pre_exs_cache[depth].append(post_ex)
+                next_exs.append(post_ex)
                 yield post_ex
 
 
@@ -625,11 +626,8 @@ def get_pre_exs(ctx: ContractContext, depth: int) -> Iterable[Exec]:
 
 
 def run_message(ctx: FunctionContext, sevm, message, dyn_params) -> Iterator[Exec]:
-
     for depth in range(ctx.max_depth + 1):
-
         for setup_ex in get_pre_exs(ctx.contract_ctx, depth):
-
             reset(ctx.solver)
 
             path = Path(ctx.solver)
@@ -1036,7 +1034,9 @@ def run_tests(
             if debug_config:
                 debug(f"{test_config.formatted_layers()}")
 
-            max_depth = test_config.invariant_depth if funsig.startswith("invariant_") else 0
+            max_depth = (
+                test_config.invariant_depth if funsig.startswith("invariant_") else 0
+            )
 
             test_ctx = FunctionContext(
                 args=test_config,
