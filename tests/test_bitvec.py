@@ -257,3 +257,50 @@ def test_bitvec_mul():
     assert x.mul(BV(1), abstraction=f_mul) == x
     assert x.mul(BV(123), abstraction=f_mul) == BV(123 * x.as_z3())
     assert x.mul(y, abstraction=f_mul) == BV(f_mul(x.as_z3(), y.as_z3()))
+
+
+def test_bv_hashable():
+    x_z3 = BitVec("x", 256)
+    y_z3 = BitVec("y", 256)
+    x = BV(x_z3)
+    x_2 = BV(x_z3)
+    y = BV(y_z3)
+    y_2 = BV(y_z3)
+    z = BV(42)
+    x_trunc = BV(x_z3, size=8)
+
+    assert hash(x) == hash(x_2)
+    assert hash(x) != hash(y)
+    assert hash(x) != hash(z)
+    assert hash(x) != hash(x_z3)
+    assert hash(y) != hash(y_z3)
+    assert hash(x_trunc) != hash(x)
+
+    dict = {x_z3: 1, y: 2}
+
+    assert x not in dict
+    assert y in dict
+    assert y_2 in dict
+    assert z not in dict
+
+
+def test_bool_hashable():
+    print(a.con_val, a.sym_val)
+
+    assert hash(a) == hash(a)
+    assert hash(a) != hash(b)
+    assert hash(a) != hash(TRUE)
+    assert hash(a) != hash(FALSE)
+    assert hash(TRUE) != hash(FALSE)
+    assert hash(Bool(True)) == hash(TRUE)
+    assert hash(Bool(False)) == hash(FALSE)
+    assert hash(x) != hash(Bool(x))
+    assert hash(True) != hash(TRUE)
+    assert hash(False) != hash(FALSE)
+
+    dict = {x: 1, FALSE: 2}
+
+    assert x in dict
+    assert y not in dict
+    assert TRUE not in dict
+    assert FALSE in dict
