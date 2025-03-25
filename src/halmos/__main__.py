@@ -771,6 +771,7 @@ def compute_pre_exs(
                 post_ex.block.timestamp = ZeroExt(192, BitVec(timestamp_name, 64))
                 post_ex.path.append(post_ex.block.timestamp >= pre_ex.block.timestamp)
 
+                ctx.pre_exs_cache[depth].append(post_ex)
                 yield post_ex
 
 
@@ -780,11 +781,8 @@ def get_pre_exs(ctx: ContractContext, depth: int):
     if depth in pre_exs_cache:
         return pre_exs_cache[depth]
 
-    results = []
-    pre_exs_cache[depth] = results
-    for pre_ex in compute_pre_exs(ctx, depth):
-        results.append(pre_ex)
-        yield pre_ex
+    pre_exs_cache[depth] = []
+    return compute_pre_exs(ctx, depth)
 
 
 def run_message(ctx: FunctionContext, sevm, cd, dyn_params):
