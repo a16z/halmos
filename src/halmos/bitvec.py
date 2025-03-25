@@ -9,6 +9,7 @@ from z3 import (
     BitVec,
     BitVecRef,
     BitVecVal,
+    Bool,
     BoolRef,
     BoolVal,
     Concat,
@@ -131,7 +132,7 @@ class HalmosBool:
                 self.con_val = None
 
             case str():
-                self.sym_val = BoolVal(value)
+                self.sym_val = Bool(value)
                 self.con_val = None
 
             case HalmosBool():
@@ -221,6 +222,13 @@ class HalmosBool:
 
             case _:
                 return False
+
+    def __hash__(self) -> int:
+        """
+        Hash the boolean based on its value.
+        """
+
+        return hash((self.con_val, self.sym_val))
 
     def is_zero(self) -> "HalmosBool":
         if self is TRUE:
@@ -444,6 +452,13 @@ class HalmosBitVec:
             return self.value == other.value
 
         return False
+
+    def __hash__(self) -> int:
+        """
+        Hash the bitvector based on its value and size.
+        """
+
+        return hash((self.value, self.size))
 
     def __int__(self) -> int:
         if self._symbolic:

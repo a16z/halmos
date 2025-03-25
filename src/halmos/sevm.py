@@ -14,6 +14,7 @@ from typing import (
     ClassVar,
     ForwardRef,
     Optional,
+    TypeAlias,
     TypeVar,
     Union,
 )
@@ -555,6 +556,9 @@ class Message:
     is_static: bool = False
     gas: Word | None = None
 
+    # optional human-readable function information (name, signature, selector, etc.)
+    fun_info: FunctionInfo | None = None
+
     def is_create(self) -> bool:
         return self.call_scheme in (OP_CREATE, OP_CREATE2)
 
@@ -590,6 +594,16 @@ TraceElement = Union["CallContext", EventLog, StorageRead, StorageWrite]
 # TODO: support frozen=True
 @dataclass(frozen=False, slots=True, eq=False, order=False)
 class CallContext:
+    """
+    Represents a single, atomic call to an address (typically a contract, but not necessarily).
+    It is started by a Message, and has a mutable (initially empty) output.
+
+    The trace field represents events that occurred during the execution of the call:
+    - storage reads and writes
+    - logs
+    - subcalls (making this a recursive data structure)
+    """
+
     message: Message
     output: CallOutput = field(default_factory=CallOutput)
     depth: int = 1
@@ -636,6 +650,15 @@ class CallContext:
 
         if (last_subcall := self.last_subcall()) is not None:
             return last_subcall.get_stuck_reason()
+
+
+CallSequence: TypeAlias = list[CallContext]
+"""
+Represents a sequence of calls, from any senders to any addresses.
+
+The order matters, because it represents a chronologic sequence of execution. That is to say,
+the output state of one call is the input state of the next call in the sequence.
+"""
 
 
 @dataclass(frozen=True, slots=True, eq=False, order=False)
@@ -1038,7 +1061,7 @@ class HashableTerm:
         return self.term.eq(other.term)
 
     def __hash__(self):
-        return self.term.hash()
+        return hash(self.term)
 
 
 class Path:
@@ -1329,6 +1352,7 @@ class StorageData:
                 for _k in key:
                     # The first key (slot) is of size 256 bits
                     m.update(int.to_bytes(_k, length=32))
+
             m.update(int.to_bytes(val.get_id(), length=32))
         return m.digest()
 
@@ -1367,6 +1391,9 @@ class Exec:  # an execution path
     known_keys: dict[Any, Any]  # maps address to private key
     known_sigs: dict[Any, Any]  # maps (private_key, digest) to (v, r, s)
 
+    # the sequence of calls leading to the state at the start of this execution
+    call_sequence: CallSequence
+
     def __init__(self, **kwargs) -> None:
         self.code = kwargs["code"]
         self.storage = kwargs["storage"]
@@ -1376,6 +1403,7 @@ class Exec:  # an execution path
         self.block = kwargs["block"]
         #
         self.context = kwargs["context"]
+        self.call_sequence = kwargs.get("call_sequence") or []
         self.callback = kwargs["callback"]
         #
         self.pgm = kwargs["pgm"]
@@ -1955,7 +1983,7 @@ class SolidityStorage(Storage):
                 BitVecSort256,
             )
             if storage_addr.symbolic
-            else ZERO
+            else Z3_ZERO
         )
 
     @classmethod
@@ -1976,7 +2004,7 @@ class SolidityStorage(Storage):
         if not symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
             default_value = Select(cls.empty(addr, slot, keys), concat_keys)
-            ex.path.append(default_value == ZERO)
+            ex.path.append(default_value == Z3_ZERO)
 
         return ex.select(storage_chunk, concat_keys, ex.storages, symbolic)
 
@@ -2124,7 +2152,7 @@ class GenericStorage(Storage):
         if not symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
             default_value = Select(cls.empty(addr, loc), loc)
-            ex.path.append(default_value == ZERO)
+            ex.path.append(default_value == Z3_ZERO)
 
         return ex.select(storage_addr[size_keys], loc, ex.storages, symbolic)
 
@@ -2374,7 +2402,7 @@ class SEVM:
             raise WriteInStaticContext(ex.context_str())
 
         if is_bool(val):
-            val = If(val, ONE, ZERO)
+            val = If(val, Z3_ONE, Z3_ZERO)
 
         self.storage_model.store(ex, storage, addr, loc, val)
 
@@ -2576,6 +2604,7 @@ class SEVM:
                 block=ex.block,
                 #
                 context=CallContext(message=message, depth=ex.context.depth + 1),
+                call_sequence=ex.call_sequence,
                 callback=callback,
                 #
                 pgm=ex.code[to],
@@ -2952,6 +2981,7 @@ class SEVM:
             block=ex.block,
             #
             context=CallContext(message=message, depth=ex.context.depth + 1),
+            call_sequence=ex.call_sequence,
             callback=callback,
             #
             pgm=create_code,
@@ -3076,6 +3106,8 @@ class SEVM:
             balances=ex.balances.copy(),
             known_keys=ex.known_keys,  # pass by reference, not need to copy
             known_sigs=ex.known_sigs,  # pass by reference, not need to copy
+            #
+            call_sequence=ex.call_sequence,  # pass by reference
         )
         return new_ex
 
@@ -3148,6 +3180,7 @@ class SEVM:
             block=deepcopy(pre_ex.block),
             #
             context=CallContext(message=message),
+            call_sequence=pre_ex.call_sequence,  # pass by reference
             callback=None,
             #
             pgm=pre_ex.code[message.target],
@@ -3786,6 +3819,7 @@ class SEVM:
             block=block,
             #
             context=context,
+            call_sequence=[],
             callback=None,  # top-level; no callback
             #
             pgm=pgm,

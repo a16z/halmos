@@ -14,7 +14,6 @@ import time
 import traceback
 from collections import Counter
 from concurrent.futures import Future
-from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
@@ -97,7 +96,7 @@ from .solve import (
     solve_end_to_end,
     solve_low_level,
 )
-from .traces import render_trace, rendered_trace
+from .traces import render_trace, rendered_call_sequence, rendered_trace
 from .utils import (
     EVM,
     Address,
@@ -530,6 +529,7 @@ def step_invariant_tests(
     ctx = inv_ctx.contract_ctx
     test_results_map = inv_ctx.test_results_map
     visited = inv_ctx.visited
+    panic_error_codes = ctx.args.panic_error_codes
 
     next_exs = []
 
@@ -560,8 +560,28 @@ def step_invariant_tests(
                     )
                     continue
 
-                # ignore if reverted
                 if subcall.output.error:
+                    # ignore normal reverts
+                    if not post_ex.is_panic_of(panic_error_codes):
+                        continue
+
+                    fun_info = post_ex.context.message.fun_info
+
+                    # ignore if the probe has already been reported
+                    if fun_info in inv_ctx.probes_reported:
+                        continue
+
+                    inv_ctx.probes_reported.add(fun_info)
+
+                    # print error trace
+                    sequence = (
+                        rendered_call_sequence(post_ex.call_sequence) or "    (empty)\n"
+                    )
+                    trace = rendered_trace(post_ex.context)
+                    msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
+                    print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
+
+                    # because this is a reverted state, we don't need to explore it further
                     continue
 
                 # skip if already visited
@@ -574,9 +594,12 @@ def step_invariant_tests(
                 # TODO: check path feasibility
                 visited.add(post_id)
 
+                # transfer the setup_ex message to the post_ex message
+                # (so that invariant tests run against the test contract)
+                post_ex.context.message = pre_ex.context.message
+
                 # update call traces
-                post_ex.context = deepcopy(pre_ex.context)
-                post_ex.context.trace.append(subcall)
+                post_ex.call_sequence = pre_ex.call_sequence + [subcall]
 
                 # update timestamp
                 timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
@@ -594,11 +617,12 @@ def step_invariant_tests(
 
                 # print call trace if failed, to provide additional info for counterexamples
                 if any(r.exitcode != PASS for r in test_results):
-                    print("Path:")
-                    print(indent_text(hexify(post_ex.path)))
+                    print(f"Path:\n{indent_text(hexify(post_ex.path))}\n")
 
-                    print("\nTrace:")
-                    render_trace(post_ex.context)
+                    sequence = rendered_call_sequence(post_ex.call_sequence)
+                    print(f"Sequence:\n{sequence}")
+
+                    # note: the trace for the invariant_test function is rendered in run_tests()
 
                 # stop if no more invariants to test
                 if not funsigs:
@@ -645,7 +669,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
     # iterate over each function in the target contract
     for fun_sig, fun_selector in method_identifiers.items():
         fun_name = fun_sig.split("(")[0]
-        fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
+        fun_info = FunctionInfo(contract_name, fun_name, fun_sig, fun_selector)
 
         # skip if 'pure' or 'view' function that doesn't change the state
         state_mutability = abi[fun_sig]["stateMutability"]
@@ -692,6 +716,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 value=msg_value,
                 data=cd,
                 call_scheme=EVM.CALL,
+                fun_info=fun_info,
             )
 
             # execute the transaction and collect output states
@@ -1009,7 +1034,8 @@ def run_test(ctx: FunctionContext) -> TestResult:
         )
 
 
-def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
+def extract_setup(ctx: ContractContext) -> FunctionInfo:
+    methodIdentifiers = ctx.method_identifiers
     setup_sigs = sorted(
         [
             (k, v)
@@ -1023,7 +1049,7 @@ def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
 
     (setup_sig, setup_selector) = setup_sigs[-1]
     setup_name = setup_sig.split("(")[0]
-    return FunctionInfo(setup_name, setup_sig, setup_selector)
+    return FunctionInfo(ctx.name, setup_name, setup_sig, setup_selector)
 
 
 def reset(solver):
@@ -1038,7 +1064,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
     BuildOut().set_build_out(ctx.build_out_map)
 
     args = ctx.args
-    setup_info = extract_setup(ctx.method_identifiers)
+    setup_info = extract_setup(ctx)
 
     try:
         setup_config = with_devdoc(args, setup_info.sig, ctx.contract_json)
@@ -1112,7 +1138,7 @@ def run_tests(
 
     for funsig in funsigs:
         selector = ctx.method_identifiers[funsig]
-        fun_info = FunctionInfo(funsig.split("(")[0], funsig, selector)
+        fun_info = FunctionInfo(ctx.name, funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
             # TODO: reuse solver across different functions

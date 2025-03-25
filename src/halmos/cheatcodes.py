@@ -364,7 +364,7 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     for funsig in methodIdentifiers:
         funname = funsig.split("(")[0]
         funselector = methodIdentifiers[funsig]
-        funinfo = FunctionInfo(funname, funsig, funselector)
+        funinfo = FunctionInfo(contract_name, funname, funsig, funselector)
 
         # assume fallback_selector differs from all existing selectors
         ex.path.append(fallback_selector != con(int(funselector, 16), 32))
