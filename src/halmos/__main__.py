@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-
 import faulthandler
 import gc
 import json
@@ -436,7 +435,7 @@ def run_target_contract(
     ctx: ContractContext, ex: Exec, addr: Address
 ) -> Iterator[Exec]:
     """
-    Executes a given contract from a given input state and returns all output states.
+    Executes a given contract from a given input state and yields all output states.
 
     Args:
         ctx: The context of the test contract, which differs from the target contract to be executed.
@@ -444,7 +443,7 @@ def run_target_contract(
         addr: The address of the contract to be executed.
 
     Returns:
-        A list of output states.
+        A generator of output states.
 
     Raises:
         ValueError: If the contract name cannot be found for the given address.
@@ -529,13 +528,10 @@ def run_target_contract(
             reset(solver)
 
 
-def compute_pre_exs(
-    ctx: ContractContext,
-    depth: int,
-) -> Iterator[Exec]:
-    curr_exs = ctx.pre_exs_cache[depth - 1]
+def compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
+    curr_exs = ctx.frontier_states[depth - 1]
 
-    next_exs = ctx.pre_exs_cache[depth]
+    next_exs = ctx.frontier_states[depth]
 
     visited = ctx.visited
 
@@ -615,27 +611,28 @@ def compute_pre_exs(
                 yield post_ex
 
 
-def get_pre_exs(ctx: ContractContext, depth: int) -> Iterable[Exec]:
-    pre_exs_cache = ctx.pre_exs_cache
+def get_frontier(ctx: ContractContext, depth: int) -> Iterable[Exec]:
+    frontier_states = ctx.frontier_states
 
-    if depth in pre_exs_cache:
-        return pre_exs_cache[depth]
+    if depth in frontier_states:
+        return frontier_states[depth]
 
-    pre_exs_cache[depth] = []
-    return compute_pre_exs(ctx, depth)
+    frontier_states[depth] = []
+    return compute_frontier(ctx, depth)
 
 
-def run_message(ctx: FunctionContext, sevm, message, dyn_params) -> Iterator[Exec]:
-    for depth in range(ctx.max_depth + 1):
-        for setup_ex in get_pre_exs(ctx.contract_ctx, depth):
+def run_message(
+    ctx: FunctionContext, sevm: SEVM, message: Message, dyn_params: list
+) -> Iterator[Exec]:
+    for depth in range(ctx.max_call_depth + 1):
+        for ex in get_frontier(ctx.contract_ctx, depth):
             reset(ctx.solver)
 
             path = Path(ctx.solver)
-            path.extend_path(setup_ex.path)
-
+            path.extend_path(ex.path)
             path.process_dyn_params(dyn_params)
 
-            yield from sevm.run_message(setup_ex, message, path)
+            yield from sevm.run_message(ex, message, path)
 
 
 def run_test(ctx: FunctionContext) -> TestResult:
@@ -738,6 +735,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
             ctx.invalid_counterexamples.append(model)
 
+        # print call sequence for invariant testing
         if sequence := ctx.call_sequences[path_id]:
             print(f"Sequence:\n{sequence}")
 
@@ -991,7 +989,8 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
         return []
 
-    ctx.pre_exs_cache[0] = [setup_ex]
+    # initialize frontier states and visited states with setup output
+    ctx.frontier_states[0] = [setup_ex]
     ctx.visited.add(get_state_id(setup_ex))
 
     test_results = run_tests(ctx, setup_ex, ctx.funsigs)
@@ -1034,7 +1033,7 @@ def run_tests(
             if debug_config:
                 debug(f"{test_config.formatted_layers()}")
 
-            max_depth = (
+            max_call_depth = (
                 test_config.invariant_depth if funsig.startswith("invariant_") else 0
             )
 
@@ -1044,7 +1043,7 @@ def run_tests(
                 solver=solver,
                 contract_ctx=ctx,
                 setup_ex=pre_ex,
-                max_depth=max_depth,
+                max_call_depth=max_call_depth,
             )
 
             test_result = run_test(test_ctx)
@@ -1240,8 +1239,6 @@ def _main(_args=None) -> MainResult:
             contract_json=contract_json,
             libs=libs,
             build_out_map=build_out_map,
-            pre_exs_cache={},
-            visited=set(),
         )
 
         test_results = run_contract(contract_ctx)

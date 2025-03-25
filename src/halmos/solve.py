@@ -88,10 +88,11 @@ class ContractContext:
     # so in principle, we could consider having another context, say CompileUnitContext, and put build_out_map there
     build_out_map: dict
 
-    pre_exs_cache: dict
+    # map from depth to frontier states
+    frontier_states: dict[int, list[Exec]] = field(default_factory=dict)
 
-    # set of visited states, to be updated during the invariant testing run
-    visited: set
+    # set of visited state ids, to be updated during the invariant testing run
+    visited: set[bytes] = field(default_factory=set)
 
     # the function info for the invariant test
     probes_reported: set[FunctionInfo] = field(default_factory=set)
@@ -126,7 +127,8 @@ class FunctionContext:
     # optional starting state
     setup_ex: Exec | None = None
 
-    max_depth: int = 0
+    # optional max call depth for frontier states (for invariant testing)
+    max_call_depth: int = 0
 
     # function-level solving context
     # the FunctionContext initializes and owns the SolvingContext
