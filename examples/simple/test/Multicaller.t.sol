@@ -123,14 +123,16 @@ contract MulticallerWithSenderSymTest is SymTest, Test {
         assert(impl.sender() == spec.sender());
         assert(impl.reentrancyUnlocked() == spec.reentrancyUnlocked());
 
-        vm.deal(address(this), 100_000_000 ether);
         vm.assume(address(impl).balance == address(spec).balance);
     }
 
     function _check_equivalence(bytes memory data) internal {
         uint value = svm.createUint256("value");
 
+        vm.deal(address(this), value);
         (bool success_impl, bytes memory retdata_impl) = address(impl).call{value: value}(data);
+
+        vm.deal(address(this), value);
         (bool success_spec, bytes memory retdata_spec) = address(spec).call{value: value}(data);
 
         // Check: `impl` succeeds if and only if `spec` succeeds.

@@ -115,6 +115,9 @@ class InvariantContext:
     # test results, to be updated during the invariant testing run
     test_results_map: dict
 
+    # the function info for the invariant test
+    probes_reported: set[FunctionInfo] = field(default_factory=set)
+
 
 @dataclass(frozen=True)
 class FunctionContext:

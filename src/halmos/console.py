@@ -1,11 +1,11 @@
-from z3 import BitVec, BitVecRef
+from z3 import BitVec
 
-from .logs import (
+from halmos.bitvec import HalmosBitVec as BV
+from halmos.logs import (
     info,
     warn,
 )
-from .utils import (
-    con_addr,
+from halmos.utils import (
     extract_bytes,
     extract_bytes_argument,
     extract_funsig,
@@ -88,7 +88,7 @@ def log_string_uint256(arg: BitVec) -> None:
 
 class console:
     # see forge-std/console2.sol
-    address: BitVecRef = con_addr(0x000000000000000000636F6E736F6C652E6C6F67)
+    address = BV(0x000000000000000000636F6E736F6C652E6C6F67, size=160)
 
     handlers = {
         0xF82C50F1: log_uint256,
