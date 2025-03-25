@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
+import faulthandler
 import gc
 import json
 import logging
@@ -8,11 +9,11 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from collections import Counter
 from concurrent.futures import Future
-from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
@@ -66,7 +67,6 @@ from .mapper import BuildOut, DeployAddressMapper
 from .processes import ExecutorRegistry, ShutdownError
 from .sevm import (
     EMPTY_BALANCE,
-    EVM,
     FOUNDRY_CALLER,
     FOUNDRY_ORIGIN,
     FOUNDRY_TEST,
@@ -75,13 +75,12 @@ from .sevm import (
     ZERO,
     Block,
     CallContext,
-    CallOutput,
     Contract,
     Exec,
     Message,
     Path,
+    Profiler,
     SMTQuery,
-    State,
     con_addr,
     id_str,
     jumpid_str,
@@ -96,8 +95,9 @@ from .solve import (
     solve_end_to_end,
     solve_low_level,
 )
-from .traces import render_trace, rendered_trace
+from .traces import render_trace, rendered_call_sequence, rendered_trace
 from .utils import (
+    EVM,
     Address,
     BitVecSort256,
     NamedTimer,
@@ -114,6 +114,9 @@ from .utils import (
     unbox_int,
     yellow,
 )
+
+faulthandler.enable()
+
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -295,10 +298,7 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
     ex.pgm = deployed_bytecode
 
     # reset vm state
-    ex.pc = 0
-    ex.st = State()
-    ex.context.output = CallOutput()
-    ex.jumpis = {}
+    ex.reset()
 
     return ex
 
@@ -528,6 +528,7 @@ def step_invariant_tests(
     ctx = inv_ctx.contract_ctx
     test_results_map = inv_ctx.test_results_map
     visited = inv_ctx.visited
+    panic_error_codes = ctx.args.panic_error_codes
 
     next_exs = []
 
@@ -558,8 +559,28 @@ def step_invariant_tests(
                     )
                     continue
 
-                # ignore if reverted
                 if subcall.output.error:
+                    # ignore normal reverts
+                    if not post_ex.is_panic_of(panic_error_codes):
+                        continue
+
+                    fun_info = post_ex.context.message.fun_info
+
+                    # ignore if the probe has already been reported
+                    if fun_info in inv_ctx.probes_reported:
+                        continue
+
+                    inv_ctx.probes_reported.add(fun_info)
+
+                    # print error trace
+                    sequence = (
+                        rendered_call_sequence(post_ex.call_sequence) or "    (empty)\n"
+                    )
+                    trace = rendered_trace(post_ex.context)
+                    msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
+                    print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
+
+                    # because this is a reverted state, we don't need to explore it further
                     continue
 
                 # skip if already visited
@@ -572,9 +593,12 @@ def step_invariant_tests(
                 # TODO: check path feasibility
                 visited.add(post_id)
 
+                # transfer the setup_ex message to the post_ex message
+                # (so that invariant tests run against the test contract)
+                post_ex.context.message = pre_ex.context.message
+
                 # update call traces
-                post_ex.context = deepcopy(pre_ex.context)
-                post_ex.context.trace.append(subcall)
+                post_ex.call_sequence = pre_ex.call_sequence + [subcall]
 
                 # update timestamp
                 timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
@@ -592,11 +616,12 @@ def step_invariant_tests(
 
                 # print call trace if failed, to provide additional info for counterexamples
                 if any(r.exitcode != PASS for r in test_results):
-                    print("Path:")
-                    print(indent_text(hexify(post_ex.path)))
+                    print(f"Path:\n{indent_text(hexify(post_ex.path))}\n")
 
-                    print("\nTrace:")
-                    render_trace(post_ex.context)
+                    sequence = rendered_call_sequence(post_ex.call_sequence)
+                    print(f"Sequence:\n{sequence}")
+
+                    # note: the trace for the invariant_test function is rendered in run_tests()
 
                 # stop if no more invariants to test
                 if not funsigs:
@@ -643,7 +668,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
     # iterate over each function in the target contract
     for fun_sig, fun_selector in method_identifiers.items():
         fun_name = fun_sig.split("(")[0]
-        fun_info = FunctionInfo(fun_name, fun_sig, fun_selector)
+        fun_info = FunctionInfo(contract_name, fun_name, fun_sig, fun_selector)
 
         # skip if 'pure' or 'view' function that doesn't change the state
         state_mutability = abi[fun_sig]["stateMutability"]
@@ -690,6 +715,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 value=msg_value,
                 data=cd,
                 call_scheme=EVM.CALL,
+                fun_info=fun_info,
             )
 
             # execute the transaction and collect output states
@@ -702,7 +728,7 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
             continue
 
         finally:
-            solver.reset()
+            reset(solver)
 
     return results
 
@@ -756,6 +782,13 @@ def run_test(ctx: FunctionContext) -> TestResult:
         # so we must be careful to avoid referencing any z3 objects / contexts
 
         if e := future.exception():
+            if isinstance(e, ShutdownError):
+                if args.debug:
+                    debug(
+                        f"ignoring solver callback, executor has been shutdown: {e!r}"
+                    )
+                return
+
             error(f"encountered exception during assertion solving: {e!r}")
 
         #
@@ -831,13 +864,18 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
         output = ex.context.output
         error_output = output.error
-        if ex.is_panic_of(args.panic_error_codes) or is_global_fail_set(ex.context):
+        panic_found = ex.is_panic_of(args.panic_error_codes)
+
+        if panic_found or (fail_found := is_global_fail_set(ex.context)):
             potential += 1
 
             if args.verbose >= 1:
-                print(f"Found potential path (id: {path_id})")
-                panic_code = unbox_int(output.data[4:36].unwrap())
-                print(f"Panic(0x{panic_code:02x}) {error_output}")
+                print(f"Found potential path with {path_id=} ", end="")
+                if panic_found:
+                    panic_code = unbox_int(output.data[4:36].unwrap())
+                    print(f"Panic(0x{panic_code:02x}) {error_output}")
+                elif fail_found:
+                    print(f"(fail flag set) {error_output}")
 
             # we don't know yet if this will lead to a counterexample
             # so we save the rendered trace here and potentially print it later
@@ -971,19 +1009,13 @@ def run_test(ctx: FunctionContext) -> TestResult:
             print(f"\nPath #{path_id}")
             print(ctx.traces[path_id], end="")
 
-    (logs, steps) = (sevm.logs, sevm.steps)
-
+    logs = sevm.logs
     if logs.bounded_loops:
         warn_code(
             LOOP_BOUND,
             f"{funsig}: paths have not been fully explored due to the loop unrolling bound: {args.loop}",
         )
         debug("\n".join(jumpid_str(x) for x in logs.bounded_loops))
-
-    # log steps
-    if args.log:
-        with open(args.log, "w") as json_file:
-            json.dump(steps, json_file)
 
     # return test result
     num_cexes = len(ctx.valid_counterexamples) + len(ctx.invalid_counterexamples)
@@ -1001,7 +1033,8 @@ def run_test(ctx: FunctionContext) -> TestResult:
         )
 
 
-def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
+def extract_setup(ctx: ContractContext) -> FunctionInfo:
+    methodIdentifiers = ctx.method_identifiers
     setup_sigs = sorted(
         [
             (k, v)
@@ -1015,14 +1048,22 @@ def extract_setup(methodIdentifiers: dict[str, str]) -> FunctionInfo:
 
     (setup_sig, setup_selector) = setup_sigs[-1]
     setup_name = setup_sig.split("(")[0]
-    return FunctionInfo(setup_name, setup_sig, setup_selector)
+    return FunctionInfo(ctx.name, setup_name, setup_sig, setup_selector)
+
+
+def reset(solver):
+    if threading.current_thread() != threading.main_thread():
+        # can't access z3 objects from other threads
+        warn("reset() called from a non-main thread")
+
+    solver.reset()
 
 
 def run_contract(ctx: ContractContext) -> list[TestResult]:
     BuildOut().set_build_out(ctx.build_out_map)
 
     args = ctx.args
-    setup_info = extract_setup(ctx.method_identifiers)
+    setup_info = extract_setup(ctx)
 
     try:
         setup_config = with_devdoc(args, setup_info.sig, ctx.contract_json)
@@ -1043,7 +1084,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
             traceback.print_exc()
 
         # reset any remaining solver states from the default context
-        setup_solver.reset()
+        reset(setup_solver)
 
         return []
 
@@ -1063,7 +1104,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
         test_results.extend(run_invariant_tests(ctx, setup_ex, inv_funsigs))
 
     # reset any remaining solver states from the default context
-    setup_solver.reset()
+    reset(setup_solver)
 
     return test_results
 
@@ -1092,14 +1133,17 @@ def run_tests(
     args = ctx.args
 
     test_results = []
+    debug_config = args.debug_config
+
     for funsig in funsigs:
         selector = ctx.method_identifiers[funsig]
-        fun_info = FunctionInfo(funsig.split("(")[0], funsig, selector)
+        fun_info = FunctionInfo(ctx.name, funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
             # TODO: reuse solver across different functions
             solver = mk_solver(test_config)
-            debug(f"{test_config.formatted_layers()}")
+            if debug_config:
+                debug(f"{test_config.formatted_layers()}")
 
             # stop if the current depth exceeds the max depth for the test.
             # note that the max depth may vary across tests.
@@ -1126,7 +1170,7 @@ def run_tests(
             continue
         finally:
             # reset any remaining solver states from the default context
-            solver.reset()
+            reset(solver)
 
         test_results.append(test_result)
 
@@ -1134,17 +1178,18 @@ def run_tests(
 
 
 def contract_regex(args):
-    if args.contract:
-        return f"^{args.contract}$"
+    if contract := args.contract:
+        return f"^{contract}$"
     else:
         return args.match_contract
 
 
 def test_regex(args):
-    if args.match_test.startswith("^"):
-        return args.match_test
+    match_test = args.match_test
+    if match_test.startswith("^"):
+        return match_test
     else:
-        return f"^{args.function}.*{args.match_test}"
+        return f"^{args.function}.*{match_test}"
 
 
 @dataclass(frozen=True)
@@ -1263,8 +1308,11 @@ def _main(_args=None) -> MainResult:
     # run
     #
 
+    _contract_regex = contract_regex(args)
+    _test_regex = test_regex(args)
+
     for build_out_map, filename, contract_name in build_output_iterator(build_out):
-        if not re.search(contract_regex(args), contract_name):
+        if not re.search(_contract_regex, contract_name):
             continue
 
         (contract_json, contract_type, natspec) = build_out_map[filename][contract_name]
@@ -1272,7 +1320,7 @@ def _main(_args=None) -> MainResult:
             continue
 
         methodIdentifiers = contract_json["methodIdentifiers"]
-        funsigs = [f for f in methodIdentifiers if re.search(test_regex(args), f)]
+        funsigs = [f for f in methodIdentifiers if re.search(_test_regex, f)]
         num_found = len(funsigs)
 
         if num_found == 0:
@@ -1330,6 +1378,19 @@ def _main(_args=None) -> MainResult:
     if args.statistics:
         print(f"\n[time] {timer.report()}")
 
+    if args.profile_instructions:
+        profiler = Profiler()
+        top_instructions = profiler.get_top_instructions()
+        separator = "-" * 26
+        print(separator)
+        print(f"{'Instruction':<12} {'Count':>12}")
+        print(separator)
+        for instruction, count in top_instructions:
+            print(f"{instruction:<12} {count:>12,}")
+        print(separator)
+        print(f"{'Total':<12} {profiler.counters.total():>12,}")
+        print(separator)
+
     if total_found == 0:
         error(
             "No tests with"
@@ -1344,7 +1405,8 @@ def _main(_args=None) -> MainResult:
 
 # entrypoint for the `halmos` script
 def main() -> int:
-    return _main().exitcode
+    exitcode = _main().exitcode
+    return exitcode
 
 
 # entrypoint for `python -m halmos`

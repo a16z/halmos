@@ -1194,7 +1194,25 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_etch_then_sload()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_etch_then_store()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_etch_then_tstore()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -1630,6 +1648,17 @@
                 "name": "invariant_2()",
                 "exitcode": 1,
                 "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/InvariantProbes.t.sol:InvariantProbesTest": [
+            {
+                "name": "invariant_probes_found()",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,
