@@ -89,7 +89,12 @@ class ContractContext:
     build_out_map: dict
 
     pre_exs_cache: dict
+
+    # set of visited states, to be updated during the invariant testing run
     visited: set
+
+    # the function info for the invariant test
+    probes_reported: set[FunctionInfo] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -102,21 +107,6 @@ class SolvingContext:
 
     # list of unsat cores
     unsat_cores: list[list] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class InvariantContext:
-    # backlink to the parent contract context
-    contract_ctx: ContractContext
-
-    # set of visited states, to be updated during the invariant testing run
-    visited: set
-
-    # test results, to be updated during the invariant testing run
-    test_results_map: dict
-
-    # the function info for the invariant test
-    probes_reported: set[FunctionInfo] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -157,8 +147,9 @@ class FunctionContext:
     # list of potentially invalid counterexamples for this function
     invalid_counterexamples: list[PotentialModel] = field(default_factory=list)
 
-    # map from path id to trace
+    # map from path id to trace and call sequence
     traces: dict[int, str] = field(default_factory=dict)
+    call_sequences: dict[int, str] = field(default_factory=dict)
 
     # map from path id to execution
     exec_cache: dict[int, Exec] = field(default_factory=dict)
