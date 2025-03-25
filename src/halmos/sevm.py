@@ -2466,11 +2466,13 @@ class SEVM:
         ex.alias[target] = addr
         return addr
 
-    def handle_insufficient_fund_case(self, caller, value, message, ex, stack, step_id):
-        if is_bv_value(value) and value.as_long() == 0:
+    def handle_insufficient_fund_case(
+        self, caller: Address, value: BV, message: Message, ex: Exec, stack: Worklist
+    ):
+        if value == ZERO:
             return
 
-        insufficiency_cond = simplify(ULT(ex.balance_of(caller), value))
+        insufficiency_cond = simplify(ULT(ex.balance_of(caller), value.as_z3()))
 
         # note: although creating a new branch is unnecessary when insufficiency_cond is true,
         # such definite insufficiency is rare, and this logic is simpler to maintain.
@@ -2484,9 +2486,9 @@ class SEVM:
                     depth=ex.context.depth + 1,
                 )
             )
-            fail_ex.st.push(0)
-            fail_ex.advance_pc()
-            stack.push(fail_ex, step_id)
+            fail_ex.st.push(ZERO)
+            fail_ex.advance()
+            stack.push(fail_ex)
 
     def transfer_value(
         self,
@@ -2532,7 +2534,7 @@ class SEVM:
         ex.st.pop()  # gas
 
         to: BV = uint160(ex.st.pop())
-        fund: BV = ZERO if op in [OP_STATICCALL, OP_DELEGATECALL] else ex.st.pop()
+        fund: BV = ZERO if op in [OP_STATICCALL, OP_DELEGATECALL] else ex.st.popi()
 
         arg_loc: int = ex.mloc(check_size=False)
         arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
@@ -2551,18 +2553,16 @@ class SEVM:
 
         resolved_to = to_alias if to_alias is not None else to
         message = Message(
-            target=resolved_to if op in [EVM.CALL, EVM.STATICCALL] else ex.this(),
-            caller=pranked_caller if op != EVM.DELEGATECALL else ex.caller(),
+            target=resolved_to if op in [OP_CALL, OP_STATICCALL] else ex.this(),
+            caller=pranked_caller if op != OP_DELEGATECALL else ex.caller(),
             origin=pranked_origin,
-            value=fund if op != EVM.DELEGATECALL else ex.callvalue(),
+            value=fund if op != OP_DELEGATECALL else ex.callvalue(),
             data=arg,
-            is_static=(ex.context.message.is_static or op == EVM.STATICCALL),
+            is_static=(ex.context.message.is_static or op == OP_STATICCALL),
             call_scheme=op,
         )
 
-        self.handle_insufficient_fund_case(
-            pranked_caller, fund, message, ex, stack, step_id
-        )
+        self.handle_insufficient_fund_case(pranked_caller, fund, message, ex, stack)
 
         def send_callvalue(condition: BoolRef | None = None) -> None:
             # no balance update for CALLCODE which transfers to itself
@@ -2859,7 +2859,7 @@ class SEVM:
         if ex.message().is_static:
             raise WriteInStaticContext(ex.context_str())
 
-        value: Word = ex.st.pop()
+        value: BV = ex.st.popi()
         loc: int = ex.int_of(ex.st.pop(), "symbolic CREATE offset")
         size: int = ex.int_of(ex.st.pop(), "symbolic CREATE size")
 
@@ -2908,9 +2908,7 @@ class SEVM:
             call_scheme=op,
         )
 
-        self.handle_insufficient_fund_case(
-            pranked_caller, value, message, ex, stack, step_id
-        )
+        self.handle_insufficient_fund_case(pranked_caller, value, message, ex, stack)
 
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
