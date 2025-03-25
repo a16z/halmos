@@ -1061,7 +1061,7 @@ class HashableTerm:
         return self.term.eq(other.term)
 
     def __hash__(self):
-        return self.term.hash()
+        return hash(self.term)
 
 
 class Path:
@@ -1352,6 +1352,7 @@ class StorageData:
                 for _k in key:
                     # The first key (slot) is of size 256 bits
                     m.update(int.to_bytes(_k, length=32))
+
             m.update(int.to_bytes(val.get_id(), length=32))
         return m.digest()
 
@@ -1982,7 +1983,7 @@ class SolidityStorage(Storage):
                 BitVecSort256,
             )
             if storage_addr.symbolic
-            else ZERO
+            else Z3_ZERO
         )
 
     @classmethod
@@ -2003,7 +2004,7 @@ class SolidityStorage(Storage):
         if not symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
             default_value = Select(cls.empty(addr, slot, keys), concat_keys)
-            ex.path.append(default_value == ZERO)
+            ex.path.append(default_value == Z3_ZERO)
 
         return ex.select(storage_chunk, concat_keys, ex.storages, symbolic)
 
@@ -2151,7 +2152,7 @@ class GenericStorage(Storage):
         if not symbolic:
             # generate emptyness axiom for each array index, instead of using quantified formula; see init()
             default_value = Select(cls.empty(addr, loc), loc)
-            ex.path.append(default_value == ZERO)
+            ex.path.append(default_value == Z3_ZERO)
 
         return ex.select(storage_addr[size_keys], loc, ex.storages, symbolic)
 
@@ -2401,7 +2402,7 @@ class SEVM:
             raise WriteInStaticContext(ex.context_str())
 
         if is_bool(val):
-            val = If(val, ONE, ZERO)
+            val = If(val, Z3_ONE, Z3_ZERO)
 
         self.storage_model.store(ex, storage, addr, loc, val)
 
