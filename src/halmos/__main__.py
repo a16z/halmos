@@ -630,7 +630,7 @@ def run_message(ctx: FunctionContext, sevm, message, dyn_params) -> Iterator[Exe
 
         for setup_ex in get_pre_exs(ctx.contract_ctx, depth):
 
-            ctx.solver.reset()
+            reset(ctx.solver)
 
             path = Path(ctx.solver)
             path.extend_path(setup_ex.path)
@@ -903,12 +903,10 @@ def run_test(ctx: FunctionContext) -> TestResult:
     time_info = timer.report(include_subtimers=args.statistics)
 
     # print test result
-    # TODO: improve test result display logic for invariant tests
-    if ctx.terminal or exitcode != PASS:
-        print(
-            f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
-            f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
-        )
+    print(
+        f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
+        f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
+    )
 
     for path_id, _, err in stuck:
         warn_code(INTERNAL_ERROR, f"Encountered {err}")
@@ -1000,21 +998,6 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
     test_results = run_tests(ctx, setup_ex, ctx.funsigs)
 
-#   # separate regular and invariant tests
-#   test_funsigs, inv_funsigs = [], []
-#   for sig in ctx.funsigs:
-#       (inv_funsigs if sig.startswith("invariant_") else test_funsigs).append(sig)
-
-#   test_results = []
-
-#   # execute regular tests
-#   if test_funsigs:
-#       test_results.extend(run_tests(ctx, setup_ex, test_funsigs))
-
-#   # execute invariant tests
-#   if inv_funsigs:
-#       test_results.extend(run_invariant_tests(ctx, setup_ex, inv_funsigs))
-
     # reset any remaining solver states from the default context
     reset(setup_solver)
 
@@ -1025,8 +1008,6 @@ def run_tests(
     ctx: ContractContext,
     pre_ex: Exec,
     funsigs: list[str],
-    depth: int = 0,
-    terminal: bool = True,
 ) -> list[TestResult]:
     """
     Executes each of the given test functions on the given input state.
@@ -1036,8 +1017,6 @@ def run_tests(
         ctx: The context of the test contract.
         pre_ex: The input state from which each test will be run.
         funsigs: A list of test function signatures to execute.
-        depth (optional, only for invariant testing): The current depth of the invariant testing run.
-        terminal (optional, only for invariant testing): A flag indicating whether this testing run is final.
 
     Returns:
         A list of test results.
@@ -1059,19 +1038,12 @@ def run_tests(
 
             max_depth = test_config.invariant_depth if funsig.startswith("invariant_") else 0
 
-#           # stop if the current depth exceeds the max depth for the test.
-#           # note that the max depth may vary across tests.
-#           # no-op for regular tests where depth is 0.
-#           if depth > test_config.invariant_depth:
-#               continue
-
             test_ctx = FunctionContext(
                 args=test_config,
                 info=fun_info,
                 solver=solver,
                 contract_ctx=ctx,
                 setup_ex=pre_ex,
-                terminal=terminal,
                 max_depth=max_depth,
             )
 

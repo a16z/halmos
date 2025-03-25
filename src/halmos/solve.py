@@ -126,9 +126,6 @@ class FunctionContext:
     # optional starting state
     setup_ex: Exec | None = None
 
-    # optional terminal mode flag (default: true)
-    terminal: bool = True
-
     max_depth: int = 0
 
     # function-level solving context
