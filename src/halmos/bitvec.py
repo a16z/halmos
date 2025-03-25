@@ -23,6 +23,7 @@ from z3 import (
     SRem,
     UDiv,
     URem,
+    Xor,
     ZeroExt,
     eq,
     is_bv_value,
@@ -294,7 +295,7 @@ class HalmosBool:
         if other is FALSE:
             return self
 
-        return HalmosBool(self.as_z3() ^ other.as_z3())
+        return HalmosBool(Xor(self.as_z3(), other.as_z3()))
 
     def as_bv(self, size: int = 1) -> BV:
         if self is TRUE:
