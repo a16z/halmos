@@ -2,7 +2,7 @@
 
 from itertools import tee
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Iterable
 
 from copy import deepcopy
 import faulthandler
@@ -435,7 +435,7 @@ def get_state_id(ex: Exec) -> bytes:
     return snapshot_state(ex, include_path=True).unwrap()
 
 
-def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[Exec]:
+def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> Iterator[Exec]:
     """
     Executes a given contract from a given input state and returns all output states.
 
@@ -463,8 +463,6 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
     contract_json = BuildOut().get_by_name(contract_name, filename)
     abi = get_abi(contract_json)
     method_identifiers = contract_json["methodIdentifiers"]
-
-    results = []
 
     # iterate over each function in the target contract
     for fun_sig, fun_selector in method_identifiers.items():
@@ -519,8 +517,8 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
                 fun_info=fun_info,
             )
 
-            # execute the transaction and collect output states
-            results.extend(sevm.run_message(ex, message, path))
+            # execute the transaction and yield output states
+            yield from sevm.run_message(ex, message, path)
 
         except Exception as err:
             error(f"run_target_contract {addr} {fun_sig}: {type(err).__name__}: {err}")
@@ -530,8 +528,6 @@ def run_target_contract(ctx: ContractContext, ex: Exec, addr: Address) -> list[E
 
         finally:
             reset(solver)
-
-    return results
 
 
 def compute_pre_exs(
@@ -618,7 +614,7 @@ def compute_pre_exs(
                 yield post_ex
 
 
-def get_pre_exs(ctx: ContractContext, depth: int):
+def get_pre_exs(ctx: ContractContext, depth: int) -> Iterable[Exec]:
     pre_exs_cache = ctx.pre_exs_cache
 
     if depth in pre_exs_cache:
@@ -628,7 +624,7 @@ def get_pre_exs(ctx: ContractContext, depth: int):
     return compute_pre_exs(ctx, depth)
 
 
-def run_message(ctx: FunctionContext, sevm, message, dyn_params):
+def run_message(ctx: FunctionContext, sevm, message, dyn_params) -> Iterator[Exec]:
 
     for depth in range(ctx.max_depth + 1):
 
