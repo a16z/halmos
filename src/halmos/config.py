@@ -534,6 +534,13 @@ class Config:
         group=experimental,
     )
 
+    coverage_flamegraph: str = arg(
+        help="generate a flamegraph of the execution coverage",
+        global_default=None,
+        metavar="SVG_FILE_PATH",
+        group=experimental,
+    )
+
     ### Deprecated
 
     test_parallel: bool = arg(

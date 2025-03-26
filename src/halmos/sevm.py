@@ -3212,6 +3212,7 @@ class SEVM:
             storages=pre_ex.storages.copy(),
             balances=pre_ex.balances.copy(),
         )
+        print(f"running ex with fun_info {ex0.context.message.fun_info}")
         yield from self.run(ex0)
 
     def run(self, ex0: Exec) -> Iterator[Exec]:

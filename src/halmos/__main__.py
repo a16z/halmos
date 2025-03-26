@@ -49,6 +49,7 @@ from .constants import (
     VERBOSITY_TRACE_SETUP,
 )
 from .exceptions import FailCheatcode, HalmosException
+from .flamegraphs import flamegraph
 from .logs import (
     COUNTEREXAMPLE_INVALID,
     COUNTEREXAMPLE_UNKNOWN,
@@ -282,6 +283,9 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
 
     [ex] = exs
 
+    if ctx.args.coverage_flamegraph:
+        flamegraph.add(ex.context)
+
     if ctx.args.verbose >= VERBOSITY_TRACE_CONSTRUCTOR:
         print("Constructor trace:")
         render_trace(ex.context)
@@ -337,11 +341,15 @@ def setup(ctx: FunctionContext) -> Exec:
 
     setup_exs_all = sevm.run(setup_ex)
     setup_exs_no_error: list[tuple[Exec, SMTQuery]] = []
+    flamegraph_enabled = args.coverage_flamegraph
 
     for path_id, setup_ex in enumerate(setup_exs_all):
         if args.verbose >= VERBOSITY_TRACE_SETUP:
             print(f"{setup_sig} trace #{path_id}:")
             render_trace(setup_ex.context)
+
+        if flamegraph_enabled:
+            flamegraph.add(setup_ex.context)
 
         if err := setup_ex.context.output.error:
             opcode = setup_ex.current_opcode()
@@ -529,6 +537,7 @@ def step_invariant_tests(
     test_results_map = inv_ctx.test_results_map
     visited = inv_ctx.visited
     panic_error_codes = ctx.args.panic_error_codes
+    flamegraph_enabled = ctx.args.coverage_flamegraph
 
     next_exs = []
 
@@ -550,6 +559,10 @@ def step_invariant_tests(
             post_exs = run_target_contract(ctx, pre_ex, addr)
 
             for post_ex in post_exs:
+                print(
+                    f"retrieving post_ex with fun_info={post_ex.context.message.fun_info} and sequence={post_ex.call_sequence}"
+                )
+
                 subcall = post_ex.context
 
                 # ignore and report if halmos-errored
@@ -564,7 +577,7 @@ def step_invariant_tests(
                     if not post_ex.is_panic_of(panic_error_codes):
                         continue
 
-                    fun_info = post_ex.context.message.fun_info
+                    fun_info = subcall.message.fun_info
 
                     # ignore if the probe has already been reported
                     if fun_info in inv_ctx.probes_reported:
@@ -576,12 +589,15 @@ def step_invariant_tests(
                     sequence = (
                         rendered_call_sequence(post_ex.call_sequence) or "    (empty)\n"
                     )
-                    trace = rendered_trace(post_ex.context)
+                    trace = rendered_trace(subcall)
                     msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
                     print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
 
                     # because this is a reverted state, we don't need to explore it further
                     continue
+
+                if flamegraph_enabled:
+                    flamegraph.add_with_sequence(post_ex.call_sequence, subcall)
 
                 # skip if already visited
                 post_ex.path_slice()
@@ -842,6 +858,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     # (actually triggers path exploration)
     #
 
+    # flamegraphs at this level are only enabled for non-invariant tests
+    flamegraph_enabled = args.coverage_flamegraph and ctx.terminal
+
     path_id = 0  # default value in case we don't enter the loop body
     submitted_futures = []
     for path_id, ex in enumerate(exs):
@@ -861,6 +880,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
             print("\nTrace:")
             render_trace(ex.context)
+
+        if flamegraph_enabled:
+            flamegraph.add(ex.context)
 
         output = ex.context.output
         error_output = output.error
@@ -1377,6 +1399,13 @@ def _main(_args=None) -> MainResult:
 
     if args.statistics:
         print(f"\n[time] {timer.report()}")
+
+    # if any stacks were collected, generate the flamegraph
+    # (it may have been enabled for a particular contract/test)
+    if flamegraph.stacks:
+        filename = args.coverage_flamegraph or "coverage-flamegraph.svg"
+        print(f"Writing coverage flamegraph to {filename}")
+        flamegraph.generate_flamegraph(filename)
 
     if args.profile_instructions:
         profiler = Profiler()
