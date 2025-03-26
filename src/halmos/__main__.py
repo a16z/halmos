@@ -461,7 +461,6 @@ def run_target_contract(
         try:
             # initialize symbolic execution environment
             sevm = SEVM(args, fun_info)
-            # TODO: reuse solver across different functions
             solver = mk_solver(args)
             path = Path(solver)
             path.extend_path(ex.path)
@@ -645,15 +644,22 @@ def run_message(
 
     For regular tests (where the max tx depth is 0), this function amounts to executing the given test against only the initial setup state.
     """
+    args = ctx.args
+    contract_ctx = ctx.contract_ctx
     for depth in range(ctx.max_call_depth + 1):
-        for ex in get_frontier(ctx.contract_ctx, depth):
-            reset(ctx.solver)
+        for ex in get_frontier(contract_ctx, depth):
+            try:
+                solver = mk_solver(args)
 
-            path = Path(ctx.solver)
-            path.extend_path(ex.path)
-            path.process_dyn_params(dyn_params)
+                path = Path(solver)
+                path.extend_path(ex.path)
+                path.process_dyn_params(dyn_params)
 
-            yield from sevm.run_message(ex, message, path)
+                yield from sevm.run_message(ex, message, path)
+
+            finally:
+                # reset any remaining solver states from the default context
+                reset(solver)
 
 
 def run_test(ctx: FunctionContext) -> TestResult:
@@ -1049,8 +1055,6 @@ def run_tests(
         fun_info = FunctionInfo(ctx.name, funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
-            # TODO: reuse solver across different functions
-            solver = mk_solver(test_config)
             if debug_config:
                 debug(f"{test_config.formatted_layers()}")
 
@@ -1061,7 +1065,7 @@ def run_tests(
             test_ctx = FunctionContext(
                 args=test_config,
                 info=fun_info,
-                solver=solver,
+                solver=None,
                 contract_ctx=ctx,
                 setup_ex=setup_ex,
                 max_call_depth=max_call_depth,
@@ -1075,9 +1079,6 @@ def run_tests(
                 traceback.print_exc()
             test_results.append(TestResult(funsig, Exitcode.EXCEPTION.value))
             continue
-        finally:
-            # reset any remaining solver states from the default context
-            reset(solver)
 
         test_results.append(test_result)
 
