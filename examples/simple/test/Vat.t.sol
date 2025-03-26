@@ -6,7 +6,8 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 import {Vat} from "../src/Vat.sol";
 
-// halmos --contract VatTest --solver-command 'yices-smt2 --smt2-model-format' --early-exit
+// halmos --contract VatTest --solver-command 'yices-smt2 --smt2-model-format'
+/// @custom:halmos --early-exit
 contract VatTest is Test, SymTest {
     Vat public vat;
     bytes32 ilk;

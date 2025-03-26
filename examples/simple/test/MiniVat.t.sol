@@ -8,7 +8,7 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 import {MiniVat} from "../src/MiniVat.sol";
 
-// halmos --match-contract MiniVatTest --solver-command 'yices-smt2 --smt2-model-format'
+// halmos --contract MiniVatTest --solver-command 'yices-smt2 --smt2-model-format'
 contract MiniVatTest is Test, SymTest {
     MiniVat public minivat;
 
