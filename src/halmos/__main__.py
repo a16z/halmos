@@ -415,105 +415,6 @@ def get_state_id(ex: Exec) -> bytes:
     return snapshot_state(ex, include_path=True).unwrap()
 
 
-def compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
-    """
-    Computes the frontier states at a given depth.
-
-    This function iterates over the previous frontier states at `depth - 1` and executes an arbitrary function of an arbitrary target contract from each state.
-    The resulting states form the new frontier at the current depth, which are yielded and also stored in the frontier state cache.
-
-    Args:
-        ctx: The contract context containing the previous frontier states and other information.
-        depth: The current depth level for which the frontier states are being computed.
-
-    Returns:
-        A generator for frontier states at the given depth.
-    """
-    # frontier states at the previous depth, which will be used as input for computing new frontier states at the current depth
-    curr_exs = ctx.frontier_states[depth - 1]
-
-    # the cache for the new frontier states
-    next_exs = ctx.frontier_states[depth]
-
-    visited = ctx.visited
-
-    panic_error_codes = ctx.args.panic_error_codes
-
-    for idx, pre_ex in enumerate(curr_exs):
-        progress_status.update(
-            f"depth: {cyan(depth)} | "
-            f"starting states: {cyan(len(curr_exs))} | "
-            f"unique states: {cyan(len(visited))} | "
-            f"frontier states: {cyan(len(next_exs))} | "
-            f"completed paths: {cyan(idx)} "
-        )
-
-        for addr in pre_ex.code:
-            # skip the test contract
-            if eq(addr, FOUNDRY_TEST):
-                continue
-
-            # execute a target contract
-            post_exs = run_target_contract(ctx, pre_ex, addr)
-
-            for post_ex in post_exs:
-                subcall = post_ex.context
-
-                # ignore and report if halmos-errored
-                if subcall.is_stuck():
-                    error(
-                        f"{depth=}: addr={hexify(addr)}: {subcall.get_stuck_reason()}"
-                    )
-                    continue
-
-                # ignore if reverted
-                if subcall.output.error:
-                    # ignore normal reverts
-                    if not post_ex.is_panic_of(panic_error_codes):
-                        continue
-
-                    fun_info = post_ex.context.message.fun_info
-
-                    # ignore if the probe has already been reported
-                    if fun_info in ctx.probes_reported:
-                        continue
-
-                    ctx.probes_reported.add(fun_info)
-
-                    # print error trace
-                    sequence = (
-                        rendered_call_sequence(post_ex.call_sequence) or "    (empty)\n"
-                    )
-                    trace = rendered_trace(post_ex.context)
-                    msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
-                    print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
-
-                    # because this is a reverted state, we don't need to explore it further
-                    continue
-
-                # skip if already visited
-                post_ex.path_slice()
-                post_id = get_state_id(post_ex)
-                if post_id in visited:
-                    continue
-
-                # update visited set
-                # TODO: check path feasibility
-                visited.add(post_id)
-
-                # update call sequences
-                post_ex.call_sequence = pre_ex.call_sequence + [subcall]
-
-                # update timestamp
-                timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
-                post_ex.block.timestamp = ZeroExt(192, BitVec(timestamp_name, 64))
-                post_ex.path.append(post_ex.block.timestamp >= pre_ex.block.timestamp)
-
-                # update the frontier states cache and yield the new frontier state
-                next_exs.append(post_ex)
-                yield post_ex
-
-
 def run_target_contract(
     ctx: ContractContext, ex: Exec, addr: Address
 ) -> Iterator[Exec]:
@@ -611,21 +512,124 @@ def run_target_contract(
             reset(solver)
 
 
+def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
+    """
+    Computes the frontier states at a given depth.
+
+    This function iterates over the previous frontier states at `depth - 1` and executes an arbitrary function of an arbitrary target contract from each state.
+    The resulting states form the new frontier at the current depth, which are yielded and also stored in the frontier state cache.
+
+    NOTE: this is internal, only to be called by get_frontier().
+
+    Args:
+        ctx: The contract context containing the previous frontier states and other information.
+        depth: The current depth level for which the frontier states are being computed.
+
+    Returns:
+        A generator for frontier states at the given depth.
+    """
+    # frontier states at the previous depth, which will be used as input for computing new frontier states at the current depth
+    curr_exs = ctx.frontier_states[depth - 1]
+
+    # the cache for the new frontier states
+    next_exs = ctx.frontier_states[depth]
+
+    visited = ctx.visited
+
+    panic_error_codes = ctx.args.panic_error_codes
+
+    for idx, pre_ex in enumerate(curr_exs):
+        progress_status.update(
+            f"depth: {cyan(depth)} | "
+            f"starting states: {cyan(len(curr_exs))} | "
+            f"unique states: {cyan(len(visited))} | "
+            f"frontier states: {cyan(len(next_exs))} | "
+            f"completed paths: {cyan(idx)} "
+        )
+
+        for addr in pre_ex.code:
+            # skip the test contract
+            if eq(addr, FOUNDRY_TEST):
+                continue
+
+            # execute a target contract
+            post_exs = run_target_contract(ctx, pre_ex, addr)
+
+            for post_ex in post_exs:
+                subcall = post_ex.context
+
+                # ignore and report if halmos-errored
+                if subcall.is_stuck():
+                    error(
+                        f"{depth=}: addr={hexify(addr)}: {subcall.get_stuck_reason()}"
+                    )
+                    continue
+
+                # ignore if reverted
+                if subcall.output.error:
+                    # ignore normal reverts
+                    if not post_ex.is_panic_of(panic_error_codes):
+                        continue
+
+                    fun_info = post_ex.context.message.fun_info
+
+                    # ignore if the probe has already been reported
+                    if fun_info in ctx.probes_reported:
+                        continue
+
+                    ctx.probes_reported.add(fun_info)
+
+                    # print error trace
+                    sequence = (
+                        rendered_call_sequence(post_ex.call_sequence) or "    (empty)\n"
+                    )
+                    trace = rendered_trace(post_ex.context)
+                    msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
+                    print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
+
+                    # because this is a reverted state, we don't need to explore it further
+                    continue
+
+                # skip if already visited
+                post_ex.path_slice()
+                post_id = get_state_id(post_ex)
+                if post_id in visited:
+                    continue
+
+                # update visited set
+                # TODO: check path feasibility
+                visited.add(post_id)
+
+                # update call sequences
+                post_ex.call_sequence = pre_ex.call_sequence + [subcall]
+
+                # update timestamp
+                timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
+                post_ex.block.timestamp = ZeroExt(192, BitVec(timestamp_name, 64))
+                post_ex.path.append(post_ex.block.timestamp >= pre_ex.block.timestamp)
+
+                # update the frontier states cache and yield the new frontier state
+                next_exs.append(post_ex)
+                yield post_ex
+
+
 def get_frontier(ctx: ContractContext, depth: int) -> Iterable[Exec]:
     """
     Retrieves the frontier states at a given depth.
 
     If the frontier states have already been computed, the cached results are returned.
-    Otherwise, the generator from compute_frontier() is returned.
+    Otherwise, the generator from _compute_frontier() is returned.
+
+    NOTE: This is not thread-safe.
     """
     frontier_states = ctx.frontier_states
 
-    if depth in frontier_states:
-        return frontier_states[depth]
+    if (frontier := frontier_states.get(depth)) is not None:
+        return frontier
 
-    # initialize the frontier cache; it will be populated by compute_frontier().
+    # initialize the frontier cache; it will be populated by _compute_frontier().
     frontier_states[depth] = []
-    return compute_frontier(ctx, depth)
+    return _compute_frontier(ctx, depth)
 
 
 def run_message(
