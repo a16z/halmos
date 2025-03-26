@@ -82,7 +82,6 @@ from .sevm import (
     Path,
     Profiler,
     SMTQuery,
-    con_addr,
     id_str,
     jumpid_str,
     mnemonic,
@@ -223,13 +222,6 @@ def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
 
-def mk_this() -> Address:
-    # NOTE: Do NOT remove the `con_addr()` wrapper.
-    #       The return type should be BitVecSort(160) as it is used as a key for ex.code.
-    #       The keys of ex.code are compared using structural equality with other BitVecRef addresses.
-    return con_addr(FOUNDRY_TEST)
-
-
 def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None):
     return create_solver(
         logic=logic,
@@ -239,25 +231,17 @@ def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None):
     )
 
 
-# NOTE: Do NOT remove the `con_addr()` wrapper for TEST_TARGET.
-# The return type should be BitVecSort(160) as it is used as a key for ex.code.
-# The keys of ex.code are compared using structural equality with other BitVecRef addresses.
-TEST_TARGET = con_addr(FOUNDRY_TEST)
-TEST_CALLER = FOUNDRY_CALLER
-TEST_ORIGIN = FOUNDRY_ORIGIN
-
-
 def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
     message = Message(
-        target=TEST_TARGET,
-        caller=TEST_CALLER,
-        origin=TEST_ORIGIN,
+        target=FOUNDRY_TEST,
+        caller=FOUNDRY_CALLER,
+        origin=FOUNDRY_ORIGIN,
         value=0,
         data=ByteVec(),
         call_scheme=EVM.CREATE,
     )
 
-    this = TEST_TARGET
+    this = FOUNDRY_TEST
 
     ex = sevm.mk_exec(
         code={this: Contract(b"")},
@@ -335,9 +319,9 @@ def setup(ctx: FunctionContext) -> Exec:
 
     setup_ex.context = CallContext(
         message=Message(
-            target=TEST_TARGET,
-            caller=TEST_CALLER,
-            origin=TEST_ORIGIN,
+            target=FOUNDRY_TEST,
+            caller=FOUNDRY_CALLER,
+            origin=FOUNDRY_ORIGIN,
             value=0,
             data=calldata,
             call_scheme=EVM.CALL,
@@ -466,7 +450,7 @@ def compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
 
         for addr in pre_ex.code:
             # skip the test contract
-            if eq(addr, con_addr(FOUNDRY_TEST)):
+            if eq(addr, FOUNDRY_TEST):
                 continue
 
             # execute a target contract
@@ -687,9 +671,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     cd, dyn_params = mk_calldata(ctx.contract_ctx.abi, fun_info, args)
 
     message = Message(
-        target=TEST_TARGET,
-        caller=TEST_CALLER,
-        origin=TEST_ORIGIN,
+        target=FOUNDRY_TEST,
+        caller=FOUNDRY_CALLER,
+        origin=FOUNDRY_ORIGIN,
         value=0,
         data=cd,
         call_scheme=EVM.CALL,
@@ -1257,7 +1241,7 @@ def _main(_args=None) -> MainResult:
         print(f"\nRunning {num_found} tests for {contract_path}")
 
         # Set the test contract address in DeployAddressMapper
-        DeployAddressMapper().add_deployed_contract(hexify(mk_this()), contract_name)
+        DeployAddressMapper().add_deployed_contract(hexify(FOUNDRY_TEST), contract_name)
 
         # support for `/// @custom:halmos` annotations
         contract_args = with_natspec(args, contract_name, natspec)

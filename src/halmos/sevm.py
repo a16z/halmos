@@ -162,9 +162,11 @@ EMPTY_BALANCE = Array("balance_00", BitVecSort160, BitVecSort256)
 PULSE_INTERVAL = 2**13
 assert is_power_of_two(PULSE_INTERVAL)
 
+# NOTE: `con_addr()` wrapper is needed for FOUNDRY_TEST, which will be used as a key for ex.code,
+# and compared for structural equality with other BitVecRef addresses.
+FOUNDRY_TEST = con_addr(0x7FA9385BE102AC3EAC297483DD6233D62B3E1496)
 FOUNDRY_CALLER = 0x1804C8AB1F12E6BBF3894D4083F33E07309D1F38
 FOUNDRY_ORIGIN = FOUNDRY_CALLER
-FOUNDRY_TEST = 0x7FA9385BE102AC3EAC297483DD6233D62B3E1496
 
 CHEATCODE_ADDRESSES: tuple[BV, ...] = (
     hevm_cheat_code.address,
@@ -2431,7 +2433,7 @@ class SEVM:
         potential_aliases = []
         for addr in ex.code:
             # exclude the test contract from alias candidates
-            if addr == FOUNDRY_TEST:
+            if eq(addr, FOUNDRY_TEST):
                 continue
             alias_cond = target == addr
             if ex.check(alias_cond) != unsat:
