@@ -8,6 +8,7 @@ from z3 import (
     Concat,
     Function,
     Or,
+    Xor,
     eq,
     simplify,
 )
@@ -239,7 +240,7 @@ def test_bitwise_xor():
     assert FALSE.bitwise_xor(a) == a
     assert a.bitwise_xor(FALSE) == a
 
-    assert a.bitwise_xor(b) == Bool(a.as_z3() ^ b.as_z3())
+    assert a.bitwise_xor(b) == Bool(Xor(a.as_z3(), b.as_z3()))
 
 
 def test_bitvec_mul():

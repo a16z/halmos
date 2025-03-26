@@ -88,6 +88,15 @@ class ContractContext:
     # so in principle, we could consider having another context, say CompileUnitContext, and put build_out_map there
     build_out_map: dict
 
+    # map from depth to frontier states
+    frontier_states: dict[int, list[Exec]] = field(default_factory=dict)
+
+    # set of visited state ids, to be updated during the invariant testing run
+    visited: set[bytes] = field(default_factory=set)
+
+    # the function info for the invariant test
+    probes_reported: set[FunctionInfo] = field(default_factory=set)
+
 
 @dataclass(frozen=True)
 class SolvingContext:
@@ -99,21 +108,6 @@ class SolvingContext:
 
     # list of unsat cores
     unsat_cores: list[list] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
-class InvariantContext:
-    # backlink to the parent contract context
-    contract_ctx: ContractContext
-
-    # set of visited states, to be updated during the invariant testing run
-    visited: set
-
-    # test results, to be updated during the invariant testing run
-    test_results_map: dict
-
-    # the function info for the invariant test
-    probes_reported: set[FunctionInfo] = field(default_factory=set)
 
 
 @dataclass(frozen=True)
@@ -133,8 +127,8 @@ class FunctionContext:
     # optional starting state
     setup_ex: Exec | None = None
 
-    # optional terminal mode flag (default: true)
-    terminal: bool = True
+    # optional max call depth for frontier states (for invariant testing)
+    max_call_depth: int = 0
 
     # function-level solving context
     # the FunctionContext initializes and owns the SolvingContext
@@ -152,8 +146,9 @@ class FunctionContext:
     # list of potentially invalid counterexamples for this function
     invalid_counterexamples: list[PotentialModel] = field(default_factory=list)
 
-    # map from path id to trace
+    # map from path id to trace and call sequence
     traces: dict[int, str] = field(default_factory=dict)
+    call_sequences: dict[int, str] = field(default_factory=dict)
 
     # map from path id to execution
     exec_cache: dict[int, Exec] = field(default_factory=dict)
