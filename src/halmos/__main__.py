@@ -529,8 +529,23 @@ def run_target_contract(
 
 
 def compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
+    """
+    Computes the frontier states at a given depth.
+
+    This function iterates over the previous frontier states at `depth - 1` and executes an arbitrary function of an arbitrary target contract from each state.
+    The resulting states form the new frontier at the current depth, which are yielded and also stored in the frontier state cache.
+
+    Args:
+        ctx: The contract context containing the previous frontier states and other information.
+        depth: The current depth level for which the frontier states are being computed.
+
+    Returns:
+        A generator for frontier states at the given depth.
+    """
+    # frontier states at the previous depth, which will be used as input for computing new frontier states at the current depth
     curr_exs = ctx.frontier_states[depth - 1]
 
+    # the cache for the new frontier states
     next_exs = ctx.frontier_states[depth]
 
     visited = ctx.visited
@@ -607,16 +622,24 @@ def compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                 post_ex.block.timestamp = ZeroExt(192, BitVec(timestamp_name, 64))
                 post_ex.path.append(post_ex.block.timestamp >= pre_ex.block.timestamp)
 
+                # update the frontier states cache and yield the new frontier state
                 next_exs.append(post_ex)
                 yield post_ex
 
 
 def get_frontier(ctx: ContractContext, depth: int) -> Iterable[Exec]:
+    """
+    Retrieves the frontier states at a given depth.
+
+    If the frontier states have already been computed, the cached results are returned.
+    Otherwise, the generator from compute_frontier() is returned.
+    """
     frontier_states = ctx.frontier_states
 
     if depth in frontier_states:
         return frontier_states[depth]
 
+    # initialize the frontier cache; it will be populated by compute_frontier().
     frontier_states[depth] = []
     return compute_frontier(ctx, depth)
 
@@ -624,6 +647,16 @@ def get_frontier(ctx: ContractContext, depth: int) -> Iterable[Exec]:
 def run_message(
     ctx: FunctionContext, sevm: SEVM, message: Message, dyn_params: list
 ) -> Iterator[Exec]:
+    """
+    Executes the given test against all frontier states.
+
+    A frontier state is the result of executing a sequence of arbitrary txs starting from the initial setup state.
+    These states are grouped by their tx depth (i.e., the number of txs in a sequence) and cached in ContractContext.frontier_states to avoid re-computation for other tests.
+
+    The max tx depth to consider is specified in FunctionContext, which is given by --invariant-depth for invariant tests, and set to 0 for regular tests.
+
+    For regular tests (where the max tx depth is 0), this function amounts to executing the given test against only the initial setup state.
+    """
     for depth in range(ctx.max_call_depth + 1):
         for ex in get_frontier(ctx.contract_ctx, depth):
             reset(ctx.solver)
@@ -989,7 +1022,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
         return []
 
-    # initialize frontier states and visited states with setup output
+    # initialize the frontier and visited states using the initial setup state
     ctx.frontier_states[0] = [setup_ex]
     ctx.visited.add(get_state_id(setup_ex))
 
@@ -1003,7 +1036,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
 def run_tests(
     ctx: ContractContext,
-    pre_ex: Exec,
+    setup_ex: Exec,
     funsigs: list[str],
 ) -> list[TestResult]:
     """
@@ -1012,7 +1045,7 @@ def run_tests(
 
     Args:
         ctx: The context of the test contract.
-        pre_ex: The input state from which each test will be run.
+        setup_ex: The setup state from which each test will be run.
         funsigs: A list of test function signatures to execute.
 
     Returns:
@@ -1042,7 +1075,7 @@ def run_tests(
                 info=fun_info,
                 solver=solver,
                 contract_ctx=ctx,
-                setup_ex=pre_ex,
+                setup_ex=setup_ex,
                 max_call_depth=max_call_depth,
             )
 
