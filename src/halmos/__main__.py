@@ -431,103 +431,6 @@ def get_state_id(ex: Exec) -> bytes:
     return snapshot_state(ex, include_path=True).unwrap()
 
 
-def run_target_contract(
-    ctx: ContractContext, ex: Exec, addr: Address
-) -> Iterator[Exec]:
-    """
-    Executes a given contract from a given input state and yields all output states.
-
-    Args:
-        ctx: The context of the test contract, which differs from the target contract to be executed.
-        ex: The input state.
-        addr: The address of the contract to be executed.
-
-    Returns:
-        A generator of output states.
-
-    Raises:
-        ValueError: If the contract name cannot be found for the given address.
-    """
-    args = ctx.args
-
-    # retrieve the contract name and metadata from the given address
-    code = ex.code[addr]
-    contract_name = code.contract_name
-    filename = code.filename
-
-    if not contract_name:
-        raise ValueError(f"couldn't find the contract name for: {addr}")
-
-    contract_json = BuildOut().get_by_name(contract_name, filename)
-    abi = get_abi(contract_json)
-    method_identifiers = contract_json["methodIdentifiers"]
-
-    # iterate over each function in the target contract
-    for fun_sig, fun_selector in method_identifiers.items():
-        fun_name = fun_sig.split("(")[0]
-        fun_info = FunctionInfo(contract_name, fun_name, fun_sig, fun_selector)
-
-        # skip if 'pure' or 'view' function that doesn't change the state
-        state_mutability = abi[fun_sig]["stateMutability"]
-        if state_mutability in ["pure", "view"]:
-            if args.debug:
-                print(f"Skipping {fun_name} ({state_mutability})")
-            continue
-
-        try:
-            # initialize symbolic execution environment
-            sevm = SEVM(args, fun_info)
-            # TODO: reuse solver across different functions
-            solver = mk_solver(args)
-            path = Path(solver)
-            path.extend_path(ex.path)
-
-            # prepare calldata and dynamic parameters
-            cd, dyn_params = mk_calldata(
-                abi, fun_info, args, new_symbol_id=ex.new_symbol_id
-            )
-            path.process_dyn_params(dyn_params)
-
-            # create a symbolic tx.origin
-            tx_origin = mk_addr(
-                f"tx_origin_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
-            )
-
-            # create a symbolic msg.sender
-            msg_sender = mk_addr(
-                f"msg_sender_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
-            )
-
-            # create a symbolic msg.value
-            msg_value = BitVec(
-                f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}",
-                BitVecSort256,
-            )
-
-            # construct the transaction message
-            message = Message(
-                target=addr,
-                caller=msg_sender,
-                origin=tx_origin,
-                value=msg_value,
-                data=cd,
-                call_scheme=EVM.CALL,
-                fun_info=fun_info,
-            )
-
-            # execute the transaction and yield output states
-            yield from sevm.run_message(ex, message, path)
-
-        except Exception as err:
-            error(f"run_target_contract {addr} {fun_sig}: {type(err).__name__}: {err}")
-            if args.debug:
-                traceback.print_exc()
-            continue
-
-        finally:
-            reset(solver)
-
-
 def compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
     """
     Computes the frontier states at a given depth.
@@ -625,6 +528,103 @@ def compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                 # update the frontier states cache and yield the new frontier state
                 next_exs.append(post_ex)
                 yield post_ex
+
+
+def run_target_contract(
+    ctx: ContractContext, ex: Exec, addr: Address
+) -> Iterator[Exec]:
+    """
+    Executes a given contract from a given input state and yields all output states.
+
+    Args:
+        ctx: The context of the test contract, which differs from the target contract to be executed.
+        ex: The input state.
+        addr: The address of the contract to be executed.
+
+    Returns:
+        A generator of output states.
+
+    Raises:
+        ValueError: If the contract name cannot be found for the given address.
+    """
+    args = ctx.args
+
+    # retrieve the contract name and metadata from the given address
+    code = ex.code[addr]
+    contract_name = code.contract_name
+    filename = code.filename
+
+    if not contract_name:
+        raise ValueError(f"couldn't find the contract name for: {addr}")
+
+    contract_json = BuildOut().get_by_name(contract_name, filename)
+    abi = get_abi(contract_json)
+    method_identifiers = contract_json["methodIdentifiers"]
+
+    # iterate over each function in the target contract
+    for fun_sig, fun_selector in method_identifiers.items():
+        fun_name = fun_sig.split("(")[0]
+        fun_info = FunctionInfo(contract_name, fun_name, fun_sig, fun_selector)
+
+        # skip if 'pure' or 'view' function that doesn't change the state
+        state_mutability = abi[fun_sig]["stateMutability"]
+        if state_mutability in ["pure", "view"]:
+            if args.debug:
+                print(f"Skipping {fun_name} ({state_mutability})")
+            continue
+
+        try:
+            # initialize symbolic execution environment
+            sevm = SEVM(args, fun_info)
+            # TODO: reuse solver across different functions
+            solver = mk_solver(args)
+            path = Path(solver)
+            path.extend_path(ex.path)
+
+            # prepare calldata and dynamic parameters
+            cd, dyn_params = mk_calldata(
+                abi, fun_info, args, new_symbol_id=ex.new_symbol_id
+            )
+            path.process_dyn_params(dyn_params)
+
+            # create a symbolic tx.origin
+            tx_origin = mk_addr(
+                f"tx_origin_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
+            )
+
+            # create a symbolic msg.sender
+            msg_sender = mk_addr(
+                f"msg_sender_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
+            )
+
+            # create a symbolic msg.value
+            msg_value = BitVec(
+                f"msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}",
+                BitVecSort256,
+            )
+
+            # construct the transaction message
+            message = Message(
+                target=addr,
+                caller=msg_sender,
+                origin=tx_origin,
+                value=msg_value,
+                data=cd,
+                call_scheme=EVM.CALL,
+                fun_info=fun_info,
+            )
+
+            # execute the transaction and yield output states
+            yield from sevm.run_message(ex, message, path)
+
+        except Exception as err:
+            error(f"run_target_contract {addr} {fun_sig}: {type(err).__name__}: {err}")
+            if args.debug:
+                traceback.print_exc()
+            continue
+
+        finally:
+            reset(solver)
 
 
 def get_frontier(ctx: ContractContext, depth: int) -> Iterable[Exec]:
