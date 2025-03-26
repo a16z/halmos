@@ -527,11 +527,14 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
     Returns:
         A generator for frontier states at the given depth.
     """
+    frontier_states = ctx.frontier_states
+
     # frontier states at the previous depth, which will be used as input for computing new frontier states at the current depth
-    curr_exs = ctx.frontier_states[depth - 1]
+    curr_exs = frontier_states[depth - 1]
 
     # the cache for the new frontier states
-    next_exs = ctx.frontier_states[depth]
+    next_exs = []
+    frontier_states[depth] = next_exs
 
     visited = ctx.visited
 
@@ -621,13 +624,9 @@ def get_frontier(ctx: ContractContext, depth: int) -> Iterable[Exec]:
 
     NOTE: This is not thread-safe.
     """
-    frontier_states = ctx.frontier_states
-
-    if (frontier := frontier_states.get(depth)) is not None:
+    if (frontier := ctx.frontier_states.get(depth)) is not None:
         return frontier
 
-    # initialize the frontier cache; it will be populated by _compute_frontier().
-    frontier_states[depth] = []
     return _compute_frontier(ctx, depth)
 
 
