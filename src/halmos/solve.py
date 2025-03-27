@@ -97,6 +97,8 @@ class ContractContext:
     # the function info for the invariant test
     probes_reported: set[FunctionInfo] = field(default_factory=set)
 
+    target_senders: list = field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class SolvingContext:

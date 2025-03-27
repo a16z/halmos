@@ -27,6 +27,7 @@ from z3 import (
     eq,
     set_option,
     unsat,
+    Or,
 )
 
 import halmos.traces
@@ -96,6 +97,9 @@ from .solve import (
 )
 from .traces import render_trace, rendered_call_sequence, rendered_trace
 from .utils import (
+    con_addr,
+    extract_bytes,
+    int_of,
     EVM,
     Address,
     BitVecSort256,
@@ -480,6 +484,10 @@ def run_target_contract(
             msg_sender = mk_addr(
                 f"halmos_msg_sender_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
             )
+
+            if ctx.target_senders:
+                msg_sender_cond = Or([msg_sender == target_sender for target_sender in ctx.target_senders])
+                path.append(msg_sender_cond)
 
             # create a symbolic msg.value
             msg_value = BitVec(
@@ -987,6 +995,55 @@ def reset(solver):
     solver.reset()
 
 
+def process_target_senders(ctx: ContractContext, setup_ex):
+    args = ctx.args
+
+    # function targetSenders() public view returns (address[] memory targetedSenders_)
+    targetSenders_selector = "3e5e3c23"
+    targetSenders_info = FunctionInfo(ctx.name, "targetSenders", "targetSenders()", targetSenders_selector)
+
+    sevm = SEVM(args, targetSenders_info)
+
+    calldata, dyn_params = mk_calldata(ctx.abi, targetSenders_info, args)
+    setup_ex.path.process_dyn_params(dyn_params)
+
+    setup_ex.context = CallContext(
+        message=Message(
+            target=FOUNDRY_TEST,
+            caller=FOUNDRY_CALLER,
+            origin=FOUNDRY_ORIGIN,
+            value=0,
+            data=calldata,
+            call_scheme=EVM.CALL,
+        ),
+    )
+
+    setup_ex.reset()
+    exs = list(sevm.run(setup_ex))
+
+    # sanity check
+    if len(exs) != 1:
+        raise ValueError(f"targetSenders(): # of paths: {len(exs)}")
+
+    [ex] = exs
+
+    returndata = ex.context.output.data
+
+    offset = int_of(
+        extract_bytes(returndata, 0, 32),
+        "symbolic offset for bytes argument",
+    )
+    length = int_of(
+        extract_bytes(returndata, offset, 32),
+        "symbolic size for bytes argument",
+    )
+
+    for idx in range(length):
+        target_sender = extract_bytes(returndata, offset + 32 + idx * 32, 32)
+        target_sender = con_addr(int.from_bytes(target_sender, "big"))
+        ctx.target_senders.append(target_sender)
+
+
 def run_contract(ctx: ContractContext) -> list[TestResult]:
     BuildOut().set_build_out(ctx.build_out_map)
 
@@ -1006,6 +1063,9 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
         halmos.traces.config_context.set(setup_config)
         setup_ex = setup(setup_ctx)
         setup_ex.path_slice()
+
+        process_target_senders(ctx, setup_ex)
+
     except Exception as err:
         error(f"{setup_info.sig} failed: {type(err).__name__}: {err}")
         if args.debug:
