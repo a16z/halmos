@@ -916,7 +916,7 @@ class HalmosBitVec:
         assert self._size == other._size
         return HalmosBool(self._value == other._value)
 
-    def byte(self, idx: int, *, output_size: int | None = None) -> BV:
+    def byte(self, idx: int, *, output_size: int = 8) -> BV:
         """
         Extract a byte from the bitvector.
 
@@ -928,19 +928,18 @@ class HalmosBitVec:
             - idx >= 0
             - size to be a multiple of 8
         """
-        assert idx >= 0
 
         size = self._size
         byte_length = size // 8
-        assert size == byte_length * 8
 
-        output_size = output_size or 8
+        assert size == byte_length * 8
+        assert idx >= 0
 
         if idx >= byte_length:
             return HalmosBitVec(0, size=output_size)
 
         if self.is_concrete:
-            b = self._value.to_bytes(length=byte_length, byteorder="little")
+            b = self._value.to_bytes(length=byte_length, byteorder="big")
             return HalmosBitVec(b[idx], size=output_size)
 
         # symbolic case

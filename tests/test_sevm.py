@@ -45,9 +45,12 @@ from halmos.utils import EVM
 caller = BitVec("msg_sender", 160)
 origin = BitVec("tx_origin", 160)
 this = BitVec("this_address", 160)
-
 balance = Array("balance_0", BitVecSort(160), BitVecSort(256))
 callvalue = BitVec("msg_value", 256)
+
+BV_1234000000dcba = BV(
+    0x11223344000000000000000000000000000000000000000000000000DDCCBBAA
+)
 
 
 @pytest.fixture
@@ -288,6 +291,12 @@ def byte_of(i, x):
         (o(EVM.OR), [x, y], x.bitwise_or(y)),
         (o(EVM.XOR), [x, y], x.bitwise_xor(y)),
         (o(EVM.NOT), [x], x.bitwise_not()),
+        (o(EVM.BYTE), [BV(0), BV_1234000000dcba], BV(0x11)),
+        (o(EVM.BYTE), [BV(1), BV_1234000000dcba], BV(0x22)),
+        (o(EVM.BYTE), [BV(30), BV_1234000000dcba], BV(0xBB)),
+        (o(EVM.BYTE), [BV(31), BV_1234000000dcba], BV(0xAA)),
+        (o(EVM.BYTE), [BV(32), BV_1234000000dcba], BV(0)),
+        (o(EVM.BYTE), [BV(2**256 - 1), BV_1234000000dcba], BV(0)),
         (o(EVM.BYTE), [BV(0), y], BV(ZeroExt(248, Extract(255, 248, y.as_z3())))),
         (o(EVM.BYTE), [BV(1), y], BV(ZeroExt(248, Extract(247, 240, y.as_z3())))),
         (o(EVM.BYTE), [BV(31), y], BV(ZeroExt(248, Extract(7, 0, y.as_z3())))),
