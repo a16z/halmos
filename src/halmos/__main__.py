@@ -858,6 +858,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
         if args.print_states:
             print(f"# {path_id}")
             print(ex)
+            print(rendered_call_sequence(ex.call_sequence))
 
         # 0 width is unlimited
         if args.width and path_id >= args.width:
