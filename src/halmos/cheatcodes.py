@@ -389,7 +389,11 @@ def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view
     return results
 
 
-def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef:
+def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef | ByteVec:
+    # z3 does not support empty bitvectors, so we return an empty bytevec instead
+    if not bits:
+        return ByteVec()
+
     label = f"halmos_{var_name}_{type_name}_{uid()}_{ex.new_symbol_id():>02}"
     return BitVec(label, BitVecSorts[bits])
 
