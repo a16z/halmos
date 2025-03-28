@@ -1315,6 +1315,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_createBytes_empty()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_createInt()",
                 "exitcode": 0,
                 "num_models": 0,
@@ -1334,6 +1343,15 @@
             },
             {
                 "name": "check_createString()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createString_empty()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
