@@ -589,6 +589,34 @@ class CallOutput:
     #   - gas_refund
     #   - gas_left
 
+    def is_panic_of(self, expected_error_codes: set[int]) -> bool:
+        """
+        Check if the error is Panic(k) for any k in the given error code set.
+        An empty set or None will match any error code.
+
+        Panic(k) is encoded as 36 bytes (4 + 32) consisting of:
+            bytes4(keccak256("Panic(uint256)")) + bytes32(k)
+        """
+        if not isinstance(self.error, Revert):
+            return False
+
+        error_data = self.data
+        if byte_length(error_data) != 36:
+            return False
+
+        error_selector = error_data[0:4].unwrap()
+        if error_selector != PANIC_SELECTOR:
+            return False
+
+        # match any error code
+        if not expected_error_codes:
+            return True
+
+        # the argument of Panic is expected to be concrete
+        # NOTE: symbolic error code will be silently ignored
+        error_code = unbox_int(error_data[4:36].unwrap())
+        return error_code in expected_error_codes
+
 
 TraceElement = Union["CallContext", EventLog, StorageRead, StorageWrite]
 
@@ -1466,35 +1494,7 @@ class Exec:  # an execution path
         return self.context.output.data is not None
 
     def is_panic_of(self, expected_error_codes: set[int]) -> bool:
-        """
-        Check if the error is Panic(k) for any k in the given error code set.
-        An empty set or None will match any error code.
-
-        Panic(k) is encoded as 36 bytes (4 + 32) consisting of:
-            bytes4(keccak256("Panic(uint256)")) + bytes32(k)
-        """
-
-        output = self.context.output
-
-        if not isinstance(output.error, Revert):
-            return False
-
-        error_data = output.data
-        if byte_length(error_data) != 36:
-            return False
-
-        error_selector = error_data[0:4].unwrap()
-        if error_selector != PANIC_SELECTOR:
-            return False
-
-        # match any error code
-        if not expected_error_codes:
-            return True
-
-        # the argument of Panic is expected to be concrete
-        # NOTE: symbolic error code will be silently ignored
-        error_code = unbox_int(error_data[4:36].unwrap())
-        return error_code in expected_error_codes
+        return self.context.output.is_panic_of(expected_error_codes)
 
     def emit_log(self, log: EventLog):
         self.context.trace.append(log)
@@ -3807,11 +3807,6 @@ class SEVM:
                 stack.completed_paths += 1
                 yield ex  # early exit; do not call finalize()
                 continue
-
-        if self.options.statistics and self.options.verbose:
-            elapsed = timer() - start_time
-            speed = step_id / elapsed
-            print(f"[speed] {int(speed):,} ops/s")
 
     def mk_exec(
         self,
