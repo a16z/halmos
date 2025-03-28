@@ -37,9 +37,19 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assert(0 <= y && y <= type(uint8).max);
     }
 
+    function check_createBytes_empty() public {
+        bytes memory data = svm.createBytes(0, 'data');
+        assert(data.length == 0);
+    }
+
     function check_createString() public {
         string memory data = svm.createString(5, 'str');
         assert(bytes(data).length == 5);
+    }
+
+    function check_createString_empty() public {
+        string memory data = svm.createString(0, 'str');
+        assert(bytes(data).length == 0);
     }
 
     function check_createUint256() public {
