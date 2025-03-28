@@ -37,9 +37,8 @@ contract Sha3Test is Test, SymTest {
     function check_empty_hash_value() public {
         assertEq(keccak256(""), EMPTY_HASH);
 
-        // TODO: uncomment when we support empty bytes
-        // bytes memory data = svm.createBytes(0, "data");
-        // assertEq(keccak256(data), EMPTY_HASH);
+        bytes memory data = svm.createBytes(0, "data");
+        assertEq(keccak256(data), EMPTY_HASH);
     }
 
     function check_only_empty_bytes_matches_empty_hash(bytes memory data) public {
