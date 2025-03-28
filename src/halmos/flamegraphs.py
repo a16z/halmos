@@ -49,12 +49,12 @@ def extract_stacks(
         prefix: The prefix to add to the stack (optional)
     """
 
-    id = extract_identifier(call.message)
+    identifier = extract_identifier(call.message)
 
     if mark_as_fail:
-        id = f"[FAIL] {id}"
+        identifier = f"[FAIL] {identifier}"
 
-    prefix = f"{prefix};{id}" if prefix else id
+    prefix = f"{prefix};{identifier}" if prefix else identifier
     stacks.append(prefix)
 
     for trace_element in call.trace:
