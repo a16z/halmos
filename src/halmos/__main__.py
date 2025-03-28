@@ -7,6 +7,7 @@ import logging
 import os
 import pathlib
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -1181,6 +1182,11 @@ def _main(_args=None) -> MainResult:
         import halmos.memtrace as memtrace
 
         memtrace.MemTracer.get().start()
+
+    if args.flamegraph and not shutil.which("flamegraph.pl"):
+        error("flamegraph.pl not found in PATH")
+        error("(see https://github.com/brendangregg/FlameGraph)")
+        args = args.with_overrides("halmos runtime", flamegraph=False)
 
     #
     # compile
