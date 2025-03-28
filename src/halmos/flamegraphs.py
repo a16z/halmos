@@ -1,6 +1,7 @@
 import subprocess
+import traceback
 
-from halmos.logs import debug
+from halmos.logs import debug, warn
 from halmos.sevm import CallContext, CallSequence, Message
 from halmos.traces import rendered_address
 from halmos.utils import hexify
@@ -19,7 +20,11 @@ def extract_identifier(message: Message) -> str:
 
 
 def extract_stacks(
-    ctx: CallContext, stacks: list[str], *, prefix: str = "", mark_as_fail: bool = False
+    call: CallContext,
+    stacks: list[str],
+    *,
+    prefix: str = "",
+    mark_as_fail: bool = False,
 ) -> list[str]:
     """
     Expands a call context (i.e. a call tree) into a flat list of stack traces.
@@ -39,12 +44,12 @@ def extract_stacks(
         "A;C"
 
     Parameters:
-        ctx: The call context that will be converted into a collection of stack traces
+        call: The call context that will be converted into a collection of stack traces
         stacks: Where the produced stack traces will be stored (mutable input/output argument)
         prefix: The prefix to add to the stack (optional)
     """
 
-    id = extract_identifier(ctx.message)
+    id = extract_identifier(call.message)
 
     if mark_as_fail:
         id = f"[FAIL] {id}"
@@ -52,7 +57,7 @@ def extract_stacks(
     prefix = f"{prefix};{id}" if prefix else id
     stacks.append(prefix)
 
-    for trace_element in ctx.trace:
+    for trace_element in call.trace:
         if isinstance(trace_element, CallContext):
             extract_stacks(trace_element, stacks, prefix=prefix)
     return stacks
@@ -63,32 +68,33 @@ def extract_sequence(seq: CallSequence, stacks: list[str]) -> list[str]:
     Extracts a sequence of call contexts into a list of stack traces.
     """
 
-    for ctx in seq:
-        extract_stacks(ctx, stacks)
+    for call in seq:
+        extract_stacks(call, stacks)
 
     return stacks
 
 
+# TODO: show SSTORE/LOG for stateless flamegraphs
 class FlamegraphAccumulator:
-    stacks: list[str]
-    debug: bool
+    __slots__ = ["title", "colors", "debug", "stacks"]
 
-    def __init__(self, debug: bool = False):
+    def __init__(self, *, title: str, colors: str = "hot", debug: bool = False):
+        self.title = title
+        self.colors = colors
+        self.debug = debug
         self.stacks = []
-        self.debug = True
 
-    def add(self, ctx: CallContext):
-        extract_stacks(ctx, self.stacks)
+    def __len__(self) -> int:
+        return len(self.stacks)
 
-    def add_with_sequence(
-        self, seq: CallSequence, ctx: CallContext, mark_as_fail: bool = False
-    ):
-        fun_infos = [call_context.message.fun_info for call_context in seq]
-
-        prefix = ";".join([f"{f.contract_name}::{f.name}" for f in fun_infos])
-        extract_stacks(ctx, self.stacks, prefix=prefix, mark_as_fail=mark_as_fail)
+    def add(self, call: CallContext):
+        extract_stacks(call, self.stacks)
 
     def generate_flamegraph(self, filename: str) -> None:
+        if not self.stacks:
+            print(f"No stacks collected for {self.title}, ")
+            return
+
         with_counts = "\n".join([f"{line} 1" for line in self.stacks])
 
         if self.debug:
@@ -96,22 +102,40 @@ class FlamegraphAccumulator:
 
         try:
             with open(filename, "w") as f:
-                # stderr not captured
+                # stderr not captured, errors will be printed to console
                 stdout = subprocess.check_output(
                     [
                         "flamegraph.pl",
                         "--title",
-                        "Exploration Flamegraph",
+                        self.title,
                         "--colors",
-                        "aqua",
+                        self.colors,
                     ],
                     input=with_counts,
                     text=True,
                 )
                 f.write(stdout)
-        except subprocess.CalledProcessError as e:
+        except (subprocess.CalledProcessError, FileNotFoundError) as e:
+            warn(f"Failed to generate flamegraph: {e}")
             if self.debug:
-                raise RuntimeError(f"Failed to generate flamegraph: {e}") from e
+                traceback.print_exc()
 
 
-flamegraph = FlamegraphAccumulator()
+class CallSequenceFlamegraph(FlamegraphAccumulator):
+    def __init__(self, *, title: str, colors: str = "aqua", debug: bool = False):
+        super().__init__(title=title, colors=colors, debug=debug)
+
+    def add_with_sequence(
+        self, seq: CallSequence, call: CallContext, mark_as_fail: bool = False
+    ):
+        fun_infos = [call_context.message.fun_info for call_context in seq]
+
+        prefix = ";".join([f"{f.contract_name}::{f.name}" for f in fun_infos])
+        extract_stacks(call, self.stacks, prefix=prefix, mark_as_fail=mark_as_fail)
+
+
+# useful for stateless/single-function tests
+exec_flamegraph = FlamegraphAccumulator(title="Execution Flamegraph")
+
+# useful for invariant tests
+call_flamegraph = CallSequenceFlamegraph(title="Call Flamegraph")
