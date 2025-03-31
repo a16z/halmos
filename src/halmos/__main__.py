@@ -5,7 +5,6 @@ import gc
 import json
 import logging
 import os
-import pathlib
 import re
 import shutil
 import signal
@@ -1183,10 +1182,17 @@ def _main(_args=None) -> MainResult:
 
         memtrace.MemTracer.get().start()
 
-    if args.flamegraph and not shutil.which("flamegraph.pl"):
-        error("flamegraph.pl not found in PATH")
-        error("(see https://github.com/brendangregg/FlameGraph)")
-        args = args.with_overrides("halmos runtime", flamegraph=False)
+    if args.flamegraph:
+        flamegraph_installed = shutil.which("flamegraph.pl") is not None
+        if flamegraph_installed:
+            print(
+                f"Flamegraphs will be written to {exec_flamegraph.out_filepath}"
+                f" and {call_flamegraph.out_filepath}"
+            )
+        else:
+            error("flamegraph.pl not found in PATH")
+            error("(see https://github.com/brendangregg/FlameGraph)")
+            args = args.with_overrides("halmos runtime", flamegraph=False)
 
     #
     # compile
@@ -1329,16 +1335,11 @@ def _main(_args=None) -> MainResult:
     if args.statistics:
         print(f"\n[time] {timer.report()}")
 
-    # if any stacks were collected, generate the flamegraphs
     if exec_flamegraph:
-        filename = pathlib.Path("exec-flamegraph.svg")
-        rich.print(f"Writing execution flamegraph to {filename}")
-        exec_flamegraph.generate_flamegraph(filename)
+        exec_flamegraph.flush(force=True)
 
     if call_flamegraph:
-        filename = pathlib.Path("call-flamegraph.svg")
-        rich.print(f"Writing call flamegraph to {filename}")
-        call_flamegraph.generate_flamegraph(filename)
+        call_flamegraph.flush(force=True)
 
     if args.profile_instructions:
         profiler = Profiler()
