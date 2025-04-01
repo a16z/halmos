@@ -72,7 +72,6 @@ def as_int(value: AnyValue) -> tuple[BVValue, MaybeSize]:
         raise TypeError(f"Cannot convert {type(value)} to int")
 
 
-# TODO: HalmosBool.TRUE, HalmosBool.FALSE
 class HalmosBool:
     """
     Immutable wrapper for concrete or symbolic boolean values.
