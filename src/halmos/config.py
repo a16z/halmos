@@ -479,6 +479,14 @@ class Config:
 
     ### Solver options
 
+    solver: str = arg(
+        help="specify the SMT solver to use (e.g., 'yices'). If not specified, defaults to 'z3'. If --solver-command is used, this is ignored.",
+        global_default="z3",
+        metavar="SOLVER_NAME",
+        choices=["yices", "z3"],
+        group=solver,
+    )
+
     smt_exp_by_const: int = arg(
         help="interpret constant power up to N",
         global_default=2,
@@ -508,8 +516,8 @@ class Config:
     )
 
     solver_command: str = arg(
-        help="use the given command when invoking the solver",
-        global_default=str(find_z3_path()),
+        help="use the given exact command when invoking the solver (overrides automatic solver detection/download triggered by --solver)",
+        global_default=None,
         metavar="COMMAND",
         group=solver,
     )
