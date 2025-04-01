@@ -23,11 +23,11 @@ from importlib import metadata
 import rich
 from z3 import (
     BitVec,
+    BoolRef,
+    Or,
     ZeroExt,
-    eq,
     set_option,
     unsat,
-    Or,
 )
 
 import halmos.traces
@@ -97,21 +97,22 @@ from .solve import (
 )
 from .traces import render_trace, rendered_call_sequence, rendered_trace
 from .utils import (
-    con_addr,
-    extract_bytes,
-    int_of,
     EVM,
     Address,
     BitVecSort256,
     NamedTimer,
+    Word,
     address,
     color_error,
     con,
+    con_addr,
     create_solver,
     cyan,
+    extract_bytes,
     green,
     hexify,
     indent_text,
+    int_of,
     red,
     uid,
     unbox_int,
@@ -292,6 +293,7 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
         )
 
     deployed_bytecode = Contract(returndata)
+    ex.try_resolve_contract_info(deployed_bytecode)
     ex.set_code(this, deployed_bytecode)
     ex.pgm = deployed_bytecode
 
@@ -419,6 +421,51 @@ def get_state_id(ex: Exec) -> bytes:
     return snapshot_state(ex, include_path=True).unwrap()
 
 
+def run_target_function(
+    args: HalmosConfig,
+    ex: Exec,
+    addr: Address,
+    abi: dict,
+    fun_info: FunctionInfo,
+    tx_origin: Address,
+    msg_sender: Address,
+    msg_value: Word,
+    msg_sender_cond: BoolRef | None = None,
+) -> Iterator[Exec]:
+    try:
+        # initialize symbolic execution environment
+        sevm = SEVM(args, fun_info)
+        solver = mk_solver(args)
+        path = Path(solver)
+        path.extend_path(ex.path)
+
+        # prepare calldata and dynamic parameters
+        calldata, dyn_params = mk_calldata(
+            abi, fun_info, args, new_symbol_id=ex.new_symbol_id
+        )
+        path.process_dyn_params(dyn_params)
+
+        if msg_sender_cond:
+            path.append(msg_sender_cond)
+
+        # construct the transaction message
+        message = Message(
+            target=addr,
+            caller=msg_sender,
+            origin=tx_origin,
+            value=msg_value,
+            data=calldata,
+            call_scheme=EVM.CALL,
+            fun_info=fun_info,
+        )
+
+        # execute the transaction and yield output states
+        yield from sevm.run_message(ex, message, path)
+
+    finally:
+        reset(solver)
+
+
 def run_target_contract(
     ctx: ContractContext, ex: Exec, addr: Address
 ) -> Iterator[Exec]:
@@ -451,7 +498,8 @@ def run_target_contract(
     method_identifiers = contract_json["methodIdentifiers"]
 
     # iterate over each function in the target contract
-    for fun_sig, fun_selector in method_identifiers.items():
+    target_selectors = resolve_target_selectors(ctx, addr, method_identifiers)
+    for fun_sig, fun_selector in target_selectors:
         fun_name = fun_sig.split("(")[0]
         fun_info = FunctionInfo(contract_name, fun_name, fun_sig, fun_selector)
 
@@ -463,18 +511,6 @@ def run_target_contract(
             continue
 
         try:
-            # initialize symbolic execution environment
-            sevm = SEVM(args, fun_info)
-            solver = mk_solver(args)
-            path = Path(solver)
-            path.extend_path(ex.path)
-
-            # prepare calldata and dynamic parameters
-            cd, dyn_params = mk_calldata(
-                abi, fun_info, args, new_symbol_id=ex.new_symbol_id
-            )
-            path.process_dyn_params(dyn_params)
-
             # create a symbolic tx.origin
             tx_origin = mk_addr(
                 f"halmos_tx_origin_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
@@ -485,9 +521,16 @@ def run_target_contract(
                 f"halmos_msg_sender_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
             )
 
-            if ctx.target_senders:
-                msg_sender_cond = Or([msg_sender == target_sender for target_sender in ctx.target_senders])
-                path.append(msg_sender_cond)
+            msg_sender_cond = (
+                Or(
+                    [
+                        msg_sender == target_sender
+                        for target_sender in ctx.target_senders
+                    ]
+                )
+                if ctx.target_senders
+                else None
+            )
 
             # create a symbolic msg.value
             msg_value = BitVec(
@@ -495,28 +538,23 @@ def run_target_contract(
                 BitVecSort256,
             )
 
-            # construct the transaction message
-            message = Message(
-                target=addr,
-                caller=msg_sender,
-                origin=tx_origin,
-                value=msg_value,
-                data=cd,
-                call_scheme=EVM.CALL,
-                fun_info=fun_info,
+            yield from run_target_function(
+                args,
+                ex,
+                addr,
+                abi,
+                fun_info,
+                tx_origin,
+                msg_sender,
+                msg_value,
+                msg_sender_cond,
             )
-
-            # execute the transaction and yield output states
-            yield from sevm.run_message(ex, message, path)
 
         except Exception as err:
             error(f"run_target_contract {addr} {fun_sig}: {type(err).__name__}: {err}")
             if args.debug:
                 traceback.print_exc()
             continue
-
-        finally:
-            reset(solver)
 
 
 def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
@@ -557,11 +595,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
             f"completed paths: {cyan(idx)} "
         )
 
-        for addr in pre_ex.code:
-            # skip the test contract
-            if eq(addr, FOUNDRY_TEST):
-                continue
-
+        for addr in resolve_target_contracts(ctx, pre_ex):
             # execute a target contract
             post_exs = run_target_contract(ctx, pre_ex, addr)
 
@@ -631,6 +665,8 @@ def get_frontier(ctx: ContractContext, depth: int) -> Iterable[Exec]:
     Otherwise, the generator from _compute_frontier() is returned.
 
     NOTE: This is not thread-safe.
+    Using the --early-exit option may result in incomplete exploration of the current depth if a counterexample is found during the first invariant test.
+    As a result, subsequent tests might only consider a partially computed frontier.
     """
     if (frontier := ctx.frontier_states.get(depth)) is not None:
         return frontier
@@ -995,35 +1031,44 @@ def reset(solver):
     solver.reset()
 
 
-def process_target_senders(ctx: ContractContext, setup_ex):
+def setup_invariant_test_context(ctx: ContractContext, setup_ex: Exec):
+    # skip if forge-std/Test.sol is not imported
+    if "targetSenders()" not in ctx.abi:
+        return
+
+    try:
+        process_target_senders(ctx, setup_ex)
+        process_target_contracts(ctx, setup_ex)
+        process_target_selectors(ctx, setup_ex)
+    except Exception as err:
+        warn(
+            f"An error occurred in setup_invariant_test_context and was ignored: {type(err).__name__}: {err}"
+        )
+
+
+def process_target_senders(ctx: ContractContext, setup_ex: Exec):
     args = ctx.args
 
     # function targetSenders() public view returns (address[] memory targetedSenders_)
-    targetSenders_selector = "3e5e3c23"
-    targetSenders_info = FunctionInfo(ctx.name, "targetSenders", "targetSenders()", targetSenders_selector)
+    selector = "3e5e3c23"
+    funname = "targetSenders"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
 
-    sevm = SEVM(args, targetSenders_info)
-
-    calldata, dyn_params = mk_calldata(ctx.abi, targetSenders_info, args)
-    setup_ex.path.process_dyn_params(dyn_params)
-
-    setup_ex.context = CallContext(
-        message=Message(
-            target=FOUNDRY_TEST,
-            caller=FOUNDRY_CALLER,
-            origin=FOUNDRY_ORIGIN,
-            value=0,
-            data=calldata,
-            call_scheme=EVM.CALL,
-        ),
+    exs = run_target_function(
+        args,
+        setup_ex,
+        FOUNDRY_TEST,
+        ctx.abi,
+        fun_info,
+        FOUNDRY_ORIGIN,
+        FOUNDRY_CALLER,
+        0,
     )
-
-    setup_ex.reset()
-    exs = list(sevm.run(setup_ex))
+    exs = list(exs)
 
     # sanity check
     if len(exs) != 1:
-        raise ValueError(f"targetSenders(): # of paths: {len(exs)}")
+        raise ValueError(f"{funname}(): # of paths: {len(exs)}")
 
     [ex] = exs
 
@@ -1042,6 +1087,154 @@ def process_target_senders(ctx: ContractContext, setup_ex):
         target_sender = extract_bytes(returndata, offset + 32 + idx * 32, 32)
         target_sender = con_addr(int.from_bytes(target_sender, "big"))
         ctx.target_senders.append(target_sender)
+
+
+def process_target_contracts(ctx: ContractContext, setup_ex: Exec):
+    args = ctx.args
+
+    # function targetContracts() public view returns (address[] memory targetedContracts_) {
+    selector = "3f7286f4"
+    funname = "targetContracts"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+
+    exs = run_target_function(
+        args,
+        setup_ex,
+        FOUNDRY_TEST,
+        ctx.abi,
+        fun_info,
+        FOUNDRY_ORIGIN,
+        FOUNDRY_CALLER,
+        0,
+    )
+    exs = list(exs)
+
+    # sanity check
+    if len(exs) != 1:
+        raise ValueError(f"{funname}(): # of paths: {len(exs)}")
+
+    [ex] = exs
+
+    returndata = ex.context.output.data
+
+    offset = int_of(
+        extract_bytes(returndata, 0, 32),
+        "symbolic offset for bytes argument",
+    )
+    length = int_of(
+        extract_bytes(returndata, offset, 32),
+        "symbolic size for bytes argument",
+    )
+
+    for idx in range(length):
+        target_contract = extract_bytes(returndata, offset + 32 + idx * 32, 32)
+        target_contract = con_addr(int.from_bytes(target_contract, "big"))
+        ctx.target_contracts.add(target_contract)
+
+
+def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
+    args = ctx.args
+
+    # function targetSelectors() public view returns (FuzzSelector[] memory targetedSelectors_) {
+    selector = "916a17c6"
+    funname = "targetSelectors"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+
+    exs = run_target_function(
+        args,
+        setup_ex,
+        FOUNDRY_TEST,
+        ctx.abi,
+        fun_info,
+        FOUNDRY_ORIGIN,
+        FOUNDRY_CALLER,
+        0,
+    )
+    exs = list(exs)
+
+    # sanity check
+    if len(exs) != 1:
+        raise ValueError(f"{funname}(): # of paths: {len(exs)}")
+
+    [ex] = exs
+
+    returndata = ex.context.output.data
+
+    offset = int_of(
+        extract_bytes(returndata, 0, 32),
+        "symbolic offset for bytes argument",
+    )
+    length = int_of(
+        extract_bytes(returndata, offset, 32),
+        "symbolic size for bytes argument",
+    )
+
+    start = offset + 32
+    for idx in range(length):
+        item_offset = int_of(
+            extract_bytes(returndata, start + idx * 32, 32),
+            "symbolic offset for FuzzSelector items",
+        )
+        item_start = start + item_offset
+
+        target_contract = extract_bytes(returndata, item_start, 32)
+        target_contract = con_addr(int.from_bytes(target_contract, "big"))
+
+        selectors_offset = item_start + 64
+        selectors_count = int_of(
+            extract_bytes(returndata, selectors_offset, 32),
+            "symbolic size for FuzzSelector items",
+        )
+        selectors_start = selectors_offset + 32
+        for selector_idx in range(selectors_count):
+            # read the first four bytes
+            target_selector = extract_bytes(
+                returndata, selectors_start + selector_idx * 32, 4
+            )
+            ctx.target_selectors[target_contract].add(target_selector)
+
+
+def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
+    target_contracts = ctx.target_contracts
+    target_selectors = ctx.target_selectors
+
+    resolved_target_contracts = (
+        target_contracts | target_selectors.keys()
+        if target_contracts
+        else ex.code.keys()
+    )
+
+    # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it, even if targetContract(FOUNDRY_TEST) is provided.
+    result = (
+        resolved_target_contracts
+        if target_selectors[FOUNDRY_TEST]
+        else resolved_target_contracts - {FOUNDRY_TEST}
+    )
+
+    if not result:
+        msg = (
+            "A targetSelector() must be specified if the test contract is set as a target."
+            if target_contracts
+            else "No contracts have been deployed during setUp()."
+        )
+        raise HalmosException(f"No target contracts available. {msg}")
+
+    return result
+
+
+def resolve_target_selectors(
+    ctx: ContractContext, addr: Address, method_identifiers: dict
+) -> Iterator[str]:
+    method_identifiers = method_identifiers.items()
+
+    if target_selectors := ctx.target_selectors[addr]:
+        for fun_sig, fun_selector in method_identifiers:
+            # TODO: Refactor contract_json to use bytes for method_identifiers instead of strings
+            if bytes.fromhex(fun_selector) in target_selectors:
+                yield (fun_sig, fun_selector)
+
+    else:
+        yield from method_identifiers
 
 
 def run_contract(ctx: ContractContext) -> list[TestResult]:
@@ -1064,8 +1257,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
         setup_ex = setup(setup_ctx)
         setup_ex.path_slice()
 
-        process_target_senders(ctx, setup_ex)
-
+        setup_invariant_test_context(ctx, setup_ex)
     except Exception as err:
         error(f"{setup_info.sig} failed: {type(err).__name__}: {err}")
         if args.debug:
