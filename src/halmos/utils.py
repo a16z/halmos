@@ -23,6 +23,7 @@ from z3 import (
     Function,
     If,
     Not,
+    Or,
     SignExt,
     SolverFor,
     eq,
@@ -149,6 +150,13 @@ def wrap(x: Any) -> Word:
 def concat(args):
     if len(args) > 1:
         return Concat([wrap(x) for x in args])
+    else:
+        return args[0]
+
+
+def smt_or(args):
+    if len(args) > 1:
+        return Or(args)
     else:
         return args[0]
 

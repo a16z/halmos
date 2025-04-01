@@ -24,7 +24,6 @@ import rich
 from z3 import (
     BitVec,
     BoolRef,
-    Or,
     ZeroExt,
     set_option,
     unsat,
@@ -114,6 +113,7 @@ from .utils import (
     indent_text,
     int_of,
     red,
+    smt_or,
     uid,
     unbox_int,
     yellow,
@@ -525,7 +525,9 @@ def run_target_contract(
 
             # restrict msg.sender to the specified target senders
             msg_sender_cond = (
-                Or([msg_sender == target_sender for target_sender in target_senders])
+                smt_or(
+                    [msg_sender == target_sender for target_sender in target_senders]
+                )
                 if target_senders
                 else None
             )
@@ -1086,7 +1088,7 @@ def process_target_senders(ctx: ContractContext, setup_ex: Exec):
     for idx in range(length):
         target_sender = extract_bytes(returndata, start + idx * 32, 32)
         target_sender = con_addr(int.from_bytes(target_sender, "big"))
-        target_senders.append(target_sender)
+        target_senders.add(target_sender)
 
 
 def process_target_contracts(ctx: ContractContext, setup_ex: Exec):

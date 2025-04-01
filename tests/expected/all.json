@@ -1683,7 +1683,29 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/InvariantSender.t.sol:InvariantSenderTest_non_owner": [
+        "test/InvariantSender.t.sol:InvariantSenderTest_all": [
+            {
+                "name": "invariant_num()",
+                "exitcode": 1,
+                "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/InvariantSender.t.sol:InvariantSenderTest_non_owner_1": [
+            {
+                "name": "invariant_num()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/InvariantSender.t.sol:InvariantSenderTest_non_owner_2": [
             {
                 "name": "invariant_num()",
                 "exitcode": 0,

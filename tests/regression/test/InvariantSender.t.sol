@@ -25,7 +25,7 @@ abstract contract InvariantSenderTest is Test {
     }
 }
 
-contract InvariantSenderTest_non_owner is InvariantSenderTest {
+contract InvariantSenderTest_non_owner_1 is InvariantSenderTest {
     function setUp() public {
         c = new C();
 
@@ -33,7 +33,24 @@ contract InvariantSenderTest_non_owner is InvariantSenderTest {
     }
 }
 
+contract InvariantSenderTest_non_owner_2 is InvariantSenderTest {
+    function setUp() public {
+        c = new C();
+
+        targetSender(address(0xdead));
+        targetSender(address(0xbeef));
+    }
+}
+
 contract InvariantSenderTest_owner is InvariantSenderTest {
+    function setUp() public {
+        c = new C();
+
+        targetSender(address(this));
+    }
+}
+
+contract InvariantSenderTest_all is InvariantSenderTest {
     function setUp() public {
         c = new C();
     }

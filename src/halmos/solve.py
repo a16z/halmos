@@ -99,7 +99,7 @@ class ContractContext:
     probes_reported: set[FunctionInfo] = field(default_factory=set)
 
     # invariant testing context
-    target_senders: list[Address] = field(default_factory=list)
+    target_senders: set[Address] = field(default_factory=set)
     target_contracts: set[Address] = field(default_factory=set)
     target_selectors: dict[Address, set[bytes]] = field(
         default_factory=lambda: defaultdict(set)
