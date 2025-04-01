@@ -446,7 +446,7 @@ def run_target_function(
         path.process_dyn_params(dyn_params)
 
         # add (optional) constraints on msg_sender
-        if msg_sender_cond:
+        if msg_sender_cond is not None:
             path.append(msg_sender_cond)
 
         # construct the transaction message

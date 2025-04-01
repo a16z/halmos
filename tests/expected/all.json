@@ -1683,6 +1683,28 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/InvariantSender.t.sol:InvariantSenderTest_non_owner": [
+            {
+                "name": "invariant_num()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/InvariantSender.t.sol:InvariantSenderTest_owner": [
+            {
+                "name": "invariant_num()",
+                "exitcode": 1,
+                "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/InvariantTarget.t.sol:InvariantTargetTest_0": [
             {
                 "name": "invariant_0()",
