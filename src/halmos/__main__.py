@@ -445,6 +445,7 @@ def run_target_function(
         )
         path.process_dyn_params(dyn_params)
 
+        # add (optional) constraints on msg_sender
         if msg_sender_cond:
             path.append(msg_sender_cond)
 
@@ -484,6 +485,7 @@ def run_target_contract(
         ValueError: If the contract name cannot be found for the given address.
     """
     args = ctx.args
+    target_senders = ctx.target_senders
 
     # retrieve the contract name and metadata from the given address
     code = ex.code[addr]
@@ -521,14 +523,10 @@ def run_target_contract(
                 f"halmos_msg_sender_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
             )
 
+            # restrict msg.sender to the specified target senders
             msg_sender_cond = (
-                Or(
-                    [
-                        msg_sender == target_sender
-                        for target_sender in ctx.target_senders
-                    ]
-                )
-                if ctx.target_senders
+                Or([msg_sender == target_sender for target_sender in target_senders])
+                if target_senders
                 else None
             )
 
@@ -1083,10 +1081,12 @@ def process_target_senders(ctx: ContractContext, setup_ex: Exec):
         "symbolic size for bytes argument",
     )
 
+    target_senders = ctx.target_senders
+    start = offset + 32
     for idx in range(length):
-        target_sender = extract_bytes(returndata, offset + 32 + idx * 32, 32)
+        target_sender = extract_bytes(returndata, start + idx * 32, 32)
         target_sender = con_addr(int.from_bytes(target_sender, "big"))
-        ctx.target_senders.append(target_sender)
+        target_senders.append(target_sender)
 
 
 def process_target_contracts(ctx: ContractContext, setup_ex: Exec):
@@ -1126,10 +1126,12 @@ def process_target_contracts(ctx: ContractContext, setup_ex: Exec):
         "symbolic size for bytes argument",
     )
 
+    target_contracts = ctx.target_contracts
+    start = offset + 32
     for idx in range(length):
-        target_contract = extract_bytes(returndata, offset + 32 + idx * 32, 32)
+        target_contract = extract_bytes(returndata, start + idx * 32, 32)
         target_contract = con_addr(int.from_bytes(target_contract, "big"))
-        ctx.target_contracts.add(target_contract)
+        target_contracts.add(target_contract)
 
 
 def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
@@ -1180,6 +1182,8 @@ def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
         target_contract = extract_bytes(returndata, item_start, 32)
         target_contract = con_addr(int.from_bytes(target_contract, "big"))
 
+        target_selectors = ctx.target_selectors[target_contract]
+
         selectors_offset = item_start + 64
         selectors_count = int_of(
             extract_bytes(returndata, selectors_offset, 32),
@@ -1191,7 +1195,7 @@ def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
             target_selector = extract_bytes(
                 returndata, selectors_start + selector_idx * 32, 4
             )
-            ctx.target_selectors[target_contract].add(target_selector)
+            target_selectors.add(target_selector)
 
 
 def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
