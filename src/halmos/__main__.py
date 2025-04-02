@@ -277,7 +277,7 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
 
     # sanity check
     if len(exs) != 1:
-        raise ValueError(f"constructor: # of paths: {len(exs)}")
+        raise HalmosException(f"constructor: # of paths: {len(exs)}")
 
     [ex] = exs
 
@@ -285,12 +285,10 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
         print("Constructor trace:")
         render_trace(ex.context)
 
-    error_output = ex.context.output.error
-    returndata = ex.context.output.data
-    if error_output:
-        raise ValueError(
-            f"constructor failed, error={error_output} returndata={returndata}"
-        )
+    output = ex.context.output
+    returndata = output.data
+    if output.error is not None or not returndata:
+        raise HalmosException(f"constructor failed: {output.error=} {returndata=}")
 
     deployed_bytecode = Contract(returndata)
     ex.try_resolve_contract_info(deployed_bytecode)
@@ -1068,11 +1066,15 @@ def process_target_senders(ctx: ContractContext, setup_ex: Exec):
 
     # sanity check
     if len(exs) != 1:
-        raise ValueError(f"{funname}(): # of paths: {len(exs)}")
+        raise HalmosException(f"{funname}(): # of paths: {len(exs)}")
 
     [ex] = exs
 
-    returndata = ex.context.output.data
+    output = ex.context.output
+    returndata = output.data
+
+    if output.error is not None or not returndata:
+        raise HalmosException(f"{funname}(): {output.error=} {returndata=}")
 
     offset = int_of(
         extract_bytes(returndata, 0, 32),
@@ -1113,11 +1115,15 @@ def process_target_contracts(ctx: ContractContext, setup_ex: Exec):
 
     # sanity check
     if len(exs) != 1:
-        raise ValueError(f"{funname}(): # of paths: {len(exs)}")
+        raise HalmosException(f"{funname}(): # of paths: {len(exs)}")
 
     [ex] = exs
 
-    returndata = ex.context.output.data
+    output = ex.context.output
+    returndata = output.data
+
+    if output.error is not None or not returndata:
+        raise HalmosException(f"{funname}(): {output.error=} {returndata=}")
 
     offset = int_of(
         extract_bytes(returndata, 0, 32),
@@ -1158,11 +1164,15 @@ def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
 
     # sanity check
     if len(exs) != 1:
-        raise ValueError(f"{funname}(): # of paths: {len(exs)}")
+        raise HalmosException(f"{funname}(): # of paths: {len(exs)}")
 
     [ex] = exs
 
-    returndata = ex.context.output.data
+    output = ex.context.output
+    returndata = output.data
+
+    if output.error is not None or not returndata:
+        raise HalmosException(f"{funname}(): {output.error=} {returndata=}")
 
     offset = int_of(
         extract_bytes(returndata, 0, 32),
