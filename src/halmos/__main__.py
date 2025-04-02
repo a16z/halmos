@@ -54,7 +54,6 @@ from .exceptions import FailCheatcode, HalmosException
 from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
 from .logs import (
     COUNTEREXAMPLE_INVALID,
-    COUNTEREXAMPLE_UNKNOWN,
     INTERNAL_ERROR,
     LOOP_BOUND,
     REVERT_ALL,
@@ -758,7 +757,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
         # we are done solving, process and triage the result
         #
 
-        solver_output = future.result()
+        solver_output: SolverOutput = future.result()
         result, model = solver_output.result, solver_output.model
 
         if ctx.solving_ctx.executor.is_shutdown():
@@ -774,9 +773,14 @@ def run_test(ctx: FunctionContext) -> TestResult:
                 ctx.append_unsat_core(solver_output.unsat_core)
             return
 
+        if result == "err":
+            error(
+                f"solver error: {solver_output.error} (returncode={solver_output.returncode})"
+            )
+            return
+
         # model could be an empty dict here, so compare to None explicitly
         if model is None:
-            warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
             return
 
         # print counterexample trace
@@ -959,6 +963,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     if counter["sat"] > 0:
         passfail = red("[FAIL]")
         exitcode = Exitcode.COUNTEREXAMPLE.value
+    elif counter["err"] > 0:
+        passfail = red("[ERROR]")
+        exitcode = Exitcode.EXCEPTION.value
     elif counter["unknown"] > 0:
         passfail = yellow("[TIMEOUT]")
         exitcode = Exitcode.TIMEOUT.value
