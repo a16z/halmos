@@ -264,9 +264,6 @@ class SolverOutput:
             case "unknown":
                 return SolverOutput(unknown, returncode, path_id)
             case _:
-                print(f"{stdout=}")
-                print(f"{stderr=}")
-                print(f"{returncode=}")
                 return SolverOutput("err", returncode, path_id, error=stderr)
 
 
