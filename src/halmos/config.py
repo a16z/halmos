@@ -518,6 +518,12 @@ class Config:
         group=experimental,
     )
 
+    flamegraph: bool = arg(
+        help="generate a flamegraph of the execution",
+        global_default=False,
+        group=experimental,
+    )
+
     ### Deprecated
 
     test_parallel: bool = arg(
