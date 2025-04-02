@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 contract ArithTest {
-
     function unchecked_div(uint x, uint y) public pure returns (uint ret) {
         assembly {
             ret := div(x, y)
@@ -41,7 +40,6 @@ contract ArithTest {
         }
     }
 
-    /// @custom:halmos --solver yices
     function check_Div_fail(uint x, uint y) public pure {
         require(x > y);
 
@@ -52,7 +50,10 @@ contract ArithTest {
         assert(q != 0); // counterexample: y == 0
     }
 
-    /// @custom:halmos --solver yices
+    // this would run better with `@custom:halmos --solver yices`
+    // but the static binaries for yices on macOS actually link against libcudd
+    // which is not available on GitHub Actions runners
+    // https://github.com/a16z/halmos/issues/492
     function check_Div_pass(uint x, uint y) public pure {
         require(x > y);
         require(y > 0);
