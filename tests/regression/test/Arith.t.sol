@@ -41,6 +41,7 @@ contract ArithTest {
         }
     }
 
+    /// @custom:halmos --solver yices
     function check_Div_fail(uint x, uint y) public pure {
         require(x > y);
 
@@ -51,6 +52,7 @@ contract ArithTest {
         assert(q != 0); // counterexample: y == 0
     }
 
+    /// @custom:halmos --solver yices
     function check_Div_pass(uint x, uint y) public pure {
         require(x > y);
         require(y > 0);

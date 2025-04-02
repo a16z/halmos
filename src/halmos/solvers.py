@@ -12,6 +12,7 @@ from pathlib import Path
 import requests
 
 from halmos.logs import debug, error, info, warn
+from halmos.utils import format_size
 
 # Define the cache directory for solvers
 SOLVER_CACHE_DIR = Path.home() / ".halmos" / "solvers"
@@ -24,6 +25,9 @@ YICES_BASE_URL = "https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.
 class MachineInfo:
     system: str
     machine: str
+
+    def __str__(self) -> str:
+        return f"{self.system}-{self.machine}"
 
 
 @dataclass(frozen=True, eq=False, order=False, slots=True)
@@ -43,9 +47,6 @@ class SolverInfo:
 
     # options/arguments/flags needed for this solver
     arguments: list[str]
-
-    # name of the final binary file in the cache
-    binary_name_in_cache: str = ""  # defaults to binary_name_in_archive if empty
 
 
 macos_intel = MachineInfo(system="Darwin", machine="x86_64")
@@ -83,15 +84,12 @@ SUPPORTED_SOLVERS: dict[str, SolverInfo] = {
                 binary_name_in_archive="yices-2.6.5/bin/yices-smt2.exe",
             ),
         },
-        binary_name_in_archive="yices-2.6.5/bin/yices-smt2",
-        binary_name_in_cache="yices",
         arguments=["--smt2-model-format"],
     ),
     # for z3 we just rely on PATH/venv
     "z3": SolverInfo(
         name="z3",
         downloads={},
-        binary_name_in_archive="z3",
         arguments=[],
     ),
 }
@@ -106,32 +104,41 @@ def get_platform_arch() -> MachineInfo:
     return MachineInfo(system=system, machine=machine)
 
 
-def _verify_checksum(file_path: Path, expected_checksum: str) -> bool:
-    """Verifies the SHA256 checksum of a file."""
+def binary_path_in_cache(solver_name: str) -> Path:
+    """
+    Gets the (expected) path to the binary in the cache.
+
+    Does not check if the file exists.
+    """
+
+    suffix = ".exe" if platform.system() == "Windows" else ""
+    return SOLVER_CACHE_DIR / f"{solver_name}{suffix}"
+
+
+def verify_checksum(file_path: Path, expected_checksum: str) -> bool:
+    """
+    Verifies the SHA256 checksum of a file.
+
+    Raises a ValueError if the checksum does not match.
+    """
 
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as f:
         # Read and update hash string value in blocks of 4K
         for byte_block in iter(lambda: f.read(4096), b""):
             sha256_hash.update(byte_block)
-    calculated_checksum = sha256_hash.hexdigest()
-    if calculated_checksum != expected_checksum:
-        warn(
-            f"Checksum mismatch for {file_path}: Expected {expected_checksum}, Got {calculated_checksum}"
-        )
-        return False
-    debug(f"Checksum verified for {file_path}")
+    actual = sha256_hash.hexdigest().lower()
+    expected = expected_checksum.lower()
+    if actual != expected:
+        raise ValueError(f"{expected=}, {actual=}")
+
     return True
 
 
-def _download(
+def download(
     download_info: DownloadInfo, output_dir: Path, timeout_seconds: int = 10
 ) -> Path | None:
-    """
-    Downloads the solver archive.
-
-    May throw requests.exceptions.RequestException
-    """
+    """Downloads the solver archive."""
 
     url = download_info.base_url + "/" + download_info.filename
     response = requests.get(url, stream=True, timeout=timeout_seconds)
@@ -145,7 +152,7 @@ def _download(
     return archive_path
 
 
-def _list_archive(archive_path: Path) -> None:
+def list_archive(archive_path: Path) -> None:
     """Lists the contents of the solver archive."""
 
     if archive_path.name.endswith(".tar.gz"):
@@ -172,197 +179,73 @@ def _list_archive(archive_path: Path) -> None:
         return None
 
 
-def _download_and_extract_solver(
-    solver_info: SolverInfo, url: str, expected_checksum: str
-) -> Path | None:
-    """Downloads, verifies, and extracts the solver archive."""
-    binary_path_in_cache = SOLVER_CACHE_DIR / (
-        solver_info.binary_name_in_cache or solver_info.binary_name_in_archive
-    )
+def extract_file(archive_path: Path, filename: str) -> bytes | None:
+    """Extracts a file from the archive."""
+
+    if archive_path.name.endswith(".tar.gz"):
+        with tarfile.open(archive_path, "r:gz") as tar:
+            # may raise KeyError
+            member = tar.getmember(filename)
+            return tar.extractfile(member).read()
+    elif archive_path.name.endswith(".zip"):
+        with zipfile.ZipFile(archive_path, "r") as zip:
+            # may raise KeyError
+            member = zip.getinfo(filename)
+            return zip.read(member)
+    else:
+        raise RuntimeError(f"Unsupported archive format: {archive_path.suffix}")
+
+
+def install_solver(solver_info: SolverInfo) -> Path:
+    """
+    Downloads, verifies, and extracts the solver archive.
+
+    The caller is responsible for handling exceptions.
+    """
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        archive_path = Path(tmpdir) / Path(url).name
-        info(f"Downloading {solver_info.name} from {url}...")
-        try:
-            response = requests.get(url, stream=True, timeout=300)  # 5 min timeout
-            response.raise_for_status()
-            with open(archive_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
-            info(f"Downloaded to {archive_path}")
+        machine_tuple = get_platform_arch()
+        download_info = solver_info.downloads.get(machine_tuple)
+        if not download_info:
+            raise ValueError(
+                f"No download URL configured for solver '{solver_info.name}'"
+            )
 
-            # Verify checksum
-            if not _verify_checksum(archive_path, expected_checksum):
-                # Keep the downloaded file for inspection if checksum fails? For now, let's delete.
-                error(
-                    f"Checksum verification failed for {archive_path}. Aborting installation."
-                )
-                return None
+        # Download the archive
+        url = download_info.base_url + "/" + download_info.filename
+        info(f"Downloading from {url}...")
+        archive_path = download(download_info, Path(tmpdir))
 
-            # Extract the archive
-            info(f"Extracting {archive_path}...")
-            if url.endswith(".tar.gz"):
-                with tarfile.open(archive_path, "r:gz") as tar:
-                    # Find the binary member
-                    # Search within common parent directories too (e.g., yices-2.6.5-..../bin/yices-smt2)
-                    member_to_extract = None
-                    for member in tar.getmembers():
-                        if member.name.endswith(
-                            f"/{solver_info.binary_name_in_archive}"
-                        ):
-                            member_to_extract = member
-                            break
+        if not archive_path:
+            raise RuntimeError(f"Failed to download {solver_info.name} from {url}")
 
-                    if not member_to_extract:
-                        error(
-                            f"Could not find binary '{solver_info.binary_name_in_archive}' in {archive_path}"
-                        )
-                        return None
+        # Verify checksum
+        info(f"Verifying sha256 hash for {archive_path}... ")
+        verify_checksum(archive_path, download_info.checksum)
 
-                    # Extract just the binary to the temp dir first
-                    member_to_extract.name = Path(
-                        member_to_extract.name
-                    ).name  # Extract without full path
-                    tar.extract(member_to_extract, path=tmpdir)
-                    extracted_binary_path = Path(tmpdir) / member_to_extract.name
+        # Extract the binary from the archive
+        binary_filename = download_info.binary_name_in_archive
+        info(f"Extracting {binary_filename} from {archive_path}...")
+        content = extract_file(archive_path, binary_filename)
+        if not content:
+            raise RuntimeError(
+                f"Failed to extract {binary_filename} from {archive_path}"
+            )
 
-                    # Move to cache and make executable
-                    shutil.move(str(extracted_binary_path), str(binary_path_in_cache))
-                    binary_path_in_cache.chmod(
-                        binary_path_in_cache.stat().st_mode
-                        | stat.S_IXUSR
-                        | stat.S_IXGRP
-                        | stat.S_IXOTH
-                    )
-                    info(
-                        f"Solver '{solver_info.name}' installed to {binary_path_in_cache}"
-                    )
-                    return binary_path_in_cache
-            # Add handling for other archive types (e.g., .zip) if needed
-            else:
-                error(f"Unsupported archive format for URL: {url}")
-                return None
+        # Write the binary to the cache
+        install_path = binary_path_in_cache(solver_info.name)
+        if install_path.exists():
+            raise RuntimeError(f"File already exists: {install_path}")
 
-        except requests.exceptions.RequestException as e:
-            error(f"Failed to download {solver_info.name}: {e}")
-            return None
-        except tarfile.TarError as e:
-            error(f"Failed to extract {archive_path}: {e}")
-            return None
-        except Exception as e:
-            error(f"An unexpected error occurred during solver installation: {e}")
-            return None
+        install_path.write_bytes(content)
+        info(f"Wrote {install_path} ({format_size(len(content))})")
 
-    return None  # Should not be reached if successful
+        # Make the binary executable
+        install_path.chmod(install_path.stat().st_mode | stat.S_IXUSR)
+
+        return install_path
 
 
-def find_solver_binary(solver_name: str) -> Path | None:
-    """
-    Finds the solver binary path.
-    Checks cache first, then PATH, then venv (for z3).
-    """
-    if solver_name not in SUPPORTED_SOLVERS:
-        warn(f"Solver '{solver_name}' is not explicitly supported by halmos.")
-        # Still try PATH as a fallback
-        return shutil.which(solver_name)
-
-    solver_info = SUPPORTED_SOLVERS[solver_name]
-    binary_name = solver_info.binary_name_in_cache or solver_info.binary_name_in_archive
-    cached_binary_path = SOLVER_CACHE_DIR / binary_name
-
-    # 1. Check cache
-    if cached_binary_path.exists() and os.access(cached_binary_path, os.X_OK):
-        debug(f"Found {solver_name} binary in cache: {cached_binary_path}")
-        return cached_binary_path
-
-    # 2. Check PATH (using the cached name first, then the base name)
-    path_binary = shutil.which(binary_name) or shutil.which(
-        solver_info.binary_name_in_archive
-    )
-    if path_binary:
-        debug(f"Found {solver_name} binary in PATH: {path_binary}")
-        return Path(path_binary)
-
-    # 3. Special check for z3 in venv (using logic from config.py)
-    if solver_name == "z3":
-        venv_z3 = find_z3_path_in_venv()  # We'll need to define or import this helper
-        if venv_z3:
-            debug(f"Found z3 binary in venv: {venv_z3}")
-            return venv_z3
-
-    debug(f"Solver binary '{binary_name}' not found in cache or PATH.")
-    return None
-
-
-def ensure_solver_available(solver_name: str) -> Path | None:
-    """
-    Ensures the specified solver is available, downloading it if necessary.
-    Returns the path to the executable binary or None if unavailable/installation fails.
-    """
-    binary_path = find_solver_binary(solver_name)
-    if binary_path:
-        return binary_path
-
-    # If not found, attempt download for supported solvers with URLs
-    if solver_name not in SUPPORTED_SOLVERS:
-        warn(f"Cannot automatically install unsupported solver: {solver_name}")
-        return None
-
-    solver_info = SUPPORTED_SOLVERS[solver_name]
-    system, machine = get_platform_arch()
-    platform_key = (system, machine)
-
-    if not solver_info.download_urls:
-        warn(
-            f"No download URLs configured for solver '{solver_name}'. Please install it manually and ensure it's in PATH."
-        )
-        return None
-
-    if platform_key not in solver_info.download_urls:
-        error(
-            f"No download URL configured for solver '{solver_name}' on platform {system}/{machine}."
-        )
-        return None
-
-    url = solver_info.download_urls[platform_key]
-    expected_checksum = solver_info.checksums.get(url)
-
-    if not expected_checksum or expected_checksum.startswith("EXPECTED_CHECKSUM"):
-        # For now, proceed without checksum if not defined or placeholder, but warn
-        warn(
-            f"Checksum not defined for {solver_name} URL: {url}. Cannot verify integrity."
-        )
-        # In a stricter mode, we might return None here
-        expected_checksum = None  # Or set to None to skip verification
-
-    # Attempt download and installation
-    installed_path = _download_and_extract_solver(solver_info, url, expected_checksum)
-    return installed_path
-
-
-def get_solver_command(solver_name: str) -> list[str] | None:
-    """
-    Gets the full command list (binary path + arguments) for the specified solver.
-    Ensures the solver is available first.
-    """
-    solver_binary_path = ensure_solver_available(solver_name)
-    if not solver_binary_path:
-        error(f"Solver '{solver_name}' could not be found or installed.")
-        return None
-
-    if solver_name not in SUPPORTED_SOLVERS:
-        # For unsupported solvers found in PATH, return just the binary path
-        return [str(solver_binary_path)]
-
-    solver_info = SUPPORTED_SOLVERS[solver_name]
-    command = [str(solver_binary_path)] + solver_info.arguments
-    debug(f"Solver command for '{solver_name}': {' '.join(command)}")
-    return command
-
-
-# Helper function to find z3 in venv (similar to the one in config.py)
-# Consider moving the original `find_venv_root` and `find_z3_path` to a common utils module
-# For now, let's duplicate/adapt it here.
 def find_venv_root() -> Path | None:
     if "VIRTUAL_ENV" in os.environ:
         return Path(os.environ["VIRTUAL_ENV"])
@@ -388,6 +271,89 @@ def find_z3_path_in_venv() -> Path | None:
     return None
 
 
+def find_solver_binary(solver_name: str) -> Path | None:
+    """
+    Finds the solver binary path.
+    Checks cache first, then PATH, then venv (for z3).
+    """
+
+    if solver_name not in SUPPORTED_SOLVERS:
+        warn(f"Solver '{solver_name}' is not explicitly supported by halmos.")
+
+        # try PATH as a fallback
+        return shutil.which(solver_name)
+
+    cached_binary_path = SOLVER_CACHE_DIR / solver_name
+
+    # 1. Check cache
+    if cached_binary_path.exists() and os.access(cached_binary_path, os.X_OK):
+        debug(f"Found {solver_name} binary in cache: {cached_binary_path}")
+        return cached_binary_path
+
+    # 2. Check PATH
+    # path_binary = shutil.which(solver_name)
+    # if path_binary:
+    #     debug(f"Found {solver_name} binary in PATH: {path_binary}")
+    #     return Path(path_binary)
+
+    # 3. Special check for z3 in venv
+    if solver_name == "z3":
+        venv_z3 = find_z3_path_in_venv()
+        if venv_z3:
+            debug(f"Found z3 binary in venv: {venv_z3}")
+            return venv_z3
+
+    debug(f"Solver binary '{solver_name}' not found in cache or PATH.")
+    return None
+
+
+def ensure_solver_available(solver_name: str) -> Path:
+    """
+    Ensures the specified solver is available, downloading it if necessary.
+    Returns the path to the executable binary or None if unavailable/installation fails.
+    """
+
+    binary_path = find_solver_binary(solver_name)
+    if binary_path:
+        return binary_path
+
+    # If not found, attempt download for supported solvers with URLs
+    solver_info = SUPPORTED_SOLVERS.get(solver_name)
+    if not solver_info:
+        raise ValueError(f"Unsupported solver: {solver_name}")
+
+    # Attempt download and installation
+    installed_path = install_solver(solver_info)
+    return installed_path
+
+
+# this is the public entrypoint for this module
+def get_solver_command(solver_name: str) -> list[str]:
+    """
+    Gets the full command list (binary path + arguments) for the specified solver.
+    Ensures the solver is available first.
+    """
+
+    solver_binary_path = ensure_solver_available(solver_name)
+    if not solver_binary_path:
+        raise RuntimeError(f"Solver '{solver_name}' could not be found or installed.")
+
+    solver_info = SUPPORTED_SOLVERS.get(solver_name)
+    if not solver_info:
+        # For unsupported solvers found in PATH, return just the binary path
+        return [str(solver_binary_path)]
+
+    command = [str(solver_binary_path)] + solver_info.arguments
+    debug(f"Solver command for '{solver_name}': {' '.join(command)}")
+    return command
+
+
+# python -m halmos.solvers <solver_name>
+# useful when adding a new solver:
+# - tests the download for all platforms
+# - prints the checksums,
+# - lists the archive contents
+# - verifies that we can extract the binary from the archive
 if __name__ == "__main__":
     import sys
     import time
@@ -397,21 +363,33 @@ if __name__ == "__main__":
         print("Supported:", list(SUPPORTED_SOLVERS.keys()))
         sys.exit(1)
 
-    solver_to_test = sys.argv[1]
-    solver_info: SolverInfo = SUPPORTED_SOLVERS[solver_to_test]
+    solver_name = sys.argv[1]
+    solver_info: SolverInfo = SUPPORTED_SOLVERS[solver_name]
 
     with tempfile.TemporaryDirectory(delete=False) as tmpdir:
-        for download_info in solver_info.downloads.values():
+        for machine_tuple, download_info in solver_info.downloads.items():
             print(f"Downloading {download_info.base_url}/{download_info.filename}")
-            archive_path = _download(download_info, Path(tmpdir))
+            archive_path = download(download_info, Path(tmpdir))
 
             print(f"Downloaded to {archive_path}")
-            _verify_checksum(archive_path, download_info.checksum)
+            verify_checksum(archive_path, download_info.checksum)
 
             print("Listing archive contents:")
-            _list_archive(archive_path)
+            list_archive(archive_path)
 
-            print()
+            filename = download_info.binary_name_in_archive
+            print(f"\nExtracting {filename} from {archive_path}")
+            content = extract_file(archive_path, filename)
+
+            if not content:
+                print(f"Failed to extract {filename} from {archive_path}")
+                continue
+
+            output_path = Path(tmpdir) / f"{machine_tuple}-{solver_name}"
+            output_path.write_bytes(content)
+            output_path.chmod(output_path.stat().st_mode | stat.S_IXUSR)
+
+            print(f"Wrote {format_size(len(content))} to {output_path}")
 
             # avoid rate limiting
             time.sleep(1)

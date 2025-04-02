@@ -7,7 +7,6 @@ from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from enum import Enum
-from pathlib import Path
 from typing import Any
 
 import toml
@@ -31,29 +30,6 @@ class TraceEvent(Enum):
     LOG = "LOG"
     SSTORE = "SSTORE"
     SLOAD = "SLOAD"
-
-
-def find_venv_root() -> Path | None:
-    # If the environment variable is set, use that
-    if "VIRTUAL_ENV" in os.environ:
-        return Path(os.environ["VIRTUAL_ENV"])
-
-    # Otherwise, if we're in a venv, sys.prefix != sys.base_prefix
-    if sys.prefix != sys.base_prefix:
-        return Path(sys.prefix)
-
-    # Not in a virtual environment
-    return None
-
-
-def find_z3_path() -> Path | None:
-    venv_path = find_venv_root()
-    if venv_path:
-        z3_bin = "z3.exe" if sys.platform == "win32" else "z3"
-        z3_path = venv_path / "bin" / z3_bin
-        if z3_path.exists():
-            return z3_path
-    return None
 
 
 # helper to define config fields
