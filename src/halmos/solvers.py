@@ -207,8 +207,9 @@ def install_solver(solver_info: SolverInfo) -> Path:
         machine_tuple = get_platform_arch()
         download_info = solver_info.downloads.get(machine_tuple)
         if not download_info:
-            raise ValueError(
-                f"No download URL configured for solver '{solver_info.name}'"
+            solver = solver_info.name
+            raise RuntimeError(
+                f"No download URL configured {solver=}, {machine_tuple=}"
             )
 
         # Download the archive
