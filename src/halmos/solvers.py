@@ -11,7 +11,7 @@ from pathlib import Path
 
 import requests
 
-from halmos.logs import debug, error, info, warn
+from halmos.logs import debug, error, info
 from halmos.utils import format_size
 
 # Define the cache directory for solvers
@@ -40,13 +40,17 @@ class DownloadInfo:
 
 @dataclass(frozen=True, eq=False, order=False, slots=True)
 class SolverInfo:
+    # descriptive name, e.g., "yices" or "bitwuzla-abstraction"
     name: str
 
-    # maps (system, machine) tuples to download URLs
-    downloads: dict[MachineInfo, DownloadInfo]
+    # name of the executable, e.g., "yices-smt2" or "bitwuzla"
+    binary_name: str
 
     # options/arguments/flags needed for this solver
     arguments: list[str]
+
+    # maps (system, machine) tuples to download URLs
+    downloads: dict[MachineInfo, DownloadInfo]
 
 
 macos_intel = MachineInfo(system="Darwin", machine="x86_64")
@@ -58,6 +62,8 @@ windows_intel = MachineInfo(system="Windows", machine="x86_64")
 SUPPORTED_SOLVERS: dict[str, SolverInfo] = {
     "yices": SolverInfo(
         name="yices",
+        binary_name="yices-smt2",
+        arguments=["--smt2-model-format"],
         downloads={
             macos_intel: DownloadInfo(
                 base_url=YICES_BASE_URL,
@@ -84,11 +90,11 @@ SUPPORTED_SOLVERS: dict[str, SolverInfo] = {
                 binary_name_in_archive="yices-2.6.5/bin/yices-smt2.exe",
             ),
         },
-        arguments=["--smt2-model-format"],
     ),
     # for z3 we just rely on PATH/venv
     "z3": SolverInfo(
         name="z3",
+        binary_name="z3",
         downloads={},
         arguments=[],
     ),
@@ -101,10 +107,13 @@ def get_platform_arch() -> MachineInfo:
     system = platform.system()  # e.g., 'Linux', 'Darwin', 'Windows'
     machine = platform.machine()  # e.g., 'x86_64', 'arm64', 'AMD64'
 
+    # AMD64 is basically an alias for x86_64, let's use x86_64 as the canonical name
+    machine = "x86_64" if machine == "AMD64" else machine
+
     return MachineInfo(system=system, machine=machine)
 
 
-def binary_path_in_cache(solver_name: str) -> Path:
+def binary_path_in_cache(solver: SolverInfo) -> Path:
     """
     Gets the (expected) path to the binary in the cache.
 
@@ -112,7 +121,7 @@ def binary_path_in_cache(solver_name: str) -> Path:
     """
 
     suffix = ".exe" if platform.system() == "Windows" else ""
-    return SOLVER_CACHE_DIR / f"{solver_name}{suffix}"
+    return SOLVER_CACHE_DIR / f"{solver.binary_name}{suffix}"
 
 
 def verify_checksum(file_path: Path, expected_checksum: str) -> bool:
@@ -196,7 +205,7 @@ def extract_file(archive_path: Path, filename: str) -> bytes | None:
         raise RuntimeError(f"Unsupported archive format: {archive_path.suffix}")
 
 
-def install_solver(solver_info: SolverInfo) -> Path:
+def install_solver(solver: SolverInfo) -> Path:
     """
     Downloads, verifies, and extracts the solver archive.
 
@@ -205,11 +214,10 @@ def install_solver(solver_info: SolverInfo) -> Path:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         machine_tuple = get_platform_arch()
-        download_info = solver_info.downloads.get(machine_tuple)
+        download_info = solver.downloads.get(machine_tuple)
         if not download_info:
-            solver = solver_info.name
             raise RuntimeError(
-                f"No download URL configured {solver=}, {machine_tuple=}"
+                f"No download URL configured {solver.name=}, {machine_tuple=}"
             )
 
         # Download the archive
@@ -218,7 +226,7 @@ def install_solver(solver_info: SolverInfo) -> Path:
         archive_path = download(download_info, Path(tmpdir))
 
         if not archive_path:
-            raise RuntimeError(f"Failed to download {solver_info.name} from {url}")
+            raise RuntimeError(f"Failed to download {solver.name} from {url}")
 
         # Verify checksum
         info(f"Verifying sha256 hash for {archive_path}... ")
@@ -234,7 +242,7 @@ def install_solver(solver_info: SolverInfo) -> Path:
             )
 
         # Write the binary to the cache
-        install_path = binary_path_in_cache(solver_info.name)
+        install_path = binary_path_in_cache(solver)
         if install_path.exists():
             raise RuntimeError(f"File already exists: {install_path}")
 
@@ -272,59 +280,48 @@ def find_z3_path_in_venv() -> Path | None:
     return None
 
 
-def find_solver_binary(solver_name: str) -> Path | None:
+def find_solver_binary(solver: SolverInfo) -> Path | None:
     """
     Finds the solver binary path.
     Checks cache first, then PATH, then venv (for z3).
     """
 
-    if solver_name not in SUPPORTED_SOLVERS:
-        warn(f"Solver '{solver_name}' is not explicitly supported by halmos.")
-
-        # try PATH as a fallback
-        return shutil.which(solver_name)
-
-    cached_binary_path = SOLVER_CACHE_DIR / solver_name
+    cache_bin = binary_path_in_cache(solver)
 
     # 1. Check cache
-    if cached_binary_path.exists() and os.access(cached_binary_path, os.X_OK):
-        debug(f"Found {solver_name} binary in cache: {cached_binary_path}")
-        return cached_binary_path
+    if cache_bin.exists() and os.access(cache_bin, os.X_OK):
+        debug(f"Found {solver.name} binary in cache: {cache_bin}")
+        return cache_bin
 
     # 2. Check PATH
-    # path_binary = shutil.which(solver_name)
-    # if path_binary:
-    #     debug(f"Found {solver_name} binary in PATH: {path_binary}")
-    #     return Path(path_binary)
+    path_bin = shutil.which(solver.binary_name)
+    if path_bin:
+        debug(f"Found {solver.name} binary in PATH: {path_bin}")
+        return Path(path_bin)
 
     # 3. Special check for z3 in venv
-    if solver_name == "z3":
+    if solver.name == "z3":
         venv_z3 = find_z3_path_in_venv()
         if venv_z3:
             debug(f"Found z3 binary in venv: {venv_z3}")
             return venv_z3
 
-    debug(f"Solver binary '{solver_name}' not found in cache or PATH.")
+    debug(f"Solver binary '{solver.name}' not found in cache or PATH.")
     return None
 
 
-def ensure_solver_available(solver_name: str) -> Path:
+def ensure_solver_available(solver: SolverInfo) -> Path:
     """
     Ensures the specified solver is available, downloading it if necessary.
     Returns the path to the executable binary or None if unavailable/installation fails.
     """
 
-    binary_path = find_solver_binary(solver_name)
+    binary_path = find_solver_binary(solver)
     if binary_path:
         return binary_path
 
-    # If not found, attempt download for supported solvers with URLs
-    solver_info = SUPPORTED_SOLVERS.get(solver_name)
-    if not solver_info:
-        raise ValueError(f"Unsupported solver: {solver_name}")
-
-    # Attempt download and installation
-    installed_path = install_solver(solver_info)
+    # If not found, attempt download
+    installed_path = install_solver(solver)
     return installed_path
 
 
@@ -335,14 +332,17 @@ def get_solver_command(solver_name: str) -> list[str]:
     Ensures the solver is available first.
     """
 
-    solver_binary_path = ensure_solver_available(solver_name)
+    solver_info: SolverInfo | None = SUPPORTED_SOLVERS.get(solver_name)
+    if not solver_info:
+        # should have been caught by the config parsing:
+        #   `--solver <solver_name>` is a high level command that expects a supported solver
+        # solvers not managed by halmos can be accessed with the low-level
+        #   `--solver-command "solver_binary <args>"`
+        raise ValueError(f"Unsupported solver: {solver_name}")
+
+    solver_binary_path = ensure_solver_available(solver_info)
     if not solver_binary_path:
         raise RuntimeError(f"Solver '{solver_name}' could not be found or installed.")
-
-    solver_info = SUPPORTED_SOLVERS.get(solver_name)
-    if not solver_info:
-        # For unsupported solvers found in PATH, return just the binary path
-        return [str(solver_binary_path)]
 
     command = [str(solver_binary_path)] + solver_info.arguments
     debug(f"Solver command for '{solver_name}': {' '.join(command)}")
