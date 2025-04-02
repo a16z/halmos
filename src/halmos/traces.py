@@ -159,6 +159,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
 
     message = context.message
     addr_str = rendered_address(message.target)
+    caller_str = f" (caller: {rendered_address(message.caller)})"
 
     value = unbox_int(message.value)
     value_str = f" (value: {value})" if is_bv(value) or value > 0 else ""
@@ -191,7 +192,10 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
         calldata = rendered_calldata(message.data, addr_str)
         call_str = f"{addr_str}::{calldata}"
         static_str = yellow(" [static]") if message.is_static else ""
-        print(f"{indent}{call_scheme_str}{call_str}{static_str}{value_str}", file=file)
+        print(
+            f"{indent}{call_scheme_str}{call_str}{static_str}{value_str}{caller_str}",
+            file=file,
+        )
 
     log_indent = (context.depth + 1) * "    "
     for trace_element in context.trace:

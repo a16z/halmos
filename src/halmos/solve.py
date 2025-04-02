@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,7 +20,7 @@ from halmos.processes import (
     PopenFuture,
     TimeoutExpired,
 )
-from halmos.sevm import Exec, SMTQuery
+from halmos.sevm import Address, Exec, SMTQuery
 from halmos.utils import hexify
 
 
@@ -96,6 +97,13 @@ class ContractContext:
 
     # the function info for the invariant test
     probes_reported: set[FunctionInfo] = field(default_factory=set)
+
+    # invariant testing context
+    target_senders: set[Address] = field(default_factory=set)
+    target_contracts: set[Address] = field(default_factory=set)
+    target_selectors: dict[Address, set[bytes]] = field(
+        default_factory=lambda: defaultdict(set)
+    )
 
 
 @dataclass(frozen=True)

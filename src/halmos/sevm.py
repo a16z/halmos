@@ -1543,47 +1543,47 @@ class Exec:  # an execution path
         return self.dump()
 
     def dump(self, print_mem=False) -> str:
-        # output = self.context.output.data
+        output = self.context.output.data
         return hexify(
             "".join(
                 [
                     f"PC: {self.this()} {self.pc} {mnemonic(self.current_opcode())}\n",
                     self.st.dump(print_mem=print_mem),
-                    # f"\nBalance: {self.balance}\n",
-                    # "Storage:\n",
-                    # "".join(
-                    #     map(
-                    #         lambda x: f"- {x}: {self.storage[x]}\n",
-                    #         self.storage,
-                    #     )
-                    # ),
-                    # "Transient Storage:\n",
-                    # "".join(
-                    #     map(
-                    #         lambda x: f"- {x}: {self.transient_storage[x]}\n",
-                    #         self.transient_storage,
-                    #     )
-                    # ),
-                    # f"Path:\n{self.path}",
-                    # "Aliases:\n",
-                    # "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
-                    # f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
-                    # "Balance updates:\n",
-                    # "".join(
-                    #     map(
-                    #         lambda x: f"- {x}\n",
-                    #         sorted(self.balances.items(), key=lambda x: str(x[0])),
-                    #     )
-                    # ),
-                    # "Storage updates:\n",
-                    # "".join(
-                    #     map(
-                    #         lambda x: f"- {x}\n",
-                    #         sorted(self.storages.items(), key=lambda x: str(x[0])),
-                    #     )
-                    # ),
-                    # "SHA3 hashes:\n",
-                    # "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
+                    f"\nBalance: {self.balance}\n",
+                    "Storage:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}: {self.storage[x]}\n",
+                            self.storage,
+                        )
+                    ),
+                    "Transient Storage:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}: {self.transient_storage[x]}\n",
+                            self.transient_storage,
+                        )
+                    ),
+                    f"Path:\n{self.path}",
+                    "Aliases:\n",
+                    "".join([f"- {k}: {v}\n" for k, v in self.alias.items()]),
+                    f"Output: {output.hex() if isinstance(output, bytes) else output}\n",
+                    "Balance updates:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}\n",
+                            sorted(self.balances.items(), key=lambda x: str(x[0])),
+                        )
+                    ),
+                    "Storage updates:\n",
+                    "".join(
+                        map(
+                            lambda x: f"- {x}\n",
+                            sorted(self.storages.items(), key=lambda x: str(x[0])),
+                        )
+                    ),
+                    "SHA3 hashes:\n",
+                    "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
                 ]
             )
         )
