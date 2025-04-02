@@ -1305,7 +1305,7 @@ def format_time(seconds: float) -> str:
         return f"{seconds * 1e9:.3f}ns"
 
 
-class timed:
+class timed_block:
     def __init__(self, label="Block"):
         self.label = label
 
@@ -1317,3 +1317,29 @@ class timed:
         end = timer()
         elapsed = end - self.start
         print(f"{self.label} took {format_time(elapsed)}")
+
+
+def timed(label=None):
+    """
+    A decorator that measures and prints the execution time of a function.
+
+    Args:
+        label (str, optional): Custom label for the timing output. If None, the function name will be used.
+
+    Returns:
+        callable: The wrapped function with timing functionality.
+    """
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            # Use function name if no label is provided
+            function_label = label if label is not None else func.__name__
+
+            with timed_block(function_label):
+                result = func(*args, **kwargs)
+
+            return result
+
+        return wrapper
+
+    return decorator

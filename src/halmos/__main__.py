@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -50,6 +51,7 @@ from .constants import (
     VERBOSITY_TRACE_SETUP,
 )
 from .exceptions import FailCheatcode, HalmosException
+from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
 from .logs import (
     COUNTEREXAMPLE_INVALID,
     COUNTEREXAMPLE_UNKNOWN,
@@ -281,6 +283,9 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
 
     [ex] = exs
 
+    if ctx.args.flamegraph:
+        exec_flamegraph.add(ex.context)
+
     if ctx.args.verbose >= VERBOSITY_TRACE_CONSTRUCTOR:
         print("Constructor trace:")
         render_trace(ex.context)
@@ -334,11 +339,15 @@ def setup(ctx: FunctionContext) -> Exec:
 
     setup_exs_all = sevm.run(setup_ex)
     setup_exs_no_error: list[tuple[Exec, SMTQuery]] = []
+    flamegraph_enabled = args.flamegraph
 
     for path_id, setup_ex in enumerate(setup_exs_all):
         if args.verbose >= VERBOSITY_TRACE_SETUP:
             print(f"{setup_sig} trace #{path_id}:")
             render_trace(setup_ex.context)
+
+        if flamegraph_enabled:
+            exec_flamegraph.add(setup_ex.context)
 
         if err := setup_ex.context.output.error:
             opcode = setup_ex.current_opcode()
@@ -583,6 +592,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
     visited = ctx.visited
 
     panic_error_codes = ctx.args.panic_error_codes
+    flamegraph_enabled = ctx.args.flamegraph
 
     for idx, pre_ex in enumerate(curr_exs):
         progress_status.update(
@@ -600,6 +610,9 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
             for post_ex in post_exs:
                 subcall = post_ex.context
 
+                if flamegraph_enabled:
+                    call_flamegraph.add_with_sequence(post_ex.call_sequence, subcall)
+
                 # ignore and report if halmos-errored
                 if subcall.is_stuck():
                     error(
@@ -613,7 +626,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                     if not post_ex.is_panic_of(panic_error_codes):
                         continue
 
-                    fun_info = post_ex.context.message.fun_info
+                    fun_info = subcall.message.fun_info
 
                     # ignore if the probe has already been reported
                     if fun_info in ctx.probes_reported:
@@ -625,7 +638,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                     sequence = (
                         rendered_call_sequence(post_ex.call_sequence) or "    (empty)\n"
                     )
-                    trace = rendered_trace(post_ex.context)
+                    trace = rendered_trace(subcall)
                     msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
                     print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
 
@@ -685,8 +698,10 @@ def run_message(
 
     For regular tests (where the max tx depth is 0), this function amounts to executing the given test against only the initial setup state.
     """
+
     args = ctx.args
     contract_ctx = ctx.contract_ctx
+
     for depth in range(ctx.max_call_depth + 1):
         for ex in get_frontier(contract_ctx, depth):
             try:
@@ -707,8 +722,11 @@ def run_test(ctx: FunctionContext) -> TestResult:
     args = ctx.args
     fun_info = ctx.info
     funname, funsig = fun_info.name, fun_info.sig
+
     if args.verbose >= 1:
         print(f"Executing {funname}")
+
+    is_invariant = funname.startswith("invariant_")
 
     # set the config for every trace rendered in this test
     halmos.traces.config_context.set(args)
@@ -728,6 +746,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
         value=0,
         data=cd,
         call_scheme=EVM.CALL,
+        fun_info=fun_info,
     )
 
     #
@@ -742,6 +761,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     normal = 0
     potential = 0
     stuck = []
+
+    flamegraph_enabled = args.flamegraph
+    potential_flamegraphs: dict[int, CallSequenceFlamegraph] = {}
 
     def solve_end_to_end_callback(future: Future):
         # beware: this function may be called from threads other than the main thread,
@@ -793,6 +815,10 @@ def run_test(ctx: FunctionContext) -> TestResult:
             print(red(f"Counterexample: {model}"))
             ctx.valid_counterexamples.append(model)
 
+            # add the stacks from the temporary flamegraph to the global one
+            if flamegraph_enabled and is_invariant:
+                call_flamegraph.stacks.extend(potential_flamegraphs[path_id].stacks)
+
             # we have a valid counterexample, so we are eligible for early exit
             if args.early_exit:
                 debug(f"Shutting down {ctx.info.name}'s solver executor")
@@ -832,6 +858,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
             print("\nTrace:")
             render_trace(ex.context)
 
+        if flamegraph_enabled and not is_invariant:
+            exec_flamegraph.add(ex.context)
+
         output = ex.context.output
         error_output = output.error
         panic_found = ex.is_panic_of(args.panic_error_codes)
@@ -853,6 +882,15 @@ def run_test(ctx: FunctionContext) -> TestResult:
             if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
                 ctx.traces[path_id] = rendered_trace(ex.context)
             ctx.call_sequences[path_id] = rendered_call_sequence(ex.call_sequence)
+
+            if flamegraph_enabled and is_invariant:
+                # render the flamegraph to a temporary holder,
+                # until we can confirm that it's a valid counterexample
+                tmp_flamegraph = CallSequenceFlamegraph(title="Temp")
+                tmp_flamegraph.add_with_sequence(
+                    ex.call_sequence, ex.context, mark_as_fail=True
+                )
+                potential_flamegraphs[path_id] = tmp_flamegraph
 
             query: SMTQuery = ex.path.to_smt2(args)
 
@@ -1413,6 +1451,18 @@ def _main(_args=None) -> MainResult:
 
         memtrace.MemTracer.get().start()
 
+    if args.flamegraph:
+        flamegraph_installed = shutil.which("flamegraph.pl") is not None
+        if flamegraph_installed:
+            print(
+                f"Flamegraphs will be written to {exec_flamegraph.out_filepath}"
+                f" and {call_flamegraph.out_filepath}"
+            )
+        else:
+            error("flamegraph.pl not found in PATH")
+            error("(see https://github.com/brendangregg/FlameGraph)")
+            args = args.with_overrides("halmos runtime", flamegraph=False)
+
     #
     # compile
     #
@@ -1553,6 +1603,12 @@ def _main(_args=None) -> MainResult:
 
     if args.statistics:
         print(f"\n[time] {timer.report()}")
+
+    if exec_flamegraph:
+        exec_flamegraph.flush(force=True)
+
+    if call_flamegraph:
+        call_flamegraph.flush(force=True)
 
     if args.profile_instructions:
         profiler = Profiler()
