@@ -108,7 +108,8 @@ jobs:
             apt-get update && \
             apt-get install -y golang-go && \
             go version && \
-            go install github.com/fjl/geas/cmd/geas@latest"
+            env 'GOBIN=/halmos/bin' go install github.com/fjl/geas/cmd/geas@latest && \
+            geas -h"
           docker commit tmp-halmos-image halmos-image
 
       - name: Checkout external repo
