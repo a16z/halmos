@@ -2502,7 +2502,6 @@ class SEVM:
             return
 
         caller_balance: BitVecRef = ex.balance_of(caller)
-        to_balance: BitVecRef = ex.balance_of(to)
 
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
@@ -2517,7 +2516,8 @@ class SEVM:
             value = If(condition, value, Z3_ZERO)
 
         ex.balance_update(caller, BV(caller_balance).sub(value))
-        ex.balance_update(to, BV(to_balance).add(value))
+        # NOTE: ex.balance_of(to) must be called **after** updating the caller's balance above, to correctly handle the self-transfer case
+        ex.balance_update(to, BV(ex.balance_of(to)).add(value))
 
     def call(
         self,
