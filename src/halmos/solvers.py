@@ -3,6 +3,7 @@ import os
 import platform
 import shutil
 import stat
+import sys
 import tarfile
 import tempfile
 import zipfile
@@ -19,6 +20,8 @@ SOLVER_CACHE_DIR = Path.home() / ".halmos" / "solvers"
 SOLVER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 YICES_BASE_URL = "https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.5"
+
+ALLOW_DOWNLOAD_VAR = "HALMOS_ALLOW_DOWNLOAD"
 
 
 @dataclass(frozen=True, eq=True, order=False, slots=True, kw_only=True)
@@ -205,6 +208,18 @@ def extract_file(archive_path: Path, filename: str) -> bytes | None:
         raise RuntimeError(f"Unsupported archive format: {archive_path.suffix}")
 
 
+def download_allowed(solver: SolverInfo, download_info: DownloadInfo) -> bool:
+    """
+    Checks if the download is allowed.
+    """
+
+    if not sys.stdout.isatty():
+        return os.environ.get(ALLOW_DOWNLOAD_VAR, "false").lower() in ["true", "1"]
+
+    prompt = f"{solver.name} can be downloaded from {download_info.base_url}, ok to proceed? (y/N) "
+    return input(prompt).lower() == "y"
+
+
 def install_solver(solver: SolverInfo) -> Path:
     """
     Downloads, verifies, and extracts the solver archive.
@@ -212,14 +227,17 @@ def install_solver(solver: SolverInfo) -> Path:
     The caller is responsible for handling exceptions.
     """
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        machine_tuple = get_platform_arch()
-        download_info = solver.downloads.get(machine_tuple)
-        if not download_info:
-            raise RuntimeError(
-                f"No download URL configured {solver.name=}, {machine_tuple=}"
-            )
+    machine_tuple = get_platform_arch()
+    download_info = solver.downloads.get(machine_tuple)
+    if not download_info:
+        raise RuntimeError(f"No download URL for {solver.name=}, {machine_tuple=}")
 
+    if not download_allowed(solver, download_info):
+        raise RuntimeError(
+            f"Download not allowed (configure {ALLOW_DOWNLOAD_VAR}=1 to bypass)"
+        )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
         # Download the archive
         url = download_info.base_url + "/" + download_info.filename
         info(f"Downloading from {url}...")
