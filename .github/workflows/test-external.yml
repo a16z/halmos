@@ -102,12 +102,14 @@ jobs:
           docker commit halmos-image-vyper halmos-image
 
       # for sys-asm-halmos
-      - name: Setup Go
-        uses: actions/setup-go@v4
-
-      # for sys-asm-halmos
       - name: Install Geas
-        run: go install github.com/fjl/geas/cmd/geas@latest
+        run: |
+          docker run --name tmp-halmos-image halmos-image bash -c "\
+            apt-get update && \
+            apt-get install -y golang-go && \
+            go version && \
+            go install github.com/fjl/geas/cmd/geas@latest"
+          docker commit tmp-halmos-image halmos-image
 
       - name: Checkout external repo
         uses: actions/checkout@v4
