@@ -3073,7 +3073,7 @@
         ],
         "test/Send.t.sol:SendTest": [
             {
-                "name": "check_create(address,uint256,address,bytes32,uint256)",
+                "name": "check_create(uint256,bytes32,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -3082,7 +3082,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_send(address,uint256,address,uint256)",
+                "name": "check_send(uint256,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
@@ -3091,7 +3091,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_transfer(address,uint256,address)",
+                "name": "check_transfer(uint256)",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
