@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import requests
+from rich.console import Console
 
 from halmos.logs import debug, error, info
 from halmos.utils import format_size
@@ -24,6 +25,8 @@ SOLVER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
 # environment variable to bypass the interactive download confirmation prompt
 ALLOW_DOWNLOAD_VAR = "HALMOS_ALLOW_DOWNLOAD"
+
+console = Console()
 
 
 def yices_base_url(version: str) -> str:
@@ -253,7 +256,7 @@ def download_allowed(solver: SolverInfo, download_info: DownloadInfo) -> bool:
     Checks if the download is allowed.
     """
 
-    if not sys.stdout.isatty():
+    if not console.is_interactive:
         return os.environ.get(ALLOW_DOWNLOAD_VAR, "false").lower() in ["true", "1"]
 
     prompt = f"{solver.name} can be downloaded from {download_info.base_url}, ok to proceed? (y/N) "
