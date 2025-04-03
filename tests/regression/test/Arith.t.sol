@@ -40,6 +40,7 @@ contract ArithTest {
         }
     }
 
+    /// @custom:halmos --solver yices
     function check_Div_fail(uint x, uint y) public pure {
         require(x > y);
 
@@ -50,10 +51,7 @@ contract ArithTest {
         assert(q != 0); // counterexample: y == 0
     }
 
-    // this would run better with `@custom:halmos --solver yices`
-    // but the static binaries for yices on macOS actually link against libcudd
-    // which is not available on GitHub Actions runners
-    // https://github.com/a16z/halmos/issues/492
+    /// @custom:halmos --solver yices
     function check_Div_pass(uint x, uint y) public pure {
         require(x > y);
         require(y > 0);

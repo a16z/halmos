@@ -15,13 +15,19 @@ import requests
 from halmos.logs import debug, error, info
 from halmos.utils import format_size
 
+# not defaulting to latest because of https://github.com/a16z/halmos/issues/492
+DEFAULT_YICES_VERSION = "2.6.4"
+
 # Define the cache directory for solvers
 SOLVER_CACHE_DIR = Path.home() / ".halmos" / "solvers"
 SOLVER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-YICES_BASE_URL = "https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.5"
-
+# environment variable to bypass the interactive download confirmation prompt
 ALLOW_DOWNLOAD_VAR = "HALMOS_ALLOW_DOWNLOAD"
+
+
+def yices_base_url(version: str) -> str:
+    return f"https://github.com/SRI-CSL/yices2/releases/download/Yices-{version}"
 
 
 @dataclass(frozen=True, eq=True, order=False, slots=True, kw_only=True)
@@ -63,34 +69,65 @@ windows_intel = MachineInfo(system="Windows", machine="x86_64")
 
 # define known solvers
 SUPPORTED_SOLVERS: dict[str, SolverInfo] = {
-    "yices": SolverInfo(
-        name="yices",
+    "yices-2.6.5": SolverInfo(
+        name="yices-2.6.5",
         binary_name="yices-smt2",
         arguments=["--smt2-model-format"],
         downloads={
             macos_intel: DownloadInfo(
-                base_url=YICES_BASE_URL,
+                base_url=yices_base_url("2.6.5"),
                 filename="yices-2.6.5-x86_64-apple-darwin21.6.0-static-gmp.tar.gz",
                 checksum="831094681703173cb30657e9a9d690bd6139f435ff44afdcf81f8e761f9ed0c4",
                 binary_name_in_archive="yices-2.6.5/bin/yices-smt2",
             ),
             macos_arm64: DownloadInfo(
-                base_url=YICES_BASE_URL,
+                base_url=yices_base_url("2.6.5"),
                 filename="yices-2.6.5-arm-apple-darwin22.6.0-static-gmp.tar.gz",
                 checksum="b75f2881859fb91c1e8fae121595091b89c07421f35db0e7cddc8a43cba13507",
                 binary_name_in_archive="yices-2.6.5/bin/yices-smt2",
             ),
             linux_intel: DownloadInfo(
-                base_url=YICES_BASE_URL,
+                base_url=yices_base_url("2.6.5"),
                 filename="yices-2.6.5-x86_64-pc-linux-gnu-static-gmp.tar.gz",
                 checksum="d6c9465c261e4f4eabd240d0dd9dff5e740fca2beb0042de15f67954bbc70cce",
                 binary_name_in_archive="yices-2.6.5/bin/yices-smt2",
             ),
             windows_intel: DownloadInfo(
-                base_url=YICES_BASE_URL,
+                base_url=yices_base_url("2.6.5"),
                 filename="yices-2.6.5-x86_64-unknown-mingw32-static-gmp.zip",
                 checksum="189aaa5515bb71c18996b87d7eceb8cfa037a7b2114f6b46abf5c6f4f07072af",
                 binary_name_in_archive="yices-2.6.5/bin/yices-smt2.exe",
+            ),
+        },
+    ),
+    "yices-2.6.4": SolverInfo(
+        name="yices-2.6.4",
+        binary_name="yices-smt2",
+        arguments=["--smt2-model-format"],
+        downloads={
+            macos_intel: DownloadInfo(
+                base_url="https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4",
+                filename="yices-2.6.4-x86_64-apple-darwin20.6.0.tar.gz",
+                checksum="e54d979bf466102c03476c9a34dd3b5316e543f201eca8ca0e4be07ffccdefd5",
+                binary_name_in_archive="yices-2.6.4/bin/yices-smt2",
+            ),
+            macos_arm64: DownloadInfo(
+                base_url="https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4",
+                filename="yices-2.6.4-arm-apple-darwin20.6.0.tar.gz",
+                checksum="302fdf64bd2d9fb0e124c4adcf9b2ff9658426ebb983fd7ad3ac54a4019a9fc9",
+                binary_name_in_archive="yices-2.6.4/bin/yices-smt2",
+            ),
+            linux_intel: DownloadInfo(
+                base_url="https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4",
+                filename="yices-2.6.4-x86_64-pc-linux-gnu.tar.gz",
+                checksum="841184509aecdc4df99c7ee280e33f76359032dc367919260a916257229601a4",
+                binary_name_in_archive="yices-2.6.4/bin/yices-smt2",
+            ),
+            windows_intel: DownloadInfo(
+                base_url="https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4",
+                filename="yices-2.6.4-x86_64-unknown-mingw32-static-gmp.zip",
+                checksum="a26031f0c9634ff1f1737086cc058a1b6d401a5aa04a1904bcbd71b761736ded",
+                binary_name_in_archive="yices-2.6.4/bin/yices-smt2.exe",
             ),
         },
     ),
@@ -102,6 +139,9 @@ SUPPORTED_SOLVERS: dict[str, SolverInfo] = {
         arguments=[],
     ),
 }
+
+# set default aliases
+SUPPORTED_SOLVERS["yices"] = SUPPORTED_SOLVERS[f"yices-{DEFAULT_YICES_VERSION}"]
 
 
 def get_platform_arch() -> MachineInfo:
@@ -391,7 +431,10 @@ if __name__ == "__main__":
             archive_path = download(download_info, Path(tmpdir))
 
             print(f"Downloaded to {archive_path}")
-            verify_checksum(archive_path, download_info.checksum)
+            try:
+                verify_checksum(archive_path, download_info.checksum)
+            except ValueError as e:
+                print(f"Checksum verification failed: {e}")
 
             print("Listing archive contents:")
             list_archive(archive_path)
