@@ -1,30 +1,48 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
+import "forge-std/Test.sol";
+import {SymTest} from "halmos-cheatcodes/SymTest.sol";
+
 contract C {
     constructor() payable { }
 }
 
 /// @custom:halmos --solver-timeout-assertion 0
-contract SendTest {
+contract SendTest is Test, SymTest {
+    address sender;
+    address payable receiver;
+    address others;
 
-    function check_transfer(address payable receiver, uint amount, address others) public {
-        require(others != address(this) && others != receiver);
+    function setUp() public {
+        sender = svm.createAddress("sender");
+        receiver = payable(svm.createAddress("receiver"));
+        others = svm.createAddress("others");
 
-        uint oldBalanceSender = address(this).balance;
+        vm.deal(sender, svm.createUint(96, "sender.balance"));
+        vm.deal(receiver, svm.createUint(96, "receiver.balance"));
+        vm.deal(others, svm.createUint(96, "others.balance"));
+    }
+
+    function check_transfer(uint amount) public {
+        vm.assume(others != sender && others != receiver);
+
+        uint oldBalanceSender = sender.balance;
         uint oldBalanceReceiver = receiver.balance;
         uint oldBalanceOthers = others.balance;
 
+        vm.prank(sender);
         receiver.transfer(amount);
 
+        // in case of insufficient funds, transfer() would have already reverted, not reaching here
         assert(oldBalanceSender >= amount);
 
-        uint newBalanceSender = address(this).balance;
+        uint newBalanceSender = sender.balance;
         uint newBalanceReceiver = receiver.balance;
         uint newBalanceOthers = others.balance;
 
         unchecked {
-            if (receiver != address(this)) {
+            if (receiver != sender) {
                 assert(newBalanceSender == oldBalanceSender - amount);
                 assert(newBalanceSender <= oldBalanceSender);
                 assert(newBalanceReceiver == oldBalanceReceiver + amount);
@@ -38,17 +56,19 @@ contract SendTest {
         }
     }
 
-    function check_send(address payable receiver, uint amount, address others, uint mode) public {
-        require(others != address(this) && others != receiver);
+    function check_send(uint amount, uint mode) public {
+        vm.assume(others != sender && others != receiver);
 
-        uint oldBalanceSender = address(this).balance;
+        uint oldBalanceSender = sender.balance;
         uint oldBalanceReceiver = receiver.balance;
         uint oldBalanceOthers = others.balance;
 
         bool success;
         if (mode == 0) {
+            vm.prank(sender);
             success = receiver.send(amount);
         } else {
+            vm.prank(sender);
             (success,) = receiver.call{ value: amount }("");
         }
 
@@ -56,12 +76,12 @@ contract SendTest {
             assert(oldBalanceSender >= amount);
         }
 
-        uint newBalanceSender = address(this).balance;
+        uint newBalanceSender = sender.balance;
         uint newBalanceReceiver = receiver.balance;
         uint newBalanceOthers = others.balance;
 
         unchecked {
-            if (success && receiver != address(this)) {
+            if (success && receiver != sender) {
                 assert(newBalanceSender == oldBalanceSender - amount);
                 assert(newBalanceSender <= oldBalanceSender);
                 assert(newBalanceReceiver == oldBalanceReceiver + amount);
@@ -75,29 +95,34 @@ contract SendTest {
         }
     }
 
-    function check_create(address receiver, uint amount, address others, bytes32 salt, uint mode) public {
-        require(others != address(this) && others != receiver);
+    function check_create(uint amount, bytes32 salt, uint mode) public {
+        // note: deployer is set to concrete, to prevent halmos from treating the contract creation target as aliasing with the deployer
+        address deployer = address(0xbeef);
+        vm.deal(deployer, svm.createUint(96, "deployer.balance"));
 
-        uint oldBalanceSender = address(this).balance;
+        vm.assume(others != deployer && others != receiver);
+
+        uint oldBalanceSender = deployer.balance;
         uint oldBalanceReceiver = receiver.balance;
         uint oldBalanceOthers = others.balance;
 
         C c;
         if (mode == 0) {
+            vm.prank(deployer);
             c = new C{ value: amount }();
         } else {
+            vm.prank(deployer);
             c = new C{ value: amount, salt: salt }();
         }
-        require(receiver == address(c));
+        vm.assume(receiver == address(c));
 
-
-        uint newBalanceSender = address(this).balance;
+        uint newBalanceSender = deployer.balance;
         uint newBalanceReceiver = receiver.balance;
         uint newBalanceOthers = others.balance;
 
         if (oldBalanceSender >= amount) {
             unchecked {
-                assert(receiver != address(this)); // new address cannot be equal to the deployer
+                assert(receiver != deployer); // new address cannot be equal to the deployer
                 assert(newBalanceSender == oldBalanceSender - amount);
                 assert(newBalanceSender <= oldBalanceSender);
                 assert(newBalanceReceiver == oldBalanceReceiver + amount);
