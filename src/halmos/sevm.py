@@ -3029,7 +3029,7 @@ class SEVM:
     ) -> None:
         cond_z3 = cond.as_z3()
         cond_true = simplify(cond_z3)
-        cond_false = simplify(Not(cond_z3))
+        cond_false = simplify(Not(cond_true))
 
         check_true = ex.check(cond_true)
         check_false = ex.check(cond_false)
