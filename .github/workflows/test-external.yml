@@ -70,6 +70,11 @@ jobs:
             cmd: "--config test/halmos.toml --contract MathTestHalmos --solver-command 'jsi --model --sequence yices,bitwuzla-abstraction' --solver-threads 1"
             branch: ""
             profile: "halmos-venom"
+          - repo: "daejunpark/sys-asm-halmos"
+            dir: "sys-asm-halmos"
+            cmd: "--solver-threads 3 --loop 2"
+            branch: ""
+            profile: ""
 
     steps:
       - name: Checkout halmos
@@ -89,11 +94,23 @@ jobs:
           # commit the result back to halmos-image
           docker commit halmos-image-foundryup halmos-image
 
+      # for snekmate
       - name: Install Vyper
         if: ${{ matrix.project.dir == 'snekmate' }}
         run: |
           docker run --name halmos-image-vyper halmos-image uv pip install git+https://github.com/vyperlang/vyper@master
           docker commit halmos-image-vyper halmos-image
+
+      # for sys-asm-halmos
+      - name: Install Geas
+        run: |
+          docker run --name tmp-halmos-image halmos-image bash -c "\
+            apt-get update && \
+            apt-get install -y golang-go && \
+            go version && \
+            env 'GOBIN=/halmos/bin' go install github.com/fjl/geas/cmd/geas@latest && \
+            geas -h"
+          docker commit tmp-halmos-image halmos-image
 
       - name: Checkout external repo
         uses: actions/checkout@v4
