@@ -1286,12 +1286,51 @@ class NamedTimer:
         )
 
 
+def format_size(num_bytes: int) -> str:
+    """
+    Returns a human-readable string for a number of bytes
+    Automatically chooses a relevant size unit (G, M, K, B)
+
+    e.g.:
+        1234567890 -> 1.15G
+        123456789 -> 117.7M
+        123456 -> 120.5K
+        123 -> 123B
+    """
+    if num_bytes >= 1024 * 1024 * 1024:
+        return f"{num_bytes / (1024 * 1024 * 1024):.2f}GB"
+    elif num_bytes >= 1024 * 1024:
+        return f"{num_bytes / (1024 * 1024):.1f}MB"
+    elif num_bytes >= 1024:
+        return f"{num_bytes / 1024:.1f}KB"
+    else:
+        return f"{num_bytes}B"
+
+
 def format_time(seconds: float) -> str:
     """
-    Return a pretty string for an elapsed time in seconds.
-    Automatically choose a relevant time unit among s, ms, µs, ns.
+    Returns a pretty string for an elapsed time in seconds.
+    Automatically chooses a relevant time unit (h, m, s, ms, µs, ns)
+
+    e.g.:
+        3602.13 -> 1h00m02s
+        62.003 -> 1m02s
+        1.000000001 -> 1.000s
+        0.123456789 -> 123.457ms
+        0.000000001 -> 1.000ns
     """
-    if seconds >= 1:
+    if seconds >= 3600:
+        # 1 hour or more
+        hours = int(seconds / 3600)
+        minutes = int((seconds - (3600 * hours)) / 60)
+        seconds_rounded = int(seconds - (3600 * hours) - (60 * minutes))
+        return f"{hours}h{minutes:02}m{seconds_rounded:02}s"
+    elif seconds >= 60:
+        # 1 minute or more
+        minutes = int(seconds / 60)
+        seconds_rounded = int(seconds - (60 * minutes))
+        return f"{minutes}m{seconds_rounded:02}s"
+    elif seconds >= 1:
         # 1 second or more
         return f"{seconds:.3f}s"
     elif seconds >= 1e-3:

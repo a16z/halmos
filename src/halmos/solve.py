@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Literal
 
 from z3 import CheckSatResult, Solver, sat, unknown, unsat
 
@@ -22,6 +23,8 @@ from halmos.processes import (
 )
 from halmos.sevm import Address, Exec, SMTQuery
 from halmos.utils import hexify
+
+EXIT_TIMEDOUT = 124
 
 
 @dataclass
@@ -225,10 +228,13 @@ class PathContext:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SolverOutput:
-    # solver result
-    result: CheckSatResult
+    # solver result (sat, unsat, unknown, err)
+    result: CheckSatResult | Literal["err"]
+
+    # solver return code
+    returncode: int
 
     # we don't backlink to the parent path context to avoid extra
     # references to Exec objects past the lifetime of the path
@@ -239,6 +245,9 @@ class SolverOutput:
 
     # optional unsat core
     unsat_core: list[str] | None = None
+
+    # solver error
+    error: str | None = None
 
     @staticmethod
     def from_result(
@@ -255,13 +264,15 @@ class SolverOutput:
         match first_line:
             case "unsat":
                 unsat_core = parse_unsat_core(stdout) if args.cache_solver else None
-                return SolverOutput(unsat, path_id, unsat_core=unsat_core)
+                return SolverOutput(unsat, returncode, path_id, unsat_core=unsat_core)
             case "sat":
                 is_valid = is_model_valid(stdout)
                 model = PotentialModel(model=parse_model_str(stdout), is_valid=is_valid)
-                return SolverOutput(sat, path_id, model=model)
+                return SolverOutput(sat, returncode, path_id, model=model)
+            case "unknown":
+                return SolverOutput(unknown, returncode, path_id)
             case _:
-                return SolverOutput(unknown, path_id)
+                return SolverOutput("err", returncode, path_id, error=stderr)
 
 
 def parse_const_value(value: str) -> int:
@@ -410,8 +421,13 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     # which translates to timeout_seconds=None for subprocess.run
     timeout_seconds = t / 1000 if (t := args.solver_timeout_assertion) else None
 
-    cmd = args.solver_command.split() + [smt2_filename]
-    future = PopenFuture(cmd, timeout=timeout_seconds)
+    cmd_list = (
+        args.solver_command.split()
+        if isinstance(args.solver_command, str)
+        else args.solver_command
+    )
+    cmd_with_file = cmd_list + [smt2_filename]
+    future = PopenFuture(cmd_with_file, timeout=timeout_seconds)
 
     # starts the subprocess asynchronously
     path_ctx.solving_ctx.executor.submit(future)
@@ -420,7 +436,9 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     try:
         stdout, stderr, returncode = future.result()
     except TimeoutExpired:
-        return SolverOutput(result=unknown, path_id=path_ctx.path_id)
+        return SolverOutput(
+            result=unknown, returncode=EXIT_TIMEDOUT, path_id=path_ctx.path_id
+        )
 
     # save solver stdout to file
     with open(f"{smt2_filename}.out", "w") as f:
@@ -451,7 +469,7 @@ def solve_end_to_end(ctx: PathContext) -> SolverOutput:
     # if the query contains an unsat-core, it is unsat; no need to run the solver
     if check_unsat_cores(query, ctx.solving_ctx.unsat_cores):
         verbose("  Already proven unsat")
-        return SolverOutput(unsat, path_id)
+        return SolverOutput(unsat, 0, path_id)
 
     solver_output = solve_low_level(ctx)
     result, model = solver_output.result, solver_output.model
