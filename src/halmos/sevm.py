@@ -3031,10 +3031,21 @@ class SEVM:
         cond_true = simplify(cond_z3)
         cond_false = simplify(Not(cond_z3))
 
-        potential_true: bool = ex.check(cond_true) != unsat
-        potential_false: bool = ex.check(cond_false) != unsat
+        check_true = ex.check(cond_true)
+        check_false = ex.check(cond_false)
+
+        potential_true: bool = check_true != unsat
+        potential_false: bool = check_false != unsat
+
+        must_true: bool = check_true == sat and check_false == unsat
+        must_false: bool = check_true == unsat and check_false == sat
+
+        is_symbolic_cond = not (must_true or must_false)
 
         # note: both may be false if the previous path condition was considered unknown but turns out to be unsat later
+
+        # we don't apply the loop unrolling limit to constant loops, where the branching condition is definitely true or false.
+        # note that potential_* values alone are not enough, because unsat may result from earlier infeasible path conditions that haven't been pruned due to smt timeout.
 
         follow_true = False
         follow_false = False
@@ -3042,11 +3053,15 @@ class SEVM:
         jid = ex.jumpid()
         visited = ex.jumpis.get(jid, {True: 0, False: 0})
 
-        if potential_true and potential_false:
+        if is_symbolic_cond:
             # for loop unrolling
-            follow_true = visited[True] < self.options.loop
-            follow_false = visited[False] < self.options.loop
-            if not (follow_true and follow_false):
+            follow_true = potential_true and visited[True] < self.options.loop
+            follow_false = potential_false and visited[False] < self.options.loop
+
+            unroll_limit_reached_true = potential_true and not follow_true
+            unroll_limit_reached_false = potential_false and not follow_false
+
+            if unroll_limit_reached_true or unroll_limit_reached_false:
                 self.logs.bounded_loops.append(jid)
 
                 # rendering ex.path to string can be expensive, so only do it if debug is enabled
@@ -3082,7 +3097,7 @@ class SEVM:
             new_ex_false.advance()
 
         if new_ex_true:
-            if potential_true and potential_false:
+            if is_symbolic_cond:
                 new_ex_true.jumpis[jid] = {
                     True: visited[True] + 1,
                     False: visited[False],
@@ -3090,7 +3105,7 @@ class SEVM:
             stack.push(new_ex_true)
 
         if new_ex_false:
-            if potential_true and potential_false:
+            if is_symbolic_cond:
                 new_ex_false.jumpis[jid] = {
                     True: visited[True],
                     False: visited[False] + 1,
@@ -3239,6 +3254,13 @@ class SEVM:
         profile_instructions = self.options.profile_instructions
         profiler = Profiler()
         start_time = timer()
+        fun_name = self.fun_info.name
+
+        # TODO: break the backward dependency from traces, and use the existing trace lender methods
+        call_seq_str = "\n".join(
+            f"{hexify(call.message.target)}::{hexify(call.message.data[:4].unwrap())}"
+            for call in ex0.call_sequence
+        )
 
         step_id = 0
         step_interval_mask = PULSE_INTERVAL - 1
@@ -3264,9 +3286,11 @@ class SEVM:
                     elapsed_fmt = timedelta(seconds=int(elapsed))
 
                     progress_status.update(
+                        f"{fun_name}: "
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"
                         f" | completed paths: {stack.completed_paths}"
                         f" | outstanding paths: {len(stack)}"
+                        f"\n{call_seq_str}"
                     )
 
                 if not ex.path.is_activated():

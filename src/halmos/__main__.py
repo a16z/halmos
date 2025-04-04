@@ -610,8 +610,10 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
     panic_error_codes = ctx.args.panic_error_codes
     flamegraph_enabled = ctx.args.flamegraph
 
+    contract_name = ctx.name
     for idx, pre_ex in enumerate(curr_exs):
         progress_status.update(
+            f"{contract_name}: "
             f"depth: {cyan(depth)} | "
             f"starting states: {cyan(len(curr_exs))} | "
             f"unique states: {cyan(len(visited))} | "
@@ -990,7 +992,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
             if done == total:
                 break
             elapsed = timedelta(seconds=int(timer.elapsed()))
-            progress_status.update(f"[{elapsed}] solving queries: {done} / {total}")
+            progress_status.update(
+                f"{funsig}: [{elapsed}] solving queries: {done} / {total}"
+            )
             time.sleep(0.1)
 
     ctx.thread_pool.shutdown(wait=True)
