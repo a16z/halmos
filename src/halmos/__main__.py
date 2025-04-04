@@ -54,7 +54,6 @@ from .exceptions import FailCheatcode, HalmosException
 from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
 from .logs import (
     COUNTEREXAMPLE_INVALID,
-    COUNTEREXAMPLE_UNKNOWN,
     INTERNAL_ERROR,
     LOOP_BOUND,
     REVERT_ALL,
@@ -96,6 +95,7 @@ from .solve import (
     solve_end_to_end,
     solve_low_level,
 )
+from .solvers import get_solver_command
 from .traces import render_trace, rendered_call_sequence, rendered_trace
 from .utils import (
     EVM,
@@ -183,13 +183,29 @@ def with_natspec(
     return args.with_overrides(source=contract_name, **vars(overrides))
 
 
+def with_resolved_solver(args: HalmosConfig) -> HalmosConfig:
+    solver, solver_source = args.value_with_source("solver")
+    solver_command, solver_command_source = args.value_with_source("solver_command")
+
+    if solver_command:
+        if solver_source != "default":
+            sources = f"({solver_source=}, {solver_command_source=})"
+            raise RuntimeError(
+                f"can not provide both --solver-command and --solver {sources}"
+            )
+
+        # --solver-command is provided expliticly, it overrides the --solver default
+        return args
+    else:
+        # --solver is provided, so we need to resolve it to an actual command
+        command = get_solver_command(solver)
+        if not command:
+            raise RuntimeError(f"Solver '{solver}' could not be found or installed.")
+        return args.with_overrides(source="solver resolution", solver_command=command)
+
+
 def load_config(_args) -> HalmosConfig:
     config = default_config()
-
-    if not config.solver_command:
-        warn(
-            "could not find z3 on the PATH -- check your PATH/venv or pass --solver-command explicitly"
-        )
 
     # parse CLI args first, so that can get `--help` out of the way and resolve `--debug`
     # but don't apply the CLI overrides yet
@@ -785,7 +801,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
         # we are done solving, process and triage the result
         #
 
-        solver_output = future.result()
+        solver_output: SolverOutput = future.result()
         result, model = solver_output.result, solver_output.model
 
         if ctx.solving_ctx.executor.is_shutdown():
@@ -801,9 +817,14 @@ def run_test(ctx: FunctionContext) -> TestResult:
                 ctx.append_unsat_core(solver_output.unsat_core)
             return
 
+        if result == "err":
+            error(
+                f"solver error: {solver_output.error} (returncode={solver_output.returncode})"
+            )
+            return
+
         # model could be an empty dict here, so compare to None explicitly
         if model is None:
-            warn_code(COUNTEREXAMPLE_UNKNOWN, f"Counterexample: {result}")
             return
 
         # print counterexample trace
@@ -989,6 +1010,9 @@ def run_test(ctx: FunctionContext) -> TestResult:
     if counter["sat"] > 0:
         passfail = red("[FAIL]")
         exitcode = Exitcode.COUNTEREXAMPLE.value
+    elif counter["err"] > 0:
+        passfail = red("[ERROR]")
+        exitcode = Exitcode.EXCEPTION.value
     elif counter["unknown"] > 0:
         passfail = yellow("[TIMEOUT]")
         exitcode = Exitcode.TIMEOUT.value
@@ -1365,6 +1389,10 @@ def run_tests(
         fun_info = FunctionInfo(ctx.name, funsig.split("(")[0], funsig, selector)
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
+
+            # resolve the solver command at the function level
+            test_config = with_resolved_solver(test_config)
+
             if debug_config:
                 debug(f"{test_config.formatted_layers()}")
 

@@ -21,6 +21,8 @@ on:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    env:
+      HALMOS_ALLOW_DOWNLOAD: 1
 
     strategy:
       fail-fast: false
