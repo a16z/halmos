@@ -17,7 +17,7 @@ progress_status: Status = Status("")
 
 logging.basicConfig(
     format="%(message)s",
-    handlers=[RichHandler(level=logging.NOTSET, show_time=False, show_path=False)],
+    handlers=[RichHandler(level=logging.INFO, show_time=False, show_path=False)],
 )
 
 logger = logging.getLogger("halmos")

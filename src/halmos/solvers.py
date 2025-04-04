@@ -7,7 +7,7 @@ import sys
 import tarfile
 import tempfile
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import requests
@@ -18,6 +18,8 @@ from halmos.utils import format_size
 
 # not defaulting to latest because of https://github.com/a16z/halmos/issues/492
 DEFAULT_YICES_VERSION = "2.6.4"
+
+DEFAULT_CVC5_VERSION = "1.1.2"
 
 # Define the cache directory for solvers
 SOLVER_CACHE_DIR = Path.home() / ".halmos" / "solvers"
@@ -31,6 +33,10 @@ console = Console()
 
 def yices_base_url(version: str) -> str:
     return f"https://github.com/SRI-CSL/yices2/releases/download/Yices-{version}"
+
+
+def cvc5_base_url(version: str) -> str:
+    return f"https://github.com/cvc5/cvc5/releases/download/cvc5-{version}"
 
 
 @dataclass(frozen=True, eq=True, order=False, slots=True, kw_only=True)
@@ -71,11 +77,11 @@ linux_intel = MachineInfo(system="Linux", machine="x86_64")
 windows_intel = MachineInfo(system="Windows", machine="x86_64")
 
 # define known solvers
-SUPPORTED_SOLVERS: dict[str, SolverInfo] = {
+SOLVERS: dict[str, SolverInfo] = {
     "yices-2.6.5": SolverInfo(
         name="yices-2.6.5",
         binary_name="yices-smt2",
-        arguments=["--smt2-model-format"],
+        arguments=["--smt2-model-format", "--bvconst-in-decimal"],
         downloads={
             macos_intel: DownloadInfo(
                 base_url=yices_base_url("2.6.5"),
@@ -106,7 +112,7 @@ SUPPORTED_SOLVERS: dict[str, SolverInfo] = {
     "yices-2.6.4": SolverInfo(
         name="yices-2.6.4",
         binary_name="yices-smt2",
-        arguments=["--smt2-model-format"],
+        arguments=["--smt2-model-format", "--bvconst-in-decimal"],
         downloads={
             macos_intel: DownloadInfo(
                 base_url="https://github.com/SRI-CSL/yices2/releases/download/Yices-2.6.4",
@@ -141,10 +147,61 @@ SUPPORTED_SOLVERS: dict[str, SolverInfo] = {
         downloads={},
         arguments=[],
     ),
+    "bitwuzla": SolverInfo(
+        name="bitwuzla",
+        binary_name="bitwuzla",
+        # bitwuzla does not release static binaries, must build from source
+        downloads={},
+        arguments=["--produce-models"],
+    ),
+    "bitwuzla-abs": SolverInfo(
+        name="bitwuzla-abs",
+        binary_name="bitwuzla",
+        # bitwuzla does not release static binaries, must build from source
+        downloads={},
+        arguments=["--produce-models", "--abstraction"],
+    ),
+    "cvc5-1.1.2": SolverInfo(
+        name="cvc5-1.1.2",
+        binary_name="cvc5",
+        downloads={
+            macos_intel: DownloadInfo(
+                base_url=cvc5_base_url("1.1.2"),
+                filename="cvc5-macOS-x86_64-static.zip",
+                checksum="XYZ",
+                binary_name_in_archive="cvc5",
+            ),
+            macos_arm64: DownloadInfo(
+                base_url=cvc5_base_url("1.1.2"),
+                filename="cvc5-macOS-arm64-static.zip",
+                checksum="XYZ",
+                binary_name_in_archive="cvc5",
+            ),
+            linux_intel: DownloadInfo(
+                base_url=cvc5_base_url("1.1.2"),
+                filename="cvc5-Linux-x86_64-static.zip",
+                checksum="XYZ",
+                binary_name_in_archive="cvc5",
+            ),
+            windows_intel: DownloadInfo(
+                base_url=cvc5_base_url("1.1.2"),
+                filename="cvc5-Win64-x86_64-static.zip",
+                checksum="XYZ",
+                binary_name_in_archive="cvc5.exe",
+            ),
+        },
+        arguments=["--produce-models"],
+    ),
 }
 
 # set default aliases
-SUPPORTED_SOLVERS["yices"] = SUPPORTED_SOLVERS[f"yices-{DEFAULT_YICES_VERSION}"]
+SOLVERS["yices"] = SOLVERS[f"yices-{DEFAULT_YICES_VERSION}"]
+SOLVERS["cvc5"] = SOLVERS[f"cvc5-{DEFAULT_CVC5_VERSION}"]
+SOLVERS["cvc5-int"] = replace(
+    SOLVERS["cvc5"],
+    name="cvc5-int",
+    arguments=["--produce-models", "--solve-bv-as-int=iand", "--iand-mode=bitwise"],
+)
 
 
 def get_platform_arch() -> MachineInfo:
@@ -259,7 +316,9 @@ def download_allowed(solver: SolverInfo, download_info: DownloadInfo) -> bool:
     if not console.is_interactive:
         return os.environ.get(ALLOW_DOWNLOAD_VAR, "false").lower() in ["true", "1"]
 
-    prompt = f"{solver.name} can be downloaded from {download_info.base_url}, ok to proceed? (y/N) "
+    prompt = (
+        f"Do you want to download {solver.name} from {download_info.base_url}? (y/N) "
+    )
     return input(prompt).lower() == "y"
 
 
@@ -393,7 +452,7 @@ def get_solver_command(solver_name: str) -> list[str]:
     Ensures the solver is available first.
     """
 
-    solver_info: SolverInfo | None = SUPPORTED_SOLVERS.get(solver_name)
+    solver_info: SolverInfo | None = SOLVERS.get(solver_name)
     if not solver_info:
         # should have been caught by the config parsing:
         #   `--solver <solver_name>` is a high level command that expects a supported solver
@@ -422,11 +481,11 @@ if __name__ == "__main__":
 
     if not len(sys.argv) > 1:
         print("Usage: python solvers.py <solver_name>")
-        print("Supported:", list(SUPPORTED_SOLVERS.keys()))
+        print("Supported:", list(SOLVERS.keys()))
         sys.exit(1)
 
     solver_name = sys.argv[1]
-    solver_info: SolverInfo = SUPPORTED_SOLVERS[solver_name]
+    solver_info: SolverInfo = SOLVERS[solver_name]
 
     with tempfile.TemporaryDirectory(delete=False) as tmpdir:
         for machine_tuple, download_info in solver_info.downloads.items():
