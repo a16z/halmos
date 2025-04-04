@@ -3254,6 +3254,13 @@ class SEVM:
         profile_instructions = self.options.profile_instructions
         profiler = Profiler()
         start_time = timer()
+        fun_name = self.fun_info.name
+
+        # TODO: break the backward dependency from traces, and use the existing trace lender methods
+        call_seq_str = "\n".join(
+            f"{hexify(call.message.target)}::{hexify(call.message.data[:4].unwrap())}"
+            for call in ex0.call_sequence
+        )
 
         step_id = 0
         step_interval_mask = PULSE_INTERVAL - 1
@@ -3279,9 +3286,11 @@ class SEVM:
                     elapsed_fmt = timedelta(seconds=int(elapsed))
 
                     progress_status.update(
+                        f"{fun_name}: "
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"
                         f" | completed paths: {stack.completed_paths}"
                         f" | outstanding paths: {len(stack)}"
+                        f"\n{call_seq_str}"
                     )
 
                 if not ex.path.is_activated():
