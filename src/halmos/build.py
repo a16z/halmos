@@ -6,6 +6,7 @@ import traceback
 from halmos.config import Config as HalmosConfig
 from halmos.logs import PARSING_ERROR, debug, warn_code
 from halmos.mapper import Mapper
+from halmos.ui import ui
 
 
 def get_contract_type(
@@ -30,6 +31,7 @@ def parse_build_out(args: HalmosConfig) -> dict:
             f"The build output directory `{out_path}` does not exist"
         )
 
+    ui.update_status(f"Parsing {out_path}")
     for sol_dirname in os.listdir(out_path):  # for each source filename
         if not sol_dirname.endswith(".sol"):
             continue

@@ -11,13 +11,14 @@ from typing import Any
 
 import toml
 
-from .logs import warn
+from halmos.logs import warn
+from halmos.solvers import SOLVERS
 
 # common strings
 internal = "internal"
 
 # groups
-debugging, solver, build, experimental, deprecated = (
+debugging, solver_group, build, experimental, deprecated = (
     "Debugging options",
     "Solver options",
     "Build options",
@@ -38,7 +39,7 @@ def arg(
     global_default: Any,
     metavar: str | None = None,
     group: str | None = None,
-    choices: str | None = None,
+    choices: list[str] | None = None,
     short: str | None = None,
     countable: bool = False,
     global_default_str: str | None = None,
@@ -459,55 +460,57 @@ class Config:
         help="specify the SMT solver to use (e.g., 'yices'). If not specified, defaults to 'z3'. If --solver-command is used, this is ignored.",
         global_default="z3",
         metavar="SOLVER_NAME",
-        choices=["yices", "z3"],
-        group=solver,
+        choices=list(SOLVERS.keys()),
+        group=solver_group,
     )
 
     smt_exp_by_const: int = arg(
         help="interpret constant power up to N",
         global_default=2,
         metavar="N",
-        group=solver,
+        group=solver_group,
     )
 
     solver_timeout_branching: int = arg(
         help="set timeout (in milliseconds) for solving branching conditions; 0 means no timeout",
         global_default=1,
         metavar="TIMEOUT",
-        group=solver,
+        group=solver_group,
     )
 
     solver_timeout_assertion: int = arg(
         help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout",
         global_default=60_000,
         metavar="TIMEOUT",
-        group=solver,
+        group=solver_group,
     )
 
     solver_max_memory: int = arg(
         help="set memory limit (in megabytes) for the solver; 0 means no limit",
         global_default=0,
         metavar="SIZE",
-        group=solver,
+        group=solver_group,
     )
 
     solver_command: str = arg(
         help="use the given exact command when invoking the solver (overrides automatic solver detection/download triggered by --solver)",
         global_default=None,
         metavar="COMMAND",
-        group=solver,
+        group=solver_group,
     )
 
     solver_threads: int = arg(
         help="set the number of threads for parallel solvers",
         metavar="N",
-        group=solver,
+        group=solver_group,
         global_default=(lambda: os.cpu_count() or 1),
         global_default_str="number of CPUs",
     )
 
     cache_solver: bool = arg(
-        help="cache unsat queries using unsat cores", global_default=False, group=solver
+        help="cache unsat queries using unsat cores",
+        global_default=False,
+        group=solver_group,
     )
 
     ### Experimental options

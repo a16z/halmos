@@ -21,7 +21,6 @@ from datetime import timedelta
 from enum import Enum
 from importlib import metadata
 
-import rich
 from z3 import (
     BitVec,
     BoolRef,
@@ -61,7 +60,6 @@ from .logs import (
     error,
     logger,
     logger_unique,
-    progress_status,
     warn,
     warn_code,
 )
@@ -97,6 +95,7 @@ from .solve import (
 )
 from .solvers import get_solver_command
 from .traces import render_trace, rendered_call_sequence, rendered_trace
+from .ui import ui
 from .utils import (
     EVM,
     Address,
@@ -612,7 +611,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
 
     contract_name = ctx.name
     for idx, pre_ex in enumerate(curr_exs):
-        progress_status.update(
+        ui.update_status(
             f"{contract_name}: "
             f"depth: {cyan(depth)} | "
             f"starting states: {cyan(len(curr_exs))} | "
@@ -992,9 +991,8 @@ def run_test(ctx: FunctionContext) -> TestResult:
             if done == total:
                 break
             elapsed = timedelta(seconds=int(timer.elapsed()))
-            progress_status.update(
-                f"{funsig}: [{elapsed}] solving queries: {done} / {total}"
-            )
+            new_status = f"{funsig}: [{elapsed}] solving queries: {done} / {total}"
+            ui.update_status(new_status)
             time.sleep(0.1)
 
     ctx.thread_pool.shutdown(wait=True)
@@ -1449,10 +1447,6 @@ def _main(_args=None) -> MainResult:
     timer = NamedTimer("total")
     timer.create_subtimer("build")
 
-    # clear any remaining live display before starting a new instance
-    rich.get_console().clear_live()
-    progress_status.start()
-
     #
     # z3 global options
     #
@@ -1519,6 +1513,8 @@ def _main(_args=None) -> MainResult:
         error(f"Build failed: {build_cmd}")
         return MainResult(1)
 
+    ui.start_status()
+
     timer.create_subtimer("load")
     try:
         build_out = parse_build_out(args)
@@ -1542,7 +1538,7 @@ def _main(_args=None) -> MainResult:
     def on_exit(exitcode: int) -> MainResult:
         ExecutorRegistry().shutdown_all()
 
-        progress_status.stop()
+        ui.stop_status()
 
         result = MainResult(exitcode, test_results_map)
 

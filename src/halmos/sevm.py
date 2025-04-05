@@ -86,11 +86,11 @@ from .logs import (
     LIBRARY_PLACEHOLDER,
     debug,
     debug_once,
-    progress_status,
     warn,
     warn_code,
 )
 from .mapper import BuildOut
+from .ui import ui
 from .utils import (
     Address,
     BitVecSort160,
@@ -3285,7 +3285,7 @@ class SEVM:
                     # hh:mm:ss
                     elapsed_fmt = timedelta(seconds=int(elapsed))
 
-                    progress_status.update(
+                    ui.update_status(
                         f"{fun_name}: "
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"
                         f" | completed paths: {stack.completed_paths}"
