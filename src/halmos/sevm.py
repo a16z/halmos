@@ -62,7 +62,7 @@ from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
 from .console import console
-from .constants import MAX_MEMORY_SIZE
+from .constants import MAX_ETH, MAX_MEMORY_SIZE
 from .exceptions import (
     AddressCollision,
     EvmException,
@@ -126,6 +126,7 @@ from .utils import (
     is_concrete,
     is_f_sha3_name,
     match_dynamic_array_overflow_condition,
+    render_address,
     restore_precomputed_hashes,
     sha3_inv,
     str_opcode,
@@ -1654,7 +1655,14 @@ class Exec:  # an execution path
         self.path.append(Select(EMPTY_BALANCE, addr) == ZERO)
 
         # practical assumption on the max balance per account
-        self.path.append(ULT(value, con(2**96)))
+        # (only for symbolic values, otherwise we may append false constraints)
+        if is_bv_value(value):
+            if (v := value.as_long()) > MAX_ETH:
+                warn(
+                    f"address {render_address(addr)} has balance {v} greater than {MAX_ETH=}"
+                )
+        else:
+            self.path.append(ULE(value, con(MAX_ETH)))
 
         return value
 
