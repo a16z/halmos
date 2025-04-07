@@ -1312,7 +1312,7 @@ def format_time(seconds: float) -> str:
     Returns a pretty string for an elapsed time in seconds.
     Automatically chooses a relevant time unit (h, m, s, ms, µs, ns)
 
-    e.g.:
+    Examples:
         3602.13 -> 1h00m02s
         62.003 -> 1m02s
         1.000000001 -> 1.000s
@@ -1342,6 +1342,37 @@ def format_time(seconds: float) -> str:
     else:
         # Otherwise, display in nanoseconds
         return f"{seconds * 1e9:.3f}ns"
+
+
+def parse_time(arg: str, default_unit: str | None = "s") -> float:
+    """
+    Parse a time string into a number of seconds, with an optional unit suffix.
+
+    Examples:
+        "200ms" -> 0.2
+        "5s" -> 5.0
+        "2m" -> 120.0
+        "1h" -> 3600.0
+
+    Note: does not support combined units like "1h00m02s" (like `format_time` produces)
+    """
+
+    if arg.endswith("ms"):
+        return float(arg[:-2]) / 1000
+    elif arg.endswith("s"):
+        return float(arg[:-1])
+    elif arg.endswith("m"):
+        return float(arg[:-1]) * 60
+    elif arg.endswith("h"):
+        return float(arg[:-1]) * 3600
+    elif arg == "0":
+        return 0.0
+    else:
+        if not default_unit:
+            raise ValueError(f"Could not infer time unit from {arg}")
+        if default_unit not in ["ms", "s", "m", "h"]:
+            raise ValueError(f"Invalid time unit: {default_unit}")
+        return parse_time(arg + default_unit, default_unit=None)
 
 
 class timed_block:

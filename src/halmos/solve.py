@@ -1,4 +1,5 @@
 import re
+import subprocess
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -19,7 +20,6 @@ from halmos.processes import (
     ExecutorRegistry,
     PopenExecutor,
     PopenFuture,
-    TimeoutExpired,
 )
 from halmos.sevm import Address, Exec, SMTQuery
 from halmos.utils import hexify
@@ -419,7 +419,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
 
     # solver_timeout_assertion == 0 means no timeout,
     # which translates to timeout_seconds=None for subprocess.run
-    timeout_seconds = t / 1000 if (t := args.solver_timeout_assertion) else None
+    timeout_seconds = t if (t := args.solver_timeout_assertion) else None
 
     cmd_list = (
         args.solver_command.split()
@@ -435,7 +435,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     # block until the external solver returns, times out, is interrupted, fails, etc.
     try:
         stdout, stderr, returncode = future.result()
-    except TimeoutExpired:
+    except subprocess.TimeoutExpired:
         return SolverOutput(
             result=unknown, returncode=EXIT_TIMEDOUT, path_id=path_ctx.path_id
         )

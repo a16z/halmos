@@ -4,7 +4,7 @@ import subprocess
 import threading
 import time
 import weakref
-from subprocess import PIPE, Popen, TimeoutExpired
+from subprocess import PIPE, Popen
 
 import psutil
 
@@ -66,7 +66,7 @@ class PopenFuture(concurrent.futures.Future):
                 )
                 self.end_time = time.time()
                 self.returncode = self.process.returncode
-            except TimeoutExpired as e:
+            except subprocess.TimeoutExpired as e:
                 self._exception = e
                 self.cancel()
             except Exception as e:
@@ -98,7 +98,7 @@ class PopenFuture(concurrent.futures.Future):
                 process.terminate()
 
             # termination grace period
-            with contextlib.suppress(TimeoutExpired):
+            with contextlib.suppress(psutil.TimeoutExpired, subprocess.TimeoutExpired):
                 parent_process.wait(timeout=0.5)
 
             # after grace period, force kill

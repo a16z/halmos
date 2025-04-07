@@ -245,10 +245,14 @@ def mk_addr(name: str) -> Address:
 
 
 def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None):
+    # in the config, we have a float in seconds
+    # z3 expects an int in milliseconds
+    timeout_ms = int(args.solver_timeout_branching * 1000)
+
     return create_solver(
         logic=logic,
         ctx=ctx,
-        timeout=args.solver_timeout_branching,
+        timeout=timeout_ms,
         max_memory=args.solver_max_memory,
     )
 

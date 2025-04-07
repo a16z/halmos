@@ -13,6 +13,7 @@ import toml
 
 from halmos.logs import warn
 from halmos.solvers import SOLVERS
+from halmos.utils import parse_time
 
 # common strings
 internal = "internal"
@@ -70,6 +71,17 @@ def ensure_non_empty(values: list | set | dict) -> list:
 def parse_csv(values: str, sep: str = ",") -> Generator[Any, None, None]:
     """Parse a CSV string and return a generator of *non-empty* values."""
     return (x for _x in values.split(sep) if (x := _x.strip()))
+
+
+class ParseTimeout(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        values = ParseTimeout.parse(values)
+        setattr(namespace, self.dest, values)
+
+    @staticmethod
+    def parse(values: str) -> float:
+        # keeping ms as the default unit for backward compatibility
+        return parse_time(values, default_unit="ms")
 
 
 class ParseCSVTraceEvent(argparse.Action):
@@ -471,18 +483,26 @@ class Config:
         group=solver_group,
     )
 
-    solver_timeout_branching: int = arg(
-        help="set timeout (in milliseconds) for solving branching conditions; 0 means no timeout",
-        global_default=1,
+    solver_timeout_branching: str = arg(
+        help=(
+            "set timeout for solving branching conditions; 0 means no timeout. "
+            "Can specify a unit, e.g. '200ms', '5s', '2m', '1h', etc."
+        ),
+        global_default="1ms",
         metavar="TIMEOUT",
         group=solver_group,
+        action=ParseTimeout,
     )
 
-    solver_timeout_assertion: int = arg(
-        help="set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout",
-        global_default=60_000,
+    solver_timeout_assertion: str = arg(
+        help=(
+            "set timeout for solving assertion violation conditions; 0 means no timeout. "
+            "Can specify a unit, e.g. '200ms', '5s', '2m', '1h', etc."
+        ),
+        global_default="60s",
         metavar="TIMEOUT",
         group=solver_group,
+        action=ParseTimeout,
     )
 
     solver_max_memory: int = arg(
