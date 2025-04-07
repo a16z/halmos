@@ -1344,7 +1344,7 @@ def format_time(seconds: float) -> str:
         return f"{seconds * 1e9:.3f}ns"
 
 
-def parse_time(arg: str, default_unit: str | None = "s") -> float:
+def parse_time(arg: int | float | str, default_unit: str | None = "s") -> float:
     """
     Parse a time string into a number of seconds, with an optional unit suffix.
 
@@ -1357,22 +1357,30 @@ def parse_time(arg: str, default_unit: str | None = "s") -> float:
     Note: does not support combined units like "1h00m02s" (like `format_time` produces)
     """
 
-    if arg.endswith("ms"):
-        return float(arg[:-2]) / 1000
-    elif arg.endswith("s"):
-        return float(arg[:-1])
-    elif arg.endswith("m"):
-        return float(arg[:-1]) * 60
-    elif arg.endswith("h"):
-        return float(arg[:-1]) * 3600
-    elif arg == "0":
-        return 0.0
-    else:
+    if default_unit and default_unit not in ["ms", "s", "m", "h"]:
+        raise ValueError(f"Invalid time unit: {default_unit}")
+
+    if isinstance(arg, str):
+        if arg.endswith("ms"):
+            return float(arg[:-2]) / 1000
+        elif arg.endswith("s"):
+            return float(arg[:-1])
+        elif arg.endswith("m"):
+            return float(arg[:-1]) * 60
+        elif arg.endswith("h"):
+            return float(arg[:-1]) * 3600
+        elif arg == "0":
+            return 0.0
+        else:
+            if not default_unit:
+                raise ValueError(f"Could not infer time unit from {arg}")
+            return parse_time(arg + default_unit, default_unit=None)
+    elif isinstance(arg, int | float):
         if not default_unit:
             raise ValueError(f"Could not infer time unit from {arg}")
-        if default_unit not in ["ms", "s", "m", "h"]:
-            raise ValueError(f"Invalid time unit: {default_unit}")
-        return parse_time(arg + default_unit, default_unit=None)
+        return parse_time(str(arg) + default_unit, default_unit=None)
+    else:
+        raise ValueError(f"Invalid time argument: {arg}")
 
 
 class timed_block:
