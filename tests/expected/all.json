@@ -888,8 +888,8 @@
             },
             {
                 "name": "check_deal_over_max_eth_concrete()",
-                "exitcode": 1,
-                "num_models": 1,
+                "exitcode": 3,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,

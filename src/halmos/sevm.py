@@ -126,7 +126,6 @@ from .utils import (
     is_concrete,
     is_f_sha3_name,
     match_dynamic_array_overflow_condition,
-    render_address,
     restore_precomputed_hashes,
     sha3_inv,
     str_opcode,
@@ -1658,9 +1657,7 @@ class Exec:  # an execution path
         # (only for symbolic values, otherwise we may append false constraints)
         if is_bv_value(value):
             if (v := value.as_long()) > MAX_ETH:
-                warn(
-                    f"address {render_address(addr)} has balance {v} greater than {MAX_ETH=}"
-                )
+                raise HalmosException(f"balance {v} > MAX_ETH")
         else:
             self.path.append(ULE(value, con(MAX_ETH)))
 
