@@ -1329,6 +1329,11 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
     try:
         setup_config = with_devdoc(args, setup_info.sig, ctx.contract_json)
+        setup_config = with_resolved_solver(setup_config)
+
+        if setup_config.debug_config:
+            debug(f"{setup_config.formatted_layers()}")
+
         setup_solver = mk_solver(setup_config)
         setup_ctx = FunctionContext(
             args=setup_config,
