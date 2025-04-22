@@ -62,7 +62,7 @@ from .calldata import FunctionInfo
 from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
 from .config import Config as HalmosConfig
 from .console import console
-from .constants import MAX_MEMORY_SIZE
+from .constants import MAX_ETH, MAX_MEMORY_SIZE
 from .exceptions import (
     AddressCollision,
     EvmException,
@@ -1654,7 +1654,17 @@ class Exec:  # an execution path
         self.path.append(Select(EMPTY_BALANCE, addr) == ZERO)
 
         # practical assumption on the max balance per account
-        self.path.append(ULT(value, con(2**96)))
+        if is_bv_value(value):
+            if (v := value.as_long()) > MAX_ETH:
+                raise HalmosException(f"balance {v} > MAX_ETH")
+        else:
+            cond = simplify(ULE(value, con(MAX_ETH)))
+
+            # stop the current path if we know the balance is definitely greater than MAX_ETH
+            if is_false(cond):
+                raise HalmosException(f"balance {value} > MAX_ETH")
+
+            self.path.append(cond)
 
         return value
 
