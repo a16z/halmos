@@ -1654,12 +1654,17 @@ class Exec:  # an execution path
         self.path.append(Select(EMPTY_BALANCE, addr) == ZERO)
 
         # practical assumption on the max balance per account
-        # (only for symbolic values, otherwise we may append false constraints)
         if is_bv_value(value):
             if (v := value.as_long()) > MAX_ETH:
                 raise HalmosException(f"balance {v} > MAX_ETH")
         else:
-            self.path.append(ULE(value, con(MAX_ETH)))
+            cond = simplify(ULE(value, con(MAX_ETH)))
+
+            # stop the current path if we know the balance is definitely greater than MAX_ETH
+            if is_false(cond):
+                raise HalmosException(f"balance {value} > MAX_ETH")
+
+            self.path.append(cond)
 
         return value
 

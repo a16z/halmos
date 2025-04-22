@@ -860,6 +860,15 @@
         ],
         "test/Deal.t.sol:DealTest": [
             {
+                "name": "check_concretized_transfer_over_max_eth(bytes)",
+                "exitcode": 3,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_deal_1(address,uint256)",
                 "exitcode": 0,
                 "num_models": 0,
@@ -887,7 +896,7 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_deal_over_max_eth_concrete()",
+                "name": "check_deal_over_max_eth()",
                 "exitcode": 3,
                 "num_models": 0,
                 "models": null,
@@ -896,8 +905,26 @@
                 "num_bounded_loops": null
             },
             {
-                "name": "check_deal_over_max_eth_mixed(address)",
-                "exitcode": 0,
+                "name": "check_deal_over_max_eth(address)",
+                "exitcode": 3,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_deal_over_max_eth(address,uint256)",
+                "exitcode": 3,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_deal_over_max_eth(uint256)",
+                "exitcode": 3,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,
@@ -908,6 +935,15 @@
                 "name": "check_deal_under_max_eth_mixed(address)",
                 "exitcode": 1,
                 "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_implicit_transfer_over_max_eth(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,
