@@ -1735,6 +1735,9 @@ class Exec:  # an execution path
         sha3_hash = self.sha3_hash(data)
 
         if sha3_hash is not None:
+            if byte_length(data) > 128:  # 1024 bits
+                return bytes_to_bv_value(sha3_hash)
+
             self.path.append(sha3_expr == bytes_to_bv_value(sha3_hash))
 
             # ensure the hash value is within the safe range assumed below
