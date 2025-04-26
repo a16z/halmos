@@ -866,8 +866,8 @@ class hevm_cheat_code:
 
         # vm.sign(uint256 privateKey, bytes32 digest) returns (uint8 v, bytes32 r, bytes32 s)
         elif funsig == hevm_cheat_code.sign_sig:
-            key = extract_bytes(arg, 4, 32)
-            digest = extract_bytes(arg, 4 + 32, 32)
+            key = uint256(extract_bytes(arg, 4, 32)).as_z3()
+            digest = uint256(extract_bytes(arg, 4 + 32, 32)).as_z3()
 
             # TODO: handle concrete private key + digest (generate concrete signature)
 
