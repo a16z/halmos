@@ -498,16 +498,10 @@ def create_bool(ex, arg, **kwargs):
 
 
 def create_uint256_min_max(ex, arg, **kwargs):
-    # Generate a symbolic uint256 value
     symbolic_value = create_generic(ex, 256, "vmRandomUint_min_max", "uint256")
 
-    # Extract min and max values from `arg`
-    min_value = uint256(
-        extract_bytes(arg, 4 + 32 * 1, 32)
-    )  # Assuming min is at offset 1
-    max_value = uint256(
-        extract_bytes(arg, 4 + 32 * 2, 32)
-    )  # Assuming max is at offset 2
+    min_value = uint256(extract_bytes(arg, 4 + 32 * 1, 32))
+    max_value = uint256(extract_bytes(arg, 4 + 32 * 2, 32))
 
     min_value = uint256(min_value).as_z3()
     max_value = uint256(max_value).as_z3()

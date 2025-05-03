@@ -199,12 +199,12 @@ contract HalmosCheatCodeTest is SymTest, Test {
     function check_random_uint_range(uint256 min, uint256 max) public {
         vm.assume(max >= min);
         uint256 rand = vm.randomUint(min, max);
+        assertTrue(rand >= min, "rand >= min");
+        assertTrue(rand <= max, "rand <= max");
     }
 
     function check_random_uint_range_max_greaterthan_min_fail(uint256 min, uint256 max) public {
         uint256 rand = vm.randomUint(min, max);
-        assertTrue(rand >= min, "rand >= min");
-        assertTrue(rand <= max, "rand <= max");
     }
 
     function check_SymbolLabel() public returns (uint256) {
