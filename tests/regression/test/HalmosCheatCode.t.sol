@@ -20,10 +20,28 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assert(0 <= z && z <= type(uint8).max);
     }
 
+    function check_randomUnit() public {
+        uint x = vm.randomUint(256);
+        uint y = vm.randomUint(160);
+        uint z = vm.randomUint(8);
+        assert(0 <= x && x <= type(uint256).max);
+        assert(0 <= y && y <= type(uint160).max);
+        assert(0 <= z && z <= type(uint8).max);
+    }
+
     function check_createInt() public {
         int x = svm.createInt(256, 'x');
         int y = svm.createInt(160, 'y');
         int z = svm.createInt(8, 'z');
+        assert(type(int256).min <= x && x <= type(int256).max);
+        assert(type(int160).min <= y && y <= type(int160).max);
+        assert(type(int8).min <= z && z <= type(int8).max);
+    }
+
+    function check_randomInt() public {
+        int x = vm.randomInt(256);
+        int y = vm.randomInt(160);
+        int z = vm.randomInt(8);
         assert(type(int256).min <= x && x <= type(int256).max);
         assert(type(int160).min <= y && y <= type(int160).max);
         assert(type(int8).min <= z && z <= type(int8).max);
@@ -37,8 +55,22 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assert(0 <= y && y <= type(uint8).max);
     }
 
+    function check_randomBytes() public {
+        bytes memory data = vm.randomBytes(2);
+        uint x = uint(uint8(data[0]));
+        uint y = uint(uint8(data[1]));
+        assert(0 <= x && x <= type(uint8).max);
+        assert(0 <= y && y <= type(uint8).max);
+    }
+
+
     function check_createBytes_empty() public {
         bytes memory data = svm.createBytes(0, 'data');
+        assert(data.length == 0);
+    }
+
+    function check_randomBytes_empty() public {
+        bytes memory data = vm.randomBytes(0);
         assert(data.length == 0);
     }
 
@@ -57,8 +89,18 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assert(0 <= x && x <= type(uint256).max);
     }
 
+    function check_randomUint256() public {
+        uint x = vm.randomUint();
+        assert(0 <= x && x <= type(uint256).max);
+    }
+
     function check_createInt256() public {
         int x = svm.createInt256('x');
+        assert(type(int256).min <= x && x <= type(int256).max);
+    }
+
+    function check_randomInt256() public {
+        int x = vm.randomInt();
         assert(type(int256).min <= x && x <= type(int256).max);
     }
 
@@ -84,6 +126,38 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertLe(y, type(uint256).max);
     }
 
+
+    function check_randomBytes4() public {
+        bytes4 x = vm.randomBytes4();
+
+        uint256 r;
+        assembly {
+            r := returndatasize()
+        }
+        assert(r == 32);
+
+        uint256 x_uint = uint256(uint32(x));
+        assertLe(x_uint, type(uint32).max);
+        uint y; assembly { y := x }
+        assertLe(y, type(uint256).max);
+    }
+
+    function check_randomBytes8() public {
+        bytes8 x = vm.randomBytes8();
+
+        uint256 r;
+        assembly {
+            r := returndatasize()
+        }
+        assert(r == 32);
+
+        uint256 x_uint = uint256(uint64(x));
+        assertLe(x_uint, type(uint64).max);
+        uint y; assembly { y := x }
+        assertLe(y, type(uint256).max);
+    }
+
+
     /// @dev we expect a counterexample
     ///      (meaning that createBytes4 is able to find the selector for boop())
     function check_createBytes4_finds_selector() public {
@@ -104,10 +178,33 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assert(0 <= y && y <= type(uint160).max);
     }
 
+    function check_randomAddress() public {
+        address x = vm.randomAddress();
+        uint y; assembly { y := x }
+        assert(0 <= y && y <= type(uint160).max);
+    }
+
     function check_createBool() public {
         bool x = svm.createBool('x');
         uint y; assembly { y := x }
         assert(y == 0 || y == 1);
+    }
+
+    function check_randomBool() public { 
+        bool x = vm.randomBool();
+        uint y; assembly { y := x }
+        assert(y == 0 || y == 1);
+    }
+
+    function check_random_uint_range(uint256 min, uint256 max) public {
+        vm.assume(max >= min);
+        uint256 rand = vm.randomUint(min, max);
+    }
+
+    function check_random_uint_range_max_greaterthan_min_fail(uint256 min, uint256 max) public {
+        uint256 rand = vm.randomUint(min, max);
+        assertTrue(rand >= min, "rand >= min");
+        assertTrue(rand <= max, "rand <= max");
     }
 
     function check_SymbolLabel() public returns (uint256) {
@@ -137,6 +234,17 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(vm.load(dummy, bytes32(0)), bytes32(val));
     }
 
+    function check_setArbitraryStorage_pass(uint val) public {
+        address dummy = address(new Beep());
+        // initial value is zero
+        assertEq(vm.load(dummy, bytes32(0)), 0);
+
+        vm.store(dummy, bytes32(0), bytes32(val));
+        vm.setArbitraryStorage(dummy);
+        // enableSymbolicStorage updates only uninitialized slots
+        assertEq(vm.load(dummy, bytes32(0)), bytes32(val));
+    }
+
     function check_enableSymbolicStorage_fail() public {
         address dummy = address(new Beep());
         svm.enableSymbolicStorage(dummy);
@@ -144,9 +252,22 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(vm.load(dummy, bytes32(0)), 0); // fail
     }
 
+    function check_setArbitraryStorage_fail() public {
+        address dummy = address(new Beep());
+        vm.setArbitraryStorage(dummy);
+        // storage slots have been initialized with a symbolic value
+        assertEq(vm.load(dummy, bytes32(0)), 0); // fail
+    }
+
+
     function check_enableSymbolicStorage_nonexistent() public {
         // symbolic storage is not allowed for a nonexistent account
         svm.enableSymbolicStorage(address(0xdeadbeef)); // HalmosException
+    }
+
+    function check_setArbitraryStorage_nonexistent() public {
+        // symbolic storage is not allowed for a nonexistent account
+        vm.setArbitraryStorage(address(0xdeadbeef)); // HalmosException
     }
 
     /// @custom:halmos --array-lengths name=1

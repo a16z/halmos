@@ -7,6 +7,8 @@ from subprocess import PIPE, Popen
 
 from xxhash import xxh3_64, xxh3_64_digest
 from z3 import (
+    UGE,
+    ULE,
     ULT,
     And,
     BitVec,
@@ -16,6 +18,7 @@ from z3 import (
     Implies,
     Not,
     Or,
+    eq,
     is_bv,
     is_false,
     simplify,
@@ -223,7 +226,7 @@ def symbolic_storage(ex, arg, sevm, stack):
     )
 
     if account_alias is None:
-        error_msg = f"enableSymbolicStorage() is not allowed for a nonexistent account: {hexify(account)}"
+        error_msg = f"enableSymbolicStorage() or setArbitraryStorage() is not allowed for a nonexistent account: {hexify(account)}"
         raise HalmosException(error_msg)
 
     ex.storage[account_alias].symbolic = True
@@ -405,12 +408,18 @@ def create_uint(ex, arg, **kwargs):
     if bits > 256:
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
-    name = name_of(extract_string_argument(arg, 1))
+    try:
+        name = name_of(extract_string_argument(arg, 1))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomUint"
     return ByteVec(uint256(create_generic(ex, bits, name, f"uint{bits}")))
 
 
 def create_uint256(ex, arg, **kwargs):
-    name = name_of(extract_string_argument(arg, 0))
+    try:
+        name = name_of(extract_string_argument(arg, 0))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomUint256"
     return ByteVec(create_generic(ex, 256, name, "uint256"))
 
 
@@ -421,12 +430,18 @@ def create_int(ex, arg, **kwargs):
     if bits > 256:
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
-    name = name_of(extract_string_argument(arg, 1))
+    try:
+        name = name_of(extract_string_argument(arg, 1))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomint"
     return ByteVec(int256(create_generic(ex, bits, name, f"int{bits}")))
 
 
 def create_int256(ex, arg, **kwargs):
-    name = name_of(extract_string_argument(arg, 0))
+    try:
+        name = name_of(extract_string_argument(arg, 0))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomint256"
     return ByteVec(create_generic(ex, 256, name, "int256"))
 
 
@@ -434,7 +449,10 @@ def create_bytes(ex, arg, **kwargs):
     byte_size = int_of(
         extract_bytes(arg, 4, 32), "symbolic byte size for halmos.createBytes()"
     )
-    name = name_of(extract_string_argument(arg, 1))
+    try:
+        name = name_of(extract_string_argument(arg, 1))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomBytes"
     symbolic_bytes = create_generic(ex, byte_size * 8, name, "bytes")
     return encode_tuple_bytes(symbolic_bytes)
 
@@ -449,7 +467,10 @@ def create_string(ex, arg, **kwargs):
 
 
 def create_bytes4(ex, arg, **kwargs):
-    name = name_of(extract_string_argument(arg, 0))
+    try:
+        name = name_of(extract_string_argument(arg, 0))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomBytes4"
     result = ByteVec(create_generic(ex, 32, name, "bytes4"))
     result.append((0).to_bytes(28))  # pad right
     return result
@@ -461,13 +482,65 @@ def create_bytes32(ex, arg, **kwargs):
 
 
 def create_address(ex, arg, **kwargs):
-    name = name_of(extract_string_argument(arg, 0))
+    try:
+        name = name_of(extract_string_argument(arg, 0))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomAddress"
     return ByteVec(uint256(create_generic(ex, 160, name, "address")))
 
 
 def create_bool(ex, arg, **kwargs):
-    name = name_of(extract_string_argument(arg, 0))
+    try:
+        name = name_of(extract_string_argument(arg, 0))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomBool"
     return ByteVec(uint256(create_generic(ex, 1, name, "bool")))
+
+
+def create_uint256_min_max(ex, arg, **kwargs):
+    # Generate a symbolic uint256 value
+    symbolic_value = create_generic(ex, 256, "vmRandomUint_min_max", "uint256")
+
+    # Extract min and max values from `arg`
+    min_value = uint256(
+        extract_bytes(arg, 4 + 32 * 1, 32)
+    )  # Assuming min is at offset 1
+    max_value = uint256(
+        extract_bytes(arg, 4 + 32 * 2, 32)
+    )  # Assuming max is at offset 2
+
+    min_value = uint256(min_value).as_z3()
+    max_value = uint256(max_value).as_z3()
+
+    if eq(simplify(min_value), simplify(max_value)):
+        return ByteVec(symbolic_value)
+
+    min_max_condition = simplify(UGE(max_value, min_value))
+
+    if not min_max_condition:
+        raise HalmosException(f"min_value: {min_value}, max_value: {max_value} ")
+
+    ex.path.append(min_max_condition)  # Ensure max >= min
+
+    # Add constraints for the symbolic value to be within the specified range
+
+    min_condition = simplify(UGE(symbolic_value, min_value))
+    ex.path.append(min_condition)  # Use UGE for unsigned >=
+
+    max_condition = simplify(ULE(symbolic_value, max_value))
+    ex.path.append(max_condition)  # Use ULE for unsigned <=
+
+    return ByteVec(symbolic_value)
+
+
+def create_bytes8(ex, arg, **kwargs):
+    try:
+        name = name_of(extract_string_argument(arg, 0))
+    except (IndexError, NotConcreteError):
+        name = "vmRandomBytes8"
+    result = ByteVec(create_generic(ex, 64, name, "bytes8"))
+    result.append((0).to_bytes(24))  # pad right
+    return result
 
 
 def apply_vmaddr(ex, private_key: Word):
@@ -617,6 +690,39 @@ class hevm_cheat_code:
 
     # snapshotState()
     snapshot_state_sig: int = 0x9CD23835
+
+    # bytes4(keccak256("setArbitraryStorage(address)"))
+    set_arbitrary_storage_sig: int = 0xE1631837
+
+    # bytes4(keccak256("randomInt()"))
+    random_int_sig: int = 0x111F1202
+
+    # bytes4(keccak256("randomInt(uint256)"))
+    random_int_dynamic_bit_size_sig: int = 0x12845966
+
+    # bytes4(keccak256("randomUint()"))
+    random_uint_sig: int = 0x25124730
+
+    # bytes4(keccak256("randomUint(uint256)"))
+    random_uint_dynamic_bit_size_sig: int = 0xCF81E69C
+
+    # bytes4(keccak256("randomUint(uint256,uint256)"))
+    random_uint_min_max_sig: int = 0xD61B051B
+
+    # bytes4(keccak256("randomAddress()"))
+    random_address_sig: int = 0xD5BEE9F5
+
+    # bytes4(keccak256("randomBool()"))
+    random_bool_sig: int = 0xCDC126BD
+
+    # bytes4(keccak256("randomBytes(uint256)"))
+    random_bytes_sig: int = 0x6C5D32A9
+
+    # bytes4(keccak256("randomBytes4()"))
+    random_bytes4_sig: int = 0x9B7CD579
+
+    # bytes4(keccak256("randomBytes8()"))
+    random_bytes8_sig: int = 0x0497B0A5
 
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack) -> ByteVec | None:
@@ -931,6 +1037,39 @@ class hevm_cheat_code:
         # vm.snapshotState() return (uint256)
         elif funsig == hevm_cheat_code.snapshot_state_sig:
             return snapshot_state(ex, arg, sevm, stack)
+
+        elif funsig == hevm_cheat_code.set_arbitrary_storage_sig:
+            return symbolic_storage(ex, arg, sevm, stack)
+
+        elif funsig == hevm_cheat_code.random_int_sig:
+            return create_int256(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_int_dynamic_bit_size_sig:
+            return create_int(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_uint_sig:
+            return create_uint256(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_uint_dynamic_bit_size_sig:
+            return create_uint(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_uint_min_max_sig:
+            return create_uint256_min_max(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_address_sig:
+            return create_address(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_bool_sig:
+            return create_bool(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_bytes_sig:
+            return create_bytes(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_bytes4_sig:
+            return create_bytes4(ex, arg)
+
+        elif funsig == hevm_cheat_code.random_bytes8_sig:
+            return create_bytes8(ex, arg)
 
         else:
             # TODO: support other cheat codes
