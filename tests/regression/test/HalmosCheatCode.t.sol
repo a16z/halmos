@@ -241,7 +241,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
         vm.store(dummy, bytes32(0), bytes32(val));
         vm.setArbitraryStorage(dummy);
-        // enableSymbolicStorage updates only uninitialized slots
+        // setArbitraryStorage updates only uninitialized slots
         assertEq(vm.load(dummy, bytes32(0)), bytes32(val));
     }
 
@@ -266,7 +266,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_setArbitraryStorage_nonexistent() public {
-        // symbolic storage is not allowed for a nonexistent account
+        // Arbitrary Storage is not allowed for a nonexistent account
         vm.setArbitraryStorage(address(0xdeadbeef)); // HalmosException
     }
 
