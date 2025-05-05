@@ -20,7 +20,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assert(0 <= z && z <= type(uint8).max);
     }
 
-    function check_randomUnit() public {
+    function check_randomUint() public {
         uint x = vm.randomUint(256);
         uint y = vm.randomUint(160);
         uint z = vm.randomUint(8);
@@ -122,8 +122,6 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
         uint256 x_uint = uint256(uint32(x));
         assertLe(x_uint, type(uint32).max);
-        uint y; assembly { y := x }
-        assertLe(y, type(uint256).max);
     }
 
 
@@ -138,8 +136,6 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
         uint256 x_uint = uint256(uint32(x));
         assertLe(x_uint, type(uint32).max);
-        uint y; assembly { y := x }
-        assertLe(y, type(uint256).max);
     }
 
     function check_randomBytes8() public {
@@ -153,8 +149,6 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
         uint256 x_uint = uint256(uint64(x));
         assertLe(x_uint, type(uint64).max);
-        uint y; assembly { y := x }
-        assertLe(y, type(uint256).max);
     }
 
 
@@ -170,7 +164,6 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
         assertNotEq(val, 42);
     }
-
 
     function check_createAddress() public {
         address x = svm.createAddress('x');
@@ -190,21 +183,28 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assert(y == 0 || y == 1);
     }
 
-    function check_randomBool() public { 
+    function check_randomBool() public {
         bool x = vm.randomBool();
         uint y; assembly { y := x }
         assert(y == 0 || y == 1);
     }
 
-    function check_random_uint_range(uint256 min, uint256 max) public {
-        vm.assume(max >= min);
+    function check_random_uint_range_concrete_pass() public {
+        uint256 min = 120;
+        uint256 max = 1_000_000;
         uint256 rand = vm.randomUint(min, max);
-        assertTrue(rand >= min, "rand >= min");
-        assertTrue(rand <= max, "rand <= max");
+        assertGe(rand, min);
+        assertLe(rand, max);
     }
 
-    function check_random_uint_range_max_greaterthan_min_fail(uint256 min, uint256 max) public {
-        uint256 rand = vm.randomUint(min, max);
+    function check_random_uint_range_symbolic_fail(uint256 min, uint256 max) public {
+        // expected to fail with HalmosException
+        vm.randomUint(min, max);
+    }
+
+    function check_random_uint_range_max_greaterthan_min_fail() public {
+        // expected to fail with HalmosException
+        vm.randomUint(1, 0);
     }
 
     function check_SymbolLabel() public returns (uint256) {
