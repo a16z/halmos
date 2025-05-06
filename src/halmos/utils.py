@@ -1012,11 +1012,9 @@ class OffsetMap:
 def mk_precomputed_keccak_registry() -> OffsetMap:
     m = OffsetMap()
     for k, v in keccak256_256.items():
-        v = f_sha3_256(con(v))
-        m[k] = v
+        m[k] = f_sha3_256(con(v))
     for k, (v1, v2) in keccak256_512.items():
-        v = f_sha3_512(con((v1 << 256) + v2, size_bits=512))
-        m[k] = v
+        m[k] = f_sha3_512(con((v1 << 256) + v2, size_bits=512))
     return m
 
 
