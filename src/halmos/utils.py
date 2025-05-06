@@ -1015,7 +1015,7 @@ def mk_precomputed_keccak_registry() -> OffsetMap:
         v = f_sha3_256(con(v))
         m[k] = v
     for k, (v1, v2) in keccak256_512.items():
-        v = f_sha3_512(con(v1 << 256 + v2, size_bits=512))
+        v = f_sha3_512(con((v1 << 256) + v2, size_bits=512))
         m[k] = v
     return m
 
