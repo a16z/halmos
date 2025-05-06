@@ -1003,11 +1003,6 @@ class OffsetMap:
         self._map[k >> self._offset_bits] = (v, k & self._mask)
 
     def copy(self) -> "OffsetMap":
-        """Create a deep copy of this OffsetMap.
-
-        Returns:
-            A new OffsetMap instance with the same offset_bits and copied mapping.
-        """
         new_map = OffsetMap(self._offset_bits)
         new_map._map = self._map.copy()
         return new_map
