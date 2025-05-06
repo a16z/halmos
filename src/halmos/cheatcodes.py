@@ -64,6 +64,7 @@ from .utils import (
     red,
     secp256k1n,
     stripped,
+    try_bytes_to_bv_value,
     uid,
     uint160,
     uint256,
@@ -931,8 +932,8 @@ class hevm_cheat_code:
 
         # vm.sign(uint256 privateKey, bytes32 digest) returns (uint8 v, bytes32 r, bytes32 s)
         elif funsig == hevm_cheat_code.sign_sig:
-            key = uint256(extract_bytes(arg, 4, 32)).as_z3()
-            digest = uint256(extract_bytes(arg, 4 + 32, 32)).as_z3()
+            key = try_bytes_to_bv_value(extract_bytes(arg, 4, 32))
+            digest = try_bytes_to_bv_value(extract_bytes(arg, 4 + 32, 32))
 
             # TODO: handle concrete private key + digest (generate concrete signature)
 

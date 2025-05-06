@@ -363,6 +363,10 @@ def bytes_to_bv_value(x: bytes) -> BitVecNumRef:
     return con(int.from_bytes(x, "big"), size_bits=len(x) * 8)
 
 
+def try_bytes_to_bv_value(x: Any) -> Any:
+    return bytes_to_bv_value(x) if isinstance(x, bytes) else x
+
+
 def unbox_int(x: Any) -> Any:
     """
     Converts int-like objects to int, returns x otherwise
