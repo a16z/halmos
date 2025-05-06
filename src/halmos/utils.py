@@ -275,42 +275,38 @@ def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
     return solver
 
 
-def extract_bytes32_array_argument(calldata: BitVecRef, arg_idx: int):
+def extract_bytes32_array_argument(data: Bytes, arg_idx: int):
     """Extracts idx-th argument of bytes32[] from calldata"""
     offset = int_of(
-        extract_bytes(calldata, 4 + arg_idx * 32, 32),
+        extract_bytes(data, 4 + arg_idx * 32, 32),
         "symbolic offset for bytes argument",
     )
     length = int_of(
-        extract_bytes(calldata, 4 + offset, 32),
+        extract_bytes(data, 4 + offset, 32),
         "symbolic size for bytes argument",
     )
     if length == 0:
         return b""
 
-    return extract_bytes(calldata, 4 + offset + 32, length * 32)
+    return extract_bytes(data, 4 + offset + 32, length * 32)
 
 
-def extract_bytes_argument(calldata: BitVecRef, arg_idx: int) -> bytes:
-    """Extracts idx-th argument of string from calldata"""
+def extract_bytes_argument(data: Bytes, arg_idx: int) -> bytes:
+    """Extracts idx-th argument of string from data"""
     offset = int_of(
-        extract_bytes(calldata, 4 + arg_idx * 32, 32),
-        "symbolic offset for bytes argument",
+        extract_word(data, 4 + arg_idx * 32), "symbolic offset for bytes argument"
     )
-    length = int_of(
-        extract_bytes(calldata, 4 + offset, 32),
-        "symbolic size for bytes argument",
-    )
+    length = int_of(extract_word(data, 4 + offset), "symbolic size for bytes argument")
     if length == 0:
         return b""
 
-    bytes = extract_bytes(calldata, 4 + offset + 32, length)
+    bytes = extract_bytes(data, 4 + offset + 32, length)
     return bv_value_to_bytes(bytes) if is_bv_value(bytes) else bytes
 
 
-def extract_string_argument(calldata: BitVecRef, arg_idx: int):
-    """Extracts idx-th argument of string from calldata"""
-    string_bytes = extract_bytes_argument(calldata, arg_idx)
+def extract_string_argument(data: Bytes, arg_idx: int):
+    """Extracts idx-th argument of string from data"""
+    string_bytes = extract_bytes_argument(data, arg_idx)
     return string_bytes.decode("utf-8") if is_concrete(string_bytes) else string_bytes
 
 
@@ -343,11 +339,16 @@ def extract_bytes(data: Bytes, offset: int, size_bytes: int) -> Bytes:
     return val
 
 
-def extract_funsig(calldata: Bytes) -> Bytes4:
+def extract_word(data: Bytes, offset: int) -> Word:
+    """Extracts a 256-bit word from data at offset"""
+    return extract_bytes(data, offset, 32)
+
+
+def extract_funsig(data: Bytes) -> Bytes4:
     """Extracts the function signature (first 4 bytes) from calldata"""
-    if hasattr(calldata, "__getitem__"):
-        return unbox_int(calldata[:4])
-    return extract_bytes(calldata, 0, 4)
+    if hasattr(data, "__getitem__"):
+        return unbox_int(data[:4])
+    return extract_bytes(data, 0, 4)
 
 
 def bv_value_to_bytes(x: BitVecNumRef) -> bytes:
