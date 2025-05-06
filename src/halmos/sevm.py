@@ -1795,6 +1795,18 @@ class Exec:  # an execution path
 
         self.sha3s[sha3_expr] = len(self.sha3s)
 
+    def try_preimage_sha3_hash(self, val):
+        if val.is_concrete:
+            if (inverse := sha3_inv.get(val.value)) is not None:
+                # restore precomputed hashes
+                return BV(self.sha3_data(con(inverse)), size=256)
+
+            # TODO: support more commonly used concrete keccak values
+            elif val.value == EMPTY_KECCAK:
+                return BV(self.sha3_data(b""), size=256)
+
+        return val
+
     def new_gas_id(self) -> int:
         self.cnts["gas"] += 1
         return self.cnts["gas"]
@@ -3341,21 +3353,8 @@ class SEVM:
                 elif opcode == OP_PUSH32:
                     val = insn.operand
                     assert val.size == 256
-
-                    # Special handling for PUSH32 with concrete values
-                    if val.is_concrete:
-                        if (inverse := sha3_inv.get(val.value)) is not None:
-                            # restore precomputed hashes
-                            state.push_any(ex.sha3_data(con(inverse)))
-
-                        # TODO: support more commonly used concrete keccak values
-                        elif val.value == EMPTY_KECCAK:
-                            state.push_any(ex.sha3_data(b""))
-                        else:
-                            state.push(val)
-                    else:
-                        # Symbolic value
-                        state.push(val)
+                    val = ex.try_preimage_sha3_hash(val)
+                    state.push(val)
 
                 elif opcode == OP_POP:
                     state.pop()
@@ -3442,7 +3441,9 @@ class SEVM:
 
                 elif opcode == OP_MLOAD:
                     loc: int = ex.mloc(check_size=True)
-                    state.push_any(state.memory.get_word(loc))
+                    val = BV(state.memory.get_word(loc), size=256)
+                    val = ex.try_preimage_sha3_hash(val)
+                    state.push(val)
 
                 elif opcode == OP_PUSH0:
                     state.push(ZERO)
