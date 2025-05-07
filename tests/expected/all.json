@@ -5342,6 +5342,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/UniswapPairAddress.t.sol:UniswapPairAddressTest": [
+            {
+                "name": "check_inferred_address_matches_deployed_address()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/UnknownCall.t.sol:UnknownCallTest": [
             {
                 "name": "check_unknown_call(address,uint256,uint256)",
