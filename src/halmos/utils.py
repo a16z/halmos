@@ -975,11 +975,11 @@ class OffsetMap:
         self._offset_bits = offset_bits
         self._mask = (1 << offset_bits) - 1  # Creates a mask of offset_bits 1's
 
-    def __getitem__(self, k: int) -> tuple[int, int]:
+    def __getitem__(self, key: int) -> tuple[int, int] | tuple[None, None]:
         """Get the value and offset delta for a key.
 
         Args:
-            k: The integer key to look up
+            key: The integer key to look up
 
         Returns:
             A tuple of (value, delta) where:
@@ -987,20 +987,23 @@ class OffsetMap:
             - delta is the difference between the requested offset and stored offset
               Note: delta can be negative, e.g., when computing slot(a[n-1]) which is `(keccak(slot(a)) - 1) + n`
         """
-        (v, offset) = self._map.get(k >> self._offset_bits, (None, None))
-        if v is None:
+        (value, offset) = self._map.get(key >> self._offset_bits, (None, None))
+        if value is None:
             return (None, None)
-        delta = (k & self._mask) - offset
-        return (v, delta)
+        delta = (key & self._mask) - offset
+        return (value, delta)
 
-    def __setitem__(self, k: int, v: Any):
+    def __setitem__(self, key: int, value: Any):
         """Store a value with its offset.
 
         Args:
-            k: The integer key to store
-            v: The value to store
+            key: The integer key to store
+            value: The value to store
         """
-        self._map[k >> self._offset_bits] = (v, k & self._mask)
+        raw_key = key >> self._offset_bits
+        raw_value = (value, key & self._mask)
+        assert (existing := self._map.get(raw_key)) is None or existing == raw_value
+        self._map[raw_key] = raw_value
 
     def copy(self) -> "OffsetMap":
         new_map = OffsetMap(self._offset_bits)

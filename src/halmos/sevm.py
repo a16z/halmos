@@ -1424,6 +1424,7 @@ class KeccakRegistry:
         return self._hashes[key]
 
     def __setitem__(self, key: BitVecRef, value: int) -> None:
+        assert (existing := self._hashes.get(key)) is None or existing == value
         self._hashes[key] = value
 
     def __contains__(self, key: BitVecRef) -> bool:
@@ -1447,11 +1448,11 @@ class KeccakRegistry:
         new_registry._exprs = self._exprs.copy()
         return new_registry
 
-    def record(self, expr, hash_value) -> None:
+    def record(self, expr: BitVecRef, hash_value: bytes) -> None:
         hash_value = int.from_bytes(hash_value)
         self._exprs[hash_value] = expr
 
-    def reverse_lookup(self, hash_value) -> BitVecRef:
+    def reverse_lookup(self, hash_value: int) -> BitVecRef:
         (expr, delta) = self._exprs[hash_value]
         if expr is not None:
             return expr + delta if delta else expr
