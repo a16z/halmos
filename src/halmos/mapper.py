@@ -164,7 +164,7 @@ class BuildOut(metaclass=SingletonMeta):
                     continue
 
                 # for library contracts, solc emits json with an empty deployedBytecode object
-                object = deployed.get("object")
+                object = deployed.get("object", "")
 
                 # drop the '0x' prefix
                 hexcode = object[2:] if object.startswith("0x") else object
