@@ -156,18 +156,12 @@ class BuildOut(metaclass=SingletonMeta):
         """
         self._build_out_map_code = defaultdict(list)
 
+        empty = {"object": "0x"}
         for filename, file_map in self._build_out_map.items():
             for contract_name, (contract_map, _, _) in file_map.items():
                 # for library contracts, solx emits json with no deployedBytecode field
-                deployed = contract_map.get("deployedBytecode")
-                if not deployed:
-                    continue
-
-                # for library contracts, solc emits json with an empty deployedBytecode object
-                object = deployed.get("object", "")
-
-                # drop the '0x' prefix
-                hexcode = object[2:] if object.startswith("0x") else object
+                deployed = contract_map.get("deployedBytecode", empty)["object"]
+                hexcode = deployed[2:] if deployed.startswith("0x") else deployed
                 if not hexcode:
                     continue
 
