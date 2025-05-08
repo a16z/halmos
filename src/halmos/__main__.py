@@ -21,6 +21,7 @@ from datetime import timedelta
 from enum import Enum
 from importlib import metadata
 
+from rich.tree import Tree
 from z3 import (
     BitVec,
     BoolRef,
@@ -94,7 +95,12 @@ from .solve import (
     solve_low_level,
 )
 from .solvers import get_solver_command
-from .traces import render_trace, rendered_call_sequence, rendered_trace
+from .traces import (
+    render_trace,
+    rendered_address,
+    rendered_call_sequence,
+    rendered_trace,
+)
 from .ui import ui
 from .utils import (
     EVM,
@@ -523,20 +529,12 @@ def run_target_contract(
 
     contract_json = BuildOut().get_by_name(contract_name, filename)
     abi = get_abi(contract_json)
-    method_identifiers = contract_json["methodIdentifiers"]
 
     # iterate over each function in the target contract
-    target_selectors = resolve_target_selectors(ctx, addr, method_identifiers)
+    target_selectors = resolve_target_selectors(ctx, addr, contract_json)
     for fun_sig, fun_selector in target_selectors:
         fun_name = fun_sig.split("(")[0]
         fun_info = FunctionInfo(contract_name, fun_name, fun_sig, fun_selector)
-
-        # skip if 'pure' or 'view' function that doesn't change the state
-        state_mutability = abi[fun_sig]["stateMutability"]
-        if state_mutability in ["pure", "view"]:
-            if args.debug:
-                print(f"Skipping {fun_name} ({state_mutability})")
-            continue
 
         try:
             # create a symbolic tx.origin
@@ -1288,28 +1286,17 @@ def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
         else ex.code.keys()
     )
 
-    # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it, even if targetContract(FOUNDRY_TEST) is provided.
-    result = (
-        resolved_target_contracts
-        if target_selectors[FOUNDRY_TEST]
-        else resolved_target_contracts - {FOUNDRY_TEST}
-    )
+    if not resolved_target_contracts:
+        raise HalmosException("No target contracts found.")
 
-    if not result:
-        msg = (
-            "A targetSelector() must be specified if the test contract is set as a target."
-            if target_contracts
-            else "No contracts have been deployed during setUp()."
-        )
-        raise HalmosException(f"No target contracts available. {msg}")
-
-    return result
+    return resolved_target_contracts
 
 
 def resolve_target_selectors(
-    ctx: ContractContext, addr: Address, method_identifiers: dict
-) -> Iterator[str]:
-    method_identifiers = method_identifiers.items()
+    ctx: ContractContext, addr: Address, contract_json: dict
+) -> Iterator[tuple[str, str]]:
+    abi = get_abi(contract_json)
+    method_identifiers = contract_json["methodIdentifiers"].items()
 
     if target_selectors := ctx.target_selectors[addr]:
         for fun_sig, fun_selector in method_identifiers:
@@ -1318,7 +1305,16 @@ def resolve_target_selectors(
                 yield (fun_sig, fun_selector)
 
     else:
-        yield from method_identifiers
+        for fun_sig, fun_selector in method_identifiers:
+            # skip if 'pure' or 'view' function that doesn't change the state
+            state_mutability = abi[fun_sig]["stateMutability"]
+            if state_mutability in ["pure", "view"]:
+                if ctx.args.debug:
+                    fun_name = fun_sig.split("(")[0]
+                    print(f"Skipping {fun_name} ({state_mutability})")
+                continue
+
+            yield (fun_sig, fun_selector)
 
 
 def run_contract(ctx: ContractContext) -> list[TestResult]:
@@ -1390,6 +1386,27 @@ def run_tests(
 
     test_results = []
     debug_config = args.debug_config
+
+    # pretty print the target contracts and functions for invariant tests
+    has_invariant_tests = any(funsig.startswith("invariant_") for funsig in funsigs)
+    if has_invariant_tests:
+        ui.print("Invariant test targets:\n")
+        for target_contract in ctx.target_contracts:
+            code = setup_ex.code[target_contract]
+            contract_name = code.contract_name
+            filename = code.filename
+            contract_json = BuildOut().get_by_name(contract_name, filename)
+
+            tree = Tree(f"[bold]{rendered_address(target_contract)}[/bold]")
+
+            target_selectors = resolve_target_selectors(
+                ctx, target_contract, contract_json
+            )
+            for fun_sig, _ in target_selectors:
+                tree.add(f"{fun_sig}")
+
+            ui.print(tree)
+            ui.print()
 
     for funsig in funsigs:
         selector = ctx.method_identifiers[funsig]
