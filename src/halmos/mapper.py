@@ -160,8 +160,9 @@ class BuildOut(metaclass=SingletonMeta):
         for filename, file_map in self._build_out_map.items():
             for contract_name, (contract_map, _, _) in file_map.items():
                 # for library contracts, solx emits json with no deployedBytecode field
-                deployed = contract_map.get("deployedBytecode", empty)["object"]
-                hexcode = deployed[2:] if deployed.startswith("0x") else deployed
+                deployed = contract_map.get("deployedBytecode", empty)
+                object_str = deployed.get("object", "0x")
+                hexcode = object_str[2:] if object_str.startswith("0x") else object_str
                 if not hexcode:
                     continue
 
