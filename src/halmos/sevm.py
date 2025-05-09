@@ -1808,14 +1808,15 @@ class Exec:  # an execution path
     def sha3_data(self, data: Bytes) -> Word:
         sha3_expr = self.sha3_expr(data)
         sha3_hash = self.sha3_hash(data)
+        sha3_hash_bv = bytes_to_bv_value(sha3_hash) if sha3_hash is not None else None
 
         if sha3_hash is not None:
             # NOTE: skip tracking hashes with large preimages, which are likely creation bytecode,
             # to reduce the overhead in SMT query generation and solving.
             if byte_length(data) > 128:  # 1024 bits
-                return bytes_to_bv_value(sha3_hash)
+                return sha3_hash_bv
 
-            self.path.append(sha3_expr == bytes_to_bv_value(sha3_hash))
+            self.path.append(sha3_expr == sha3_hash_bv)
 
             # ensure the hash value is within the safe range assumed below
             sha3_hash_int = int.from_bytes(sha3_hash, "big")
@@ -1842,10 +1843,7 @@ class Exec:  # an execution path
                 return con(create2_magic_address + self.sha3s.get_id(sha3_expr))
 
         # return the concrete hash value if available, otherwise return the hash expression
-        if sha3_hash is not None:
-            return bytes_to_bv_value(sha3_hash)
-        else:
-            return sha3_expr
+        return sha3_hash_bv if sha3_hash is not None else sha3_expr
 
     def assume_sha3_distinct(self, sha3_expr: BitVecRef) -> None:
         # skip if already exist
