@@ -276,6 +276,11 @@ contract HalmosCheatCodeTest is SymTest, Test {
         console.log(x);
         assert(true);
     }
+
+    function check_unsupported_Cheatcode_fail() public {
+        // expected to fail with unknown cheatcode
+        vm.expectRevert("HalmosCheatCode.t.sol");
+    }
 }
 
 /// @custom:halmos --default-bytes-lengths 0,65
