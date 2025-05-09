@@ -11,6 +11,7 @@ from z3 import (
     Z3_OP_BADD,
     Z3_OP_CONCAT,
     Z3_OP_ULEQ,
+    And,
     BitVec,
     BitVecNumRef,
     BitVecRef,
@@ -157,6 +158,13 @@ def concat(args):
 def smt_or(args):
     if len(args) > 1:
         return Or(args)
+    else:
+        return args[0]
+
+
+def smt_and(args):
+    if len(args) > 1:
+        return And(args)
     else:
         return args[0]
 
