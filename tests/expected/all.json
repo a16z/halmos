@@ -1619,6 +1619,15 @@
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
+            },
+            {
+                "name": "check_unsupported_Cheatcode_fail()",
+                "exitcode": 3,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/HalmosCheatCode.t.sol:HalmosCreateCalldataTest": [
@@ -5734,6 +5743,53 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/StorageSlot.t.sol:StorageSlotTest": [
+            {
+                "name": "check_keccak_slot_1_pass(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_keccak_slot_2_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_keccak_slot_2_pass(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_keccak_slot_3_pass(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_setup()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Store.t.sol:StoreTest": [
             {
                 "name": "check_load_nonexistent_account(uint256)",
@@ -5904,6 +5960,17 @@
                 "name": "check_BalanceInvariant()",
                 "exitcode": 1,
                 "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/UniswapPairAddress.t.sol:UniswapPairAddressTest": [
+            {
+                "name": "check_inferred_address_matches_deployed_address()",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,
