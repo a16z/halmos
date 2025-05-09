@@ -279,7 +279,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     function check_unsupported_Cheatcode_fail() public {
         // expected to fail with unknown cheatcode
-        vm.expectRevert("HalmosCheatCode.t.sol");
+        vm.expectRevert("will revert");
     }
 }
 
