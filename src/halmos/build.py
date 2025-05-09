@@ -95,7 +95,10 @@ def parse_build_out(args: HalmosConfig) -> dict:
 def parse_symbols(args: HalmosConfig, contract_map: dict, contract_name: str) -> None:
     try:
         json_out = contract_map[contract_name][0]
-        bytecode = json_out["bytecode"]["object"]
+
+        # workaround: solx does not emit bytecode at all for library contracts
+        # default to an empty object to emulate solc behavior
+        bytecode = json_out.get("bytecode", {"object": "0x"})["object"]
         contract_mapping_info = Mapper().get_or_create(contract_name)
         contract_mapping_info.bytecode = bytecode
 
