@@ -1391,11 +1391,11 @@ class KeccakRegistry:
     """A registry for tracking Keccak hash expressions and their corresponding values.
 
     This class provides a dict-like interface for backward compatibility,
-    maintaining a mapping between hash values and their IDs (self._hashes).
-    This was the original functionality used for storing hash values and their corresponding IDs.
+    maintaining a mapping between hash expressions and their IDs (self._hash_ids).
+    This was the original functionality used for storing hash expressions and their corresponding IDs.
 
     Additionally, this class provides an additional functionality for tracking
-    hash expressions and their generating values using an OffsetMap (self._exprs).
+    hash expressions and their generating values using an OffsetMap (self._hash_values).
     This allows for reverse lookups to find the original expression that
     produced a given hash, even when the hash value is offset by some delta.
     This is particularly useful for:
@@ -1405,55 +1405,51 @@ class KeccakRegistry:
     Example:
         registry = KeccakRegistry()
 
-        # Storing hash values with ids (for backward compatibility)
-        registry[hash_value] = id_value
-        id_value = registry[hash_value]
+        # Registering a hash expression with an optional hash value
+        registry.register(expr, hash_value)  # hash_value can be None
 
-        # Tracking original hash expressions
-        registry.record(expr, hash_value)
+        # Getting unique ID for the hash expression
+        id_value = registry.get_id(expr)
+
+        # Checking if an expression is registered
+        if expr in registry: ...
+
+        # Reverse lookup of hash expressions
         original_expr = registry.reverse_lookup(hash_value)
         # With offset
         original_expr + delta = registry.reverse_lookup(hash_value + delta)
     """
 
     def __init__(self):
-        self._hashes: dict[BitVecRef, int] = {}  # hash -> id
-        self._exprs = OffsetMap()  # hash -> expr
+        self._hash_ids: dict[BitVecRef, int] = {}  # hash expr -> id
+        self._hash_values = OffsetMap()  # hash value -> hash expr
 
-    def __getitem__(self, key: BitVecRef) -> int:
-        return self._hashes[key]
+    def get_id(self, expr: BitVecRef) -> int:
+        return self._hash_ids[expr]
 
-    def __setitem__(self, key: BitVecRef, value: int) -> None:
-        assert (existing := self._hashes.get(key)) is None or existing == value
-        self._hashes[key] = value
-
-    def __contains__(self, key: BitVecRef) -> bool:
-        return key in self._hashes
-
-    def __len__(self) -> int:
-        return len(self._hashes)
-
-    def items(self) -> Iterator[tuple[BitVecRef, int]]:
-        return self._hashes.items()
-
-    def keys(self) -> Iterator[BitVecRef]:
-        return self._hashes.keys()
-
-    def values(self) -> Iterator[int]:
-        return self._hashes.values()
+    def __contains__(self, expr: BitVecRef) -> bool:
+        return expr in self._hash_ids
 
     def copy(self) -> "KeccakRegistry":
         new_registry = KeccakRegistry()
-        new_registry._hashes = self._hashes.copy()
-        new_registry._exprs = self._exprs.copy()
+        new_registry._hash_ids = self._hash_ids.copy()
+        new_registry._hash_values = self._hash_values.copy()
         return new_registry
 
-    def record(self, expr: BitVecRef, hash_value: bytes) -> None:
+    def register(self, expr: BitVecRef, hash_value: bytes | None) -> None:
+        if expr in self._hash_ids:
+            return
+
+        self._hash_ids[expr] = len(self._hash_ids)
+
+        if hash_value is None:
+            return
+
         hash_value = int.from_bytes(hash_value)
-        self._exprs[hash_value] = expr
+        self._hash_values[hash_value] = expr
 
     def reverse_lookup(self, hash_value: int) -> BitVecRef:
-        (expr, delta) = self._exprs[hash_value]
+        (expr, delta) = self._hash_values[hash_value]
         if expr is not None:
             return expr + delta if delta else expr
 
@@ -1660,7 +1656,9 @@ class Exec:  # an execution path
                         )
                     ),
                     "SHA3 hashes:\n",
-                    "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
+                    "".join(
+                        map(lambda x: f"- {self.sha3s.get_id(x)}: {x}\n", self.sha3s)
+                    ),
                 ]
             )
         )
@@ -1833,17 +1831,18 @@ class Exec:  # an execution path
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
 
+        # associate the original hash expression with the hash value for storage slot decoding later
+        self.sha3s.register(sha3_expr, sha3_hash)
+
         # handle create2 hash
         size = byte_length(data)
         if size == 85:
             first_byte = unbox_int(ByteVec(data).get_byte(0))
             if isinstance(first_byte, int) and first_byte == 0xFF:
-                return con(create2_magic_address + self.sha3s[sha3_expr])
+                return con(create2_magic_address + self.sha3s.get_id(sha3_expr))
 
         # return the concrete hash value if available, otherwise return the hash expression
         if sha3_hash is not None:
-            # associate the original hash expression with the hash value for storage slot decoding later
-            self.sha3s.record(sha3_expr, sha3_hash)
             return bytes_to_bv_value(sha3_hash)
         else:
             return sha3_expr
@@ -1880,8 +1879,6 @@ class Exec:  # an execution path
             self.path.append(f_inv_sha3(sha3_expr_core) == input_data)
 
             self.path.append(f_inv_sha3_size(sha3_expr_core) == con(input_size))
-
-        self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
         self.cnts["gas"] += 1
