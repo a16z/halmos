@@ -21,6 +21,9 @@ from datetime import timedelta
 from enum import Enum
 from importlib import metadata
 
+from rich.console import Group
+from rich.panel import Panel
+from rich.text import Text
 from rich.tree import Tree
 from z3 import (
     BitVec,
@@ -101,7 +104,7 @@ from .traces import (
     rendered_call_sequence,
     rendered_trace,
 )
-from .ui import ui
+from .ui import suspend_status, ui
 from .utils import (
     EVM,
     Address,
@@ -659,7 +662,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                     )
                     trace = rendered_trace(subcall)
                     msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
-                    print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
+                    ui.print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
 
                     # because this is a reverted state, we don't need to explore it further
                     continue
@@ -876,11 +879,11 @@ def run_test(ctx: FunctionContext) -> TestResult:
             ctx.exec_cache[path_id] = ex
 
         if args.verbose >= VERBOSITY_TRACE_PATHS:
-            print(f"Path #{path_id}:")
-            print(indent_text(hexify(ex.path)))
+            ui.print(f"Path #{path_id}:\n{indent_text(hexify(ex.path))}")
+            ui.print("\nTrace:")
 
-            print("\nTrace:")
-            render_trace(ex.context)
+            with suspend_status(ui.status):
+                render_trace(ex.context)
 
         if flamegraph_enabled and not is_invariant:
             exec_flamegraph.add(ex.context)
@@ -1390,14 +1393,17 @@ def run_tests(
     # pretty print the target contracts and functions for invariant tests
     has_invariant_tests = any(funsig.startswith("invariant_") for funsig in funsigs)
     if has_invariant_tests:
-        ui.print("Invariant test targets:\n")
-        for target_contract in ctx.target_contracts:
+        panel_content = []
+        for target_contract in resolve_target_contracts(ctx, setup_ex):
             code = setup_ex.code[target_contract]
             contract_name = code.contract_name
             filename = code.filename
             contract_json = BuildOut().get_by_name(contract_name, filename)
 
-            tree = Tree(f"[bold]{rendered_address(target_contract)}[/bold]")
+            addr_str = rendered_address(
+                target_contract, replace_with_contract_name=False
+            )
+            tree = Tree(f"[bold]{filename}:{contract_name}[/bold] @ {addr_str}")
 
             target_selectors = resolve_target_selectors(
                 ctx, target_contract, contract_json
@@ -1405,8 +1411,19 @@ def run_tests(
             for fun_sig, _ in target_selectors:
                 tree.add(f"{fun_sig}")
 
-            ui.print(tree)
-            ui.print()
+            panel_content.append(tree)
+            panel_content.append(Text(""))
+
+        if panel_content:
+            # pop the last newline
+            panel_content.pop()
+            panel = Panel(
+                Group(*panel_content),
+                title="Initial Invariant Target Functions",
+                border_style="blue",
+                expand=False,
+            )
+            ui.print("\n", panel, "\n")
 
     for funsig in funsigs:
         selector = ctx.method_identifiers[funsig]

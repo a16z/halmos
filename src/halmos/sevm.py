@@ -1164,12 +1164,15 @@ class Path:
         raise NotImplementedError("use the branch() method instead of deepcopy()")
 
     def __str__(self) -> str:
-        return "".join(
-            [
-                f"- {cond}\n"
-                for cond in self.conditions
-                if self.conditions[cond] and not is_true(cond)
-            ]
+        return (
+            "".join(
+                [
+                    f"- {cond}\n"
+                    for cond in self.conditions
+                    if self.conditions[cond] and not is_true(cond)
+                ]
+            )
+            or "- (empty path condition)"
         )
 
     def process_dyn_params(self, dyn_params):
