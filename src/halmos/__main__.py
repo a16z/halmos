@@ -1290,16 +1290,21 @@ def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
     )
 
     # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it, even if targetContract(FOUNDRY_TEST) is provided.
-    resolved_targets = (
+    result = (
         resolved_targets
         if target_selectors[FOUNDRY_TEST]
         else resolved_targets - {FOUNDRY_TEST}
     )
 
-    if not resolved_targets:
-        raise HalmosException("No target contracts found.")
+    if not result:
+        msg = (
+            "A targetSelector() must be specified if the test contract is set as a target."
+            if target_contracts
+            else "No contracts have been deployed during setUp()."
+        )
+        raise HalmosException(f"No target contracts available. {msg}")
 
-    return resolved_targets
+    return result
 
 
 def resolve_target_selectors(
@@ -1400,8 +1405,14 @@ def run_tests(
     # pretty print the target contracts and functions for invariant tests
     has_invariant_tests = any(funsig.startswith("invariant_") for funsig in funsigs)
     if has_invariant_tests:
+        try:
+            target_contracts = resolve_target_contracts(ctx, setup_ex)
+        except HalmosException:
+            # no target contracts found, let the downstream tests fail
+            target_contracts = []
+
         panel_content = []
-        for target_contract in resolve_target_contracts(ctx, setup_ex):
+        for target_contract in target_contracts:
             code = setup_ex.code[target_contract]
             contract_name = code.contract_name
             filename = code.filename
