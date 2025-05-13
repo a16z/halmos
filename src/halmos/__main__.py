@@ -514,6 +514,7 @@ def run_target_contract(
     """
     args = ctx.args
     excluded_senders = ctx.excluded_senders
+    # TODO: implement memoization
     effective_target_senders = ctx.target_senders - excluded_senders
 
     # retrieve the contract name and metadata from the given address
@@ -1292,6 +1293,7 @@ def process_excluded_selectors(ctx: ContractContext, setup_ex: Exec):
         ctx.excluded_selectors[target_contract].update(selectors)
 
 
+# TODO: implement memoization to prevent redundant computation when ex.code remains unchanged
 def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
     target_contracts = ctx.target_contracts
     target_selectors = ctx.target_selectors
@@ -1319,6 +1321,7 @@ def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
     return result
 
 
+# TODO: implement memoization
 def resolve_target_selectors(
     ctx: ContractContext, addr: Address, method_identifiers: dict
 ) -> Iterator[str]:
