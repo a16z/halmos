@@ -107,6 +107,11 @@ class ContractContext:
     target_selectors: dict[Address, set[bytes]] = field(
         default_factory=lambda: defaultdict(set)
     )
+    excluded_senders: set[Address] = field(default_factory=set)
+    excluded_contracts: set[Address] = field(default_factory=set)
+    excluded_selectors: dict[Address, set[bytes]] = field(
+        default_factory=lambda: defaultdict(set)
+    )
 
 
 @dataclass(frozen=True)
