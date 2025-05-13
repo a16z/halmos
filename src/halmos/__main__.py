@@ -1308,7 +1308,7 @@ def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
     result = (
         resolved_target_contracts
         if target_selectors[FOUNDRY_TEST]
-        else resolved_targets - {FOUNDRY_TEST}
+        else resolved_target_contracts - {FOUNDRY_TEST}
     )
 
     if not result:
