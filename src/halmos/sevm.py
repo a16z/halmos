@@ -100,6 +100,7 @@ from .utils import (
     BitVecSorts,
     Byte,
     Bytes,
+    OffsetMap,
     Word,
     assert_address,
     assert_bv,
@@ -126,8 +127,7 @@ from .utils import (
     is_concrete,
     is_f_sha3_name,
     match_dynamic_array_overflow_condition,
-    restore_precomputed_hashes,
-    sha3_inv,
+    precomputed_keccak_registry,
     str_opcode,
     stripped,
     uid,
@@ -1390,6 +1390,79 @@ class StorageData:
         return m.digest()
 
 
+class KeccakRegistry:
+    """A registry for tracking Keccak hash expressions and their corresponding values.
+
+    This class provides a dict-like interface for backward compatibility,
+    maintaining a mapping between hash expressions and their IDs (self._hash_ids).
+    This was the original functionality used for storing hash expressions and their corresponding IDs.
+
+    Additionally, this class provides an additional functionality for tracking
+    hash expressions and their generating values using an OffsetMap (self._hash_values).
+    This allows for reverse lookups to find the original expression that
+    produced a given hash, even when the hash value is offset by some delta.
+    This is particularly useful for:
+    1. Local registry: Tracks hashes generated during execution
+    2. Precomputed registry: Contains known/common hash expressions
+
+    Example:
+        registry = KeccakRegistry()
+
+        # Registering a hash expression with an optional hash value
+        registry.register(expr, hash_value)  # hash_value can be None
+
+        # Getting unique ID for the hash expression
+        id_value = registry.get_id(expr)
+
+        # Checking if an expression is registered
+        if expr in registry: ...
+
+        # Reverse lookup of hash expressions
+        original_expr = registry.reverse_lookup(hash_value)
+        # With offset
+        original_expr + delta = registry.reverse_lookup(hash_value + delta)
+    """
+
+    def __init__(self):
+        self._hash_ids: dict[BitVecRef, int] = {}  # hash expr -> id
+        self._hash_values = OffsetMap()  # hash value -> hash expr
+
+    def get_id(self, expr: BitVecRef) -> int:
+        return self._hash_ids[expr]
+
+    def __contains__(self, expr: BitVecRef) -> bool:
+        return expr in self._hash_ids
+
+    def copy(self) -> "KeccakRegistry":
+        new_registry = KeccakRegistry()
+        new_registry._hash_ids = self._hash_ids.copy()
+        new_registry._hash_values = self._hash_values.copy()
+        return new_registry
+
+    def register(self, expr: BitVecRef, hash_value: bytes | None) -> None:
+        if expr in self._hash_ids:
+            return
+
+        self._hash_ids[expr] = len(self._hash_ids)
+
+        if hash_value is None:
+            return
+
+        hash_value = int.from_bytes(hash_value)
+        self._hash_values[hash_value] = expr
+
+    def reverse_lookup(self, hash_value: int) -> BitVecRef:
+        (expr, delta) = self._hash_values[hash_value]
+        if expr is not None:
+            return expr + delta if delta else expr
+
+        (expr, delta) = precomputed_keccak_registry[hash_value]
+        if expr is not None:
+            return expr + delta if delta else expr
+
+        return None
+
+
 class Exec:  # an execution path
     # network
     code: dict[Address, Contract]
@@ -1418,7 +1491,7 @@ class Exec:  # an execution path
 
     # internal bookkeeping
     cnts: dict[str, int]  # counters
-    sha3s: dict[Word, int]  # sha3 hashes generated
+    sha3s: KeccakRegistry  # sha3 hashes generated
     storages: dict[Any, Any]  # storage updates
     balances: dict[Any, Any]  # balance updates
     known_keys: dict[Any, Any]  # maps address to private key
@@ -1586,7 +1659,9 @@ class Exec:  # an execution path
                         )
                     ),
                     "SHA3 hashes:\n",
-                    "".join(map(lambda x: f"- {self.sha3s[x]}: {x}\n", self.sha3s)),
+                    "".join(
+                        map(lambda x: f"- {self.sha3s.get_id(x)}: {x}\n", self.sha3s)
+                    ),
                 ]
             )
         )
@@ -1736,9 +1811,15 @@ class Exec:  # an execution path
     def sha3_data(self, data: Bytes) -> Word:
         sha3_expr = self.sha3_expr(data)
         sha3_hash = self.sha3_hash(data)
+        sha3_hash_bv = bytes_to_bv_value(sha3_hash) if sha3_hash is not None else None
 
         if sha3_hash is not None:
-            self.path.append(sha3_expr == bytes_to_bv_value(sha3_hash))
+            # NOTE: skip tracking hashes with large preimages, which are likely creation bytecode,
+            # to reduce the overhead in SMT query generation and solving.
+            if byte_length(data) > 128:  # 1024 bits
+                return sha3_hash_bv
+
+            self.path.append(sha3_expr == sha3_hash_bv)
 
             # ensure the hash value is within the safe range assumed below
             sha3_hash_int = int.from_bytes(sha3_hash, "big")
@@ -1754,14 +1835,18 @@ class Exec:  # an execution path
         # assume no hash collision
         self.assume_sha3_distinct(sha3_expr)
 
+        # associate the original hash expression with the hash value for storage slot decoding later
+        self.sha3s.register(sha3_expr, sha3_hash)
+
         # handle create2 hash
         size = byte_length(data)
         if size == 85:
             first_byte = unbox_int(ByteVec(data).get_byte(0))
             if isinstance(first_byte, int) and first_byte == 0xFF:
-                return con(create2_magic_address + self.sha3s[sha3_expr])
-        else:
-            return sha3_expr
+                return con(create2_magic_address + self.sha3s.get_id(sha3_expr))
+
+        # return the concrete hash value if available, otherwise return the hash expression
+        return sha3_hash_bv if sha3_hash is not None else sha3_expr
 
     def assume_sha3_distinct(self, sha3_expr: BitVecRef) -> None:
         # skip if already exist
@@ -1795,8 +1880,6 @@ class Exec:  # an execution path
             self.path.append(f_inv_sha3(sha3_expr_core) == input_data)
 
             self.path.append(f_inv_sha3_size(sha3_expr_core) == con(input_size))
-
-        self.sha3s[sha3_expr] = len(self.sha3s)
 
     def new_gas_id(self) -> int:
         self.cnts["gas"] += 1
@@ -2048,7 +2131,7 @@ class SolidityStorage(Storage):
 
     @classmethod
     def get_key_structure(cls, ex, loc) -> tuple:
-        offsets = cls.decode(loc)
+        offsets = cls.decode(ex, loc)
         if not len(offsets) > 0:
             raise ValueError(offsets)
 
@@ -2060,18 +2143,18 @@ class SolidityStorage(Storage):
         return (slot, keys, num_keys, size_keys)
 
     @classmethod
-    def decode(cls, loc: Any) -> Any:
+    def decode(cls, ex, loc: Any) -> Any:
         loc = normalize(loc)
         # m[k] : hash(k.m)
         if loc.decl().name() == f_sha3_512_name:
             args = loc.arg(0)
             offset = simplify(Extract(511, 256, args))
             base = simplify(Extract(255, 0, args))
-            return cls.decode(base) + (offset, Z3_ZERO)
+            return cls.decode(ex, base) + (offset, Z3_ZERO)
         # a[i] : hash(a) + i
         elif loc.decl().name() == f_sha3_256_name:
             base = loc.arg(0)
-            return cls.decode(base) + (Z3_ZERO,)
+            return cls.decode(ex, base) + (Z3_ZERO,)
         # m[k] : hash(k.m)  where |k| != 256-bit
         elif is_f_sha3_name(loc.decl().name()):
             sha3_input = normalize(loc.arg(0))
@@ -2079,7 +2162,7 @@ class SolidityStorage(Storage):
                 offset = simplify(sha3_input.arg(0))
                 base = simplify(sha3_input.arg(1))
                 if offset.size() != 256 and base.size() == 256:
-                    return cls.decode(base) + (offset, Z3_ZERO)
+                    return cls.decode(ex, base) + (offset, Z3_ZERO)
         elif loc.decl().name() == "bvadd":
             #   # when len(args) == 2
             #   arg0 = cls.decode(loc.arg(0))
@@ -2096,7 +2179,11 @@ class SolidityStorage(Storage):
             args = loc.children()
             if len(args) < 2:
                 raise ValueError(loc)
-            args = sorted(map(cls.decode, args), key=lambda x: len(x), reverse=True)
+            args = sorted(
+                map(lambda x: cls.decode(ex, x), args),
+                key=lambda x: len(x),
+                reverse=True,
+            )
             if len(args[1]) > 1:
                 # only args[0]'s length >= 1, the others must be 1
                 raise ValueError(loc)
@@ -2104,9 +2191,9 @@ class SolidityStorage(Storage):
                 reduce(lambda r, x: r + x[0], args[1:], args[0][-1]),
             )
         elif is_bv_value(loc):
-            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
-            if preimage:  # loc == hash(preimage) + delta
-                return (con(preimage), con(delta))
+            orig_term = ex.sha3s.reverse_lookup(loc.as_long())
+            if orig_term is not None:
+                return cls.decode(ex, orig_term)
             else:
                 return (loc,)
 
@@ -2156,7 +2243,7 @@ class GenericStorage(Storage):
 
     @classmethod
     def load(cls, ex: Exec, storage: dict, addr: Any, loc: Word) -> Word:
-        loc = cls.decode(loc)
+        loc = cls.decode(ex, loc)
         size_keys = loc.size()
 
         cls.init(ex, storage, addr, loc, size_keys)
@@ -2173,7 +2260,7 @@ class GenericStorage(Storage):
 
     @classmethod
     def store(cls, ex: Exec, storage: dict, addr: Any, loc: Any, val: Any) -> None:
-        loc = cls.decode(loc)
+        loc = cls.decode(ex, loc)
         size_keys = loc.size()
 
         cls.init(ex, storage, addr, loc, size_keys)
@@ -2192,31 +2279,32 @@ class GenericStorage(Storage):
         ex.storages[new_storage_var] = new_storage
 
     @classmethod
-    def decode(cls, loc: Any) -> Any:
+    def decode(cls, ex, loc: Any) -> Any:
         loc = normalize(loc)
         if loc.decl().name() == f_sha3_512_name:  # hash(hi,lo), recursively
             args = loc.arg(0)
-            hi = cls.decode(simplify(Extract(511, 256, args)))
-            lo = cls.decode(simplify(Extract(255, 0, args)))
+            hi = cls.decode(ex, simplify(Extract(511, 256, args)))
+            lo = cls.decode(ex, simplify(Extract(255, 0, args)))
             return cls.simple_hash(Concat(hi, lo))
         elif is_f_sha3_name(loc.decl().name()):
             sha3_input = normalize(loc.arg(0))
             if sha3_input.decl().name() == "concat":
                 decoded_sha3_input_args = [
-                    cls.decode(sha3_input.arg(i)) for i in range(sha3_input.num_args())
+                    cls.decode(ex, sha3_input.arg(i))
+                    for i in range(sha3_input.num_args())
                 ]
                 return cls.simple_hash(concat(decoded_sha3_input_args))
             else:
-                return cls.simple_hash(cls.decode(sha3_input))
+                return cls.simple_hash(cls.decode(ex, sha3_input))
         elif loc.decl().name() == "bvadd":
             args = loc.children()
             if len(args) < 2:
                 raise ValueError(loc)
-            return cls.add_all([cls.decode(arg) for arg in args])
+            return cls.add_all([cls.decode(ex, arg) for arg in args])
         elif is_bv_value(loc):
-            (preimage, delta) = restore_precomputed_hashes(loc.as_long())
-            if preimage:  # loc == hash(preimage) + delta
-                return cls.add_all([cls.simple_hash(con(preimage)), con(delta)])
+            orig_term = ex.sha3s.reverse_lookup(loc.as_long())
+            if orig_term is not None:
+                return cls.decode(ex, orig_term)
             else:
                 return loc
 
@@ -3347,12 +3435,8 @@ class SEVM:
 
                     # Special handling for PUSH32 with concrete values
                     if val.is_concrete:
-                        if (inverse := sha3_inv.get(val.value)) is not None:
-                            # restore precomputed hashes
-                            state.push_any(ex.sha3_data(con(inverse)))
-
                         # TODO: support more commonly used concrete keccak values
-                        elif val.value == EMPTY_KECCAK:
+                        if val.value == EMPTY_KECCAK:
                             state.push_any(ex.sha3_data(b""))
                         else:
                             state.push(val)
@@ -3882,7 +3966,7 @@ class SEVM:
             #
             log=[],
             cnts=defaultdict(int),
-            sha3s={},
+            sha3s=KeccakRegistry(),
             storages={},
             balances={},
         )
