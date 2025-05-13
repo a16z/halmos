@@ -109,6 +109,7 @@ from .utils import (
     EVM,
     Address,
     BitVecSort256,
+    Bytes,
     NamedTimer,
     Word,
     address,
@@ -123,6 +124,7 @@ from .utils import (
     indent_text,
     int_of,
     red,
+    smt_and,
     smt_or,
     uid,
     unbox_int,
@@ -520,7 +522,9 @@ def run_target_contract(
         ValueError: If the contract name cannot be found for the given address.
     """
     args = ctx.args
-    target_senders = ctx.target_senders
+    excluded_senders = ctx.excluded_senders
+    # TODO: implement memoization
+    effective_target_senders = ctx.target_senders - excluded_senders
 
     # retrieve the contract name and metadata from the given address
     code = ex.code[addr]
@@ -550,12 +554,16 @@ def run_target_contract(
                 f"halmos_msg_sender_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}"
             )
 
-            # restrict msg.sender to the specified target senders
+            # restrict msg.sender to the specified target senders.
+            # follow foundry's behavior where:
+            # - if effective_target_senders exist, consider them only.
+            # - if no effective_target_senders but excluded_senders exist, consider excluded_senders only.
+            # - otherwise, no restriction for sender.
             msg_sender_cond = (
-                smt_or(
-                    [msg_sender == target_sender for target_sender in target_senders]
-                )
-                if target_senders
+                smt_or([msg_sender == target for target in effective_target_senders])
+                if effective_target_senders
+                else smt_and([msg_sender != excluded for excluded in excluded_senders])
+                if excluded_senders
                 else None
             )
 
@@ -1107,19 +1115,22 @@ def setup_invariant_test_context(ctx: ContractContext, setup_ex: Exec):
         process_target_senders(ctx, setup_ex)
         process_target_contracts(ctx, setup_ex)
         process_target_selectors(ctx, setup_ex)
+
+        process_excluded_senders(ctx, setup_ex)
+        process_excluded_contracts(ctx, setup_ex)
+        process_excluded_selectors(ctx, setup_ex)
     except Exception as err:
         warn(
             f"An error occurred in setup_invariant_test_context and was ignored: {type(err).__name__}: {err}"
         )
 
 
-def process_target_senders(ctx: ContractContext, setup_ex: Exec):
-    args = ctx.args
+def execute_simple_getter(
+    ctx: ContractContext, setup_ex: Exec, fun_info: FunctionInfo
+) -> ByteVec:
+    """Executes a simple getter that takes no input, and returns the result."""
 
-    # function targetSenders() public view returns (address[] memory targetedSenders_)
-    selector = "3e5e3c23"
-    funname = "targetSenders"
-    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+    args = ctx.args
 
     exs = run_target_function(
         args,
@@ -1135,7 +1146,7 @@ def process_target_senders(ctx: ContractContext, setup_ex: Exec):
 
     # sanity check
     if len(exs) != 1:
-        raise HalmosException(f"{funname}(): # of paths: {len(exs)}")
+        raise HalmosException(f"{fun_info.sig}: # of paths: {len(exs)}")
 
     [ex] = exs
 
@@ -1143,7 +1154,13 @@ def process_target_senders(ctx: ContractContext, setup_ex: Exec):
     returndata = output.data
 
     if output.error is not None or not returndata:
-        raise HalmosException(f"{funname}(): {output.error=} {returndata=}")
+        raise HalmosException(f"{fun_info.sig}: {output.error=} {returndata=}")
+
+    return returndata
+
+
+def abi_decode_primitive_array(returndata: ByteVec) -> Iterator[Bytes]:
+    """Decodes an array of primitive-type values."""
 
     offset = int_of(
         extract_bytes(returndata, 0, 32),
@@ -1154,94 +1171,15 @@ def process_target_senders(ctx: ContractContext, setup_ex: Exec):
         "symbolic size for bytes argument",
     )
 
-    target_senders = ctx.target_senders
     start = offset + 32
     for idx in range(length):
-        target_sender = extract_bytes(returndata, start + idx * 32, 32)
-        target_sender = con_addr(int.from_bytes(target_sender, "big"))
-        target_senders.add(target_sender)
+        yield extract_bytes(returndata, start + idx * 32, 32)
 
 
-def process_target_contracts(ctx: ContractContext, setup_ex: Exec):
-    args = ctx.args
-
-    # function targetContracts() public view returns (address[] memory targetedContracts_) {
-    selector = "3f7286f4"
-    funname = "targetContracts"
-    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
-
-    exs = run_target_function(
-        args,
-        setup_ex,
-        FOUNDRY_TEST,
-        ctx.abi,
-        fun_info,
-        FOUNDRY_ORIGIN,
-        FOUNDRY_CALLER,
-        0,
-    )
-    exs = list(exs)
-
-    # sanity check
-    if len(exs) != 1:
-        raise HalmosException(f"{funname}(): # of paths: {len(exs)}")
-
-    [ex] = exs
-
-    output = ex.context.output
-    returndata = output.data
-
-    if output.error is not None or not returndata:
-        raise HalmosException(f"{funname}(): {output.error=} {returndata=}")
-
-    offset = int_of(
-        extract_bytes(returndata, 0, 32),
-        "symbolic offset for bytes argument",
-    )
-    length = int_of(
-        extract_bytes(returndata, offset, 32),
-        "symbolic size for bytes argument",
-    )
-
-    target_contracts = ctx.target_contracts
-    start = offset + 32
-    for idx in range(length):
-        target_contract = extract_bytes(returndata, start + idx * 32, 32)
-        target_contract = con_addr(int.from_bytes(target_contract, "big"))
-        target_contracts.add(target_contract)
-
-
-def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
-    args = ctx.args
-
-    # function targetSelectors() public view returns (FuzzSelector[] memory targetedSelectors_) {
-    selector = "916a17c6"
-    funname = "targetSelectors"
-    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
-
-    exs = run_target_function(
-        args,
-        setup_ex,
-        FOUNDRY_TEST,
-        ctx.abi,
-        fun_info,
-        FOUNDRY_ORIGIN,
-        FOUNDRY_CALLER,
-        0,
-    )
-    exs = list(exs)
-
-    # sanity check
-    if len(exs) != 1:
-        raise HalmosException(f"{funname}(): # of paths: {len(exs)}")
-
-    [ex] = exs
-
-    output = ex.context.output
-    returndata = output.data
-
-    if output.error is not None or not returndata:
-        raise HalmosException(f"{funname}(): {output.error=} {returndata=}")
+def abi_decode_FuzzSelector_array(
+    returndata: ByteVec,
+) -> Iterator[tuple[Bytes, list[Bytes]]]:
+    """Decodes a FuzzSelector array."""
 
     offset = int_of(
         extract_bytes(returndata, 0, 32),
@@ -1261,9 +1199,8 @@ def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
         item_start = start + item_offset
 
         target_contract = extract_bytes(returndata, item_start, 32)
-        target_contract = con_addr(int.from_bytes(target_contract, "big"))
 
-        target_selectors = ctx.target_selectors[target_contract]
+        selectors = []
 
         selectors_offset = item_start + 64
         selectors_count = int_of(
@@ -1273,25 +1210,103 @@ def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
         selectors_start = selectors_offset + 32
         for selector_idx in range(selectors_count):
             # read the first four bytes
-            target_selector = extract_bytes(
-                returndata, selectors_start + selector_idx * 32, 4
-            )
-            target_selectors.add(target_selector)
+            selector = extract_bytes(returndata, selectors_start + selector_idx * 32, 4)
+            selectors.append(selector)
+
+        yield (target_contract, selectors)
 
 
+def process_target_senders(ctx: ContractContext, setup_ex: Exec):
+    # function targetSenders() public view returns (address[] memory targetedSenders_)
+    selector = "3e5e3c23"
+    funname = "targetSenders"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+
+    returndata = execute_simple_getter(ctx, setup_ex, fun_info)
+
+    target_senders = ctx.target_senders
+    for item in abi_decode_primitive_array(returndata):
+        target_senders.add(con_addr(int.from_bytes(item, "big")))
+
+
+def process_excluded_senders(ctx: ContractContext, setup_ex: Exec):
+    # function excludeSenders() public view returns (address[] memory excludedSenders_)
+    selector = "1ed7831c"
+    funname = "excludeSenders"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+
+    returndata = execute_simple_getter(ctx, setup_ex, fun_info)
+
+    excluded_senders = ctx.excluded_senders
+    for item in abi_decode_primitive_array(returndata):
+        excluded_senders.add(con_addr(int.from_bytes(item, "big")))
+
+
+def process_target_contracts(ctx: ContractContext, setup_ex: Exec):
+    # function targetContracts() public view returns (address[] memory targetedContracts_) {
+    selector = "3f7286f4"
+    funname = "targetContracts"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+
+    returndata = execute_simple_getter(ctx, setup_ex, fun_info)
+
+    target_contracts = ctx.target_contracts
+    for item in abi_decode_primitive_array(returndata):
+        target_contracts.add(con_addr(int.from_bytes(item, "big")))
+
+
+def process_excluded_contracts(ctx: ContractContext, setup_ex: Exec):
+    # function excludeContracts() public view returns (address[] memory excludedContracts_) {
+    selector = "e20c9f71"
+    funname = "excludeContracts"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+
+    returndata = execute_simple_getter(ctx, setup_ex, fun_info)
+
+    excluded_contracts = ctx.excluded_contracts
+    for item in abi_decode_primitive_array(returndata):
+        excluded_contracts.add(con_addr(int.from_bytes(item, "big")))
+
+
+def process_target_selectors(ctx: ContractContext, setup_ex: Exec):
+    # function targetSelectors() public view returns (FuzzSelector[] memory targetedSelectors_) {
+    selector = "916a17c6"
+    funname = "targetSelectors"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+
+    returndata = execute_simple_getter(ctx, setup_ex, fun_info)
+
+    for target, selectors in abi_decode_FuzzSelector_array(returndata):
+        target_contract = con_addr(int.from_bytes(target, "big"))
+        ctx.target_selectors[target_contract].update(selectors)
+
+
+def process_excluded_selectors(ctx: ContractContext, setup_ex: Exec):
+    # function excludeSelectors() public view returns (FuzzSelector[] memory excludedSelectors_) {
+    selector = "b0464fdc"
+    funname = "excludeSelectors"
+    fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
+
+    returndata = execute_simple_getter(ctx, setup_ex, fun_info)
+
+    for target, selectors in abi_decode_FuzzSelector_array(returndata):
+        target_contract = con_addr(int.from_bytes(target, "big"))
+        ctx.excluded_selectors[target_contract].update(selectors)
+
+
+# TODO: implement memoization to prevent redundant computation when ex.code remains unchanged
 def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
     target_contracts = ctx.target_contracts
     target_selectors = ctx.target_selectors
 
-    resolved_targets = (
-        target_contracts | target_selectors.keys()
-        if target_contracts
-        else ex.code.keys()
-    )
+    # conflict resolution as per foundry's behavior
+    resolved_target_contracts = target_contracts if target_contracts else ex.code.keys()
+    resolved_target_contracts -= ctx.excluded_contracts
+    resolved_target_contracts |= target_selectors.keys()
 
     # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it, even if targetContract(FOUNDRY_TEST) is provided.
     result = (
-        resolved_targets
+        resolved_target_contracts
         if target_selectors[FOUNDRY_TEST]
         else resolved_targets - {FOUNDRY_TEST}
     )
@@ -1307,16 +1322,23 @@ def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
     return result
 
 
+# TODO: implement memoization
 def resolve_target_selectors(
     ctx: ContractContext, addr: Address, contract_json: dict
 ) -> Iterator[tuple[str, str]]:
     abi = get_abi(contract_json)
     method_identifiers = contract_json["methodIdentifiers"].items()
 
+    # follow foundry's behavior where excludeSelector is ignored if targetSelector is given
     if target_selectors := ctx.target_selectors[addr]:
         for fun_sig, fun_selector in method_identifiers:
             # TODO: Refactor contract_json to use bytes for method_identifiers instead of strings
             if bytes.fromhex(fun_selector) in target_selectors:
+                yield (fun_sig, fun_selector)
+
+    elif excluded_selectors := ctx.excluded_selectors[addr]:
+        for fun_sig, fun_selector in method_identifiers:
+            if bytes.fromhex(fun_selector) not in excluded_selectors:
                 yield (fun_sig, fun_selector)
 
     else:
