@@ -1283,16 +1283,23 @@ def resolve_target_contracts(ctx: ContractContext, ex: Exec) -> set[Address]:
     target_contracts = ctx.target_contracts
     target_selectors = ctx.target_selectors
 
-    resolved_target_contracts = (
+    resolved_targets = (
         target_contracts | target_selectors.keys()
         if target_contracts
         else ex.code.keys()
     )
 
-    if not resolved_target_contracts:
+    # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it, even if targetContract(FOUNDRY_TEST) is provided.
+    resolved_targets = (
+        resolved_targets
+        if target_selectors[FOUNDRY_TEST]
+        else resolved_targets - {FOUNDRY_TEST}
+    )
+
+    if not resolved_targets:
         raise HalmosException("No target contracts found.")
 
-    return resolved_target_contracts
+    return resolved_targets
 
 
 def resolve_target_selectors(
