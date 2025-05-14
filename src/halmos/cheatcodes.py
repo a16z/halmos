@@ -297,7 +297,9 @@ def _get_contract_name(ex, arg) -> tuple[str | None, str | None]:
     )
     code = ex.code[addr]
     if not (contract_name := code.contract_name):
-        raise HalmosException(f"createCalldata: couldn't find the contract name for: {hexify(addr)}")
+        raise HalmosException(
+            f"createCalldata: couldn't find the contract name for: {hexify(addr)}"
+        )
     return contract_name, code.filename
 
 
@@ -364,7 +366,9 @@ def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
     return result
 
 
-def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False) -> list[ByteVec]:
+def create_calldata_generic(
+    ex, sevm, contract_name, filename=None, include_view=False
+) -> list[ByteVec]:
     """
     Generate arbitrary symbolic calldata for the given contract.
 
