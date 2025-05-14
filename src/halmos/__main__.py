@@ -1127,7 +1127,7 @@ def get_invariant_testing_context(
         )
     except Exception as err:
         warn(
-            f"An error occurred in get_invariant_targets and was ignored: {type(err).__name__}: {err}"
+            f"An error occurred in get_invariant_testing_context and was ignored: {type(err).__name__}: {err}"
         )
 
     return InvariantTestingContext.empty()
