@@ -6,6 +6,10 @@ jobs:
   pypi:
     runs-on: ubuntu-latest
     environment: release
+    permissions:
+      # IMPORTANT: this permission is mandatory for Trusted Publishing
+      # https://docs.pypi.org/trusted-publishers/using-a-publisher/
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -15,5 +19,4 @@ jobs:
         run: python3 -m pip install --upgrade build && python3 -m build
       - name: Publish
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+
