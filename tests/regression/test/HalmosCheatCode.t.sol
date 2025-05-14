@@ -285,6 +285,19 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
 /// @custom:halmos --default-bytes-lengths 0,65
 contract HalmosCreateCalldataTest is SymTest, Test {
+    Beep beep = new Beep();
+    Mock mock = new Mock(false); // use Mock(true) for debugging
+
+    function check_createCalldata_Beep_0_excluding_pure() public {
+        bytes memory data = svm.createCalldata(address(beep));
+        _check_createCalldata_Beep(data); // fail because the only function in Beep is pure, which is excluded in createCalldata()
+    }
+
+    function check_createCalldata_Beep_0_including_pure() public {
+        bytes memory data = svm.createCalldata(address(beep), true);
+        _check_createCalldata_Beep(data);
+    }
+
     function check_createCalldata_Beep_1_excluding_pure() public {
         bytes memory data = svm.createCalldata("HalmosCheatCode.t.sol", "Beep");
         _check_createCalldata_Beep(data); // fail because the only function in Beep is pure, which is excluded in createCalldata()
@@ -306,11 +319,28 @@ contract HalmosCreateCalldataTest is SymTest, Test {
     }
 
     function _check_createCalldata_Beep(bytes memory data) public {
-        Beep beep = new Beep();
         (bool success, bytes memory retdata) = address(beep).call(data);
         vm.assume(success);
         uint ret = abi.decode(retdata, (uint256));
         assertEq(ret, 42);
+    }
+
+    function check_createCalldata_Mock_0_excluding_view_pass() public {
+        bytes memory data = svm.createCalldata(address(mock));
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_0_excluding_view_fail() public {
+        bytes memory data = svm.createCalldata(address(mock));
+        _check_createCalldata_Mock(data, false);
+    }
+
+    function check_createCalldata_Mock_0_including_view_pass() public {
+        bytes memory data = svm.createCalldata(address(mock), true);
+        _check_createCalldata_Mock(data, true);
+    }
+    function check_createCalldata_Mock_0_including_view_fail() public {
+        bytes memory data = svm.createCalldata(address(mock), true);
+        _check_createCalldata_Mock(data, false);
     }
 
     function check_createCalldata_Mock_1_pass() public {
@@ -386,8 +416,7 @@ contract HalmosCreateCalldataTest is SymTest, Test {
     }
 
     function _check_createCalldata_Mock(bytes memory data, bool pass) public {
-        Mock target = new Mock(false); // use Mock(true) for debugging
-        _check_createCalldata_generic(address(target), data, pass);
+        _check_createCalldata_generic(address(mock), data, pass);
     }
 
     function _check_createCalldata_generic(address target, bytes memory data, bool pass) public {

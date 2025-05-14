@@ -289,12 +289,40 @@ def snapshot_state(
     return ByteVec(balance_hash + code_hash + storage_hash + path_hash)
 
 
-def create_calldata_contract(ex, arg, sevm, stack):
+def _get_contract_name(ex, arg) -> tuple[str | None, str | None]:
+    # TODO: support symbolic target using sevm.resolve_address_alias()
+    addr = con(
+        int_of(extract_bytes(arg, 4, 32), "symbolic address for SVM.createCalldata()"),
+        size_bits=160,
+    )
+    code = ex.code[addr]
+    if not (contract_name := code.contract_name):
+        raise HalmosException(f"createCalldata: couldn't find the contract name for: {hexify(addr)}")
+    return contract_name, code.filename
+
+
+def create_calldata_address(ex, arg, sevm, stack) -> list[ByteVec]:
+    contract_name, filename = _get_contract_name(ex, arg)
+    return create_calldata_generic(ex, sevm, contract_name, filename)
+
+
+def create_calldata_address_bool(ex, arg, sevm, stack) -> list[ByteVec]:
+    contract_name, filename = _get_contract_name(ex, arg)
+    include_view = int_of(
+        extract_bytes(arg, 4 + 32 * 1, 32),
+        "symbolic boolean flag for SVM.createCalldata()",
+    )
+    return create_calldata_generic(
+        ex, sevm, contract_name, filename, bool(include_view)
+    )
+
+
+def create_calldata_contract(ex, arg, sevm, stack) -> list[ByteVec]:
     contract_name = name_of(extract_string_argument(arg, 0))
     return create_calldata_generic(ex, sevm, contract_name)
 
 
-def create_calldata_contract_bool(ex, arg, sevm, stack):
+def create_calldata_contract_bool(ex, arg, sevm, stack) -> list[ByteVec]:
     contract_name = name_of(extract_string_argument(arg, 0))
     include_view = int_of(
         extract_bytes(arg, 4 + 32 * 1, 32),
@@ -305,13 +333,13 @@ def create_calldata_contract_bool(ex, arg, sevm, stack):
     )
 
 
-def create_calldata_file_contract(ex, arg, sevm, stack):
+def create_calldata_file_contract(ex, arg, sevm, stack) -> list[ByteVec]:
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     return create_calldata_generic(ex, sevm, contract_name, filename)
 
 
-def create_calldata_file_contract_bool(ex, arg, sevm, stack):
+def create_calldata_file_contract_bool(ex, arg, sevm, stack) -> list[ByteVec]:
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     include_view = int_of(
@@ -336,7 +364,7 @@ def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
     return result
 
 
-def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False):
+def create_calldata_generic(ex, sevm, contract_name, filename=None, include_view=False) -> list[ByteVec]:
     """
     Generate arbitrary symbolic calldata for the given contract.
 
@@ -545,6 +573,8 @@ class halmos_cheat_code:
         0xDC00BA4D: symbolic_storage,  # enableSymbolicStorage(address)
         0x5DBB8438: snapshot_storage,  # snapshotStorage(address)
         0x9CD23835: snapshot_state,  # snapshotState()
+        0xB4E9E81C: create_calldata_address,  # createCalldata(address)
+        0x49D66B01: create_calldata_address_bool,  # createCalldata(address,bool)
         0xBE92D5A2: create_calldata_contract,  # createCalldata(string)
         0xDEEF391B: create_calldata_contract_bool,  # createCalldata(string,bool)
         0x88298B32: create_calldata_file_contract,  # createCalldata(string,string)

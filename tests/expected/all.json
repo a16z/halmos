@@ -1632,6 +1632,24 @@
         ],
         "test/HalmosCheatCode.t.sol:HalmosCreateCalldataTest": [
             {
+                "name": "check_createCalldata_Beep_0_excluding_pure()",
+                "exitcode": 4,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Beep_0_including_pure()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_createCalldata_Beep_1_excluding_pure()",
                 "exitcode": 4,
                 "num_models": 0,
@@ -1678,6 +1696,42 @@
             },
             {
                 "name": "check_createCalldata_Fallback()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_0_excluding_view_fail()",
+                "exitcode": 1,
+                "num_models": 18,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_0_excluding_view_pass()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_0_including_view_fail()",
+                "exitcode": 1,
+                "num_models": 20,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_createCalldata_Mock_0_including_view_pass()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
