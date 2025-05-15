@@ -86,12 +86,13 @@ def render_output(context: CallContext, file=sys.stdout) -> None:
     )
 
 
-def rendered_address(addr: Address) -> str:
+def rendered_address(addr: Address, replace_with_contract_name: bool = True) -> str:
     addr = unbox_int(addr)
     addr_str = str(addr) if is_bv(addr) else hex(addr)
 
     # check if we have a contract name for this address in our deployment mapper
-    addr_str = DeployAddressMapper().get_deployed_contract(addr_str)
+    if replace_with_contract_name:
+        addr_str = DeployAddressMapper().get_deployed_contract(addr_str)
 
     return addr_str
 

@@ -1,10 +1,10 @@
 import re
 import subprocess
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import MappingProxyType
 from typing import Literal
 
 from z3 import CheckSatResult, Solver, sat, unknown, unsat
@@ -56,7 +56,7 @@ halmos_var_pattern = re.compile(
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PotentialModel:
     model: ModelVariables
     is_valid: bool
@@ -69,7 +69,37 @@ class PotentialModel:
         return "".join(sorted(formatted)) if formatted else "∅"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
+class InvariantTestingContext:
+    # explicitly included targets
+    target_senders: frozenset[Address]
+    target_contracts: frozenset[Address]
+    target_selectors: MappingProxyType[Address, frozenset[bytes]]
+
+    # explicitly excluded targets
+    excluded_senders: frozenset[Address]
+    excluded_contracts: frozenset[Address]
+    excluded_selectors: MappingProxyType[Address, frozenset[bytes]]
+
+    # whether to print debug information
+    debug: bool = False
+
+    @staticmethod
+    def empty() -> "InvariantTestingContext":
+        return empty_invariant_testing_context
+
+
+empty_invariant_testing_context = InvariantTestingContext(
+    target_senders=frozenset(),
+    target_contracts=frozenset(),
+    target_selectors=MappingProxyType({}),  # read-only empty dict
+    excluded_senders=frozenset(),
+    excluded_contracts=frozenset(),
+    excluded_selectors=MappingProxyType({}),
+)
+
+
+@dataclass(frozen=True, slots=True)
 class ContractContext:
     # config with contract-specific overrides
     args: HalmosConfig
@@ -101,17 +131,18 @@ class ContractContext:
     # the function info for the invariant test
     probes_reported: set[FunctionInfo] = field(default_factory=set)
 
-    # invariant testing context
-    target_senders: set[Address] = field(default_factory=set)
-    target_contracts: set[Address] = field(default_factory=set)
-    target_selectors: dict[Address, set[bytes]] = field(
-        default_factory=lambda: defaultdict(set)
+    # the invariant testing context for this contract
+    # the empty context is used as a placeholder, it can be set later
+    inv_ctx: InvariantTestingContext = field(
+        default_factory=InvariantTestingContext.empty
     )
-    excluded_senders: set[Address] = field(default_factory=set)
-    excluded_contracts: set[Address] = field(default_factory=set)
-    excluded_selectors: dict[Address, set[bytes]] = field(
-        default_factory=lambda: defaultdict(set)
-    )
+
+    def set_invariant_testing_context(self, ctx: InvariantTestingContext) -> None:
+        if self.inv_ctx != InvariantTestingContext.empty():
+            raise ValueError("invariant testing context already set")
+
+        # bypass the frozen dataclass check
+        object.__setattr__(self, "inv_ctx", ctx)
 
 
 @dataclass(frozen=True)
