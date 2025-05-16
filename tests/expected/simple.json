@@ -245,6 +245,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Reentrancy.t.sol:ReentrancyTest": [
+            {
+                "name": "check_setup()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_no_stolen_funds()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/SimpleState.t.sol:SimpleStateTest": [
             {
                 "name": "check_buggy_excluding_view()",
