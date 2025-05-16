@@ -288,6 +288,11 @@ contract HalmosCreateCalldataTest is SymTest, Test {
     Beep beep = new Beep();
     Mock mock = new Mock(false); // use Mock(true) for debugging
 
+    function check_createCalldata_unknown_fail() public {
+        // fail because 0xbeef is not a contract account
+        bytes memory data = svm.createCalldata(address(0xbeef));
+    }
+
     function check_createCalldata_Beep_0_excluding_pure() public {
         bytes memory data = svm.createCalldata(address(beep));
         _check_createCalldata_Beep(data); // fail because the only function in Beep is pure, which is excluded in createCalldata()

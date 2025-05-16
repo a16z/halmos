@@ -295,11 +295,15 @@ def _get_contract_name(ex, arg) -> tuple[str | None, str | None]:
         int_of(extract_bytes(arg, 4, 32), "symbolic address for SVM.createCalldata()"),
         size_bits=160,
     )
-    code = ex.code[addr]
+
+    if not (code := ex.code.get(addr)):
+        raise HalmosException(f"createCalldata: not contract account: {hexify(addr)}")
+
     if not (contract_name := code.contract_name):
         raise HalmosException(
             f"createCalldata: couldn't find the contract name for: {hexify(addr)}"
         )
+
     return contract_name, code.filename
 
 
