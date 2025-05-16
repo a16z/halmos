@@ -111,7 +111,6 @@ from .utils import (
     con_addr,
     concat,
     create_solver,
-    extract_bytes,
     f_ecrecover,
     f_inv_sha3_name,
     f_inv_sha3_size,
@@ -2765,10 +2764,10 @@ class SEVM:
                 exit_code = ONE
 
                 # wrapping guarantees that the arguments are bitvecs
-                digest = uint256(extract_bytes(arg, 0, 32)).as_z3()
-                v = uint8(extract_bytes(arg, 32, 32)).as_z3()
-                r = uint256(extract_bytes(arg, 64, 32)).as_z3()
-                s = uint256(extract_bytes(arg, 96, 32)).as_z3()
+                digest = uint256(arg.get_word(0)).as_z3()
+                v = uint8(arg.get_word(32)).as_z3()
+                r = uint256(arg.get_word(64)).as_z3()
+                s = uint256(arg.get_word(96)).as_z3()
 
                 # TODO: empty returndata in error
                 ret = ByteVec(uint256(f_ecrecover(digest, v, r, s)))
@@ -2803,7 +2802,7 @@ class SEVM:
 
             elif to == MODEXP_PRECOMPILE:
                 exit_code = ONE
-                modulus_size = ex.int_of(extract_bytes(arg, 64, 32))
+                modulus_size = ex.int_of(arg.get_word(64))
                 f_modexp = Function(
                     f"f_modexp_{arg_size}_{modulus_size}",
                     BitVecSorts[arg_size],
