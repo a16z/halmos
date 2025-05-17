@@ -155,6 +155,7 @@ from .contract import (
     Instruction,
     mnemonic,
 )
+from .coverage import CoverageReporter
 from .exceptions import (
     AddressCollision,
     EvmException,
@@ -3042,6 +3043,7 @@ class SEVM:
         print_mem = self.options.print_mem
         profile_instructions = self.options.profile_instructions
         profiler = Profiler()
+        coverage = CoverageReporter()
         start_time = timer()
         fun_name = self.fun_info.name
 
@@ -3096,6 +3098,9 @@ class SEVM:
                 insn: Instruction = ex.insn
                 opcode: int = insn.opcode
                 state: State = ex.st
+
+                # Record instruction coverage
+                coverage.record_instruction(insn, ex.pgm)
 
                 if profile_instructions:
                     extra = ""
