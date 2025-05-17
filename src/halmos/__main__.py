@@ -54,6 +54,7 @@ from .constants import (
     VERBOSITY_TRACE_PATHS,
     VERBOSITY_TRACE_SETUP,
 )
+from .coverage import CoverageReporter
 from .exceptions import FailCheatcode, HalmosException
 from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
 from .logs import (
@@ -1750,6 +1751,21 @@ def _main(_args=None) -> MainResult:
         print(separator)
         print(f"{'Total':<12} {profiler.counters.total():>12,}")
         print(separator)
+
+    coverage = CoverageReporter()
+    coverage_stats = coverage.get_coverage_stats()
+    contract_lengths = coverage.get_contract_lengths()
+    for contract_name, instruction_counters in coverage_stats.items():
+        # if isinstance(contract_name, bytes):
+        #     continue
+        contract_name_str = (
+            contract_name
+            if isinstance(contract_name, str)
+            else f"0x{contract_name[:32].hex()}"
+        )
+        print(
+            f"{contract_name_str}: {len(instruction_counters.keys())} / {contract_lengths[contract_name]}"
+        )
 
     if total_found == 0:
         error(
