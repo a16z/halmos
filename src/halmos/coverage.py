@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import TypeAlias
 
 from .exceptions import (
     HalmosException,
@@ -6,17 +7,19 @@ from .exceptions import (
 from .mapper import SingletonMeta
 from .sevm import Contract, Instruction
 
+ContractKey: TypeAlias = str | bytes
+
 
 class CoverageReporter(metaclass=SingletonMeta):
     """Singleton class for tracking instruction coverage across contracts."""
 
     def __init__(self) -> None:
-        # (contract_name or _fastcode) -> pc -> count
-        self._coverage_data: dict[str | bytes, dict[int, int]] = defaultdict(
+        # contract_key -> pc -> count
+        self._coverage_data: dict[ContractKey, dict[int, int]] = defaultdict(
             lambda: defaultdict(int)
         )
-        # (contract_name or _fastcode) -> length
-        self._contract_lengths: dict[str | bytes, int] = {}
+        # contract_key -> length
+        self._contract_lengths: dict[ContractKey, int] = {}
 
     def _get_key(self, contract: Contract) -> str | bytes | None:
         """Get key from Contract using contract_name or _fastcode."""
@@ -40,7 +43,6 @@ class CoverageReporter(metaclass=SingletonMeta):
         return self._coverage_data[key]
 
     def get_contract_lengths(self, contract: Contract | None = None) -> dict:
-        """Get the length of each contract or a specific contract."""
         if contract is None:
             return self._contract_lengths
         key = self._get_key(contract)
