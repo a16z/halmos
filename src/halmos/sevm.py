@@ -2816,7 +2816,10 @@ class SEVM:
         stack: Worklist,
         target: int,
         cond: Bool,
+        insn: Instruction,
     ) -> None:
+        coverage = CoverageReporter()
+
         cond_z3 = cond.as_z3()
         cond_true = simplify(cond_z3)
         cond_false = simplify(Not(cond_true))
@@ -2893,6 +2896,7 @@ class SEVM:
                     False: visited[False],
                 }
             stack.push(new_ex_true)
+            coverage.record_branch(insn, True, ex.pgm)
 
         if new_ex_false:
             if is_symbolic_cond:
@@ -2901,6 +2905,7 @@ class SEVM:
                     False: visited[False] + 1,
                 }
             stack.push(new_ex_false)
+            coverage.record_branch(insn, False, ex.pgm)
 
     def create_branch(self, ex: Exec, cond: BitVecRef, target: int) -> Exec:
         new_path = ex.path.branch(cond)
@@ -3201,15 +3206,17 @@ class SEVM:
                         # we just validated that this is indeed a JUMPDEST so we can safely skip it
                         ex.advance(pc=target + 1)
                         next_ex = ex
+#                       coverage.record_branch(insn, True, ex.pgm)
                         continue
 
                     if cond.is_false:
                         ex.advance(pc=insn.next_pc)
                         next_ex = ex
+#                       coverage.record_branch(insn, False, ex.pgm)
                         continue
 
                     # handle symbolic conditions
-                    self.jumpi(ex, stack, target, cond)
+                    self.jumpi(ex, stack, target, cond, insn)
                     continue
 
                 elif opcode == OP_ISZERO:

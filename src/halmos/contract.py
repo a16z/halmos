@@ -243,6 +243,7 @@ class Contract:
     _fastcode: bytes | None
     _insn: list[Instruction]
     _jumpdests: tuple[set] | None
+    _num_insn: int | None
 
     contract_name: str | None
     filename: str | None
@@ -266,6 +267,7 @@ class Contract:
         # maps pc to decoded instruction (including operand and next_pc)
         self._insn = [None] * len(code)
         self._jumpdests = None
+        self._num_insn = None
 
         self.contract_name = contract_name
         self.filename = filename
@@ -301,6 +303,30 @@ class Contract:
                     break
 
         return jumpdests
+
+    def __get_num_insn(self):
+        # quick scan, does not eagerly decode instructions
+        total = 0
+        pc = 0
+
+        # optimistically process fast path first
+        for bytecode in (self._fastcode, self._code):
+            if not bytecode:
+                continue
+
+            N = len(bytecode)
+            while pc < N:
+                try:
+                    opcode = bytecode[pc]
+                    if type(opcode) is not int:
+                        raise NotConcreteError(f"symbolic opcode at pc={pc}")
+
+                    pc += insn_len(opcode)
+                    total += 1
+                except NotConcreteError:
+                    break
+
+        return total
 
     def from_hexcode(hexcode: str):
         """Create a contract from a hexcode string, e.g. "aabbccdd" """
@@ -398,6 +424,12 @@ class Contract:
             self._jumpdests = self.__get_jumpdests()
 
         return self._jumpdests
+
+    def num_insn(self) -> int:
+        if self._num_insn is None:
+            self.num_insn = self.__get_num_insn()
+
+        return self.num_insn
 
     def extract_erc1167_target(self) -> Address | None:
         """
