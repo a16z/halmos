@@ -15,20 +15,21 @@ class CoverageReporter(metaclass=SingletonMeta):
 
     def __init__(self) -> None:
         # contract_key -> pc -> count
-        self._instruction_coverage_data: dict[ContractKey, dict[int, int]] = defaultdict(
-            lambda: defaultdict(int)
+        self._instruction_coverage_data: dict[ContractKey, dict[int, int]] = (
+            defaultdict(lambda: defaultdict(int))
         )
         # contract_key -> pc -> bool -> count
-        self._branch_coverage_data: dict[ContractKey, dict[int, dict[bool, int]]] = defaultdict(
-            lambda: defaultdict(lambda: defaultdict(int))
+        self._branch_coverage_data: dict[ContractKey, dict[int, dict[bool, int]]] = (
+            defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
         )
         # contract_key -> length
         self._contract_lengths: dict[ContractKey, int] = {}
 
     def _get_key(self, contract: Contract) -> str | bytes | None:
         """Get key from Contract using contract_name or _fastcode."""
-#       return contract.contract_name or contract._fastcode
-        return contract.contract_name
+        # TODO: contract name is not available when the code is contract creation code, which we might not want to record for coverage.
+        # using _fastcode as an id is for dynamically generated runtime code, and  we'd need a way to distinguish it from contract creation code.
+        return contract.contract_name  # or contract._fastcode
 
     def record_instruction(self, instruction: Instruction, contract: Contract) -> None:
         key = self._get_key(contract)
@@ -39,7 +40,9 @@ class CoverageReporter(metaclass=SingletonMeta):
                 # TODO: len(contract) is not accurate. It's more than the number of instructions, because push opcodes consist of multiple bytes
                 self._contract_lengths[key] = contract.num_insn()
 
-    def record_branch(self, instruction: Instruction, condition: bool, contract: Contract) -> None:
+    def record_branch(
+        self, instruction: Instruction, condition: bool, contract: Contract
+    ) -> None:
         key = self._get_key(contract)
         if key:
             self._branch_coverage_data[key][instruction.pc][condition] += 1

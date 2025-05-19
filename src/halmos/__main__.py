@@ -1752,7 +1752,9 @@ def _main(_args=None) -> MainResult:
         print(f"{'Total':<12} {profiler.counters.total():>12,}")
         print(separator)
 
-    print(f"\nInstruction coverage: <covered instructions> / <total instructions (over approximated as contract length)>")
+    print(
+        "\nInstruction coverage: <covered instructions> / <total instructions (over approximated as contract length)>"
+    )
     coverage = CoverageReporter()
     instruction_coverage_stats = coverage.get_instruction_coverage_stats()
     contract_lengths = coverage.get_contract_lengths()
@@ -1764,11 +1766,15 @@ def _main(_args=None) -> MainResult:
             if isinstance(contract_name, str)
             else f"0x{contract_name[:32].hex()}"
         )
+
+        # todo: communicate certain limitations:
+        # - some coverage is missing due to view functions excluded by invariant testing.
+        # - low coverage for test contracts due to the inherited code from forge/Test
         print(
             f"{contract_name_str}: {len(instruction_counters.keys())} / {contract_lengths[contract_name]}"
         )
 
-    print(f"\nBranch coverage: <fully covered branches> / <total covered branches>")
+    print("\nBranch coverage: <fully covered branches> / <total covered branches>")
     branch_coverage_stats = coverage.get_branch_coverage_stats()
     for contract_name, branch_counters in branch_coverage_stats.items():
         # if isinstance(contract_name, bytes):
@@ -1781,13 +1787,12 @@ def _main(_args=None) -> MainResult:
 
         # Count program counters where both true and false branches were executed
         fully_covered_branches = sum(
-            1 for conditions in branch_counters.values()
-            if len(conditions) == 2
+            1 for conditions in branch_counters.values() if len(conditions) == 2
         )
 
-        print(
-            f"{contract_name_str}: {fully_covered_branches} / {len(branch_counters)}"
-        )
+        # todo: communicate certain limitations:
+        # - low branch coverage due to constant branching conditions, e.g., constant loops, or fixed setup parameters.
+        print(f"{contract_name_str}: {fully_covered_branches} / {len(branch_counters)}")
 
     if total_found == 0:
         error(

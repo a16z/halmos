@@ -3206,13 +3206,15 @@ class SEVM:
                         # we just validated that this is indeed a JUMPDEST so we can safely skip it
                         ex.advance(pc=target + 1)
                         next_ex = ex
-#                       coverage.record_branch(insn, True, ex.pgm)
+                        # TODO: need to decide whether to include constant branch conditions
+                        # coverage.record_branch(insn, True, ex.pgm)
                         continue
 
                     if cond.is_false:
                         ex.advance(pc=insn.next_pc)
                         next_ex = ex
-#                       coverage.record_branch(insn, False, ex.pgm)
+                        # TODO: need to decide whether to include constant branch conditions
+                        # coverage.record_branch(insn, False, ex.pgm)
                         continue
 
                     # handle symbolic conditions
