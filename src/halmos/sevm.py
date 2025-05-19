@@ -1120,6 +1120,9 @@ class KeccakRegistry:
     def __contains__(self, expr: BitVecRef) -> bool:
         return expr in self._hash_ids
 
+    def __iter__(self) -> Iterator[BitVecRef]:
+        return iter(self._hash_ids)
+
     def copy(self) -> "KeccakRegistry":
         new_registry = KeccakRegistry()
         new_registry._hash_ids = self._hash_ids.copy()
