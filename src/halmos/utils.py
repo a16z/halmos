@@ -216,6 +216,12 @@ def con(n: int, size_bits=256) -> Word:
     return BitVecVal(n, BitVecSorts[size_bits])
 
 
+def con_addr(n: int) -> BitVecRef:
+    if n >= 2**160:
+        raise ValueError(n)
+    return BitVecVal(n, 160)
+
+
 def z3_bv(x: Any) -> BitVecRef:
     if isinstance(x, BV):
         return x.as_z3()
@@ -616,12 +622,6 @@ def assert_uint256(x: Word) -> None:
 
     if x.size() != 256:
         raise ValueError(x)
-
-
-def con_addr(n: int) -> BitVecRef:
-    if n >= 2**160:
-        raise ValueError(n)
-    return BitVecVal(n, 160)
 
 
 def green(text: str) -> str:
