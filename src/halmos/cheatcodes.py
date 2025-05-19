@@ -51,6 +51,7 @@ from .utils import (
     Word,
     assert_address,
     con,
+    con_addr,
     decode_hex,
     extract_bytes,
     extract_funsig,
@@ -90,21 +91,17 @@ def name_of(x: str) -> str:
     return re.sub(r"\s+", "_", x)
 
 
-def extract_string_array_argument(calldata: BitVecRef, arg_idx: int):
+def extract_string_array_argument(calldata: ByteVec, arg_idx: int):
     """Extracts idx-th argument of string array from calldata"""
 
-    array_slot = int_of(extract_bytes(calldata, 4 + 32 * arg_idx, 32))
-    num_strings = int_of(extract_bytes(calldata, 4 + array_slot, 32))
+    array_slot = int_of(calldata.get_word(4 + 32 * arg_idx))
+    num_strings = int_of(calldata.get_word(4 + array_slot))
 
     string_array = []
 
     for i in range(num_strings):
-        string_offset = int_of(
-            extract_bytes(calldata, 4 + array_slot + 32 * (i + 1), 32)
-        )
-        string_length = int_of(
-            extract_bytes(calldata, 4 + array_slot + 32 + string_offset, 32)
-        )
+        string_offset = int_of(calldata.get_word(4 + array_slot + 32 * (i + 1)))
+        string_length = int_of(calldata.get_word(4 + array_slot + 32 + string_offset))
         string_value = int_of(
             extract_bytes(
                 calldata, 4 + array_slot + 32 + string_offset + 32, string_length
@@ -291,9 +288,8 @@ def snapshot_state(
 
 def _get_contract_name(ex, arg) -> tuple[str | None, str | None]:
     # TODO: support symbolic target using sevm.resolve_address_alias()
-    addr = con(
-        int_of(extract_bytes(arg, 4, 32), "symbolic address for SVM.createCalldata()"),
-        size_bits=160,
+    addr = con_addr(
+        int_of(arg.get_word(4), "symbolic address for SVM.createCalldata()")
     )
 
     if not (code := ex.code.get(addr)):
@@ -315,7 +311,7 @@ def create_calldata_address(ex, arg, sevm, stack) -> list[ByteVec]:
 def create_calldata_address_bool(ex, arg, sevm, stack) -> list[ByteVec]:
     contract_name, filename = _get_contract_name(ex, arg)
     include_view = int_of(
-        extract_bytes(arg, 4 + 32 * 1, 32),
+        arg.get_word(4 + 32 * 1),
         "symbolic boolean flag for SVM.createCalldata()",
     )
     return create_calldata_generic(
@@ -331,7 +327,7 @@ def create_calldata_contract(ex, arg, sevm, stack) -> list[ByteVec]:
 def create_calldata_contract_bool(ex, arg, sevm, stack) -> list[ByteVec]:
     contract_name = name_of(extract_string_argument(arg, 0))
     include_view = int_of(
-        extract_bytes(arg, 4 + 32 * 1, 32),
+        arg.get_word(4 + 32 * 1),
         "symbolic boolean flag for SVM.createCalldata()",
     )
     return create_calldata_generic(
@@ -349,7 +345,7 @@ def create_calldata_file_contract_bool(ex, arg, sevm, stack) -> list[ByteVec]:
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     include_view = int_of(
-        extract_bytes(arg, 4 + 32 * 2, 32),
+        arg.get_word(4 + 32 * 2),
         "symbolic boolean flag for SVM.createCalldata()",
     )
     return create_calldata_generic(
@@ -439,7 +435,7 @@ def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef | 
 
 
 def create_uint(ex, arg, name: str | None = None, **kwargs):
-    bits = int_of(extract_bytes(arg, 4, 32), "symbolic bit size for svm.createUint()")
+    bits = int_of(arg.get_word(4), "symbolic bit size for svm.createUint()")
     if bits > 256:
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
@@ -590,7 +586,7 @@ class halmos_cheat_code:
     }
 
     @staticmethod
-    def handle(sevm, ex, arg: BitVecRef, stack) -> list[BitVecRef]:
+    def handle(sevm, ex, arg: ByteVec, stack) -> list[BitVecRef]:
         funsig = int_of(extract_funsig(arg), "symbolic halmos cheatcode")
         if handler := halmos_cheat_code.handlers.get(funsig):
             result = handler(ex, arg, sevm=sevm, stack=stack)
@@ -605,7 +601,7 @@ class hevm_cheat_code:
 
     # address constant HEVM_ADDRESS =
     #     address(bytes20(uint160(uint256(keccak256('hevm cheat code')))));
-    address: BitVecRef = BV(0x7109709ECFA91A80626FF3989D68F67F5B1DD12D, size=160)
+    address = BV(0x7109709ECFA91A80626FF3989D68F67F5B1DD12D, size=160)
 
     # abi.encodePacked(
     #     bytes4(keccak256("store(address,bytes32,bytes32)")),
@@ -1440,7 +1436,7 @@ class hevm_cheat_code:
 
         # vm.addr(uint256 privateKey) returns (address keyAddr)
         elif funsig == hevm_cheat_code.addr_sig:
-            private_key = uint256(extract_bytes(arg, 4, 32))
+            private_key = uint256(arg.get_word(4))
 
             # TODO: handle concrete private key (return directly the corresponding address)
             # TODO: check (or assume?) private_key is valid
@@ -1456,8 +1452,8 @@ class hevm_cheat_code:
 
         # vm.sign(uint256 privateKey, bytes32 digest) returns (uint8 v, bytes32 r, bytes32 s)
         elif funsig == hevm_cheat_code.sign_sig:
-            key = try_bytes_to_bv_value(extract_bytes(arg, 4, 32))
-            digest = try_bytes_to_bv_value(extract_bytes(arg, 4 + 32, 32))
+            key = try_bytes_to_bv_value(arg.get_word(4))
+            digest = try_bytes_to_bv_value(arg.get_word(4 + 32))
 
             # TODO: handle concrete private key + digest (generate concrete signature)
 
@@ -1506,7 +1502,7 @@ class hevm_cheat_code:
 
         # vm.label(address account, string calldata newLabel)
         elif funsig == hevm_cheat_code.label_sig:
-            addr = extract_bytes(arg, 4, 32)
+            addr = arg.get_word(4)
 
             # TODO: no-op for now
             # label = extract_string_argument(arg, 1)
