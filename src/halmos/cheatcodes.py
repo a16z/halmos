@@ -51,6 +51,7 @@ from .utils import (
     Word,
     assert_address,
     con,
+    con_addr,
     decode_hex,
     extract_bytes,
     extract_funsig,
@@ -287,9 +288,8 @@ def snapshot_state(
 
 def _get_contract_name(ex, arg) -> tuple[str | None, str | None]:
     # TODO: support symbolic target using sevm.resolve_address_alias()
-    addr = con(
-        int_of(arg.get_word(4), "symbolic address for SVM.createCalldata()"),
-        size_bits=160,
+    addr = con_addr(
+        int_of(arg.get_word(4), "symbolic address for SVM.createCalldata()")
     )
 
     if not (code := ex.code.get(addr)):
