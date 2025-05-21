@@ -33,6 +33,7 @@ from .calldata import (
     mk_calldata,
 )
 from .constants import MAX_MEMORY_SIZE
+from .env import Env
 from .exceptions import (
     FailCheatcode,
     HalmosException,
@@ -440,6 +441,12 @@ def create_uint(ex, arg, name: str | None = None, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name or name_of(extract_string_argument(arg, 1))
+    print(
+        "cehcking",
+        type(ByteVec(uint256(create_generic(ex, bits, name, f"uint{bits}")))),
+        "val",
+        ByteVec(uint256(create_generic(ex, bits, name, f"uint{bits}"))),
+    )
     return ByteVec(uint256(create_generic(ex, bits, name, f"uint{bits}")))
 
 
@@ -518,6 +525,8 @@ def create_uint256_min_max(ex, arg, name: str | None = None, **kwargs):
         raise HalmosException(f"expected min={min_value} <= max={max_value}")
 
     # Add constraints for the symbolic value to be within the specified range
+    # print("before comparision")
+    # print(type(symbolic_value),type(min_value),type(max_value))
     min_condition = simplify(UGE(symbolic_value, min_value))
     ex.path.append(min_condition)  # Use UGE for unsigned >=
 
@@ -525,6 +534,20 @@ def create_uint256_min_max(ex, arg, name: str | None = None, **kwargs):
     ex.path.append(max_condition)  # Use ULE for unsigned <=
 
     return ByteVec(symbolic_value)
+
+
+def create_env_int(ex, arg, name: str | None = None, **kwargs):
+    key = decode_string_arg(arg, 0)
+    val = Env().env_int(key)
+    z3_val = int256(val)
+    return ByteVec(z3_val)
+
+
+def create_env_bytes32(ex, arg, name: str | None = None, **kwargs):
+    key = decode_string_arg(arg, 0)
+    val = Env().env_bytes32(key)
+    bytes32_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
+    return ByteVec(bytes32_val)
 
 
 def create_bytes8(ex, arg, name: str | None = None, **kwargs):
@@ -594,6 +617,27 @@ class halmos_cheat_code:
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
         raise HalmosException(error_msg)
+
+
+def decode_string_arg(data: ByteVec, base_offset: int) -> str:
+    """
+    Decode a dynamic `string` argument from ABI calldata.
+    """
+    # print("inside decode_string_arg")
+    # print(f"data: {data}")
+    # print(f"base_offset: {base_offset}")
+
+    # Step 1: get offset to actual string data
+    str_offset_bytes = data[4 + base_offset : 4 + base_offset + 32].unwrap()
+    str_offset = int.from_bytes(str_offset_bytes, "big")
+
+    # Step 2: get length of the string
+    str_len_bytes = data[4 + str_offset : 4 + str_offset + 32].unwrap()
+    str_len = int.from_bytes(str_len_bytes, "big")
+
+    # Step 3: extract the string bytes
+    str_data_bytes = data[4 + str_offset + 32 : 4 + str_offset + 32 + str_len].unwrap()
+    return str_data_bytes.decode("utf-8")
 
 
 class hevm_cheat_code:
@@ -764,9 +808,6 @@ class hevm_cheat_code:
         0x32C8176D: "deriveKey(string,uint32,string)",
         0x709ECD3F: "dumpState(string)",
         0x8C374C65: "ensNamehash(string)",
-        0x4D7BAF06: "envBytes(string)",
-        0xDDC2651B: "envBytes(string,string)",
-        0xCE8365F9: "envExists(string)",
         0x35E1349B: "eth_getLogs(uint256,uint256,address,bytes32[])",
         0x65B7B7CC: "expectCall(address,uint256,uint64,bytes,uint64)",
         0x08E4E116: "expectCallMinGas(address,uint256,uint64,bytes)",
@@ -994,34 +1035,6 @@ class hevm_cheat_code:
         0x9EBF6827: "selectFork(uint256)",
         0xBE646DA1: "transact(bytes32)",
         0x4D8ABC4B: "transact(uint256,bytes32)",
-        0x42181150: "envInt(string,string)",
-        0x74318528: "envOr(string,string,uint256[])",
-        0x97949042: "envBytes32(string)",
-        0x350D56BF: "envAddress(string)",
-        0xAD31B9FA: "envAddress(string,string)",
-        0x7ED1EC7D: "envBool(string)",
-        0xAAADDEAF: "envBool(string,string)",
-        0x953C097E: "envBytes(bytes)",
-        0x6C42F03F: "envBytes(bytes,bytes)",
-        0x5AF231C1: "envBytes32(string,string)",
-        0x892A0C61: "envInt(string)",
-        0x561FE540: "envOr(string,address)",
-        0x4777F3CF: "envOr(string,bool)",
-        0xB3E47705: "envOr(string,bytes)",
-        0xB4A85892: "envOr(string,bytes32)",
-        0xBBCB713E: "envOr(string,int256)",
-        0xD145736C: "envOr(string,string)",
-        0xC74E9DEB: "envOr(string,string,address[])",
-        0xEB85E83B: "envOr(string,string,bool[])",
-        0x2281F367: "envOr(string,string,bytes32[])",
-        0x64BC3E64: "envOr(string,string,bytes[])",
-        0x4700D74B: "envOr(string,string,int256[])",
-        0x859216BC: "envOr(string,string,string[])",
-        0x5E97348F: "envOr(string,uint256)",
-        0xF877CB19: "envString(string)",
-        0x14B02BC9: "envString(string,string)",
-        0xC1978D1F: "envUint(string)",
-        0xF3DEC099: "envUint(string,string)",
         0x3EBF73B4: "getDeployedCode(string)",
         0x528A683C: "keyExists(string,string)",
         0xDB4235F6: "keyExistsJson(string,string)",
@@ -1203,6 +1216,74 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("randomBytes8()"))
     random_bytes8_sig: int = 0x0497B0A5
+
+    # newly added cheatcodes
+
+    # bytes4(keccak256("envInt(string)"))
+    env_int_sig: int = 0x892A0C61
+    # bytes4(keccak256("envBytes32(string)"))
+    env_bytes32_sig: int = 0x97949042
+    # bytes4(keccak256("envAddress(string)"))
+    env_address_sig: int = 0x350D56BF
+    # bytes4(keccak256("envBool(string)"))
+    env_bool_sig: int = 0x7ED1EC7D
+    # bytes4(keccak256("envBytes(bytes)"))
+    env_bytes_sig: int = 0x953C097E
+    # bytes4(keccak256("envString(string)"))
+    env_string_sig: int = 0xF877CB19
+    # bytes4(keccak256("envUint(string)"))
+    env_uint_sig: int = 0xC1978D1F
+    # bytes4(keccak256("envBytes(string)"))
+    env_bytes_string_sig: int = 0x953C097E
+    # bytes4(keccak256("envExists(string)"))
+    env_exists_string_sig: int = 0xCE8365F9
+
+    # --------------
+
+    # bytes4(keccak256("envInt(string,string)"))
+    env_int_string_sig: int = 0x42181150
+    # bytes4(keccak256("envOr(string,string,uint256[])"))
+    env_or_sig: int = 0x74318528
+    # bytes4(keccak256("envAddress(string,string)"))
+    env_address_string_sig: int = 0xAD31B9FA
+    # bytes4(keccak256("envBool(string,string)"))
+    env_bool_string_sig: int = 0xAAADDEAF
+    # bytes4(keccak256("envBytes(bytes,bytes)"))
+    env_bytes_bytes_sig: int = 0x6C42F03F
+    # bytes4(keccak256("envBytes32(string,string)"))
+    env_bytes32_string_sig: int = 0x5AF231C1
+    # bytes4(keccak256("envOr(string,address)"))
+    env_or_address_sig: int = 0x561FE540
+    # bytes4(keccak256("envOr(string,bool)"))
+    env_or_bool_sig: int = 0x4777F3CF
+    # bytes4(keccak256("envOr(string,bytes)"))
+    env_or_bytes_sig: int = 0xB3E47705
+    # bytes4(keccak256("envOr(string,bytes32)"))
+    env_or_bytes32_sig: int = 0xB4A85892
+    # bytes4(keccak256("envOr(string,int256)"))
+    env_or_int_sig: int = 0xBBCB713E
+    # bytes4(keccak256("envOr(string,string)"))
+    env_or_string_sig: int = 0xD145736C
+    # bytes4(keccak256("envOr(string,string,address[])"))
+    env_or_string_address_array_sig: int = 0xC74E9DEB
+    # bytes4(keccak256("envOr(string,string,bool[])"))
+    env_or_string_bool_array_sig: int = 0xEB85E83B
+    # bytes4(keccak256("envOr(string,string,bytes32[])"))
+    env_or_string_bytes32_array_sig: int = 0x2281F367
+    # bytes4(keccak256("envOr(string,string,bytes[])"))
+    env_or_string_bytes_array_sig: int = 0x64BC3E64
+    # bytes4(keccak256("envOr(string,string,int256[])"))
+    env_or_string_int_array_sig: int = 0x4700D74B
+    # bytes4(keccak256("envOr(string,string,string[])"))
+    env_or_string_string_array_sig: int = 0x859216BC
+    # bytes4(keccak256("envOr(string,uint256)"))
+    env_or_string_uint256_sig: int = 0x5E97348F
+    # bytes4(keccak256("envString(string,string)"))
+    env_string_string_sig: int = 0x14B02BC9
+    # bytes4(keccak256("envUint(string,string)"))
+    env_uint_string_sig: int = 0xF3DEC099
+    # bytes4(keccak256("envBytes(string,string)"))
+    env_bytes_string_string_sig: int = 0xDDC2651B
 
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack) -> ByteVec | None:
@@ -1550,6 +1631,11 @@ class hevm_cheat_code:
 
         elif funsig == hevm_cheat_code.random_bytes8_sig:
             return create_bytes8(ex, arg, name="vmRandomBytes8")
+
+        elif funsig == hevm_cheat_code.env_int_sig:
+            return create_env_int(ex, arg, name="vmEnvInt")
+        elif funsig == hevm_cheat_code.env_bytes32_sig:
+            return create_env_bytes32(ex, arg, name="vmEnvBytes32")
 
         elif funsig in hevm_cheat_code.dict_of_unsupported_cheatcodes:
             msg = f"Unsupported cheat code: {hevm_cheat_code.dict_of_unsupported_cheatcodes[funsig]}"

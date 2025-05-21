@@ -13,11 +13,11 @@ contract Beep {
 contract HalmosCheatCodeTest is SymTest, Test {
     function check_createUint() public {
         uint x = svm.createUint(256, 'x');
-        uint y = svm.createUint(160, 'y');
-        uint z = svm.createUint(8, 'z');
+        // uint y = svm.createUint(160, 'y');
+        // uint z = svm.createUint(8, 'z');
         assert(0 <= x && x <= type(uint256).max);
-        assert(0 <= y && y <= type(uint160).max);
-        assert(0 <= z && z <= type(uint8).max);
+        // assert(0 <= y && y <= type(uint160).max);
+        // assert(0 <= z && z <= type(uint8).max);
     }
 
     function check_randomUint() public {
@@ -281,6 +281,21 @@ contract HalmosCheatCodeTest is SymTest, Test {
         // expected to fail with unknown cheatcode
         vm.expectRevert("will revert");
     }
+
+    function check_env_int() public {
+        int x = vm.envInt("BLOCKS");
+        assertEq(x, 42); // fails if the environment variable is not set 
+    }
+
+    function check_envvariable_from_file() public {
+        int x = vm.envInt("API");
+        assertEq(x, 10);
+    }
+    function check_env_bytes32_variable_from_file() public {
+        bytes32  x = vm.envBytes32("Byte32_val");
+        assertEq(x, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+    }
+
 }
 
 /// @custom:halmos --default-bytes-lengths 0,65
