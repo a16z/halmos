@@ -291,9 +291,35 @@ contract HalmosCheatCodeTest is SymTest, Test {
         int x = vm.envInt("API");
         assertEq(x, 10);
     }
-    function check_env_bytes32_variable_from_file() public {
+    function check_env_bytes32() public {
         bytes32  x = vm.envBytes32("Byte32_val");
         assertEq(x, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+    }
+
+    function check_env_address() public {
+        address x = vm.envAddress("ADDRESS");
+        console.log("address: ", x);
+        assertEq(x, address(0xdeadbeef));
+    }
+
+    function check_env_bool() public {
+        bool x = vm.envBool("BOOL");
+        assertEq(x, true);
+    }
+
+    function check_env_uint() public {
+        uint x = vm.envUint("UINT");
+        assertEq(x, 2**256 - 1);
+    }
+    
+    function check_env_bytes() public {
+        bytes memory x = vm.envBytes("BYTES");
+        assertEq(x, hex"deadbeef");
+    }
+
+    function check_env_string() public {
+        string memory x = vm.envString("STRING");
+        assertEq(x, "hello world");
     }
 
 }

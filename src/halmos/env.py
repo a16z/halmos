@@ -4,7 +4,7 @@ import os
 
 from dotenv import load_dotenv
 
-load_dotenv("../../tests/.env")  # Load environment variables from .env file
+load_dotenv()  # Load environment variables from .env file
 
 
 class Env:
@@ -58,6 +58,18 @@ class Env:
             return int(val, 0)  # auto-detects base (0x or decimal), supports sign
         except ValueError as e:
             raise ValueError(f"envInt parsing failed for {key} = {val}: {e}") from e
+
+    def env_uint(self, key: str, default: str = None) -> int:
+        val = self._parse_env_var(key, default)
+        try:
+            result = int(val, 0)
+            if result < 0:
+                raise ValueError(
+                    f"envUint parsing failed for {key} = {val}: value must be non-negative"
+                )
+            return result
+        except ValueError as e:
+            raise ValueError(f"envUint parsing failed for {key} = {val}: {e}") from e
 
     def env_bool(self, key: str, default: str = None) -> bool:
         return self._parse_bool(key, default)

@@ -50,6 +50,7 @@ from .utils import (
     BitVecSort256,
     BitVecSorts,
     Word,
+    address,
     assert_address,
     con,
     con_addr,
@@ -536,18 +537,55 @@ def create_uint256_min_max(ex, arg, name: str | None = None, **kwargs):
     return ByteVec(symbolic_value)
 
 
-def create_env_int(ex, arg, name: str | None = None, **kwargs):
+def create_env_int(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     val = Env().env_int(key)
     z3_val = int256(val)
     return ByteVec(z3_val)
 
 
-def create_env_bytes32(ex, arg, name: str | None = None, **kwargs):
+def create_env_bytes32(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     val = Env().env_bytes32(key)
     bytes32_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
     return ByteVec(bytes32_val)
+
+
+def create_env_address(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    val = Env().env_address(key)
+    address_hex = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
+    address_val = address(address_hex)
+    print("bytes32_val", ByteVec(address_val), type(ByteVec(address_val)))
+    return ByteVec(uint256(address_val))
+
+
+def create_env_bool(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    val = Env().env_bool(key)
+    z3_val = con(1 if val else 0, 1)
+    return ByteVec(uint256(z3_val))
+
+
+def create_env_uint(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    val = Env().env_uint(key)
+    z3_val = uint256(val)
+    return ByteVec(z3_val)
+
+
+def create_env_bytes(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    val = Env().env_bytes(key)
+    return encode_tuple_bytes(val)
+
+
+def create_env_string(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    val = Env().env_string(key)
+    if isinstance(val, str):
+        val = val.encode("utf-8")
+    return encode_tuple_bytes(val)
 
 
 def create_bytes8(ex, arg, name: str | None = None, **kwargs):
@@ -1227,19 +1265,16 @@ class hevm_cheat_code:
     env_address_sig: int = 0x350D56BF
     # bytes4(keccak256("envBool(string)"))
     env_bool_sig: int = 0x7ED1EC7D
-    # bytes4(keccak256("envBytes(bytes)"))
-    env_bytes_sig: int = 0x953C097E
-    # bytes4(keccak256("envString(string)"))
-    env_string_sig: int = 0xF877CB19
     # bytes4(keccak256("envUint(string)"))
     env_uint_sig: int = 0xC1978D1F
+    # bytes4(keccak256("envString(string)"))
+    env_string_sig: int = 0xF877CB19
     # bytes4(keccak256("envBytes(string)"))
-    env_bytes_string_sig: int = 0x953C097E
-    # bytes4(keccak256("envExists(string)"))
-    env_exists_string_sig: int = 0xCE8365F9
-
+    env_bytes_string_sig: int = 0x4D7BAF06
     # --------------
 
+    # bytes4(keccak256("envExists(string)"))
+    env_exists_sig: int = 0xCE8365F9
     # bytes4(keccak256("envInt(string,string)"))
     env_int_string_sig: int = 0x42181150
     # bytes4(keccak256("envOr(string,string,uint256[])"))
@@ -1289,7 +1324,6 @@ class hevm_cheat_code:
     def handle(sevm, ex, arg: ByteVec, stack) -> ByteVec | None:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
-
         # vm.assert*
         if funsig in assert_cheatcode_handler:
             vm_assert = assert_cheatcode_handler[funsig](arg)
@@ -1633,9 +1667,25 @@ class hevm_cheat_code:
             return create_bytes8(ex, arg, name="vmRandomBytes8")
 
         elif funsig == hevm_cheat_code.env_int_sig:
-            return create_env_int(ex, arg, name="vmEnvInt")
+            return create_env_int(arg)
+
         elif funsig == hevm_cheat_code.env_bytes32_sig:
-            return create_env_bytes32(ex, arg, name="vmEnvBytes32")
+            return create_env_bytes32(arg)
+
+        elif funsig == hevm_cheat_code.env_address_sig:
+            return create_env_address(arg)
+
+        elif funsig == hevm_cheat_code.env_bool_sig:
+            return create_env_bool(arg)
+
+        elif funsig == hevm_cheat_code.env_uint_sig:
+            return create_env_uint(arg)
+
+        elif funsig == hevm_cheat_code.env_bytes_string_sig:
+            return create_env_bytes(arg)
+
+        elif funsig == hevm_cheat_code.env_string_sig:
+            return create_env_string(arg)
 
         elif funsig in hevm_cheat_code.dict_of_unsupported_cheatcodes:
             msg = f"Unsupported cheat code: {hevm_cheat_code.dict_of_unsupported_cheatcodes[funsig]}"
