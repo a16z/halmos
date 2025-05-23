@@ -1754,7 +1754,7 @@ def _main(_args=None) -> MainResult:
 
     coverage_file = args.coverage_output
     with open(coverage_file, "w") as f:
-        f.write(CoverageReporter().generate_lcov())
+        f.write(CoverageReporter().generate_lcov_report())
     print(f"Coverage report saved to: {coverage_file}")
 
     if total_found == 0:

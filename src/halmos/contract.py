@@ -256,6 +256,10 @@ class Contract:
 
     contract_name: str | None
     filename: str | None
+
+    # List of source mappping entries in the format "s:l:f:j:m", separated by ';'
+    # where s=start, l=length, f=file_id, j=jump_type, m=modifier_depth
+    # https://docs.soliditylang.org/en/latest/internals/source_mappings.html
     source_map: str | None
 
     def __init__(
@@ -320,25 +324,19 @@ class Contract:
         return jumpdests
 
     def process_source_mapping(self):
-        """
-        Add source map information to each instruction in the contract.
-
-        Args:
-            srcmap: List of source map entries in the format "s:l:f:j:m"
-                   where s=start, l=length, f=fileid, j=jump type, m=modifier depth
-        """
+        """Add source mapping information to each instruction in the contract."""
         if not (source_map := self.source_map):
             return
 
         pc = 0
-        start, file_id = 0, 0
+        byte_offset, file_id = 0, 0
         for srcmap in source_map.split(";"):
             items = srcmap.split(":") + [""] * 5
-            start = int(items[0]) if items[0] != "" else start
+            byte_offset = int(items[0]) if items[0] != "" else byte_offset
             file_id = int(items[2]) if items[2] != "" else file_id
 
-            file_path, line_number = SourceFileMap().get_location(file_id, start)
-            CoverageReporter().record_file_line(file_path, line_number)
+            file_path, line_number = SourceFileMap().get_location(file_id, byte_offset)
+            CoverageReporter().record_lines_found(file_path, line_number)
 
             insn = self.decode_instruction(pc)
             insn.set_srcmap(file_path, line_number)
@@ -479,21 +477,19 @@ class CoverageReporter(metaclass=SingletonMeta):
             lambda: defaultdict(int)
         )
 
-    def record_file_line(self, file: str | None, line: int | None) -> None:
+    def record_lines_found(self, file_path: str | None, line_number: int | None) -> None:
         # Record lines found (for LF in lcov)
-        if not (file and line):
+        if not (file_path and line_number):
             return
-        self._instruction_coverage_data[file][line]
+        # initialize 0 (defaultdict) if not yet found
+        self._instruction_coverage_data[file_path][line_number]
 
     def record_instruction(self, instruction: Instruction) -> None:
         # Record instruction coverage by file path and line number
         if (file := instruction.source_file) and (line := instruction.source_line):
             self._instruction_coverage_data[file][line] += 1
 
-    def get_instruction_coverage_stats(self) -> dict:
-        return self._instruction_coverage_data
-
-    def generate_lcov(self) -> str:
+    def generate_lcov_report(self) -> str:
         """Generate lcov format coverage report."""
         lcov_lines = []
 
