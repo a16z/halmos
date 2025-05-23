@@ -1755,7 +1755,7 @@ def _main(_args=None) -> MainResult:
     # todo: print lcov file name. provide option for file name.
     print("\nGenerating coverage report in lcov format...")
     coverage = CoverageReporter()
-    with open('lcov.info', 'w') as f:
+    with open("lcov.info", "w") as f:
         f.write(coverage.generate_lcov())
 
     if total_found == 0:

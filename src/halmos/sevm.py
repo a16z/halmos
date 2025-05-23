@@ -152,9 +152,9 @@ from .contract import (
     OP_XOR,
     TERMINATING_OPCODES,
     Contract,
+    CoverageReporter,
     Instruction,
     mnemonic,
-    CoverageReporter,
 )
 from .exceptions import (
     AddressCollision,

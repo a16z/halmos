@@ -95,7 +95,9 @@ class SourceFileMap(metaclass=SingletonMeta):
 
     def add_mapping(self, file_id: int, filepath: str) -> None:
         if (existing := self._id_to_filepath.get(file_id)) and existing != filepath:
-            debug(f"source file id mapping conflict: {file_id=} {filepath=} {existing=}")
+            debug(
+                f"source file id mapping conflict: {file_id=} {filepath=} {existing=}"
+            )
 
         self._id_to_filepath[file_id] = filepath
 
@@ -112,13 +114,13 @@ class SourceFileMap(metaclass=SingletonMeta):
     def _index_newlines(self, filepath: str) -> list[int]:
         newline_offsets = []
         offset = 0
-        with open(filepath, 'rb') as f:
+        with open(filepath, "rb") as f:
             while True:
                 chunk = f.read(8192)
                 if not chunk:
                     break
                 for i, b in enumerate(chunk):
-                    if b == ord('\n'):
+                    if b == ord("\n"):
                         newline_offsets.append(offset + i)
                 offset += len(chunk)
         return newline_offsets
