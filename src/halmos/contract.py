@@ -342,15 +342,17 @@ class Contract:
 
         return total
 
-    def get_file_path(self, fileid: int) -> str:
-        """Get the absolute file path for a given source file ID."""
+    def get_file_path_and_line_number(self, fileid: str, offset: int) -> int:
         relative_path = SourceId().get_file_path(fileid)
-        return os.path.join(SourceId().get_root(), relative_path)
+        if not relative_path:
+            return None, None
 
-    def get_line_number(self, file_path: str, offset: int) -> int:
-        """Get the line number for a given byte offset in a file."""
+        file_path = os.path.join(SourceId().get_root(), relative_path)
+
         mapper = OffsetLineMapper(file_path)
-        return mapper.get_line_number(offset)
+        line_number = mapper.get_line_number(offset)
+
+        return file_path, line_number
 
     def add_srcmap(self, srcmap: str):
         """
@@ -363,13 +365,12 @@ class Contract:
         pc = 0
 
         start, fileid = 0, 0
-        for idx, sm in enumerate(srcmap.split(';')):
-            arr = srcmap.split(':') + ['']*5
+        for sm in srcmap.split(';'):
+            arr = sm.split(':') + ['']*5
             start  = int(arr[0]) if arr[0] != '' else start
             fileid = int(arr[2]) if arr[2] != '' else fileid
 
-            file_path = self.get_file_path(fileid)
-            line_number = self.get_line_number(file_path, start)
+            file_path, line_number = self.get_file_path_and_line_number(fileid, start)
 
             insn = self.decode_instruction(pc)
             insn.set_srcmap(file_path, line_number)

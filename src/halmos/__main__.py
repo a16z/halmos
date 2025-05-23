@@ -1754,7 +1754,8 @@ def _main(_args=None) -> MainResult:
 
     print("\nGenerating coverage report in lcov format...")
     coverage = CoverageReporter()
-    print(coverage.generate_lcov())
+    with open('lcov.info', 'w') as f:
+        f.write(coverage.generate_lcov())
 
     if total_found == 0:
         error(
