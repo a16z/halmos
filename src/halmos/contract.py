@@ -1,7 +1,12 @@
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import ClassVar
 import os
 
+from .exceptions import (
+    HalmosException,
+)
+from .mapper import SingletonMeta
 from .bitvec import HalmosBitVec as BV
 from .bytevec import ByteVec, ConcreteChunk
 from .constants import MAX_MEMORY_SIZE
@@ -23,9 +28,8 @@ from .utils import (
     str_opcode,
     stripped,
     uint256,
-    OffsetLineMapper,
 )
-from .source_mapping import SourceId
+from .mapper import SourceFileMap
 
 OP_STOP = 0x00
 OP_ADD = 0x01
@@ -219,7 +223,7 @@ class Instruction:
     # expected to be a BV256, so that it can be pushed on the stack with no conversion
     operand: BV | None = None
 
-    # source map related fields
+    # source mapping
     source_file: str | None = None
     source_line: int | None = None
 
@@ -239,9 +243,8 @@ class Instruction:
         return insn_len(self.opcode)
 
     def set_srcmap(self, source_file: str | None, source_line: int | None) -> None:
-        """Update source map information of this instruction."""
-        object.__setattr__(self, 'source_file', source_file)
-        object.__setattr__(self, 'source_line', source_line)
+        object.__setattr__(self, "source_file", source_file)
+        object.__setattr__(self, "source_line", source_line)
 
 
 # Initialize the STOP singleton
@@ -255,7 +258,6 @@ class Contract:
     _fastcode: bytes | None
     _insn: list[Instruction]
     _jumpdests: tuple[set] | None
-    _num_insn: int | None
 
     contract_name: str | None
     filename: str | None
@@ -280,7 +282,6 @@ class Contract:
         # maps pc to decoded instruction (including operand and next_pc)
         self._insn = [None] * len(code)
         self._jumpdests = None
-        self._num_insn = None
 
         self.contract_name = contract_name
         self.filename = filename
@@ -318,43 +319,21 @@ class Contract:
 
         return jumpdests
 
-    def __get_num_insn(self):
-        # quick scan, does not eagerly decode instructions
-        total = 0
-        pc = 0
+    def _get_file_path_and_line_number(self, fileid: str, offset: int) -> int:
+        source_file_map = SourceFileMap()
 
-        # optimistically process fast path first
-        for bytecode in (self._fastcode, self._code):
-            if not bytecode:
-                continue
-
-            N = len(bytecode)
-            while pc < N:
-                try:
-                    opcode = bytecode[pc]
-                    if type(opcode) is not int:
-                        raise NotConcreteError(f"symbolic opcode at pc={pc}")
-
-                    pc += insn_len(opcode)
-                    total += 1
-                except NotConcreteError:
-                    break
-
-        return total
-
-    def get_file_path_and_line_number(self, fileid: str, offset: int) -> int:
-        relative_path = SourceId().get_file_path(fileid)
+        relative_path = source_file_map.get_file_path(fileid)
         if not relative_path:
             return None, None
 
-        file_path = os.path.join(SourceId().get_root(), relative_path)
+        # todo: get_root may not be absolute path
+        file_path = os.path.join(source_file_map.get_root(), relative_path)
 
-        mapper = OffsetLineMapper(file_path)
-        line_number = mapper.get_line_number(offset)
+        line_number = source_file_map.get_line_number(file_path, offset)
 
         return file_path, line_number
 
-    def add_srcmap(self, srcmap: str):
+    def process_source_mapping(self):
         """
         Add source map information to each instruction in the contract.
         
@@ -362,24 +341,22 @@ class Contract:
             srcmap: List of source map entries in the format "s:l:f:j:m"
                    where s=start, l=length, f=fileid, j=jump type, m=modifier depth
         """
+        if not (source_map := self.source_map):
+            return
+
         pc = 0
+        start, file_id = 0, 0
+        for srcmap in source_map.split(';'):
+            items = srcmap.split(':') + ['']*5
+            start = int(items[0]) if items[0] != '' else start
+            file_id = int(items[2]) if items[2] != '' else file_id
 
-        start, fileid = 0, 0
-        for sm in srcmap.split(';'):
-            arr = sm.split(':') + ['']*5
-            start  = int(arr[0]) if arr[0] != '' else start
-            fileid = int(arr[2]) if arr[2] != '' else fileid
-
-            file_path, line_number = self.get_file_path_and_line_number(fileid, start)
+            file_path, line_number = self._get_file_path_and_line_number(file_id, start)
 
             insn = self.decode_instruction(pc)
             insn.set_srcmap(file_path, line_number)
 
-            # Add line number to SourceId tracking
             if file_path and line_number:
-                SourceId().add_line_number(file_path, line_number)
-                # Initialize coverage data for this line
-                from .coverage import CoverageReporter
                 CoverageReporter()._instruction_coverage_data[file_path][line_number] = 0
 
             pc = insn.next_pc
@@ -481,12 +458,6 @@ class Contract:
 
         return self._jumpdests
 
-    def num_insn(self) -> int:
-        if self._num_insn is None:
-            self.num_insn = self.__get_num_insn()
-
-        return self.num_insn
-
     def extract_erc1167_target(self) -> Address | None:
         """
         Extracts the target address from an ERC-1167 minimal proxy contract.
@@ -513,3 +484,45 @@ class Contract:
                 return con_addr(int.from_bytes(unwrapped, "big"))
 
         return None
+
+
+class CoverageReporter(metaclass=SingletonMeta):
+    """Singleton class for tracking instruction coverage across contracts."""
+
+    def __init__(self) -> None:
+        # file_path -> line_number -> count
+        self._instruction_coverage_data: dict[str, dict[int, int]] = (
+            defaultdict(lambda: defaultdict(int))
+        )
+
+    def record_instruction(self, instruction: Instruction) -> None:
+        # Record instruction coverage by file path and line number
+        if (file := instruction.source_file) and (line := instruction.source_line):
+            self._instruction_coverage_data[file][line] += 1
+
+    def get_instruction_coverage_stats(self) -> dict:
+        return self._instruction_coverage_data
+
+    def generate_lcov(self) -> str:
+        """Generate lcov format coverage report."""
+        lcov_lines = []
+        
+        for file_path, line_coverage in self._instruction_coverage_data.items():
+            # SF: Source file
+            lcov_lines.append(f"SF:{file_path}")
+            
+            # DA: Line data (line number, execution count)
+            for line_number, count in sorted(line_coverage.items()):
+                lcov_lines.append(f"DA:{line_number},{count}")
+            
+            # LF: Lines found
+            lcov_lines.append(f"LF:{len(line_coverage)}")
+            
+            # LH: Lines hit (lines with count > 0)
+            lines_hit = sum(1 for count in line_coverage.values() if count > 0)
+            lcov_lines.append(f"LH:{lines_hit}")
+            
+            # End of file
+            lcov_lines.append("end_of_record")
+        
+        return "\n".join(lcov_lines)

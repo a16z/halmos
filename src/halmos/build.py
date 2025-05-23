@@ -5,9 +5,8 @@ import traceback
 
 from halmos.config import Config as HalmosConfig
 from halmos.logs import PARSING_ERROR, debug, warn_code
-from halmos.mapper import Mapper
+from halmos.mapper import Mapper, SourceFileMap
 from halmos.ui import ui
-from .source_mapping import SourceId
 
 
 def get_contract_type(
@@ -26,9 +25,10 @@ def get_contract_type(
 def parse_build_out(args: HalmosConfig) -> dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
-    SourceId().set_root(args.root)
+    root = args.root
+    SourceFileMap().set_root(root)
 
-    out_path = os.path.join(args.root, args.forge_build_out)
+    out_path = os.path.join(root, args.forge_build_out)
     if not os.path.exists(out_path):
         raise FileNotFoundError(
             f"The build output directory `{out_path}` does not exist"
@@ -54,6 +54,7 @@ def parse_build_out(args: HalmosConfig) -> dict:
                 with open(json_path, encoding="utf8") as f:
                     json_out = json.load(f)
 
+                # todo: handle missing cases
                 record_source_file_id(json_out["ast"]["absolutePath"], json_out["id"])
 
                 # cut off compiler version number as well
@@ -186,4 +187,4 @@ def build_output_iterator(build_out: dict):
 
 def record_source_file_id(sol_dirname: str, file_id: int) -> None:
     """Record the mapping between file ID and filename."""
-    SourceId().add_mapping(file_id, sol_dirname)
+    SourceFileMap().add_mapping(file_id, sol_dirname)

@@ -1233,28 +1233,3 @@ def timed(label=None):
         return wrapper
 
     return decorator
-
-
-import bisect
-
-class OffsetLineMapper:
-    def __init__(self, file_path):
-        self.file_path = file_path
-        self.newline_offsets = self._index_newlines()
-
-    def _index_newlines(self):
-        newline_offsets = []
-        offset = 0
-        with open(self.file_path, 'rb') as f:
-            while True:
-                chunk = f.read(8192)
-                if not chunk:
-                    break
-                for i, b in enumerate(chunk):
-                    if b == ord('\n'):
-                        newline_offsets.append(offset + i)
-                offset += len(chunk)
-        return newline_offsets
-
-    def get_line_number(self, byte_offset):
-        return bisect.bisect_right(self.newline_offsets, byte_offset) + 1

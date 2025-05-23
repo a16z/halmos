@@ -1,8 +1,10 @@
+import bisect
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, ForwardRef, Optional
 
 from .exceptions import HalmosException
+from .logs import debug
 
 SELECTOR_FIELDS = {
     "VariableDeclaration": "functionSelector",
@@ -77,6 +79,49 @@ class SingletonMeta(type):
             cls._instances[cls] = super().__call__(*args, **kwargs)
 
         return cls._instances[cls]
+
+
+class SourceFileMap(metaclass=SingletonMeta):
+    def __init__(self):
+        self._root: str = ""  # project root
+        self._id_to_filepath: dict[int, str] = {}
+        self._line_offsets: dict[str, list[int]] = {}
+
+    def set_root(self, root: str) -> None:
+        self._root = root
+
+    def get_root(self) -> str:
+        return self._root
+
+    def add_mapping(self, file_id: int, filepath: str) -> None:
+        if (existing := self._id_to_filepath.get(file_id)) and existing != filepath:
+            debug(f"source file id mapping conflict: {file_id=} {filepath=} {existing=}")
+
+        self._id_to_filepath[file_id] = filepath
+
+    def get_file_path(self, file_id: int) -> str | None:
+        return self._id_to_filepath.get(file_id)
+
+    def get_line_number(self, filepath: str, byte_offset: int) -> int | None:
+        if not (line_offsets := self._line_offsets.get(filepath)):
+            line_offsets = self._index_newlines(filepath)
+            self._line_offsets[filepath] = line_offsets
+
+        return bisect.bisect_right(line_offsets, byte_offset) + 1
+
+    def _index_newlines(self, filepath: str) -> list[int]:
+        newline_offsets = []
+        offset = 0
+        with open(filepath, 'rb') as f:
+            while True:
+                chunk = f.read(8192)
+                if not chunk:
+                    break
+                for i, b in enumerate(chunk):
+                    if b == ord('\n'):
+                        newline_offsets.append(offset + i)
+                offset += len(chunk)
+        return newline_offsets
 
 
 class BuildOut(metaclass=SingletonMeta):

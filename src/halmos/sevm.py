@@ -154,8 +154,8 @@ from .contract import (
     Contract,
     Instruction,
     mnemonic,
+    CoverageReporter,
 )
-from .coverage import CoverageReporter
 from .exceptions import (
     AddressCollision,
     EvmException,
@@ -1697,8 +1697,7 @@ class Exec:  # an execution path
         contract.contract_name = contract_name
         contract.filename = filename
         contract.source_map = source_map
-
-        contract.add_srcmap(source_map)
+        contract.process_source_mapping()
 
         return contract_name, filename
 
@@ -2821,10 +2820,7 @@ class SEVM:
         stack: Worklist,
         target: int,
         cond: Bool,
-        insn: Instruction,
     ) -> None:
-        coverage = CoverageReporter()
-
         cond_z3 = cond.as_z3()
         cond_true = simplify(cond_z3)
         cond_false = simplify(Not(cond_true))
@@ -3108,7 +3104,7 @@ class SEVM:
                 state: State = ex.st
 
                 # Record instruction coverage
-                coverage.record_instruction(insn, ex.pgm)
+                coverage.record_instruction(insn)
 
                 if profile_instructions:
                     extra = ""
@@ -3217,7 +3213,7 @@ class SEVM:
                         continue
 
                     # handle symbolic conditions
-                    self.jumpi(ex, stack, target, cond, insn)
+                    self.jumpi(ex, stack, target, cond)
                     continue
 
                 elif opcode == OP_ISZERO:
