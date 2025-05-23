@@ -152,6 +152,7 @@ from .contract import (
     OP_XOR,
     TERMINATING_OPCODES,
     Contract,
+    CoverageReporter,
     Instruction,
     mnemonic,
 )
@@ -1685,31 +1686,33 @@ class Exec:  # an execution path
         """
 
         bytecode = contract._code
-        contract_name, filename = BuildOut().get_by_code(bytecode)
+        contract_name, filename, source_map = BuildOut().get_by_code(bytecode)
 
         if contract_name is None:
-            contract_name, filename = self._try_resolve_proxy_info(contract)
+            contract_name, filename, source_map = self._try_resolve_proxy_info(contract)
 
         if contract_name is None:
             warn(f"unknown deployed bytecode: {hexify(bytecode.unwrap())}")
 
         contract.contract_name = contract_name
         contract.filename = filename
+        contract.source_map = source_map
+        contract.process_source_mapping()
 
         return contract_name, filename
 
     def _try_resolve_proxy_info(
         self, contract: Contract
-    ) -> tuple[str | None, str | None]:
+    ) -> tuple[str | None, str | None, str | None]:
         """Helper method to resolve contract info for ERC-1167 proxies."""
 
         target = contract.extract_erc1167_target()
         if target is None:
-            return None, None
+            return None, None, None
 
         target_contract = self.code.get(target)
         if target_contract is None:
-            return None, None
+            return None, None, None
 
         return BuildOut().get_by_code(target_contract._code)
 
@@ -3044,6 +3047,7 @@ class SEVM:
         print_mem = self.options.print_mem
         profile_instructions = self.options.profile_instructions
         profiler = Profiler()
+        coverage = CoverageReporter()
         start_time = timer()
         fun_name = self.fun_info.name
 
@@ -3098,6 +3102,9 @@ class SEVM:
                 insn: Instruction = ex.insn
                 opcode: int = insn.opcode
                 state: State = ex.st
+
+                # Record instruction coverage
+                coverage.record_instruction(insn)
 
                 if profile_instructions:
                     extra = ""

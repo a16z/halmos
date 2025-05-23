@@ -54,6 +54,7 @@ from .constants import (
     VERBOSITY_TRACE_PATHS,
     VERBOSITY_TRACE_SETUP,
 )
+from .contract import CoverageReporter
 from .exceptions import FailCheatcode, HalmosException
 from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
 from .logs import (
@@ -1750,6 +1751,11 @@ def _main(_args=None) -> MainResult:
         print(separator)
         print(f"{'Total':<12} {profiler.counters.total():>12,}")
         print(separator)
+
+    coverage_file = args.coverage_output
+    with open(coverage_file, "w") as f:
+        f.write(CoverageReporter().generate_lcov_report())
+    print(f"Coverage report saved to: {coverage_file}")
 
     if total_found == 0:
         error(

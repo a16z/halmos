@@ -1,8 +1,11 @@
+import bisect
+import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, ForwardRef, Optional
 
 from .exceptions import HalmosException
+from .logs import debug
 
 SELECTOR_FIELDS = {
     "VariableDeclaration": "functionSelector",
@@ -77,6 +80,112 @@ class SingletonMeta(type):
             cls._instances[cls] = super().__call__(*args, **kwargs)
 
         return cls._instances[cls]
+
+
+class SourceFileMap(metaclass=SingletonMeta):
+    """Singleton class for managing source file mappings and line number calculations.
+
+    This class maintains mappings between file IDs and file paths, and provides functionality
+    to calculate line numbers from byte offsets in source files. It is used to track source
+    locations during contract execution and coverage reporting.
+
+    The class uses three main data structures:
+    - _root: The project root directory path
+    - _id_to_filepath: Maps file IDs to their corresponding file paths
+    - _line_offsets: Caches newline positions for each file to optimize line number lookups
+    """
+
+    def __init__(self):
+        self._root: str = ""  # project root
+        self._id_to_filepath: dict[int, str] = {}
+        self._line_offsets: dict[str, list[int]] = {}
+
+    def set_root(self, root: str) -> None:
+        self._root = os.path.abspath(root)
+
+    def get_root(self) -> str:
+        return self._root
+
+    def add_mapping(self, file_id: int, filepath: str) -> None:
+        """Add a mapping between a file ID and its file path."""
+        if (existing := self._id_to_filepath.get(file_id)) and existing != filepath:
+            debug(
+                f"source file id mapping conflict: {file_id=} {filepath=} {existing=}"
+            )
+
+        self._id_to_filepath[file_id] = filepath
+
+    def get_file_path(self, file_id: int) -> str | None:
+        """Get the absolute file path for a given file ID.
+
+        Returns None if no mapping exists.
+        """
+        relative_path = self._id_to_filepath.get(file_id)
+        if not relative_path:
+            return None
+
+        if os.path.isabs(relative_path):
+            return relative_path
+
+        return os.path.join(self.get_root(), relative_path)
+
+    def get_line_number(self, filepath: str, byte_offset: int) -> int:
+        """Calculate the line number for a given byte offset in a file.
+
+        The line number is calculated by finding the number of newlines that appear
+        before the given byte offset. The newline positions are cached for efficiency.
+
+        Args:
+            filepath (str): Path to the source file
+            byte_offset (int): Byte offset in the file
+
+        Returns:
+            line_number (int): 1-based line number
+        """
+        if (line_offsets := self._line_offsets.get(filepath)) is None:
+            line_offsets = self._index_newlines(filepath)
+            self._line_offsets[filepath] = line_offsets
+
+        return bisect.bisect_right(line_offsets, byte_offset) + 1
+
+    def get_location(
+        self, file_id: int, byte_offset: int
+    ) -> tuple[str | None, int | None]:
+        """Get the file path and line number for a given file ID and byte offset."""
+        file_path = self.get_file_path(file_id)
+
+        if not file_path:
+            return None, None
+
+        line_number = self.get_line_number(file_path, byte_offset)
+
+        return file_path, line_number
+
+    def _index_newlines(self, filepath: str) -> list[int]:
+        """Create an index of newline positions in a file.
+
+        This method reads the file in chunks and records the byte offset of each
+        newline character. The resulting list is used to efficiently calculate
+        line numbers from byte offsets.
+
+        Args:
+            filepath (str): Path to the file to index
+
+        Returns:
+            list[int]: List of byte offsets where newlines occur
+        """
+        newline_offsets = []
+        offset = 0
+        with open(filepath, "rb") as f:
+            while True:
+                chunk = f.read(8192)
+                if not chunk:
+                    break
+                for i, b in enumerate(chunk):
+                    if b == ord("\n"):
+                        newline_offsets.append(offset + i)
+                offset += len(chunk)
+        return newline_offsets
 
 
 class BuildOut(metaclass=SingletonMeta):
@@ -168,12 +277,13 @@ class BuildOut(metaclass=SingletonMeta):
 
                 size = len(hexcode) // 2  # byte length
                 placeholders = self.get_placeholders(deployed)
-                code_data = (hexcode, placeholders, contract_name, filename)
+                source_map = deployed.get("sourceMap", "")
+                code_data = (hexcode, placeholders, contract_name, filename, source_map)
                 self._build_out_map_code[size].append(code_data)
 
-    def get_by_code(self, bytecode: ForwardRef("ByteVec")) -> tuple[str, str]:
+    def get_by_code(self, bytecode: ForwardRef("ByteVec")) -> tuple[str, str, str]:
         """
-        Return the contract name and file name of the given deployed bytecode.
+        Return the contract name, file name, and source map of the given deployed bytecode.
         """
         if not self._build_out_map_code:
             self.create_build_out_map_code()
@@ -196,11 +306,11 @@ class BuildOut(metaclass=SingletonMeta):
             return bytecode == bytes.fromhex(hexcode)
 
         for code_data in self._build_out_map_code[len(bytecode)]:
-            hexcode, placeholders, contract_name, filename = code_data
+            hexcode, placeholders, contract_name, filename, source_map = code_data
             if eq_except_placeholders(hexcode, placeholders):
-                return (contract_name, filename)
+                return (contract_name, filename, source_map)
 
-        return (None, None)
+        return (None, None, None)
 
     def get_by_name(self, contract_name: str, filename: str = None) -> dict:
         """
