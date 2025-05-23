@@ -377,6 +377,10 @@ class Contract:
             insn = self.decode_instruction(pc)
             insn.set_srcmap(file_path, line_number)
 
+            # Add line number to SourceId tracking
+            if file_path and line_number:
+                SourceId().add_line_number(file_path, line_number)
+
             pc = insn.next_pc
 
     def from_hexcode(hexcode: str):

@@ -13,12 +13,24 @@ class SourceId:
         if not self._initialized:
             self._id_to_filename: dict[int, str] = {}
             self._all_files: set[str] = set()
+            self._file_to_lines: dict[str, set[int]] = {}
             self._initialized = True
 
     def add_mapping(self, file_id: int, filename: str) -> None:
         """Add a mapping from file ID to filename and track the filename."""
         self._id_to_filename[file_id] = filename
         self._all_files.add(filename)
+        if filename not in self._file_to_lines:
+            self._file_to_lines[filename] = set()
+
+    def add_line_number(self, filename: str, line_number: int) -> None:
+        """Add a line number to the set of lines for a given file."""
+        if filename in self._file_to_lines:
+            self._file_to_lines[filename].add(line_number)
+
+    def get_line_numbers(self, filename: str) -> set[int]:
+        """Get all line numbers that have been mapped for a given file."""
+        return self._file_to_lines.get(filename, set()).copy()
 
     def get_filename(self, file_id: int) -> str | None:
         """Get filename for a given file ID."""
@@ -35,4 +47,5 @@ class SourceId:
     def reset(self) -> None:
         """Reset all mappings and file list."""
         self._id_to_filename.clear()
-        self._all_files.clear() 
+        self._all_files.clear()
+        self._file_to_lines.clear() 
