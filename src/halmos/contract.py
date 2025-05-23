@@ -353,14 +353,10 @@ class Contract:
             file_id = int(items[2]) if items[2] != "" else file_id
 
             file_path, line_number = self._get_file_path_and_line_number(file_id, start)
+            CoverageReporter().record_file_line(file_path, line_number)
 
             insn = self.decode_instruction(pc)
             insn.set_srcmap(file_path, line_number)
-
-            if file_path and line_number:
-                CoverageReporter()._instruction_coverage_data[file_path][
-                    line_number
-                ] = 0
 
             pc = insn.next_pc
 
@@ -497,6 +493,12 @@ class CoverageReporter(metaclass=SingletonMeta):
         self._instruction_coverage_data: dict[str, dict[int, int]] = defaultdict(
             lambda: defaultdict(int)
         )
+
+    def record_file_line(self, file: str | None, line: int | None) -> None:
+        # Record lines found (for LF in lcov)
+        if not (file and line):
+            return
+        self._instruction_coverage_data[file][line]
 
     def record_instruction(self, instruction: Instruction) -> None:
         # Record instruction coverage by file path and line number

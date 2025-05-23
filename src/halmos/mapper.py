@@ -105,7 +105,7 @@ class SourceFileMap(metaclass=SingletonMeta):
         return self._id_to_filepath.get(file_id)
 
     def get_line_number(self, filepath: str, byte_offset: int) -> int | None:
-        if not (line_offsets := self._line_offsets.get(filepath)):
+        if (line_offsets := self._line_offsets.get(filepath)) is None:
             line_offsets = self._index_newlines(filepath)
             self._line_offsets[filepath] = line_offsets
 
