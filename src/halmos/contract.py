@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import ClassVar
+import os
 
 from .bitvec import HalmosBitVec as BV
 from .bytevec import ByteVec, ConcreteChunk
@@ -22,7 +23,12 @@ from .utils import (
     str_opcode,
     stripped,
     uint256,
+    OffsetLineMapper,
+    get_file_path,
+    get_line_number,
 )
+from .source import SourceId
+from .args import args
 
 OP_STOP = 0x00
 OP_ADD = 0x01
@@ -216,6 +222,10 @@ class Instruction:
     # expected to be a BV256, so that it can be pushed on the stack with no conversion
     operand: BV | None = None
 
+    # source map related fields
+    source_file: str | None = None
+    source_line: int | None = None
+
     STOP: ClassVar["Instruction"] = None
 
     def __str__(self) -> str:
@@ -230,6 +240,11 @@ class Instruction:
 
     def __len__(self) -> int:
         return insn_len(self.opcode)
+
+    def set_srcmap(self, source_file: str | None, source_line: int | None) -> None:
+        """Update source map information of this instruction."""
+        object.__setattr__(self, 'source_file', source_file)
+        object.__setattr__(self, 'source_line', source_line)
 
 
 # Initialize the STOP singleton
@@ -329,6 +344,40 @@ class Contract:
                     break
 
         return total
+
+    def get_file_path(self, fileid: int) -> str:
+        """Get the absolute file path for a given source file ID."""
+        relative_path = SourceId.get_file_path(fileid)
+        return os.path.join(args.root, relative_path)
+
+    def get_line_number(self, file_path: str, offset: int) -> int:
+        """Get the line number for a given byte offset in a file."""
+        mapper = OffsetLineMapper(file_path)
+        return mapper.get_line_number(offset)
+
+    def add_srcmap(self, srcmap: list[str]):
+        """
+        Add source map information to each instruction in the contract.
+        
+        Args:
+            srcmap: List of source map entries in the format "s:l:f:j:m"
+                   where s=start, l=length, f=fileid, j=jump type, m=modifier depth
+        """
+        pc = 0
+
+        start, fileid = 0, 0
+        for idx, sm in enumerate(srcmap):
+            arr = sm.split(':') + ['']*5
+            start  = int(arr[0]) if arr[0] != '' else start
+            fileid = int(arr[2]) if arr[2] != '' else fileid
+
+            file_path = self.get_file_path(fileid)
+            line_number = self.get_line_number(file_path, start)
+
+            insn = self.decode_instruction(pc)
+            insn.set_srcmap(file_path, line_number)
+
+            pc = insn.next_pc
 
     def from_hexcode(hexcode: str):
         """Create a contract from a hexcode string, e.g. "aabbccdd" """
