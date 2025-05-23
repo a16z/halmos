@@ -7,6 +7,7 @@ from halmos.config import Config as HalmosConfig
 from halmos.logs import PARSING_ERROR, debug, warn_code
 from halmos.mapper import Mapper
 from halmos.ui import ui
+from .source_mapping import SourceMapping
 
 
 def get_contract_type(
@@ -50,6 +51,8 @@ def parse_build_out(args: HalmosConfig) -> dict:
                 json_path = os.path.join(sol_path, json_filename)
                 with open(json_path, encoding="utf8") as f:
                     json_out = json.load(f)
+
+                record_source_file_id(sol_dirname, json_out["id"])
 
                 # cut off compiler version number as well
                 contract_name = json_filename.split(".")[0]
@@ -177,3 +180,8 @@ def build_output_iterator(build_out: dict):
         for filename in sorted(build_out_map):
             for contract_name in sorted(build_out_map[filename]):
                 yield (build_out_map, filename, contract_name)
+
+
+def record_source_file_id(sol_dirname: str, file_id: int) -> None:
+    """Record the mapping between file ID and filename."""
+    SourceMapping().add_mapping(file_id, sol_dirname)
