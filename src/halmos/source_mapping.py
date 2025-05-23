@@ -1,6 +1,6 @@
 from typing import Optional
 
-class SourceMapping:
+class SourceId:
     _instance = None
     _initialized = False
 

@@ -247,9 +247,10 @@ class Contract:
 
     contract_name: str | None
     filename: str | None
+    source_map: str | None
 
     def __init__(
-        self, code: ByteVec | None = None, *, contract_name=None, filename=None
+        self, code: ByteVec | None = None, *, contract_name=None, filename=None, source_map=None
     ) -> None:
         if not isinstance(code, ByteVec):
             code = ByteVec(code)
@@ -271,6 +272,7 @@ class Contract:
 
         self.contract_name = contract_name
         self.filename = filename
+        self.source_map = source_map
 
     def __deepcopy__(self, memo):
         # the class is essentially immutable (the only mutable fields are caches)

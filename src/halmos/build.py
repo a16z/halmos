@@ -7,7 +7,7 @@ from halmos.config import Config as HalmosConfig
 from halmos.logs import PARSING_ERROR, debug, warn_code
 from halmos.mapper import Mapper
 from halmos.ui import ui
-from .source_mapping import SourceMapping
+from .source_mapping import SourceId
 
 
 def get_contract_type(
@@ -184,4 +184,4 @@ def build_output_iterator(build_out: dict):
 
 def record_source_file_id(sol_dirname: str, file_id: int) -> None:
     """Record the mapping between file ID and filename."""
-    SourceMapping().add_mapping(file_id, sol_dirname)
+    SourceId().add_mapping(file_id, sol_dirname)

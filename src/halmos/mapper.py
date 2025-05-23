@@ -168,12 +168,13 @@ class BuildOut(metaclass=SingletonMeta):
 
                 size = len(hexcode) // 2  # byte length
                 placeholders = self.get_placeholders(deployed)
-                code_data = (hexcode, placeholders, contract_name, filename)
+                source_map = deployed.get("sourceMap", "")
+                code_data = (hexcode, placeholders, contract_name, filename, source_map)
                 self._build_out_map_code[size].append(code_data)
 
-    def get_by_code(self, bytecode: ForwardRef("ByteVec")) -> tuple[str, str]:
+    def get_by_code(self, bytecode: ForwardRef("ByteVec")) -> tuple[str, str, str]:
         """
-        Return the contract name and file name of the given deployed bytecode.
+        Return the contract name, file name, and source map of the given deployed bytecode.
         """
         if not self._build_out_map_code:
             self.create_build_out_map_code()
@@ -196,11 +197,11 @@ class BuildOut(metaclass=SingletonMeta):
             return bytecode == bytes.fromhex(hexcode)
 
         for code_data in self._build_out_map_code[len(bytecode)]:
-            hexcode, placeholders, contract_name, filename = code_data
+            hexcode, placeholders, contract_name, filename, source_map = code_data
             if eq_except_placeholders(hexcode, placeholders):
-                return (contract_name, filename)
+                return (contract_name, filename, source_map)
 
-        return (None, None)
+        return (None, None, None)
 
     def get_by_name(self, contract_name: str, filename: str = None) -> dict:
         """
