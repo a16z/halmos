@@ -332,11 +332,11 @@ class Contract:
         pc = 0
         byte_offset, file_id = 0, 0
         for item in source_map.split(";"):
-            # split each mapping into its components and ensure there are at least 5 items
-            data = item.split(":") + [""] * 5
+            # split each mapping into its components
+            data = item.split(":")
             # update byte_offset and file_id if they are not empty
-            byte_offset_str = data[0]
-            file_id_str = data[2]
+            byte_offset_str = data[0]  # split() returns a non-empty list
+            file_id_str = data[2] if len(data) > 2 else ""
             byte_offset = int(byte_offset_str) if byte_offset_str != "" else byte_offset
             file_id = int(file_id_str) if file_id_str != "" else file_id
 
@@ -476,7 +476,8 @@ class Contract:
 class CoverageReporter(metaclass=SingletonMeta):
     """Singleton class for tracking instruction coverage across contracts.
 
-    This class maintains a record of which lines of code have been executed during contract testing. The coverage data is used to generate LCOV format reports.
+    This class maintains a record of which lines of code have been executed during contract testing.
+    The coverage data is used to generate LCOV format reports.
     """
 
     def __init__(self) -> None:
