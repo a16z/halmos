@@ -26,6 +26,8 @@ def get_contract_type(
 def parse_build_out(args: HalmosConfig) -> dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
+    SourceId().set_root(args.root)
+
     out_path = os.path.join(args.root, args.forge_build_out)
     if not os.path.exists(out_path):
         raise FileNotFoundError(
@@ -52,7 +54,7 @@ def parse_build_out(args: HalmosConfig) -> dict:
                 with open(json_path, encoding="utf8") as f:
                     json_out = json.load(f)
 
-                record_source_file_id(sol_dirname, json_out["id"])
+                record_source_file_id(json_out["ast"]["absolutePath"], json_out["id"])
 
                 # cut off compiler version number as well
                 contract_name = json_filename.split(".")[0]

@@ -1752,28 +1752,6 @@ def _main(_args=None) -> MainResult:
         print(f"{'Total':<12} {profiler.counters.total():>12,}")
         print(separator)
 
-    print(
-        "\nInstruction coverage: <covered instructions> / <total instructions (over approximated as contract length)>"
-    )
-    coverage = CoverageReporter()
-    instruction_coverage_stats = coverage.get_instruction_coverage_stats()
-    contract_lengths = coverage.get_contract_lengths()
-    for contract_name, instruction_counters in instruction_coverage_stats.items():
-        # if isinstance(contract_name, bytes):
-        #     continue
-        contract_name_str = (
-            contract_name
-            if isinstance(contract_name, str)
-            else f"0x{contract_name[:32].hex()}"
-        )
-
-        # todo: communicate certain limitations:
-        # - some coverage is missing due to view functions excluded by invariant testing.
-        # - low coverage for test contracts due to the inherited code from forge/Test
-        print(
-            f"{contract_name_str}: {len(instruction_counters.keys())} / {contract_lengths[contract_name]}"
-        )
-
     print("\nGenerating coverage report in lcov format...")
     coverage = CoverageReporter()
     print(coverage.generate_lcov())

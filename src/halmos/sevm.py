@@ -1698,6 +1698,8 @@ class Exec:  # an execution path
         contract.filename = filename
         contract.source_map = source_map
 
+        contract.add_srcmap(source_map)
+
         return contract_name, filename
 
     def _try_resolve_proxy_info(

@@ -24,11 +24,8 @@ from .utils import (
     stripped,
     uint256,
     OffsetLineMapper,
-    get_file_path,
-    get_line_number,
 )
-from .source import SourceId
-from .args import args
+from .source_mapping import SourceId
 
 OP_STOP = 0x00
 OP_ADD = 0x01
@@ -347,15 +344,15 @@ class Contract:
 
     def get_file_path(self, fileid: int) -> str:
         """Get the absolute file path for a given source file ID."""
-        relative_path = SourceId.get_file_path(fileid)
-        return os.path.join(args.root, relative_path)
+        relative_path = SourceId().get_file_path(fileid)
+        return os.path.join(SourceId().get_root(), relative_path)
 
     def get_line_number(self, file_path: str, offset: int) -> int:
         """Get the line number for a given byte offset in a file."""
         mapper = OffsetLineMapper(file_path)
         return mapper.get_line_number(offset)
 
-    def add_srcmap(self, srcmap: list[str]):
+    def add_srcmap(self, srcmap: str):
         """
         Add source map information to each instruction in the contract.
         
@@ -366,8 +363,8 @@ class Contract:
         pc = 0
 
         start, fileid = 0, 0
-        for idx, sm in enumerate(srcmap):
-            arr = sm.split(':') + ['']*5
+        for idx, sm in enumerate(srcmap.split(';')):
+            arr = srcmap.split(':') + ['']*5
             start  = int(arr[0]) if arr[0] != '' else start
             fileid = int(arr[2]) if arr[2] != '' else fileid
 

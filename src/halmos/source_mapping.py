@@ -14,7 +14,16 @@ class SourceId:
             self._id_to_filename: dict[int, str] = {}
             self._all_files: set[str] = set()
             self._file_to_lines: dict[str, set[int]] = {}
+            self._root: str = ""  # Root directory path
             self._initialized = True
+
+    def set_root(self, root: str) -> None:
+        """Set the root directory path."""
+        self._root = root
+
+    def get_root(self) -> str:
+        """Get the root directory path."""
+        return self._root
 
     def add_mapping(self, file_id: int, filename: str) -> None:
         """Add a mapping from file ID to filename and track the filename."""
@@ -32,7 +41,7 @@ class SourceId:
         """Get all line numbers that have been mapped for a given file."""
         return self._file_to_lines.get(filename, set()).copy()
 
-    def get_filename(self, file_id: int) -> str | None:
+    def get_file_path(self, file_id: int) -> str | None:
         """Get filename for a given file ID."""
         return self._id_to_filename.get(file_id)
 
