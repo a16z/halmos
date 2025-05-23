@@ -1752,11 +1752,10 @@ def _main(_args=None) -> MainResult:
         print(f"{'Total':<12} {profiler.counters.total():>12,}")
         print(separator)
 
-    # todo: print lcov file name. provide option for file name.
-    print("\nGenerating coverage report in lcov format...")
-    coverage = CoverageReporter()
-    with open("lcov.info", "w") as f:
-        f.write(coverage.generate_lcov())
+    coverage_file = args.coverage_output
+    with open(coverage_file, "w") as f:
+        f.write(CoverageReporter().generate_lcov())
+    print(f"Coverage report saved to: {coverage_file}")
 
     if total_found == 0:
         error(

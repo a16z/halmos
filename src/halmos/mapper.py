@@ -1,4 +1,5 @@
 import bisect
+import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, ForwardRef, Optional
@@ -88,7 +89,7 @@ class SourceFileMap(metaclass=SingletonMeta):
         self._line_offsets: dict[str, list[int]] = {}
 
     def set_root(self, root: str) -> None:
-        self._root = root
+        self._root = os.path.abspath(root)
 
     def get_root(self) -> str:
         return self._root
@@ -102,7 +103,14 @@ class SourceFileMap(metaclass=SingletonMeta):
         self._id_to_filepath[file_id] = filepath
 
     def get_file_path(self, file_id: int) -> str | None:
-        return self._id_to_filepath.get(file_id)
+        relative_path = self._id_to_filepath.get(file_id)
+        if not relative_path:
+            return None
+
+        if os.path.isabs(relative_path):
+            return relative_path
+
+        return os.path.join(self.get_root(), relative_path)
 
     def get_line_number(self, filepath: str, byte_offset: int) -> int | None:
         if (line_offsets := self._line_offsets.get(filepath)) is None:
@@ -110,6 +118,18 @@ class SourceFileMap(metaclass=SingletonMeta):
             self._line_offsets[filepath] = line_offsets
 
         return bisect.bisect_right(line_offsets, byte_offset) + 1
+
+    def get_location(
+        self, file_id: str, byte_offset: int
+    ) -> tuple[str | None, int | None]:
+        file_path = self.get_file_path(file_id)
+
+        if not file_path:
+            return None, None
+
+        line_number = self.get_line_number(file_path, byte_offset)
+
+        return file_path, line_number
 
     def _index_newlines(self, filepath: str) -> list[int]:
         newline_offsets = []

@@ -54,12 +54,14 @@ def parse_build_out(args: HalmosConfig) -> dict:
                 with open(json_path, encoding="utf8") as f:
                     json_out = json.load(f)
 
-                # todo: handle missing cases
-                record_source_file_id(json_out["ast"]["absolutePath"], json_out["id"])
+                ast = json_out["ast"]
+
+                # record the mapping between file id and file path
+                SourceFileMap().add_mapping(json_out["id"], ast["absolutePath"])
 
                 # cut off compiler version number as well
                 contract_name = json_filename.split(".")[0]
-                ast_nodes = json_out["ast"]["nodes"]
+                ast_nodes = ast["nodes"]
                 contract_type, natspec = get_contract_type(ast_nodes, contract_name)
 
                 # can happen to solidity files for multiple reasons:
@@ -183,8 +185,3 @@ def build_output_iterator(build_out: dict):
         for filename in sorted(build_out_map):
             for contract_name in sorted(build_out_map[filename]):
                 yield (build_out_map, filename, contract_name)
-
-
-def record_source_file_id(sol_dirname: str, file_id: int) -> None:
-    """Record the mapping between file ID and filename."""
-    SourceFileMap().add_mapping(file_id, sol_dirname)

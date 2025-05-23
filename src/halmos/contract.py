@@ -1,4 +1,3 @@
-import os
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import ClassVar
@@ -320,20 +319,6 @@ class Contract:
 
         return jumpdests
 
-    def _get_file_path_and_line_number(self, fileid: str, offset: int) -> int:
-        source_file_map = SourceFileMap()
-
-        relative_path = source_file_map.get_file_path(fileid)
-        if not relative_path:
-            return None, None
-
-        # todo: get_root may not be absolute path
-        file_path = os.path.join(source_file_map.get_root(), relative_path)
-
-        line_number = source_file_map.get_line_number(file_path, offset)
-
-        return file_path, line_number
-
     def process_source_mapping(self):
         """
         Add source map information to each instruction in the contract.
@@ -352,7 +337,7 @@ class Contract:
             start = int(items[0]) if items[0] != "" else start
             file_id = int(items[2]) if items[2] != "" else file_id
 
-            file_path, line_number = self._get_file_path_and_line_number(file_id, start)
+            file_path, line_number = SourceFileMap().get_location(file_id, start)
             CoverageReporter().record_file_line(file_path, line_number)
 
             insn = self.decode_instruction(pc)
