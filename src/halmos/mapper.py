@@ -149,7 +149,7 @@ class SourceFileMap(metaclass=SingletonMeta):
         return bisect.bisect_right(line_offsets, byte_offset) + 1
 
     def get_location(
-        self, file_id: str, byte_offset: int
+        self, file_id: int, byte_offset: int
     ) -> tuple[str | None, int | None]:
         """Get the file path and line number for a given file ID and byte offset."""
         file_path = self.get_file_path(file_id)
