@@ -83,6 +83,18 @@ class SingletonMeta(type):
 
 
 class SourceFileMap(metaclass=SingletonMeta):
+    """Singleton class for managing source file mappings and line number calculations.
+
+    This class maintains mappings between file IDs and file paths, and provides functionality
+    to calculate line numbers from byte offsets in source files. It is used to track source
+    locations during contract execution and coverage reporting.
+
+    The class uses three main data structures:
+    - _root: The project root directory path
+    - _id_to_filepath: Maps file IDs to their corresponding file paths
+    - _line_offsets: Caches newline positions for each file to optimize line number lookups
+    """
+
     def __init__(self):
         self._root: str = ""  # project root
         self._id_to_filepath: dict[int, str] = {}
@@ -95,6 +107,7 @@ class SourceFileMap(metaclass=SingletonMeta):
         return self._root
 
     def add_mapping(self, file_id: int, filepath: str) -> None:
+        """Add a mapping between a file ID and its file path."""
         if (existing := self._id_to_filepath.get(file_id)) and existing != filepath:
             debug(
                 f"source file id mapping conflict: {file_id=} {filepath=} {existing=}"
@@ -103,6 +116,10 @@ class SourceFileMap(metaclass=SingletonMeta):
         self._id_to_filepath[file_id] = filepath
 
     def get_file_path(self, file_id: int) -> str | None:
+        """Get the absolute file path for a given file ID.
+
+        Returns None if no mapping exists.
+        """
         relative_path = self._id_to_filepath.get(file_id)
         if not relative_path:
             return None
@@ -112,7 +129,19 @@ class SourceFileMap(metaclass=SingletonMeta):
 
         return os.path.join(self.get_root(), relative_path)
 
-    def get_line_number(self, filepath: str, byte_offset: int) -> int | None:
+    def get_line_number(self, filepath: str, byte_offset: int) -> int:
+        """Calculate the line number for a given byte offset in a file.
+
+        The line number is calculated by finding the number of newlines that appear
+        before the given byte offset. The newline positions are cached for efficiency.
+
+        Args:
+            filepath (str): Path to the source file
+            byte_offset (int): Byte offset in the file
+
+        Returns:
+            line_number (int): 1-based line number
+        """
         if (line_offsets := self._line_offsets.get(filepath)) is None:
             line_offsets = self._index_newlines(filepath)
             self._line_offsets[filepath] = line_offsets
@@ -122,6 +151,7 @@ class SourceFileMap(metaclass=SingletonMeta):
     def get_location(
         self, file_id: str, byte_offset: int
     ) -> tuple[str | None, int | None]:
+        """Get the file path and line number for a given file ID and byte offset."""
         file_path = self.get_file_path(file_id)
 
         if not file_path:
@@ -132,6 +162,18 @@ class SourceFileMap(metaclass=SingletonMeta):
         return file_path, line_number
 
     def _index_newlines(self, filepath: str) -> list[int]:
+        """Create an index of newline positions in a file.
+
+        This method reads the file in chunks and records the byte offset of each
+        newline character. The resulting list is used to efficiently calculate
+        line numbers from byte offsets.
+
+        Args:
+            filepath (str): Path to the file to index
+
+        Returns:
+            list[int]: List of byte offsets where newlines occur
+        """
         newline_offsets = []
         offset = 0
         with open(filepath, "rb") as f:

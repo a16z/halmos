@@ -257,7 +257,7 @@ class Contract:
     contract_name: str | None
     filename: str | None
 
-    # List of source mappping entries in the format "s:l:f:j:m", separated by ';'
+    # Source mapping string, formatted as each item is "s:l:f:j:m", with items separated by ";"
     # where s=start, l=length, f=file_id, j=jump_type, m=modifier_depth
     # https://docs.soliditylang.org/en/latest/internals/source_mappings.html
     source_map: str | None
@@ -323,6 +323,7 @@ class Contract:
 
         return jumpdests
 
+    # TODO: ensure this function is executed only once
     def process_source_mapping(self):
         """Add source mapping information to each instruction in the contract."""
         if not (source_map := self.source_map):
@@ -330,10 +331,14 @@ class Contract:
 
         pc = 0
         byte_offset, file_id = 0, 0
-        for srcmap in source_map.split(";"):
-            items = srcmap.split(":") + [""] * 5
-            byte_offset = int(items[0]) if items[0] != "" else byte_offset
-            file_id = int(items[2]) if items[2] != "" else file_id
+        for item in source_map.split(";"):
+            # split each mapping into its components and ensure there are at least 5 items
+            data = item.split(":") + [""] * 5
+            # update byte_offset and file_id if they are not empty
+            byte_offset_str = data[0]
+            file_id_str = data[2]
+            byte_offset = int(byte_offset_str) if byte_offset_str != "" else byte_offset
+            file_id = int(file_id_str) if file_id_str != "" else file_id
 
             file_path, line_number = SourceFileMap().get_location(file_id, byte_offset)
             CoverageReporter().record_lines_found(file_path, line_number)
@@ -469,7 +474,10 @@ class Contract:
 
 
 class CoverageReporter(metaclass=SingletonMeta):
-    """Singleton class for tracking instruction coverage across contracts."""
+    """Singleton class for tracking instruction coverage across contracts.
+
+    This class maintains a record of which lines of code have been executed during contract testing. The coverage data is used to generate LCOV format reports.
+    """
 
     def __init__(self) -> None:
         # file_path -> line_number -> count
@@ -477,20 +485,34 @@ class CoverageReporter(metaclass=SingletonMeta):
             lambda: defaultdict(int)
         )
 
-    def record_lines_found(self, file_path: str | None, line_number: int | None) -> None:
-        # Record lines found (for LF in lcov)
-        if not (file_path and line_number):
+    def record_lines_found(
+        self, file_path: str | None, line_number: int | None
+    ) -> None:
+        """Record that an executable line appears in the source code.
+
+        This method is used to track which lines are executable in the source code,
+        regardless of whether they were executed. This information is used to
+        calculate the total number of lines (LF) in the LCOV report.
+        """
+        if not file_path or not line_number:
             return
-        # initialize 0 (defaultdict) if not yet found
+        # utilize defaultdict to initialize a count of 0 if the line is not yet recorded
         self._instruction_coverage_data[file_path][line_number]
 
     def record_instruction(self, instruction: Instruction) -> None:
-        # Record instruction coverage by file path and line number
+        """Record instruction coverage by file path and line number."""
         if (file := instruction.source_file) and (line := instruction.source_line):
             self._instruction_coverage_data[file][line] += 1
 
     def generate_lcov_report(self) -> str:
-        """Generate lcov format coverage report."""
+        """Generate an LCOV format coverage report.
+
+        The LCOV format includes:
+        - SF: Source file path
+        - DA: Line data (line number and execution count)
+        - LF: Total number of lines found in the file
+        - LH: Number of lines that were executed at least once
+        """
         lcov_lines = []
 
         for file_path, line_coverage in self._instruction_coverage_data.items():
