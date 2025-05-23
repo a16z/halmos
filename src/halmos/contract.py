@@ -380,6 +380,9 @@ class Contract:
             # Add line number to SourceId tracking
             if file_path and line_number:
                 SourceId().add_line_number(file_path, line_number)
+                # Initialize coverage data for this line
+                from .coverage import CoverageReporter
+                CoverageReporter()._instruction_coverage_data[file_path][line_number] = 0
 
             pc = insn.next_pc
 

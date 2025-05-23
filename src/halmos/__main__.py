@@ -1774,25 +1774,9 @@ def _main(_args=None) -> MainResult:
             f"{contract_name_str}: {len(instruction_counters.keys())} / {contract_lengths[contract_name]}"
         )
 
-    print("\nBranch coverage: <fully covered branches> / <total covered branches>")
-    branch_coverage_stats = coverage.get_branch_coverage_stats()
-    for contract_name, branch_counters in branch_coverage_stats.items():
-        # if isinstance(contract_name, bytes):
-        #     continue
-        contract_name_str = (
-            contract_name
-            if isinstance(contract_name, str)
-            else f"0x{contract_name[:32].hex()}"
-        )
-
-        # Count program counters where both true and false branches were executed
-        fully_covered_branches = sum(
-            1 for conditions in branch_counters.values() if len(conditions) == 2
-        )
-
-        # todo: communicate certain limitations:
-        # - low branch coverage due to constant branching conditions, e.g., constant loops, or fixed setup parameters.
-        print(f"{contract_name_str}: {fully_covered_branches} / {len(branch_counters)}")
+    print("\nGenerating coverage report in lcov format...")
+    coverage = CoverageReporter()
+    print(coverage.generate_lcov())
 
     if total_found == 0:
         error(

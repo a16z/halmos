@@ -7,66 +7,44 @@ from .exceptions import (
 from .mapper import SingletonMeta
 from .sevm import Contract, Instruction
 
-ContractKey: TypeAlias = str | bytes
-
 
 class CoverageReporter(metaclass=SingletonMeta):
     """Singleton class for tracking instruction coverage across contracts."""
 
     def __init__(self) -> None:
-        # contract_key -> pc -> count
-        self._instruction_coverage_data: dict[ContractKey, dict[int, int]] = (
+        # file_path -> line_number -> count
+        self._instruction_coverage_data: dict[str, dict[int, int]] = (
             defaultdict(lambda: defaultdict(int))
         )
-        # contract_key -> pc -> bool -> count
-        self._branch_coverage_data: dict[ContractKey, dict[int, dict[bool, int]]] = (
-            defaultdict(lambda: defaultdict(lambda: defaultdict(int)))
-        )
-        # contract_key -> length
-        self._contract_lengths: dict[ContractKey, int] = {}
-
-    def _get_key(self, contract: Contract) -> str | bytes | None:
-        """Get key from Contract using contract_name or _fastcode."""
-        # TODO: contract name is not available when the code is contract creation code, which we might not want to record for coverage.
-        # using _fastcode as an id is for dynamically generated runtime code, and  we'd need a way to distinguish it from contract creation code.
-        return contract.contract_name  # or contract._fastcode
 
     def record_instruction(self, instruction: Instruction, contract: Contract) -> None:
-        key = self._get_key(contract)
-        if key:
-            self._instruction_coverage_data[key][instruction.pc] += 1
-            # Record contract length if not already recorded
-            if key not in self._contract_lengths:
-                # TODO: len(contract) is not accurate. It's more than the number of instructions, because push opcodes consist of multiple bytes
-                self._contract_lengths[key] = contract.num_insn()
-
-    def record_branch(
-        self, instruction: Instruction, condition: bool, contract: Contract
-    ) -> None:
-        key = self._get_key(contract)
-        if key:
-            self._branch_coverage_data[key][instruction.pc][condition] += 1
+        # Record instruction coverage by file path and line number
+        if instruction.source_file and instruction.source_line:
+            self._instruction_coverage_data[instruction.source_file][instruction.source_line] += 1
 
     def get_instruction_coverage_stats(self, contract: Contract | None = None) -> dict:
-        if contract is None:
-            return self._instruction_coverage_data
-        key = self._get_key(contract)
-        if not key:
-            raise HalmosException("Cannot use Contract with None _fastcode as key")
-        return self._instruction_coverage_data[key]
+        return self._instruction_coverage_data
 
-    def get_branch_coverage_stats(self, contract: Contract | None = None) -> dict:
-        if contract is None:
-            return self._branch_coverage_data
-        key = self._get_key(contract)
-        if not key:
-            raise HalmosException("Cannot use Contract with None _fastcode as key")
-        return self._branch_coverage_data[key]
-
-    def get_contract_lengths(self, contract: Contract | None = None) -> dict:
-        if contract is None:
-            return self._contract_lengths
-        key = self._get_key(contract)
-        if not key:
-            raise HalmosException("Cannot use Contract with None _fastcode as key")
-        return self._contract_lengths[key]
+    def generate_lcov(self) -> str:
+        """Generate lcov format coverage report."""
+        lcov_lines = []
+        
+        for file_path, line_coverage in self._instruction_coverage_data.items():
+            # SF: Source file
+            lcov_lines.append(f"SF:{file_path}")
+            
+            # DA: Line data (line number, execution count)
+            for line_number, count in sorted(line_coverage.items()):
+                lcov_lines.append(f"DA:{line_number},{count}")
+            
+            # LF: Lines found
+            lcov_lines.append(f"LF:{len(line_coverage)}")
+            
+            # LH: Lines hit (lines with count > 0)
+            lines_hit = sum(1 for count in line_coverage.values() if count > 0)
+            lcov_lines.append(f"LH:{lines_hit}")
+            
+            # End of file
+            lcov_lines.append("end_of_record")
+        
+        return "\n".join(lcov_lines)
