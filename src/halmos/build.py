@@ -25,8 +25,11 @@ def get_contract_type(
 def parse_build_out(args: HalmosConfig) -> dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
+    coverage_output = args.coverage_output
     root = args.root
-    SourceFileMap().set_root(root)
+
+    if coverage_output:
+        SourceFileMap().set_root(root)
 
     out_path = os.path.join(root, args.forge_build_out)
     if not os.path.exists(out_path):
@@ -56,8 +59,9 @@ def parse_build_out(args: HalmosConfig) -> dict:
 
                 ast = json_out["ast"]
 
-                # record the mapping between file id and file path
-                SourceFileMap().add_mapping(json_out["id"], ast["absolutePath"])
+                if coverage_output:
+                    # record the mapping between file id and file path
+                    SourceFileMap().add_mapping(json_out["id"], ast["absolutePath"])
 
                 # cut off compiler version number as well
                 contract_name = json_filename.split(".")[0]

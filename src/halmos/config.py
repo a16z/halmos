@@ -325,8 +325,8 @@ class Config:
     )
 
     coverage_output: str = arg(
-        help="specify the filename for the coverage report",
-        global_default="coverage.info",
+        help="generate coverage report at the given file path (disabled by default)",
+        global_default=None,
         metavar="COVERAGE_FILE_PATH",
     )
 

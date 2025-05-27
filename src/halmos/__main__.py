@@ -272,6 +272,8 @@ def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None):
 
 
 def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
+    args = ctx.args
+
     message = Message(
         target=FOUNDRY_TEST,
         caller=FOUNDRY_CALLER,
@@ -316,10 +318,10 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
 
     [ex] = exs
 
-    if ctx.args.flamegraph:
+    if args.flamegraph:
         exec_flamegraph.add(ex.context)
 
-    if ctx.args.verbose >= VERBOSITY_TRACE_CONSTRUCTOR:
+    if args.verbose >= VERBOSITY_TRACE_CONSTRUCTOR:
         print("Constructor trace:")
         render_trace(ex.context)
 
@@ -329,7 +331,7 @@ def deploy_test(ctx: FunctionContext, sevm: SEVM) -> Exec:
         raise HalmosException(f"constructor failed: {output.error=} {returndata=}")
 
     deployed_bytecode = Contract(returndata)
-    ex.try_resolve_contract_info(deployed_bytecode)
+    ex.try_resolve_contract_info(deployed_bytecode, args.coverage_output)
     ex.set_code(this, deployed_bytecode)
     ex.pgm = deployed_bytecode
 
@@ -1752,10 +1754,10 @@ def _main(_args=None) -> MainResult:
         print(f"{'Total':<12} {profiler.counters.total():>12,}")
         print(separator)
 
-    coverage_file = args.coverage_output
-    with open(coverage_file, "w") as f:
-        f.write(CoverageReporter().generate_lcov_report())
-    print(f"Coverage report saved to: {coverage_file}")
+    if coverage_file := args.coverage_output:
+        with open(coverage_file, "w") as f:
+            f.write(CoverageReporter().generate_lcov_report())
+        print(f"Coverage report saved to: {coverage_file}")
 
     if total_found == 0:
         error(
