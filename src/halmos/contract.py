@@ -474,7 +474,7 @@ class Contract:
 
 
 class CoverageReporter(metaclass=SingletonMeta):
-    """Singleton class for tracking instruction coverage across contracts.
+    """Singleton class for tracking instruction coverage across all tests and paths.
 
     This class maintains a record of which lines of code have been executed during contract testing.
     The coverage data is used to generate LCOV format reports.

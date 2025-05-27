@@ -91,7 +91,7 @@ class SourceFileMap(metaclass=SingletonMeta):
 
     The class uses three main data structures:
     - _root: The project root directory path
-    - _id_to_filepath: Maps file IDs to their corresponding file paths
+    - _id_to_filepath: Maps file IDs to their corresponding absolute file paths
     - _line_offsets: Caches newline positions for each file to optimize line number lookups
     """
 
@@ -108,26 +108,25 @@ class SourceFileMap(metaclass=SingletonMeta):
 
     def add_mapping(self, file_id: int, filepath: str) -> None:
         """Add a mapping between a file ID and its file path."""
-        if (existing := self._id_to_filepath.get(file_id)) and existing != filepath:
+        abspath = (
+            filepath
+            if os.path.isabs(filepath)
+            else os.path.join(self.get_root(), filepath)
+        )
+
+        if (existing := self._id_to_filepath.get(file_id)) and existing != abspath:
             debug(
                 f"source file id mapping conflict: {file_id=} {filepath=} {existing=}"
             )
 
-        self._id_to_filepath[file_id] = filepath
+        self._id_to_filepath[file_id] = abspath
 
     def get_file_path(self, file_id: int) -> str | None:
         """Get the absolute file path for a given file ID.
 
         Returns None if no mapping exists.
         """
-        relative_path = self._id_to_filepath.get(file_id)
-        if not relative_path:
-            return None
-
-        if os.path.isabs(relative_path):
-            return relative_path
-
-        return os.path.join(self.get_root(), relative_path)
+        return self._id_to_filepath.get(file_id)
 
     def get_line_number(self, filepath: str, byte_offset: int) -> int | None:
         """Calculate the line number for a given byte offset in a file.
@@ -164,9 +163,7 @@ class SourceFileMap(metaclass=SingletonMeta):
         self, file_id: int, byte_offset: int
     ) -> tuple[str | None, int | None]:
         """Get the file path and line number for a given file ID and byte offset."""
-        file_path = self.get_file_path(file_id)
-
-        if not file_path:
+        if not (file_path := self.get_file_path(file_id)):
             return None, None
 
         line_number = self.get_line_number(file_path, byte_offset)
@@ -293,7 +290,9 @@ class BuildOut(metaclass=SingletonMeta):
                 code_data = (hexcode, placeholders, contract_name, filename, source_map)
                 self._build_out_map_code[size].append(code_data)
 
-    def get_by_code(self, bytecode: ForwardRef("ByteVec")) -> tuple[str, str, str]:
+    def get_by_code(
+        self, bytecode: ForwardRef("ByteVec")
+    ) -> tuple[str | None, str | None, str | None]:
         """
         Return the contract name, file name, and source map of the given deployed bytecode.
         """
