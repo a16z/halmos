@@ -5,7 +5,7 @@ import traceback
 
 from halmos.config import Config as HalmosConfig
 from halmos.logs import PARSING_ERROR, debug, warn_code
-from halmos.mapper import Mapper
+from halmos.mapper import Mapper, SourceFileMap
 from halmos.ui import ui
 
 
@@ -25,7 +25,13 @@ def get_contract_type(
 def parse_build_out(args: HalmosConfig) -> dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
-    out_path = os.path.join(args.root, args.forge_build_out)
+    coverage_output = args.coverage_output
+    root = args.root
+
+    if coverage_output:
+        SourceFileMap().set_root(root)
+
+    out_path = os.path.join(root, args.forge_build_out)
     if not os.path.exists(out_path):
         raise FileNotFoundError(
             f"The build output directory `{out_path}` does not exist"
@@ -51,9 +57,15 @@ def parse_build_out(args: HalmosConfig) -> dict:
                 with open(json_path, encoding="utf8") as f:
                     json_out = json.load(f)
 
+                ast = json_out["ast"]
+
+                if coverage_output:
+                    # record the mapping between file id and file path
+                    SourceFileMap().add_mapping(json_out["id"], ast["absolutePath"])
+
                 # cut off compiler version number as well
                 contract_name = json_filename.split(".")[0]
-                ast_nodes = json_out["ast"]["nodes"]
+                ast_nodes = ast["nodes"]
                 contract_type, natspec = get_contract_type(ast_nodes, contract_name)
 
                 # can happen to solidity files for multiple reasons:

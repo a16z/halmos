@@ -324,6 +324,12 @@ class Config:
         global_default=False,
     )
 
+    coverage_output: str = arg(
+        help="generate coverage report at the given file path (disabled by default)",
+        global_default=None,
+        metavar="COVERAGE_FILE_PATH",
+    )
+
     ### Debugging options
 
     verbose: int = arg(
@@ -455,6 +461,7 @@ class Config:
         global_default=",".join([e.value for e in TraceEvent]),
         metavar="EVENT1,EVENT2,...",
         action=ParseCSVTraceEvent,
+        group=debugging,
     )
 
     ### Build options

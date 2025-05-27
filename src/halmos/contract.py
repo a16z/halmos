@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import ClassVar
 
@@ -12,6 +13,7 @@ from .logs import (
     LIBRARY_PLACEHOLDER,
     warn_code,
 )
+from .mapper import SingletonMeta, SourceFileMap
 from .utils import (
     Address,
     Byte,
@@ -216,6 +218,10 @@ class Instruction:
     # expected to be a BV256, so that it can be pushed on the stack with no conversion
     operand: BV | None = None
 
+    # source mapping
+    source_file: str | None = None
+    source_line: int | None = None
+
     STOP: ClassVar["Instruction"] = None
 
     def __str__(self) -> str:
@@ -230,6 +236,10 @@ class Instruction:
 
     def __len__(self) -> int:
         return insn_len(self.opcode)
+
+    def set_srcmap(self, source_file: str | None, source_line: int | None) -> None:
+        object.__setattr__(self, "source_file", source_file)
+        object.__setattr__(self, "source_line", source_line)
 
 
 # Initialize the STOP singleton
@@ -247,8 +257,18 @@ class Contract:
     contract_name: str | None
     filename: str | None
 
+    # Source mapping string, formatted as each item is "s:l:f:j:m", with items separated by ";"
+    # where s=start, l=length, f=file_id, j=jump_type, m=modifier_depth
+    # https://docs.soliditylang.org/en/latest/internals/source_mappings.html
+    source_map: str | None
+
     def __init__(
-        self, code: ByteVec | None = None, *, contract_name=None, filename=None
+        self,
+        code: ByteVec | None = None,
+        *,
+        contract_name=None,
+        filename=None,
+        source_map=None,
     ) -> None:
         if not isinstance(code, ByteVec):
             code = ByteVec(code)
@@ -269,6 +289,7 @@ class Contract:
 
         self.contract_name = contract_name
         self.filename = filename
+        self.source_map = source_map
 
     def __deepcopy__(self, memo):
         # the class is essentially immutable (the only mutable fields are caches)
@@ -301,6 +322,31 @@ class Contract:
                     break
 
         return jumpdests
+
+    # TODO: ensure this function is executed only once
+    def process_source_mapping(self):
+        """Add source mapping information to each instruction in the contract."""
+        if not (source_map := self.source_map):
+            return
+
+        pc = 0
+        byte_offset, file_id = 0, 0
+        for item in source_map.split(";"):
+            # split each mapping into its components
+            data = item.split(":")
+            # update byte_offset and file_id if they are not empty
+            byte_offset_str = data[0]  # split() returns a non-empty list
+            file_id_str = data[2] if len(data) > 2 else ""
+            byte_offset = int(byte_offset_str) if byte_offset_str != "" else byte_offset
+            file_id = int(file_id_str) if file_id_str != "" else file_id
+
+            file_path, line_number = SourceFileMap().get_location(file_id, byte_offset)
+            CoverageReporter().record_lines_found(file_path, line_number)
+
+            insn = self.decode_instruction(pc)
+            insn.set_srcmap(file_path, line_number)
+
+            pc = insn.next_pc
 
     def from_hexcode(hexcode: str):
         """Create a contract from a hexcode string, e.g. "aabbccdd" """
@@ -425,3 +471,67 @@ class Contract:
                 return con_addr(int.from_bytes(unwrapped, "big"))
 
         return None
+
+
+class CoverageReporter(metaclass=SingletonMeta):
+    """Singleton class for tracking instruction coverage across all tests and paths.
+
+    This class maintains a record of which lines of code have been executed during contract testing.
+    The coverage data is used to generate LCOV format reports.
+    """
+
+    def __init__(self) -> None:
+        # file_path -> line_number -> count
+        self._instruction_coverage_data: dict[str, dict[int, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
+
+    def record_lines_found(
+        self, file_path: str | None, line_number: int | None
+    ) -> None:
+        """Record that an executable line appears in the source code.
+
+        This method is used to track which lines are executable in the source code,
+        regardless of whether they were executed. This information is used to
+        calculate the total number of lines (LF) in the LCOV report.
+        """
+        if not file_path or not line_number:
+            return
+        # utilize defaultdict to initialize a count of 0 if the line is not yet recorded
+        self._instruction_coverage_data[file_path][line_number]
+
+    def record_instruction(self, instruction: Instruction) -> None:
+        """Record instruction coverage by file path and line number."""
+        if (file := instruction.source_file) and (line := instruction.source_line):
+            self._instruction_coverage_data[file][line] += 1
+
+    def generate_lcov_report(self) -> str:
+        """Generate an LCOV format coverage report.
+
+        The LCOV format includes:
+        - SF: Source file path
+        - DA: Line data (line number and execution count)
+        - LF: Total number of lines found in the file
+        - LH: Number of lines that were executed at least once
+        """
+        lcov_lines = []
+
+        for file_path, line_coverage in self._instruction_coverage_data.items():
+            # SF: Source file
+            lcov_lines.append(f"SF:{file_path}")
+
+            # DA: Line data (line number, execution count)
+            for line_number, count in sorted(line_coverage.items()):
+                lcov_lines.append(f"DA:{line_number},{count}")
+
+            # LF: Lines found
+            lcov_lines.append(f"LF:{len(line_coverage)}")
+
+            # LH: Lines hit (lines with count > 0)
+            lines_hit = sum(1 for count in line_coverage.values() if count > 0)
+            lcov_lines.append(f"LH:{lines_hit}")
+
+            # End of file
+            lcov_lines.append("end_of_record")
+
+        return "\n".join(lcov_lines)
