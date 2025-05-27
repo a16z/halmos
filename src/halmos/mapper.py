@@ -129,24 +129,36 @@ class SourceFileMap(metaclass=SingletonMeta):
 
         return os.path.join(self.get_root(), relative_path)
 
-    def get_line_number(self, filepath: str, byte_offset: int) -> int:
+    def get_line_number(self, filepath: str, byte_offset: int) -> int | None:
         """Calculate the line number for a given byte offset in a file.
 
-        The line number is calculated by finding the number of newlines that appear
+        This method calculates the 1-based line number by finding how many newlines appear
         before the given byte offset. The newline positions are cached for efficiency.
+
+        Special cases:
+        - Returns None for empty files
+        - Returns None for negative byte offsets
+        - Returns the last line number if byte_offset exceeds file size
 
         Args:
             filepath (str): Path to the source file
             byte_offset (int): Byte offset in the file
 
         Returns:
-            line_number (int): 1-based line number
+            int | None: 1-based line number, or None if the file is empty or byte_offset is negative
         """
+        if byte_offset < 0:
+            return None
+
         if (line_offsets := self._line_offsets.get(filepath)) is None:
-            line_offsets = self._index_newlines(filepath)
+            line_offsets = self._index_lines(filepath)
             self._line_offsets[filepath] = line_offsets
 
-        return bisect.bisect_right(line_offsets, byte_offset) + 1
+        # empty file
+        if not line_offsets:
+            return None
+
+        return bisect.bisect_right(line_offsets, byte_offset)
 
     def get_location(
         self, file_id: int, byte_offset: int
@@ -161,30 +173,30 @@ class SourceFileMap(metaclass=SingletonMeta):
 
         return file_path, line_number
 
-    def _index_newlines(self, filepath: str) -> list[int]:
-        """Create an index of newline positions in a file.
+    def _index_lines(self, filepath: str) -> list[int]:
+        """Create an index of line starting positions in a file.
 
-        This method reads the file in chunks and records the byte offset of each
-        newline character. The resulting list is used to efficiently calculate
-        line numbers from byte offsets.
+        This method reads the file line by line and records the byte offset of the start
+        of each line. The resulting list is used to efficiently calculate line numbers
+        from byte offsets using binary search.
+
+        The returned list contains the byte offset of the start of each line, where:
+        - First element is 0 (start of first line)
+        - Each subsequent element is the offset where a new line begins
+        - Empty files return an empty list
 
         Args:
             filepath (str): Path to the file to index
 
         Returns:
-            list[int]: List of byte offsets where newlines occur
+            list[int]: List of byte offsets where each line starts. Empty list for empty files.
         """
         newline_offsets = []
         offset = 0
         with open(filepath, "rb") as f:
-            while True:
-                chunk = f.read(8192)
-                if not chunk:
-                    break
-                for i, b in enumerate(chunk):
-                    if b == ord("\n"):
-                        newline_offsets.append(offset + i)
-                offset += len(chunk)
+            for line in f:
+                newline_offsets.append(offset)
+                offset += len(line)
         return newline_offsets
 
 
