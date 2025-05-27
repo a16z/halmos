@@ -71,6 +71,14 @@ class Env:
         except ValueError as e:
             raise ValueError(f"envUint parsing failed for {key} = {val}: {e}") from e
 
+    def env_int_array(self, key: str, delimiter: str = ",") -> list[int]:
+        raw = self._parse_env_var(key)
+        parts = [x.strip() for x in raw.split(delimiter)]
+        try:
+            return [int(x, 0) for x in parts]  # base 0 supports hex/dec
+        except ValueError as e:
+            raise ValueError(f"envIntArray failed to parse: {e}") from e
+
     def env_bool(self, key: str, default: str = None) -> bool:
         return self._parse_bool(key, default)
 

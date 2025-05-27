@@ -322,6 +322,33 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(x, "hello world");
     }
 
+    function check_env_int_string() public returns (int[4] memory) {
+        int[] memory x = vm.envInt("INT_ARRAY",",");
+        int y = 1;
+        // assertEq(x.length, 4);
+        // assertEq(x[0], 1);  
+        // assertEq(x[1], -1);
+        // assertEq(x[2], 4);
+        // assertEq(x[3], 5);
+        int[4] memory z = [y,y,y,y];
+        // return int[4](y);
+        return z;
+    }
+    // function check_env_int_string() public returns (int[4] memory) {
+    // int[] memory x = vm.envInt("INT_ARRRAY", ",");
+    //     assertEq(x.length, 4);
+    //     assertEq(x[0], 1);
+    //     assertEq(x[1], -1);
+    //     assertEq(x[2], 4);
+    //     assertEq(x[3], 5);
+
+    // // Optionally, copy to fixed-size array for return
+    // int[4] memory z;
+    // for (uint i = 0; i < 4; i++) {
+    //     z[i] = x[i];
+    // }
+    // return z;
+
 }
 
 /// @custom:halmos --default-bytes-lengths 0,65
