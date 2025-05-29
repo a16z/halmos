@@ -361,10 +361,11 @@ def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
 
     encoding of a tuple (bytes): 32 (offset) + length + data
     """
-
+    print("encode_tuple_bytes called with data:", data, type(data))
     length = data.size() // 8 if is_bv(data) else len(data)
     result = ByteVec((32).to_bytes(32) + int(length).to_bytes(32))
     result.append(data)
+    print("encode_tuple_bytes result after append:", result, type(result))
     return result
 
 
@@ -430,17 +431,11 @@ def create_calldata_generic(
 
 
 def create_generic(ex, bits: int, var_name: str, type_name: str) -> BitVecRef | ByteVec:
-    print("bwiubnvciwejnciwnnwenwuiedncwn")
     # z3 does not support empty bitvectors, so we return an empty bytevec instead
     if not bits:
         return ByteVec()
 
     label = f"halmos_{var_name}_{type_name}_{uid()}_{ex.new_symbol_id():>02}"
-    print(
-        "BitVec label---------------------:",
-        BitVec(label, BitVecSorts[bits]),
-        type(BitVec(label, BitVecSorts[bits])),
-    )
     return BitVec(label, BitVecSorts[bits])
 
 
@@ -460,7 +455,6 @@ def create_uint(ex, arg, name: str | None = None, **kwargs):
 
 
 def create_uint256(ex, arg, name: str | None = None, **kwargs):
-    print("create_uint256 called")
     name = name or name_of(extract_string_argument(arg, 0))
     return ByteVec(create_generic(ex, 256, name, "uint256"))
 
@@ -558,22 +552,21 @@ def create_env_address(arg, **kwargs):
     val = Env().env_address(key)
     address_hex = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
     address_val = address(address_hex)
-    print("bytes32_val", ByteVec(address_val), type(ByteVec(address_val)))
     return ByteVec(uint256(address_val))
 
 
 def create_env_bool(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     val = Env().env_bool(key)
-    z3_val = con(1 if val else 0, 1)
-    return ByteVec(uint256(z3_val))
+    bool_val = con(1 if val else 0, 1)
+    return ByteVec(uint256(bool_val))
 
 
 def create_env_uint(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     val = Env().env_uint(key)
-    z3_val = uint256(val)
-    return ByteVec(z3_val)
+    uint_val = uint256(val)
+    return ByteVec(uint_val)
 
 
 def create_env_bytes(arg, **kwargs):
@@ -587,33 +580,126 @@ def create_env_string(arg, **kwargs):
     val = Env().env_string(key)
     if isinstance(val, str):
         val = val.encode("utf-8")
-    print("val ------------", encode_tuple_bytes(val), type(encode_tuple_bytes(val)))
+        print("val after encode", val)
     return encode_tuple_bytes(val)
 
 
 def create_env_int(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     val = Env().env_int(key)
-    z3_val = int256(val)
-    return ByteVec(z3_val)
+    int_val = int256(val)
+    return ByteVec(int_val)
 
 
-def create_env_int_string(ex, arg, **kwargs):
+def create_env_int_string(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = Env().env_int_array(key, delimiter)
-    print("values", values, type(values))
-    bv = ByteVec()
-    # Append array length first
-    bv.append(uint256(len(values)))  # 32 bytes
-
-    # Then append each int256 value
+    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
-        encoded = int256(val)
-        bv.append(encoded)
+        result.append(val.to_bytes(32, "big", signed=True))
+    return result
 
-    print("bv -------- cheatcode.py", bv._dump)
-    return bv
+
+def create_env_address_string(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    delimiter = decode_string_arg(arg, 32)
+    values = Env().env_address_array(key, delimiter)
+    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
+    for val in values:
+        bytes32_val = bytes.fromhex(val.replace("0x", "").rjust(64, "0"))
+        result.append(bytes32_val)
+    return result
+
+
+def create_env_bool_string(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    delimiter = decode_string_arg(arg, 32)
+    values = Env().env_bool_array(key, delimiter)
+    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
+    for val in values:
+        bool_val = con(1 if val else 0, 1)
+        result.append(uint256(bool_val))
+    return result
+
+
+def create_env_bytes32_string(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    delimiter = decode_string_arg(arg, 32)
+    values = Env().env_bytes32_array(key, delimiter)
+    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
+    for val in values:
+        bytes32_val = bytes.fromhex(val.replace("0x", "").rjust(64, "0"))
+        result.append(bytes32_val)
+    return result
+
+
+def create_env_string_string(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    delimiter = decode_string_arg(arg, 32)
+    values = Env().env_string_array(key, delimiter)
+    print("values", values)
+    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
+    len_of_values = len(values)
+    total_String_length = 0
+    for val in values:
+        hex_val = val.encode("utf-8")
+        length_of_currentstring = len(hex_val)
+        n = len_of_values * 32 + total_String_length
+        encoded_val = (n + total_String_length).to_bytes(32, "big")
+        result.append(encoded_val)  # location of the string
+        num_chunks = (length_of_currentstring + 31) // 32
+        total_String_length += num_chunks * 32
+
+    for val in values:
+        hex_val = val.encode("utf-8")
+        result.append(int(len(hex_val)).to_bytes(32, "big"))  # length of the string
+        for i in range(0, len(hex_val), 32):
+            chunk = hex_val[i : i + 32]
+            if len(chunk) < 32:
+                chunk = chunk.ljust(32, b"\x00")  # pad with zeros
+            result.append(chunk)
+
+    return result
+
+
+def create_env_uint_string(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    delimiter = decode_string_arg(arg, 32)
+    values = Env().env_uint_array(key, delimiter)
+    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
+    for val in values:
+        result.append(val.to_bytes(32, "big"))
+    return result
+
+
+def create_env_bytes_string(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    delimiter = decode_string_arg(arg, 32)
+    values = Env().env_bytes_array(key, delimiter)
+    print("values", values)
+    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
+    len_of_values = len(values)
+
+    total_String_length = 0
+    for val in values:
+        bytes_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
+        length_of_currentstring = len(bytes_val)
+        n = len_of_values * 32 + total_String_length
+        encoded_val = (n + total_String_length).to_bytes(32, "big")
+        result.append(encoded_val)  # location of the string
+        num_chunks = (length_of_currentstring + 31) // 32
+        total_String_length += num_chunks * 32
+
+    for val in values:
+        bytes_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
+        result.append(int(len(bytes_val)).to_bytes(32, "big"))  # length of the string
+        for i in range(0, len(bytes_val), 32):
+            chunk = bytes_val[i : i + 32]
+            if len(chunk) < 32:
+                chunk = chunk.ljust(32, b"\x00")  # pad with zeros
+            result.append(chunk)
+    return result
 
 
 def create_bytes8(ex, arg, name: str | None = None, **kwargs):
@@ -1335,19 +1421,26 @@ class hevm_cheat_code:
 
     # bytes4(keccak256("envInt(string,string)"))
     env_int_string_sig: int = 0x42181150
+    # bytes4(keccak256("envAddress(string,string)"))
+    env_address_string_sig: int = 0xAD31B9FA
+    # bytes4(keccak256("envBool(string,string)"))
+    env_bool_string_sig: int = 0xAAADDEAF
+    # bytes4(keccak256("envBytes32(string,string)"))
+    env_bytes32_string_sig: int = 0x5AF231C1
+
+    # bytes4(keccak256("envString(string,string)"))
+    env_string_string_sig: int = 0x14B02BC9
+    # bytes4(keccak256("envUint(string,string)"))
+    env_uint_string_sig: int = 0xF3DEC099
+    # bytes4(keccak256("envBytes(string,string)"))
+    env_bytes_string_sig: int = 0xDDC2651B
 
     # bytes4(keccak256("envExists(string)"))
     env_exists_sig: int = 0xCE8365F9
     # bytes4(keccak256("envOr(string,string,uint256[])"))
     env_or_sig: int = 0x74318528
-    # bytes4(keccak256("envAddress(string,string)"))
-    env_address_string_sig: int = 0xAD31B9FA
-    # bytes4(keccak256("envBool(string,string)"))
-    env_bool_string_sig: int = 0xAAADDEAF
     # bytes4(keccak256("envBytes(bytes,bytes)"))
     env_bytes_bytes_sig: int = 0x6C42F03F
-    # bytes4(keccak256("envBytes32(string,string)"))
-    env_bytes32_string_sig: int = 0x5AF231C1
     # bytes4(keccak256("envOr(string,address)"))
     env_or_address_sig: int = 0x561FE540
     # bytes4(keccak256("envOr(string,bool)"))
@@ -1374,12 +1467,6 @@ class hevm_cheat_code:
     env_or_string_string_array_sig: int = 0x859216BC
     # bytes4(keccak256("envOr(string,uint256)"))
     env_or_string_uint256_sig: int = 0x5E97348F
-    # bytes4(keccak256("envString(string,string)"))
-    env_string_string_sig: int = 0x14B02BC9
-    # bytes4(keccak256("envUint(string,string)"))
-    env_uint_string_sig: int = 0xF3DEC099
-    # bytes4(keccak256("envBytes(string,string)"))
-    env_bytes_string_string_sig: int = 0xDDC2651B
 
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack) -> ByteVec | None:
@@ -1750,7 +1837,25 @@ class hevm_cheat_code:
             return create_env_string(arg)
 
         elif funsig == hevm_cheat_code.env_int_string_sig:
-            return create_env_int_string(ex, arg)
+            return create_env_int_string(arg)
+
+        elif funsig == hevm_cheat_code.env_address_string_sig:
+            return create_env_address_string(arg)
+
+        elif funsig == hevm_cheat_code.env_bool_string_sig:
+            return create_env_bool_string(arg)
+
+        elif funsig == hevm_cheat_code.env_bytes32_string_sig:
+            return create_env_bytes32_string(arg)
+
+        elif funsig == hevm_cheat_code.env_string_string_sig:
+            return create_env_string_string(arg)
+
+        elif funsig == hevm_cheat_code.env_uint_string_sig:
+            return create_env_uint_string(arg)
+
+        elif funsig == hevm_cheat_code.env_bytes_string_sig:
+            return create_env_bytes_string(arg)
 
         elif funsig in hevm_cheat_code.dict_of_unsupported_cheatcodes:
             msg = f"Unsupported cheat code: {hevm_cheat_code.dict_of_unsupported_cheatcodes[funsig]}"

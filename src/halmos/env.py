@@ -13,6 +13,7 @@ class Env:
 
     def _parse_env_var(self, key: str, default=None):
         value = os.getenv(self._key(key), default)
+        print(f"Parsing environment variable: {key} = {value}")
         if value is None:
             raise ValueError(
                 f"Environment variable '{key}' is not set and no default provided."
@@ -47,6 +48,37 @@ class Env:
     def _parse_uint_array(self, key: str, default=None, delimiter=",") -> list[int]:
         val = self._parse_env_var(key, default)
         return [int(x.strip()) for x in val.split(delimiter)]
+
+    def _parse_address_array(self, key: str, default=None, delimiter=",") -> list[str]:
+        val = self._parse_env_var(key, default)
+        addresses = [x.strip() for x in val.split(delimiter)]
+        for address in addresses:
+            if not address.startswith("0x") or len(address) != 42:
+                raise ValueError(
+                    f"Invalid Ethereum address format in array for {key}: {address}"
+                )
+        return [address.lower() for address in addresses]
+
+    def _parse_bool_array(self, key: str, default=None, delimiter=",") -> list[bool]:
+        val = self._parse_env_var(key, default)
+        bool_array = [(x.strip()) for x in val.split(delimiter)]
+        return [x.lower() in ["1", "true", "yes"] for x in bool_array]
+
+    def _parse_bytes32_array(self, key: str, default=None, delimiter=",") -> list[str]:
+        val = self._parse_env_var(key, default)
+        parts = [x.strip() for x in val.split(delimiter)]
+        for part in parts:
+            if not part.startswith("0x") or len(part) != 66:
+                raise ValueError(f"Invalid bytes32 format in array for {key}: {part}")
+        return [part.lower() for part in parts]
+
+    def _parse_string_array(self, key: str, default=None, delimiter=",") -> list[str]:
+        val = self._parse_env_var(key, default)
+        return [x.strip() for x in val.split(delimiter)]
+
+    def _parse_bytes_array(self, key: str, default=None, delimiter=",") -> list[bytes]:
+        val = self._parse_env_var(key, default)
+        return [x.strip() for x in val.split(delimiter)]
 
     # Reusable API
     def env_string(self, key: str, default: str = None) -> str:
@@ -93,3 +125,28 @@ class Env:
 
     def env_uint_array(self, key: str, default: str = None, delimiter=",") -> list[int]:
         return self._parse_uint_array(key, default, delimiter)
+
+    def env_address_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[str]:
+        return self._parse_address_array(key, default, delimiter)
+
+    def env_bool_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[bool]:
+        return self._parse_bool_array(key, default, delimiter)
+
+    def env_bytes32_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[str]:
+        return self._parse_bytes32_array(key, default, delimiter)
+
+    def env_string_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[str]:
+        return self._parse_string_array(key, default, delimiter)
+
+    def env_bytes_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[bytes]:
+        return self._parse_bytes_array(key, default, delimiter)

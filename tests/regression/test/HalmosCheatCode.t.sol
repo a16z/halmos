@@ -322,32 +322,62 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(x, "hello world");
     }
 
-    function check_env_int_string() public returns (int[4] memory) {
+    function check_env_int_array() public {
         int[] memory x = vm.envInt("INT_ARRAY",",");
         int y = 1;
-        // assertEq(x.length, 4);
-        // assertEq(x[0], 1);  
-        // assertEq(x[1], -1);
-        // assertEq(x[2], 4);
-        // assertEq(x[3], 5);
-        int[4] memory z = [y,y,y,y];
-        // return int[4](y);
-        return z;
+        assertEq(x.length, 4);
+        assertEq(x[0], 1);  
+        assertEq(x[1], -1);
+        assertEq(x[2], 4);
+        assertEq(x[3], 5);
     }
-    // function check_env_int_string() public returns (int[4] memory) {
-    // int[] memory x = vm.envInt("INT_ARRRAY", ",");
-    //     assertEq(x.length, 4);
-    //     assertEq(x[0], 1);
-    //     assertEq(x[1], -1);
-    //     assertEq(x[2], 4);
-    //     assertEq(x[3], 5);
 
-    // // Optionally, copy to fixed-size array for return
-    // int[4] memory z;
-    // for (uint i = 0; i < 4; i++) {
-    //     z[i] = x[i];
-    // }
-    // return z;
+    function check_env_address_array() public {
+        address[] memory x = vm.envAddress("ADDRESS_ARRAY", ",");
+        assertEq(x.length, 3);
+        assertEq(x[0], address(0x00000000000000000000000000000000DeaDBeef));
+        assertEq(x[1], address(0x00000000000000000000000000000000DeaDBeef));
+        assertEq(x[2], address(0x00000000000000000000000000000000DeaDBeef));
+    }
+
+    function check_env_bool_array() public {
+        bool[] memory x = vm.envBool("BOOL_ARRAY", ",");
+        assertEq(x.length, 2);
+        assertEq(x[0], true);
+        assertEq(x[1], false);
+    }
+
+    function check_env_bytes32_array() public {
+        bytes32[] memory x = vm.envBytes32("BYTES32_ARRAY", ",");
+        assertEq(x.length, 2);
+        assertEq(x[0], 0x00000000000000000000000000000000000000000000000000000000DeaDBeef);
+        assertEq(x[1], 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+    }
+
+    function check_env_string_array() public {
+        string[] memory x = vm.envString("STRING_ARRAY", ",");
+        assertEq(x.length, 3);
+        assertEq(x[0], "hello");
+        assertEq(x[1], "world");
+        assertEq(x[2], "This string is definitely longer than thirty-one bytes!");
+    }
+
+    function check_env_uint_array() public {
+        uint[] memory x = vm.envUint("UINT_ARRAY", ",");
+        assertEq(x.length, 3);
+        assertEq(x[0], 1);
+        assertEq(x[1], 2);
+        assertEq(x[2], 3);
+    }
+    function check_env_bytes_array() public {
+        bytes[] memory x = vm.envBytes("BYTES_ARRAY", ",");
+        assertEq(x.length, 4);
+        assertEq(x[0], hex"DeaDBeef");
+        assertEq(x[1], hex"00000000000000000000000000000000DeaDBeef");
+        assertEq(x[2], hex"00000000000000000000000000000000000000000000000000000000DeaDBeef");
+        assertEq(x[3], hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef");
+
+    }
 
 }
 
