@@ -172,7 +172,7 @@ contract CallTest is Test {
         assert(d.c().num() == 0);
 
         assert(address(this).balance == 0);
-        assert(address(d).balance == fund); // fund is transfered to itself
+        assert(address(d).balance == fund); // fund is transferred to itself
         assert(address(d.c()).balance == 0);
     }
 }
