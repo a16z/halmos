@@ -379,6 +379,46 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     }
 
+    function check_env_or_address() public {
+        address x = vm.envOr("ADDRESS2", address(0xdeadbeef));
+        assertEq(x, address(0xdeadbeef));
+    }
+
+    function check_env_or_bool() public {
+        bool x = vm.envOr("BOOL2", true);
+        assertEq(x, true);
+    }
+
+    function check_env_or_bytes() public {
+        bytes memory y = hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef";
+        bytes memory x = vm.envOr("BYTES2",y);
+        assertEq(x, hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef");
+    }
+
+    function check_env_or_string() public {
+        string memory y = "This string is definitely longer than thirty-one bytes!";
+        string memory x = vm.envOr("STRING2", y);
+        assertEq(x, "This string is definitely longer than thirty-one bytes!");
+    }
+
+    function check_env_or_bytes32() public {
+        bytes32 y = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF;
+        bytes32 x = vm.envOr("BYTES32", y);
+        assertEq(x, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
+    }
+
+    function check_env_or_int() public {
+        int y = -10;
+        int x = vm.envOr("INT2", y);
+        assertEq(x, -10);
+    }
+
+    function check_env_or_uint() public {
+        uint y = 100;
+        uint x = vm.envOr("UINT2", y);
+        assertEq(x, 100);
+    }
+
 }
 
 /// @custom:halmos --default-bytes-lengths 0,65

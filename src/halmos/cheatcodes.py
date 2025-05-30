@@ -361,11 +361,11 @@ def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
 
     encoding of a tuple (bytes): 32 (offset) + length + data
     """
-    print("encode_tuple_bytes called with data:", data, type(data))
+    # print("encode_tuple_bytes called with data:", data, type(data))
     length = data.size() // 8 if is_bv(data) else len(data)
     result = ByteVec((32).to_bytes(32) + int(length).to_bytes(32))
     result.append(data)
-    print("encode_tuple_bytes result after append:", result, type(result))
+    # print("encode_tuple_bytes result after append:", result, type(result))
     return result
 
 
@@ -540,6 +540,13 @@ def create_uint256_min_max(ex, arg, name: str | None = None, **kwargs):
     return ByteVec(symbolic_value)
 
 
+def create_bytes8(ex, arg, name: str | None = None, **kwargs):
+    name = name or name_of(extract_string_argument(arg, 0))
+    result = ByteVec(create_generic(ex, 64, name, "bytes8"))
+    result.append((0).to_bytes(24))  # pad right
+    return result
+
+
 def create_env_bytes32(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     val = Env().env_bytes32(key)
@@ -702,11 +709,111 @@ def create_env_bytes_string(arg, **kwargs):
     return result
 
 
-def create_bytes8(ex, arg, name: str | None = None, **kwargs):
-    name = name or name_of(extract_string_argument(arg, 0))
-    result = ByteVec(create_generic(ex, 64, name, "bytes8"))
-    result.append((0).to_bytes(24))  # pad right
-    return result
+def create_env_or_address(arg, **kwargs):
+    # print("create_env_or_address called with arg:", arg)
+    key = decode_string_arg(arg, 0)
+    fallback_val = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
+    hex_str = "0x" + fallback_val.hex()[:-8] + "DeaDBeef"
+    values = Env().env_or_address(key, hex_str)
+    address_hex = bytes.fromhex(values.replace("0x", ""))  # Convert hex string to bytes
+    address_val = address(address_hex)
+    return ByteVec(uint256(address_val))
+
+
+def create_env_or_bool(arg, **kwargs):
+    # print("create_env_or_bool called with arg:", arg)
+    key = decode_string_arg(arg, 0)
+    fallback_val = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
+    hex_str = str(bool(int.from_bytes(fallback_val, "big")))
+    values = Env().env_or_bool(key, hex_str)
+    bool_val = con(1 if values else 0, 1)
+    return ByteVec(uint256(bool_val))
+
+
+def create_env_or_bytes(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    size_location = 0
+    for offset, chunk in arg.chunks.items():
+        if offset == 36:
+            size_location = int.from_bytes(chunk.unwrap(), "big")
+
+        if 4 + size_location == offset and size_location != 0:
+            byte_size = int.from_bytes(chunk.unwrap(), "big")
+
+        if (
+            offset == size_location + 36
+            and size_location != 0
+            and byte_size == len(chunk.unwrap().hex()) // 2
+        ):
+            # This is the chunk we need
+            byte_str = "0x" + chunk.unwrap().hex()
+            break
+
+    values = Env().env_or_bytes(key, byte_str)
+    return encode_tuple_bytes(values)
+
+
+def create_env_or_string(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    size_location = 0
+    for offset, chunk in arg.chunks.items():
+        if offset == 36:
+            size_location = int.from_bytes(chunk.unwrap(), "big")
+
+        if 4 + size_location == offset and size_location != 0:
+            byte_size = int.from_bytes(chunk.unwrap(), "big")
+            print("byte_size", byte_size)
+
+        if (
+            offset == size_location + 36
+            and size_location != 0
+            and byte_size == len(chunk.unwrap().hex()) // 2
+        ):
+            # This is the chunk we need
+            byte_str = "0x" + chunk.unwrap().hex()
+            break
+    string_val = bytes.fromhex(byte_str.replace("0x", "")).decode("utf-8")
+    values = Env().env_or_string(key, string_val)
+
+    if isinstance(values, str):
+        values = values.encode("utf-8")
+
+    return encode_tuple_bytes(values)
+
+
+def create_env_or_bytes32(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    fallback_val = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
+    values = Env().env_or_bytes32(key, fallback_val.hex())
+    print("values in create_env_or_bytes32", values)
+    bytes32_val = bytes.fromhex(values.replace("0x", "").rjust(64, "0"))
+    return ByteVec(bytes32_val)
+
+
+def create_env_or_int(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    print(arg)
+    fallback_val = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
+    hex_str = fallback_val.hex()
+    n = int(hex_str, 16)
+    if n >= 2**255:
+        n -= 2**256
+    int_str = str(n)
+    values = Env().env_or_int(key, int_str)
+    int_val = int256(values)
+    return ByteVec(int_val)
+
+
+def create_env_or_uint(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    fallback_val = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
+    hex_str = fallback_val.hex()
+    n = int(hex_str, 16)
+    if n < 0:
+        raise HalmosException(f"Expected a non-negative integer but got: {n}")
+    values = Env().env_or_uint(key, n)
+    uint_val = uint256(values)
+    return ByteVec(uint_val)
 
 
 def apply_vmaddr(ex, private_key: Word):
@@ -1427,32 +1534,32 @@ class hevm_cheat_code:
     env_bool_string_sig: int = 0xAAADDEAF
     # bytes4(keccak256("envBytes32(string,string)"))
     env_bytes32_string_sig: int = 0x5AF231C1
-
     # bytes4(keccak256("envString(string,string)"))
     env_string_string_sig: int = 0x14B02BC9
     # bytes4(keccak256("envUint(string,string)"))
     env_uint_string_sig: int = 0xF3DEC099
     # bytes4(keccak256("envBytes(string,string)"))
     env_bytes_string_sig: int = 0xDDC2651B
-
     # bytes4(keccak256("envExists(string)"))
     env_exists_sig: int = 0xCE8365F9
     # bytes4(keccak256("envOr(string,string,uint256[])"))
     env_or_sig: int = 0x74318528
-    # bytes4(keccak256("envBytes(bytes,bytes)"))
-    env_bytes_bytes_sig: int = 0x6C42F03F
+
     # bytes4(keccak256("envOr(string,address)"))
     env_or_address_sig: int = 0x561FE540
     # bytes4(keccak256("envOr(string,bool)"))
     env_or_bool_sig: int = 0x4777F3CF
     # bytes4(keccak256("envOr(string,bytes)"))
     env_or_bytes_sig: int = 0xB3E47705
+    # bytes4(keccak256("envOr(string,string)"))
+    env_or_string_sig: int = 0xD145736C
     # bytes4(keccak256("envOr(string,bytes32)"))
     env_or_bytes32_sig: int = 0xB4A85892
     # bytes4(keccak256("envOr(string,int256)"))
     env_or_int_sig: int = 0xBBCB713E
-    # bytes4(keccak256("envOr(string,string)"))
-    env_or_string_sig: int = 0xD145736C
+    # bytes4(keccak256("envOr(string,uint256)"))
+    env_or_uint_sig: int = 0x5E97348F
+
     # bytes4(keccak256("envOr(string,string,address[])"))
     env_or_string_address_array_sig: int = 0xC74E9DEB
     # bytes4(keccak256("envOr(string,string,bool[])"))
@@ -1465,8 +1572,6 @@ class hevm_cheat_code:
     env_or_string_int_array_sig: int = 0x4700D74B
     # bytes4(keccak256("envOr(string,string,string[])"))
     env_or_string_string_array_sig: int = 0x859216BC
-    # bytes4(keccak256("envOr(string,uint256)"))
-    env_or_string_uint256_sig: int = 0x5E97348F
 
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack) -> ByteVec | None:
@@ -1856,6 +1961,27 @@ class hevm_cheat_code:
 
         elif funsig == hevm_cheat_code.env_bytes_string_sig:
             return create_env_bytes_string(arg)
+
+        elif funsig == hevm_cheat_code.env_or_address_sig:
+            return create_env_or_address(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bool_sig:
+            return create_env_or_bool(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bytes_sig:
+            return create_env_or_bytes(arg)
+
+        elif funsig == hevm_cheat_code.env_or_string_sig:
+            return create_env_or_string(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bytes32_sig:
+            return create_env_or_bytes32(arg)
+
+        elif funsig == hevm_cheat_code.env_or_int_sig:
+            return create_env_or_int(arg)
+
+        elif funsig == hevm_cheat_code.env_or_uint_sig:
+            return create_env_or_uint(arg)
 
         elif funsig in hevm_cheat_code.dict_of_unsupported_cheatcodes:
             msg = f"Unsupported cheat code: {hevm_cheat_code.dict_of_unsupported_cheatcodes[funsig]}"
