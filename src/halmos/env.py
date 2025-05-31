@@ -13,12 +13,15 @@ class Env:
 
     def _parse_env_var(self, key: str, default=None):
         value = os.getenv(self._key(key), default)
-        # print(f"Parsing environment variable: {key} = {value}")
         if value is None:
             raise ValueError(
                 f"Environment variable '{key}' is not set and no default provided."
             )
         return value
+
+    def _check_env_exists(self, key: str, default=None):
+        value = os.getenv(self._key(key), default)
+        return value is not None
 
     def _parse_int(self, key: str, default=None) -> int:
         return int(self._parse_env_var(key, default))
@@ -81,6 +84,9 @@ class Env:
         return [x.strip() for x in val.split(delimiter)]
 
     # Reusable API
+    def check_env_exists(self, key: str, default=None):
+        return self._check_env_exists(key, default)
+
     def env_string(self, key: str, default: str = None) -> str:
         return self._parse_env_var(key, default)
 
@@ -153,12 +159,9 @@ class Env:
 
     def env_or_address(self, key: str, default: str = None) -> str:
         try:
-            # print(f"Attempting to parse address from environment variable: {key} , default = {default}")
             return self._parse_address(key, default)
         except ValueError as err:
-            # print(f"Failed to parse address from environment variable: {key}")
             if default is not None:
-                # print(f"Returning default value: {default}")
                 return default
             raise ValueError(
                 f"Environment variable '{key}' is not set or invalid."
@@ -217,6 +220,90 @@ class Env:
     def env_or_uint(self, key: str, default: None) -> int:
         try:
             return self._parse_env_var(key, default)
+        except ValueError as err:
+            if default is not None:
+                return default
+            raise ValueError(
+                f"Environment variable '{key}' is not set or invalid."
+            ) from err
+
+    def env_or_string_address_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[str]:
+        try:
+            return self._parse_address_array(key, default, delimiter)
+        except ValueError as err:
+            if default is not None:
+                return default
+            raise ValueError(
+                f"Environment variable '{key}' is not set or invalid."
+            ) from err
+
+    def env_or_string_bool_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[bool]:
+        try:
+            return self._parse_bool_array(key, default, delimiter)
+        except ValueError as err:
+            if default is not None:
+                return default
+            raise ValueError(
+                f"Environment variable '{key}' is not set or invalid."
+            ) from err
+
+    def env_or_string_bytes32_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[str]:
+        try:
+            return self._parse_bytes32_array(key, default, delimiter)
+        except ValueError as err:
+            if default is not None:
+                return default
+            raise ValueError(
+                f"Environment variable '{key}' is not set or invalid."
+            ) from err
+
+    def env_or_string_int_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[int]:
+        try:
+            return self._parse_uint_array(key, default, delimiter)
+        except ValueError as err:
+            if default is not None:
+                return default
+            raise ValueError(
+                f"Environment variable '{key}' is not set or invalid."
+            ) from err
+
+    def env_or_string_uint_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[int]:
+        try:
+            return self._parse_uint_array(key, default, delimiter)
+        except ValueError as err:
+            if default is not None:
+                return default
+            raise ValueError(
+                f"Environment variable '{key}' is not set or invalid."
+            ) from err
+
+    def env_or_string_bytes_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[bytes]:
+        try:
+            return self._parse_bytes_array(key, default, delimiter)
+        except ValueError as err:
+            if default is not None:
+                return default
+            raise ValueError(
+                f"Environment variable '{key}' is not set or invalid."
+            ) from err
+
+    def env_or_string_string_array(
+        self, key: str, default: str = None, delimiter=","
+    ) -> list[str]:
+        try:
+            return self._parse_string_array(key, default, delimiter)
         except ValueError as err:
             if default is not None:
                 return default
