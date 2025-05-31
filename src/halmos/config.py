@@ -477,7 +477,7 @@ class Config:
 
     solver: str = arg(
         help="specify the SMT solver to use (e.g., 'yices'). If not specified, defaults to 'z3'. If --solver-command is used, this is ignored.",
-        global_default="z3",
+        global_default="yices",
         # skip metavar, otherwise argparse does not show the choices
         # metavar="SOLVER_NAME",
         choices=list(SOLVERS.keys()),
