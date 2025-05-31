@@ -394,15 +394,17 @@ def find_venv_root() -> Path | None:
     return None
 
 
-def find_z3_path_in_venv() -> Path | None:
+def find_path_in_venv(bin_name: str) -> Path | None:
     venv_path = find_venv_root()
     if venv_path:
-        z3_bin = "z3.exe" if platform.system() == "Windows" else "z3"
+        if platform.system() == "Windows":
+            bin_name += ".exe"
+
         # Check common bin locations
         for bin_dir in ["bin", "Scripts"]:  # Scripts for Windows venv
-            z3_path = venv_path / bin_dir / z3_bin
-            if z3_path.exists() and os.access(z3_path, os.X_OK):
-                return z3_path
+            bin_path = venv_path / bin_dir / bin_name
+            if bin_path.exists() and os.access(bin_path, os.X_OK):
+                return bin_path
     return None
 
 
@@ -425,12 +427,11 @@ def find_solver_binary(solver: SolverInfo) -> Path | None:
         debug(f"Found {solver.name} binary in PATH: {path_bin}")
         return Path(path_bin)
 
-    # 3. Special check for z3 in venv
-    if solver.name == "z3":
-        venv_z3 = find_z3_path_in_venv()
-        if venv_z3:
-            debug(f"Found z3 binary in venv: {venv_z3}")
-            return venv_z3
+    # 3. Check venv
+    venv_bin = find_path_in_venv(solver.binary_name)
+    if venv_bin:
+        debug(f"Found binary in venv: {venv_bin}")
+        return venv_bin
 
     debug(f"Solver binary '{solver.name}' not found in cache or PATH.")
     return None
