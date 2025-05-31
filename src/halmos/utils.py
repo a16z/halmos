@@ -26,6 +26,7 @@ from z3 import (
     Not,
     Or,
     SignExt,
+    Solver,
     SolverFor,
     eq,
     is_app,
@@ -275,7 +276,7 @@ def is_concat(x: BitVecRef) -> bool:
     return is_app_of(x, Z3_OP_CONCAT)
 
 
-def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0):
+def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0) -> Solver:
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
 

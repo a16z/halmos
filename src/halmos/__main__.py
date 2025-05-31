@@ -29,6 +29,7 @@ from rich.tree import Tree
 from z3 import (
     BitVec,
     BoolRef,
+    Solver,
     ZeroExt,
     set_option,
     unsat,
@@ -258,7 +259,7 @@ def mk_addr(name: str) -> Address:
     return BitVec(name, 160)
 
 
-def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None):
+def mk_solver(args: HalmosConfig, logic="QF_AUFBV", ctx=None) -> Solver:
     # in the config, we have a float in seconds
     # z3 expects an int in milliseconds
     timeout_ms = int(args.solver_timeout_branching * 1000)
@@ -1104,7 +1105,10 @@ def extract_setup(ctx: ContractContext) -> FunctionInfo:
     return FunctionInfo(ctx.name, setup_name, setup_sig, setup_selector)
 
 
-def reset(solver):
+def reset(solver: Solver | None):
+    if not solver:
+        return
+
     if threading.current_thread() != threading.main_thread():
         # can't access z3 objects from other threads
         warn("reset() called from a non-main thread")
@@ -1377,6 +1381,7 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
     args = ctx.args
     setup_info = extract_setup(ctx)
+    setup_solver = None
 
     try:
         setup_config = with_devdoc(args, setup_info.sig, ctx.contract_json)
