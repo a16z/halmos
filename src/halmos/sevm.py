@@ -381,14 +381,8 @@ def copy_returndata_to_memory(
 
     actual_ret_size = len(returndata)
     effective_ret_size = min(ret_size, actual_ret_size)
-    # effective_ret_size = actual_ret_size
-
-    print(
-        f"effective_ret_size: {effective_ret_size}, actual_ret_size: {actual_ret_size}"
-    )
 
     if not effective_ret_size:
-        print("effective_ret_size is 0")
         return
 
     # fast path: if the requested ret_size is the actual size of the return data,
@@ -398,11 +392,8 @@ def copy_returndata_to_memory(
         if effective_ret_size < actual_ret_size
         else returndata
     )
-    # print("data to write:", data)
 
     ex.st.set_mslice(ret_loc, data)
-
-    print("ex.st after set slice --------", ex.st)
 
 
 @dataclass(frozen=True, slots=True, eq=False, order=False)
@@ -2335,8 +2326,6 @@ class SEVM:
         # `to`: the original (symbolic) target address
         # `to_alias`: a (concrete) alias of the target considered in this path.
         #            it could be None, indicating a non-existent address.
-        print(f"call ---------: {op},{hexify(op)} {hexify(to_alias)}")
-        print("ex.st:", ex.st)
         ex.st.pop()  # gas
 
         to: BV = uint160(ex.st.pop())
@@ -2344,13 +2333,9 @@ class SEVM:
 
         arg_loc: int = ex.mloc(check_size=False)
         arg_size: int = ex.int_of(ex.st.pop(), "symbolic CALL input data size")
-        # print("arg_size:", arg_size)
 
         ret_loc: int = ex.mloc(check_size=False)
-        # print("ret_loc:", ret_loc)
         ret_size: int = ex.int_of(ex.st.pop(), "symbolic CALL return data size")
-        # ret_size = 196
-        print("ret_size:", ret_size)
 
         if not arg_size >= 0:
             raise ValueError(arg_size)
@@ -2360,8 +2345,6 @@ class SEVM:
 
         pranked_caller, pranked_origin = ex.resolve_prank(to)
         arg = ex.st.mslice(arg_loc, arg_size)
-
-        # print(f"arg: {hexify(arg)}")
 
         resolved_to = to_alias if to_alias is not None else to
         message = Message(
@@ -2384,7 +2367,6 @@ class SEVM:
                 self.transfer_value(ex, pranked_caller, to, fund, condition)
 
         def call_known(to: Address) -> None:
-            # print(f"call_known: {hexify(to)}")
             # backup current state
             orig_code = ex.code.copy()
             orig_storage = deepcopy(ex.storage)
@@ -2419,7 +2401,6 @@ class SEVM:
                 new_ex.jumpis = deepcopy(ex.jumpis)
 
                 returndata = subcall.output.data
-                print(f"returndata: {returndata}")
                 copy_returndata_to_memory(returndata, ret_loc, ret_size, new_ex)
 
                 # set status code on the stack
@@ -2468,7 +2449,6 @@ class SEVM:
             stack.push(sub_ex)
 
         def call_unknown() -> None:
-            # print(f"call_unknown: {hexify(to)}")
             # ecrecover
             if to == ECRECOVER_PRECOMPILE:
                 # TODO: explicitly return empty data in case of an error
@@ -2593,12 +2573,7 @@ class SEVM:
             # vm cheat code
             elif to == hevm_cheat_code.address:
                 exit_code = ONE
-                # print(f"hevm_cheat_code function arg: {arg}")
                 ret = hevm_cheat_code.handle(self, ex, arg, stack)
-                print(f"hevm_cheat_code return val : {ret}")
-                print(f"hevm_cheat_code return val size: {ret_size}")
-                # print("exit_code", exit_code)
-                # print("exit_code value", exit_code.is_concrete)
 
             # console
             elif to == console.address:
@@ -2615,8 +2590,6 @@ class SEVM:
 
             # push exit code
             if exit_code.is_concrete:
-                # print(f"exit_code: {exit_code}")
-                print(" exit_code value:", exit_code)
                 ex.st.push(exit_code)
 
                 # transfer msg.value
@@ -2627,17 +2600,14 @@ class SEVM:
                     f"call_exit_code_{uid()}_{ex.new_call_id():>02}", BitVecSort256
                 )
                 ex.path.append(exit_code_var == exit_code)
-                print("exit_code_var:", exit_code_var)
                 ex.st.push_any(exit_code_var)
 
                 # transfer msg.value
                 send_callvalue(exit_code_var != ZERO)
 
             ret_lst = ret if isinstance(ret, list) else [ret]
-            # print(f"ret_lst: {ret_lst}")
 
             last_idx = len(ret_lst) - 1
-            # print(f"last_idx: {last_idx}")
             for idx, ret_ in enumerate(ret_lst):
                 if not isinstance(ret_, ByteVec):
                     raise HalmosException(f"Invalid return value: {ret_}")
@@ -2647,11 +2617,7 @@ class SEVM:
                     if idx < last_idx
                     else ex
                 )
-
-                # print("ret_: ", ret_)
-                print("before copy_returndata_to_memory")
                 copy_returndata_to_memory(ret_, ret_loc, ret_size, new_ex)
-                # print("after copy_returndata_to_memory")
                 new_ex.context.trace.append(
                     CallContext(
                         message=message,
@@ -2672,7 +2638,6 @@ class SEVM:
             # non-existing contract call
             or to_alias is None
         ):
-            print("calling unknown 1")
             call_unknown()
             return
 
@@ -2740,7 +2705,6 @@ class SEVM:
 
         if new_addr in ex.code:
             # address conflicts don't revert, they push 0 on the stack and continue
-            print("pushing 0 on the stack due to address collision")
             ex.st.push(ZERO)
             ex.advance()
 
@@ -2804,12 +2768,10 @@ class SEVM:
                 new_ex.set_code(new_addr, new_code)
 
                 # push new address to stack
-                print("pushing new address on the stack:", hexify(new_addr))
                 new_ex.st.push_any(new_addr)
 
             else:
                 # creation failed
-                print("creation failed, pushing 0 on the stack")
                 new_ex.st.push(ZERO)
 
                 # revert network states
@@ -2988,12 +2950,10 @@ class SEVM:
         - If the symbol is already constrained to a concrete value in the current path condition, it is replaced by that value.
         - If the symbol is associated with candidate values, the current path is branched over these candidates.
         """
-        # print("calldataload ex " ,ex.st)
-        # print("calldataload stack", stack)
+
         offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
 
         loaded = ex.calldata().get_word(offset)
-        # print("calldataload loaded:", loaded)
 
         if is_expr_var(loaded):
             concrete_loaded = ex.path.concretization.substitution.get(loaded)
@@ -3008,7 +2968,6 @@ class SEVM:
 
                 for candidate in ex.path.concretization.candidates[loaded]:
                     new_ex = self.create_branch(ex, loaded == candidate, ex.pc)
-                    print("candidate:", candidate)
                     new_ex.st.push_any(candidate)
                     new_ex.advance()
                     stack.push(new_ex)
@@ -3039,8 +2998,6 @@ class SEVM:
 
         Note: As this involves executing a new transaction, the transient storage is reset to empty instead of being inherited from the input state.
         """
-        print(f"Running message: {message}")
-        print(f"pre_ex.st: {pre_ex.st}")
         ex0 = Exec(
             code=pre_ex.code.copy(),  # shallow copy
             storage=deepcopy(pre_ex.storage),
@@ -3069,7 +3026,6 @@ class SEVM:
         yield from self.run(ex0)
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
-        print("Running")
         next_ex: Exec | None = ex0
         stack: Worklist = Worklist()
 
@@ -3434,9 +3390,6 @@ class SEVM:
                 elif opcode in CALL_OPCODES:
                     to = uint160(state.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack)
-                    # print("ex", ex)
-                    print("calling stastic call opcode")
-                    print("ex st --------", ex.st)
                     self.call(ex, opcode, to_alias, stack)
                     continue
 
