@@ -4508,6 +4508,15 @@
                 "num_paths": null,
                 "time": null,
                 "num_bounded_loops": null
+            },
+            {
+                "name": "check_too_many_open_files()",
+                "exitcode": 2,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
             }
         ],
         "test/SortMismatch.t.sol:SortMismatchTest": [
