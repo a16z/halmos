@@ -68,10 +68,13 @@ class PopenFuture(concurrent.futures.Future):
                 self.returncode = self.process.returncode
             except subprocess.TimeoutExpired as e:
                 self._exception = e
-                self.cancel()
             except Exception as e:
                 self._exception = e
             finally:
+                # ensure process is properly cleaned up for any exception or timeout
+                if self.process:
+                    self.cancel()
+
                 self.set_result((self.stdout, self.stderr, self.returncode))
 
         # avoid daemon threads because they can cause issues during shutdown
@@ -109,6 +112,22 @@ class PopenFuture(concurrent.futures.Future):
         except psutil.NoSuchProcess:
             # process already terminated, nothing to do
             pass
+
+        # ensure file descriptors are closed after process termination.
+        # note: when a process is killed via psutil, the file descriptors remain open on the Python side,
+        # leading to resource leaks. see: https://github.com/a16z/halmos/issues/523
+        if self.process:
+            for stream in [
+                self.process.stdout,
+                self.process.stderr,
+                self.process.stdin,
+            ]:
+                try:
+                    if stream and not stream.closed:
+                        stream.close()
+                except Exception:
+                    # ignore any errors during cleanup
+                    pass
 
     def exception(self) -> Exception | None:
         """Returns any exception raised during the process."""
