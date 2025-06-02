@@ -100,7 +100,7 @@ class Env:
     def env_uint(self, key: str, default: str = None) -> int:
         val = self._parse_env_var(key, default)
         try:
-            result = int(val, 0)
+            result = val if isinstance(val, int) else int(val, 0)
             if result < 0:
                 raise ValueError(
                     f"envUint parsing failed for {key} = {val}: value must be non-negative"
@@ -219,7 +219,7 @@ class Env:
 
     def env_or_uint(self, key: str, default: None) -> int:
         try:
-            return self._parse_env_var(key, default)
+            return self.env_uint(key, default)
         except ValueError as err:
             if default is not None:
                 return default
