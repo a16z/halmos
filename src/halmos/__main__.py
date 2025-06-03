@@ -755,6 +755,139 @@ def run_message(
                 reset(solver)
 
 
+def handle_potential_counterexample(
+    args: HalmosConfig,
+    path_id: int,
+    ex: Exec,
+    panic_found: bool,
+    error_output,
+    output,
+    ctx: FunctionContext,
+    flamegraph_enabled: bool,
+    is_invariant: bool,
+    potential_flamegraphs: dict,
+    submitted_futures: list,
+) -> None:
+    """
+    Handles a potential counterexample by logging, storing traces, and submitting solving tasks.
+    
+    Raises:
+        ShutdownError: If the executor has been shutdown during task submission
+    """
+    def solve_end_to_end_callback(future: Future):
+        # beware: this function may be called from threads other than the main thread,
+        # so we must be careful to avoid referencing any z3 objects / contexts
+
+        if e := future.exception():
+            if isinstance(e, ShutdownError):
+                if args.debug:
+                    debug(
+                        f"ignoring solver callback, executor has been shutdown: {e!r}"
+                    )
+                return
+
+            error(f"encountered exception during assertion solving: {e!r}")
+
+        #
+        # we are done solving, process and triage the result
+        #
+
+        solver_output: SolverOutput = future.result()
+        result, model = solver_output.result, solver_output.model
+
+        if ctx.solving_ctx.executor.is_shutdown():
+            # if the thread pool is in the process of shutting down,
+            # we want to stop processing remaining models/timeouts/errors, etc.
+            return
+
+        # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
+        ctx.solver_outputs.append(solver_output)
+
+        if result == unsat:
+            if solver_output.unsat_core:
+                ctx.append_unsat_core(solver_output.unsat_core)
+            return
+
+        if result == "err":
+            error(
+                f"solver error: {solver_output.error} (returncode={solver_output.returncode})"
+            )
+            return
+
+        # model could be an empty dict here, so compare to None explicitly
+        if model is None:
+            return
+
+        # print counterexample trace
+        callback_path_id = solver_output.path_id
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            pid_str = f" #{callback_path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
+            print(f"Trace{pid_str}:")
+            print(ctx.traces[callback_path_id], end="")
+
+        if model.is_valid:
+            print(red(f"Counterexample: {model}"))
+            ctx.valid_counterexamples.append(model)
+
+            # add the stacks from the temporary flamegraph to the global one
+            if flamegraph_enabled and is_invariant:
+                call_flamegraph.stacks.extend(potential_flamegraphs[callback_path_id].stacks)
+
+            # we have a valid counterexample, so we are eligible for early exit
+            if args.early_exit:
+                debug(f"Shutting down {ctx.info.name}'s solver executor")
+                ctx.solving_ctx.executor.shutdown(wait=False)
+        else:
+            warn_str = f"Counterexample (potentially invalid): {model}"
+            warn_code(COUNTEREXAMPLE_INVALID, warn_str)
+
+            ctx.invalid_counterexamples.append(model)
+
+        # print call sequence for invariant testing
+        if sequence := ctx.call_sequences[callback_path_id]:
+            print(f"Sequence:\n{sequence}")
+
+    if args.verbose >= 1:
+        print(f"Found potential path with {path_id=} ", end="")
+        if panic_found:
+            panic_code = unbox_int(output.data[4:36].unwrap())
+            print(f"Panic(0x{panic_code:02x}) {error_output}")
+        else:  # fail_found
+            print(f"(fail flag set) {error_output}")
+
+    # we don't know yet if this will lead to a counterexample
+    # so we save the rendered trace here and potentially print it later
+    # if a valid counterexample is found
+    if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+        ctx.traces[path_id] = rendered_trace(ex.context)
+    ctx.call_sequences[path_id] = rendered_call_sequence(ex.call_sequence)
+
+    if flamegraph_enabled and is_invariant:
+        # render the flamegraph to a temporary holder,
+        # until we can confirm that it's a valid counterexample
+        tmp_flamegraph = CallSequenceFlamegraph(title="Temp")
+        tmp_flamegraph.add_with_sequence(
+            ex.call_sequence, ex.context, mark_as_fail=True
+        )
+        potential_flamegraphs[path_id] = tmp_flamegraph
+
+    query: SMTQuery = ex.path.to_smt2(args)
+
+    # beware: because this object crosses thread boundaries, we must be careful to
+    # avoid any reference to z3 objects
+    path_ctx = PathContext(
+        args=args,
+        path_id=path_id,
+        query=query,
+        solving_ctx=ctx.solving_ctx,
+    )
+
+    # ShutdownError may be raised here and will be handled by the caller
+    solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
+    solve_future.add_done_callback(solve_end_to_end_callback)
+    submitted_futures.append(solve_future)
+
+
 def run_test(ctx: FunctionContext) -> TestResult:
     args = ctx.args
     fun_info = ctx.info
@@ -802,85 +935,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
     flamegraph_enabled = args.flamegraph
     potential_flamegraphs: dict[int, CallSequenceFlamegraph] = {}
 
-    def solve_end_to_end_callback(future: Future):
-        # beware: this function may be called from threads other than the main thread,
-        # so we must be careful to avoid referencing any z3 objects / contexts
-
-        if e := future.exception():
-            if isinstance(e, ShutdownError):
-                if args.debug:
-                    debug(
-                        f"ignoring solver callback, executor has been shutdown: {e!r}"
-                    )
-                return
-
-            error(f"encountered exception during assertion solving: {e!r}")
-
-        #
-        # we are done solving, process and triage the result
-        #
-
-        solver_output: SolverOutput = future.result()
-        result, model = solver_output.result, solver_output.model
-
-        if ctx.solving_ctx.executor.is_shutdown():
-            # if the thread pool is in the process of shutting down,
-            # we want to stop processing remaining models/timeouts/errors, etc.
-            return
-
-        # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
-        ctx.solver_outputs.append(solver_output)
-
-        if result == unsat:
-            if solver_output.unsat_core:
-                ctx.append_unsat_core(solver_output.unsat_core)
-            return
-
-        if result == "err":
-            error(
-                f"solver error: {solver_output.error} (returncode={solver_output.returncode})"
-            )
-            return
-
-        # model could be an empty dict here, so compare to None explicitly
-        if model is None:
-            return
-
-        # print counterexample trace
-        path_id = solver_output.path_id
-        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-            pid_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
-            print(f"Trace{pid_str}:")
-            print(ctx.traces[path_id], end="")
-
-        if model.is_valid:
-            print(red(f"Counterexample: {model}"))
-            ctx.valid_counterexamples.append(model)
-
-            # add the stacks from the temporary flamegraph to the global one
-            if flamegraph_enabled and is_invariant:
-                call_flamegraph.stacks.extend(potential_flamegraphs[path_id].stacks)
-
-            # we have a valid counterexample, so we are eligible for early exit
-            if args.early_exit:
-                debug(f"Shutting down {ctx.info.name}'s solver executor")
-                ctx.solving_ctx.executor.shutdown(wait=False)
-        else:
-            warn_str = f"Counterexample (potentially invalid): {model}"
-            warn_code(COUNTEREXAMPLE_INVALID, warn_str)
-
-            ctx.invalid_counterexamples.append(model)
-
-        # print call sequence for invariant testing
-        if sequence := ctx.call_sequences[path_id]:
-            print(f"Sequence:\n{sequence}")
-
-    #
-    # consume the sevm.run() generator
-    # (actually triggers path exploration)
-    #
-
-    path_id = 0  # default value in case we don't enter the loop body
     submitted_futures = []
     for path_id, ex in enumerate(exs):
         # check if early exit is triggered
@@ -907,48 +961,23 @@ def run_test(ctx: FunctionContext) -> TestResult:
         error_output = output.error
         panic_found = ex.is_panic_of(args.panic_error_codes)
 
-        if panic_found or (fail_found := is_global_fail_set(ex.context)):
+        if panic_found or is_global_fail_set(ex.context):
             potential += 1
 
-            if args.verbose >= 1:
-                print(f"Found potential path with {path_id=} ", end="")
-                if panic_found:
-                    panic_code = unbox_int(output.data[4:36].unwrap())
-                    print(f"Panic(0x{panic_code:02x}) {error_output}")
-                elif fail_found:
-                    print(f"(fail flag set) {error_output}")
-
-            # we don't know yet if this will lead to a counterexample
-            # so we save the rendered trace here and potentially print it later
-            # if a valid counterexample is found
-            if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-                ctx.traces[path_id] = rendered_trace(ex.context)
-            ctx.call_sequences[path_id] = rendered_call_sequence(ex.call_sequence)
-
-            if flamegraph_enabled and is_invariant:
-                # render the flamegraph to a temporary holder,
-                # until we can confirm that it's a valid counterexample
-                tmp_flamegraph = CallSequenceFlamegraph(title="Temp")
-                tmp_flamegraph.add_with_sequence(
-                    ex.call_sequence, ex.context, mark_as_fail=True
-                )
-                potential_flamegraphs[path_id] = tmp_flamegraph
-
-            query: SMTQuery = ex.path.to_smt2(args)
-
-            # beware: because this object crosses thread boundaries, we must be careful to
-            # avoid any reference to z3 objects
-            path_ctx = PathContext(
-                args=args,
-                path_id=path_id,
-                query=query,
-                solving_ctx=ctx.solving_ctx,
-            )
-
             try:
-                solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
-                solve_future.add_done_callback(solve_end_to_end_callback)
-                submitted_futures.append(solve_future)
+                handle_potential_counterexample(
+                    args=args,
+                    path_id=path_id,
+                    ex=ex,
+                    panic_found=panic_found,
+                    error_output=error_output,
+                    output=output,
+                    ctx=ctx,
+                    flamegraph_enabled=flamegraph_enabled,
+                    is_invariant=is_invariant,
+                    potential_flamegraphs=potential_flamegraphs,
+                    submitted_futures=submitted_futures,
+                )
             except ShutdownError:
                 if args.debug:
                     print("aborting path exploration, executor has been shutdown")
