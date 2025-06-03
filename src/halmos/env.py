@@ -63,13 +63,21 @@ def env_uint(key: str, default: str | None = None) -> int:
         raise ValueError(f"envUint parsing failed for {key} = {value}: {e}") from e
 
 
-def env_int_array(key: str, delimiter: str = ",") -> list[int]:
+def env_int_array(key: str, delimiter: str = ",") -> list[bytes]:
     value = env_string(key)
     parts = [x.strip() for x in value.split(delimiter)]
     try:
-        return [int(x, 0) for x in parts]  # base 0 supports hex/dec
+        return [
+            int(x, 0).to_bytes(32, "big", signed=True) for x in parts
+        ]  # base 0 supports hex/dec
+    # val.to_bytes(32, "big", signed=True)
     except ValueError as e:
         raise ValueError(f"envIntArray failed to parse: {e}") from e
+
+
+def env_uint_array(key: str, default: str | None = None, delimiter=",") -> list[int]:
+    value = env_string(key, default=default)
+    return [int(x.strip()).to_bytes(32, "big") for x in value.split(delimiter)]
 
 
 def env_bool(key: str, default: str | None = None) -> bool:
@@ -77,18 +85,18 @@ def env_bool(key: str, default: str | None = None) -> bool:
     return value.lower() in ["1", "true", "yes"]
 
 
-def env_address(key: str, default: str | None = None) -> str:
+def env_address(key: str, default: str | None = None) -> bytes:
     value = env_string(key, default=default)
     if not value.startswith("0x") or len(value) != 42:
         raise ValueError(f"Invalid Ethereum address format for {key}: {value}")
-    return value.lower()
+    return bytes.fromhex(value.replace("0x", ""))
 
 
-def env_bytes32(key: str, default: str | None = None) -> str:
+def env_bytes32(key: str, default: str | None = None) -> bytes:
     value = env_string(key, default=default)
     if not value.startswith("0x") or len(value) != 66:
         raise ValueError(f"Invalid bytes32 format for {key}: {value}")
-    return value.lower()
+    return bytes.fromhex(value.replace("0x", ""))
 
 
 def env_bytes(key: str, default: str | None = None) -> bytes:
@@ -96,11 +104,6 @@ def env_bytes(key: str, default: str | None = None) -> bytes:
     if value.startswith("0x"):
         return bytes.fromhex(value[2:])
     return value.encode()
-
-
-def env_uint_array(key: str, default: str | None = None, delimiter=",") -> list[int]:
-    value = env_string(key, default=default)
-    return [int(x.strip()) for x in value.split(delimiter)]
 
 
 def env_address_array(key: str, default: str | None = None, delimiter=",") -> list[str]:
@@ -111,7 +114,9 @@ def env_address_array(key: str, default: str | None = None, delimiter=",") -> li
             raise ValueError(
                 f"Invalid Ethereum address format in array for {key}: {address}"
             )
-    return [address.lower() for address in addresses]
+    return [
+        bytes.fromhex(address.replace("0x", "").rjust(64, "0")) for address in addresses
+    ]
 
 
 def env_bool_array(key: str, default: str | None = None, delimiter=",") -> list[bool]:
@@ -171,7 +176,7 @@ def env_or_string(key: str, default: str = "") -> str:
         return default
 
 
-def env_or_bytes32(key: str, default: str = "") -> str:
+def env_or_bytes32(key: str, default: str = "") -> bytes:
     try:
         return env_bytes32(key)
     except ValueError:
@@ -200,7 +205,7 @@ def env_or_uint(key: str, default: int | None = None) -> int:
         ) from None
 
 
-def env_or_string_address_array(
+def env_or_address_array(
     key: str, default: list[str] | None = None, delimiter=","
 ) -> list[str]:
     try:
@@ -209,7 +214,7 @@ def env_or_string_address_array(
         return default if default is not None else []
 
 
-def env_or_string_bool_array(
+def env_or_bool_array(
     key: str, default: list[bool] | None = None, delimiter=","
 ) -> list[bool]:
     try:
@@ -218,7 +223,7 @@ def env_or_string_bool_array(
         return default if default is not None else []
 
 
-def env_or_string_bytes32_array(
+def env_or_bytes32_array(
     key: str, default: list[str] | None = None, delimiter=","
 ) -> list[str]:
     try:
@@ -227,7 +232,16 @@ def env_or_string_bytes32_array(
         return default if default is not None else []
 
 
-def env_or_string_int_array(
+def env_or_int_array(
+    key: str, default: list[int] | None = None, delimiter=","
+) -> list[int]:
+    try:
+        return env_int_array(key, delimiter=delimiter)
+    except ValueError:
+        return default if default is not None else []
+
+
+def env_or_uint_array(
     key: str, default: list[int] | None = None, delimiter=","
 ) -> list[int]:
     try:
@@ -236,16 +250,7 @@ def env_or_string_int_array(
         return default if default is not None else []
 
 
-def env_or_string_uint_array(
-    key: str, default: list[int] | None = None, delimiter=","
-) -> list[int]:
-    try:
-        return env_uint_array(key, delimiter=delimiter)
-    except ValueError:
-        return default if default is not None else []
-
-
-def env_or_string_bytes_array(
+def env_or_bytes_array(
     key: str, default: list[bytes] | None = None, delimiter=","
 ) -> list[bytes]:
     try:
@@ -254,7 +259,7 @@ def env_or_string_bytes_array(
         return default if default is not None else []
 
 
-def env_or_string_string_array(
+def env_or_string_array(
     key: str, default: list[str] | None = None, delimiter=","
 ) -> list[str]:
     try:

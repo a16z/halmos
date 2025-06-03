@@ -546,16 +546,14 @@ def check_env_exists(arg, **kwargs):
 
 def create_env_bytes32(arg, **kwargs):
     key = decode_string_arg(arg, 0)
-    val = env.env_bytes32(key)
-    bytes32_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
+    bytes32_val = env.env_bytes32(key)
     return ByteVec(bytes32_val)
 
 
 def create_env_address(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     val = env.env_address(key)
-    address_hex = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
-    address_val = address(address_hex)
+    address_val = address(val)
     return ByteVec(uint256(address_val))
 
 
@@ -603,7 +601,7 @@ def create_env_int_array(arg, **kwargs):
     values = env.env_int_array(key, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
-        result.append(val.to_bytes(32, "big", signed=True))
+        result.append(val)
     return result
 
 
@@ -613,8 +611,7 @@ def create_env_address_array(arg, **kwargs):
     values = env.env_address_array(key, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
-        bytes32_val = bytes.fromhex(val.replace("0x", "").rjust(64, "0"))
-        result.append(bytes32_val)
+        result.append(val)
     return result
 
 
@@ -677,7 +674,7 @@ def create_env_uint_array(arg, **kwargs):
     values = env.env_uint_array(key, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
-        result.append(val.to_bytes(32, "big"))
+        result.append(val)
     return result
 
 
@@ -712,25 +709,24 @@ def create_env_bytes_array(arg, **kwargs):
 def create_env_or_address(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     fallback_val = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
-    hex_str = "0x" + fallback_val.hex()[:-8] + "DeaDBeef"
-    values = env.env_or_address(key, hex_str)
-    address_hex = bytes.fromhex(values.replace("0x", ""))  # Convert hex string to bytes
-    address_val = address(address_hex)
+    val = env.env_or_address(key, fallback_val)
+    address_val = address(val)
     return ByteVec(uint256(address_val))
 
 
 def create_env_or_bool(arg, **kwargs):
     key = decode_string_arg(arg, 0)
-    fallback_val = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
-    hex_str = str(bool(int.from_bytes(fallback_val, "big")))
-    values = env.env_or_bool(key, hex_str)
-    bool_val = con(1 if values else 0, 1)
+    arg_input = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
+    fallback_val = bool(int.from_bytes(arg_input, "big"))
+    val = env.env_or_bool(key, fallback_val)
+    bool_val = con(1 if val else 0, 1)
     return ByteVec(uint256(bool_val))
 
 
 def create_env_or_bytes(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     size_location = 0
+    fallback_val = b""
     for offset, chunk in arg.chunks.items():
         if offset == 36:
             size_location = int.from_bytes(chunk.unwrap(), "big")
@@ -744,16 +740,17 @@ def create_env_or_bytes(arg, **kwargs):
             and byte_size == (len(chunk.unwrap().hex()) + 1) // 2
         ):
             # This is the chunk we need
-            byte_str = "0x" + chunk.unwrap().hex()
+            fallback_val = chunk
             break
 
-    values = env.env_or_bytes(key, byte_str)
+    values = env.env_or_bytes(key, fallback_val)
     return encode_tuple_bytes(values)
 
 
 def create_env_or_string(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     size_location = 0
+    fallback_val = ""
     for offset, chunk in arg.chunks.items():
         if offset == 36:
             size_location = int.from_bytes(chunk.unwrap(), "big")
@@ -767,22 +764,22 @@ def create_env_or_string(arg, **kwargs):
             and byte_size == (len(chunk.unwrap().hex()) + 1) // 2
         ):
             # This is the chunk we need
-            byte_str = "0x" + chunk.unwrap().hex()
+            fallback_val = (chunk.unwrap()).decode("utf-8")
             break
-    string_val = bytes.fromhex(byte_str.replace("0x", "")).decode("utf-8")
-    values = env.env_or_string(key, string_val)
 
-    if isinstance(values, str):
-        values = values.encode("utf-8")
+    value = env.env_or_string(key, fallback_val)
 
-    return encode_tuple_bytes(values)
+    if isinstance(value, str):
+        value = value.encode("utf-8")
+
+    return encode_tuple_bytes(value)
 
 
 def create_env_or_bytes32(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     fallback_val = arg.slice(36, 68).unwrap()
-    values = env.env_or_bytes32(key, fallback_val.hex())
-    bytes32_val = bytes.fromhex(values.replace("0x", "").rjust(64, "0"))
+    val = env.env_or_bytes32(key, fallback_val)
+    bytes32_val = val.rjust(32, b"\x00")
     return ByteVec(bytes32_val)
 
 
@@ -793,22 +790,21 @@ def create_env_or_int(arg, **kwargs):
     n = int(hex_str, 16)
     if n >= 2**255:
         n -= 2**256
-    int_str = str(n)
-    values = env.env_or_int(key, int_str)
-    int_val = int256(values)
+    val = env.env_or_int(key, n)
+    int_val = int256(val)
     return ByteVec(int_val)
 
 
 def create_env_or_uint(arg, **kwargs):
     key = decode_string_arg(arg, 0)
-    fallback_val = arg.slice(36, 68).unwrap()
-
-    hex_str = fallback_val.hex()
-    n = int(hex_str, 16)
-    if n < 0:
-        raise HalmosException(f"Expected a non-negative integer but got: {n}")
-    values = env.env_or_uint(key, n)
-    uint_val = uint256(values)
+    arg_input = arg.slice(36, 68).unwrap()
+    fallback_val = int(arg_input.hex(), 16)
+    if fallback_val < 0:
+        raise HalmosException(
+            f"Expected a non-negative integer but got: {fallback_val}"
+        )
+    val = env.env_or_uint(key, fallback_val)
+    uint_val = uint256(val)
     return ByteVec(uint_val)
 
 
@@ -818,7 +814,7 @@ def create_env_or_address_array(arg, **kwargs):
     array_location = 0
     array_size = 0
     copy_offset = []
-    fallback_val = ""
+    fallback_val = []
 
     for offset, chunk in arg.chunks.items():
         # finding array start location
@@ -832,17 +828,12 @@ def create_env_or_address_array(arg, **kwargs):
                 copy_offset.append(offset + (32 * i) + 32)
 
         if offset in copy_offset:
-            # This is the chunk we need
-            if offset == copy_offset[-1]:
-                fallback_val += "0x" + chunk.unwrap().hex()[-40:]
-            else:
-                fallback_val += "0x" + chunk.unwrap().hex()[-40:] + ","
+            fallback_val.append(chunk.unwrap())
 
-    values = env.env_or_string_address_array(key, fallback_val, delimiter)
+    values = env.env_or_address_array(key, fallback_val, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
-        bytes32_val = bytes.fromhex(val.replace("0x", "").rjust(64, "0"))
-        result.append(bytes32_val)
+        result.append(val)
     return result
 
 
@@ -852,7 +843,7 @@ def create_env_or_bool_array(arg, **kwargs):
     array_location = 0
     array_size = 0
     copy_offset = []
-    fallback_val = ""
+    fallback_val = []
 
     for offset, chunk in arg.chunks.items():
         if offset == 68:
@@ -864,12 +855,9 @@ def create_env_or_bool_array(arg, **kwargs):
                 copy_offset.append(offset + (32 * i) + 32)
 
         if offset in copy_offset:
-            if offset == copy_offset[-1]:
-                fallback_val += str(bool(int.from_bytes(chunk.unwrap(), "big")))
-            else:
-                fallback_val += str(bool(int.from_bytes(chunk.unwrap(), "big"))) + ","
+            fallback_val.append(bool(int.from_bytes(chunk.unwrap(), "big")))
 
-    values = env.env_or_string_bool_array(key, fallback_val, delimiter)
+    values = env.env_or_bool_array(key, fallback_val, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
         bool_val = con(1 if val else 0, 1)
@@ -883,7 +871,7 @@ def create_env_or_bytes32_array(arg, **kwargs):
     array_location = 0
     array_size = 0
     copy_offset = []
-    fallback_val = ""
+    fallback_val = []
 
     for offset, chunk in arg.chunks.items():
         if offset == 68:
@@ -895,12 +883,10 @@ def create_env_or_bytes32_array(arg, **kwargs):
                 copy_offset.append(offset + (32 * i) + 32)
 
         if offset in copy_offset:
-            if offset == copy_offset[-1]:
-                fallback_val += "0x" + chunk.unwrap().hex()
-            else:
-                fallback_val += "0x" + chunk.unwrap().hex() + ","
+            fallback_val.append("0x" + chunk.unwrap().hex())
 
-    values = env.env_or_string_bytes32_array(key, fallback_val, delimiter)
+    values = env.env_or_bytes32_array(key, fallback_val, delimiter)
+
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
         bytes32_val = bytes.fromhex(val.replace("0x", "").rjust(64, "0"))
@@ -914,7 +900,7 @@ def create_env_or_int_array(arg, **kwargs):
     array_location = 0
     array_size = 0
     copy_offset = []
-    fallback_val = ""
+    fallback_val = []
 
     for offset, chunk in arg.chunks.items():
         if offset == 68:
@@ -926,17 +912,12 @@ def create_env_or_int_array(arg, **kwargs):
                 copy_offset.append(offset + (32 * i) + 32)
 
         if offset in copy_offset:
-            if offset == copy_offset[-1]:
-                fallback_val += str(int.from_bytes(chunk.unwrap(), "big", signed=True))
-            else:
-                fallback_val += (
-                    str(int.from_bytes(chunk.unwrap(), "big", signed=True)) + ","
-                )
+            fallback_val.append(chunk.unwrap())
 
-    values = env.env_or_string_int_array(key, fallback_val, delimiter)
+    values = env.env_or_int_array(key, fallback_val, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
-        result.append(val.to_bytes(32, "big", signed=True))
+        result.append(val)
     return result
 
 
@@ -946,7 +927,7 @@ def create_env_or_uint_array(arg, **kwargs):
     array_location = 0
     array_size = 0
     copy_offset = []
-    fallback_val = ""
+    fallback_val = []
 
     for offset, chunk in arg.chunks.items():
         if offset == 68:
@@ -958,22 +939,19 @@ def create_env_or_uint_array(arg, **kwargs):
                 copy_offset.append(offset + (32 * i) + 32)
 
         if offset in copy_offset:
-            if offset == copy_offset[-1]:
-                fallback_val += str(int.from_bytes(chunk.unwrap(), "big"))
-            else:
-                fallback_val += str(int.from_bytes(chunk.unwrap(), "big")) + ","
+            fallback_val.append(chunk.unwrap())
 
-    values = env.env_or_string_uint_array(key, fallback_val, delimiter)
+    values = env.env_or_uint_array(key, fallback_val, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
-        result.append(val.to_bytes(32, "big"))
+        result.append(val)
     return result
 
 
 def create_env_or_bytes_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
-    fallback_val = ""
+    fallback_val = []
     byte_array_location = 0
     byte_array_size = 0
     byte_array_copy_len_list = []
@@ -997,12 +975,9 @@ def create_env_or_bytes_array(arg, **kwargs):
             byte_array_copy_location_list.append(val)
 
         if offset in byte_array_copy_location_list:
-            if byte_array_copy_location_list[-1] == offset:
-                fallback_val += "0x" + chunk.unwrap().hex()
-            else:
-                fallback_val += "0x" + chunk.unwrap().hex() + ","
+            fallback_val.append("0x" + chunk.unwrap().hex())
 
-    values = env.env_or_string_bytes_array(key, fallback_val, delimiter)
+    values = env.env_or_bytes_array(key, fallback_val, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     len_of_values = len(values)
 
@@ -1031,7 +1006,7 @@ def create_env_or_bytes_array(arg, **kwargs):
 def create_env_or_string_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
-    fallback_val = ""
+    fallback_val = []
     string_array_location = 0
     string_array_size = 0
     string_array_copy_len_list = []
@@ -1053,12 +1028,9 @@ def create_env_or_string_array(arg, **kwargs):
             string_array_copy_location_list.append(val)
 
         if offset in string_array_copy_location_list:
-            if string_array_copy_location_list[-1] == offset:
-                fallback_val += chunk.unwrap().decode("utf-8")
-            else:
-                fallback_val += chunk.unwrap().decode("utf-8") + ","
+            fallback_val.append(chunk.unwrap().decode("utf-8"))
 
-    values = env.env_or_string_bytes_array(key, fallback_val, delimiter)
+    values = env.env_or_bytes_array(key, fallback_val, delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     len_of_values = len(values)
     total_String_length = 0
