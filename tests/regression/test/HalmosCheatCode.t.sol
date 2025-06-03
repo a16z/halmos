@@ -13,11 +13,11 @@ contract Beep {
 contract HalmosCheatCodeTest is SymTest, Test {
     function check_createUint() public {
         uint x = svm.createUint(256, 'x');
-        // uint y = svm.createUint(160, 'y');
-        // uint z = svm.createUint(8, 'z');
+        uint y = svm.createUint(160, 'y');
+        uint z = svm.createUint(8, 'z');
         assert(0 <= x && x <= type(uint256).max);
-        // assert(0 <= y && y <= type(uint160).max);
-        // assert(0 <= z && z <= type(uint8).max);
+        assert(0 <= y && y <= type(uint160).max);
+        assert(0 <= z && z <= type(uint8).max);
     }
 
     function check_randomUint() public {
