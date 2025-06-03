@@ -282,7 +282,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         vm.expectRevert("will revert");
     }
 
-    function check_env_missing() public {
+    function check_env_missing_fail() public {
         // expected to fail with ValueError
         int x = vm.envInt("MISSING_FROM_DOTENV");
         assertEq(x, 42);
