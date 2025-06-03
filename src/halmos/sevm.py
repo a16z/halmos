@@ -2281,6 +2281,7 @@ class SEVM:
                     depth=ex.context.depth + 1,
                 )
             )
+            print("Insufficient funds for call:", message)
             fail_ex.st.push(ZERO)
             fail_ex.advance()
             stack.push(fail_ex)
@@ -2325,7 +2326,6 @@ class SEVM:
         # `to`: the original (symbolic) target address
         # `to_alias`: a (concrete) alias of the target considered in this path.
         #            it could be None, indicating a non-existent address.
-
         ex.st.pop()  # gas
 
         to: BV = uint160(ex.st.pop())
@@ -2617,9 +2617,7 @@ class SEVM:
                     if idx < last_idx
                     else ex
                 )
-
                 copy_returndata_to_memory(ret_, ret_loc, ret_size, new_ex)
-
                 new_ex.context.trace.append(
                     CallContext(
                         message=message,
@@ -2954,6 +2952,7 @@ class SEVM:
         """
 
         offset: int = ex.int_of(ex.st.pop(), "symbolic CALLDATALOAD offset")
+
         loaded = ex.calldata().get_word(offset)
 
         if is_expr_var(loaded):
@@ -2973,7 +2972,6 @@ class SEVM:
                     new_ex.advance()
                     stack.push(new_ex)
                 return
-
         ex.st.push_any(loaded)
         ex.advance()
         stack.push(ex)
@@ -3392,7 +3390,6 @@ class SEVM:
                 elif opcode in CALL_OPCODES:
                     to = uint160(state.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack)
-
                     self.call(ex, opcode, to_alias, stack)
                     continue
 
