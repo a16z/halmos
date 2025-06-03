@@ -1612,6 +1612,10 @@ def _main(_args=None) -> MainResult:
         "metadata",
     ]
 
+    # force fresh build when coverage reporting enabled to generate correct source file ids
+    if args.coverage_output:
+        build_cmd.append("--force")
+
     # run forge without capturing stdout/stderr
     debug(f"Running {' '.join(build_cmd)}")
 
