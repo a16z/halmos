@@ -282,12 +282,13 @@ contract HalmosCheatCodeTest is SymTest, Test {
         vm.expectRevert("will revert");
     }
 
-    function check_env_int() public {
-        int x = vm.envInt("BLOCKS");
-        assertEq(x, 42); // fails if the environment variable is not set at terminal, it is not set in .env
+    function check_env_missing() public {
+        // expected to fail with ValueError
+        int x = vm.envInt("MISSING_FROM_DOTENV");
+        assertEq(x, 42);
     }
 
-    function check_envvariable_from_file() public {
+    function check_env_int() public {
         int x = vm.envInt("API");
         assertEq(x, 10);
     }
@@ -311,7 +312,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         uint x = vm.envUint("UINT");
         assertEq(x, 2**256 - 1);
     }
-    
+
     function check_env_bytes() public {
         bytes memory x = vm.envBytes("BYTES");
         assertEq(x, hex"deadbeef");
@@ -326,7 +327,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         int[] memory x = vm.envInt("INT_ARRAY",",");
         int y = 1;
         assertEq(x.length, 4);
-        assertEq(x[0], 1);  
+        assertEq(x[0], 1);
         assertEq(x[1], -1);
         assertEq(x[2], 4);
         assertEq(x[3], 5);
@@ -398,7 +399,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         bool x = vm.envOr("BOOL2", true);
         assertEq(x, true);
     }
-    
+
     function check_env_or_bytes() public {
         bytes memory y = hex"00000000000000000000000000000000000000000000000000000000Dead";
         bytes memory x = vm.envOr("BYTES_ENV_OR",y);
@@ -466,9 +467,9 @@ contract HalmosCheatCodeTest is SymTest, Test {
     function check_env_or_address_array() public {
         address[] memory x = new address[](3);
         x[0] = address(0x00000000000000000000000000000000DeaDBe);
-        x[1] = address(0xdead); 
-        x[2] = address(0xdeadbeef);      
-        address[] memory y = vm.envOr("ADDRESS_ARRAY", ",", x); 
+        x[1] = address(0xdead);
+        x[2] = address(0xdeadbeef);
+        address[] memory y = vm.envOr("ADDRESS_ARRAY", ",", x);
         assertEq(y.length, 3);
         assertEq(y[0], address(0xdeadbeef));
         assertEq(y[1], address(0xdeadbeef));
@@ -479,8 +480,8 @@ contract HalmosCheatCodeTest is SymTest, Test {
     function check_env_or_address_array_without_env_var() public {
         address[] memory x = new address[](2);
         x[0] = address(0xDeaDBeef);
-        x[1] = address(0xdeadbeef);        
-        address[] memory y = vm.envOr("ADDRESS_ARRAY2", ",", x); 
+        x[1] = address(0xdeadbeef);
+        address[] memory y = vm.envOr("ADDRESS_ARRAY2", ",", x);
         assertEq(y.length, 2);
         assertEq(y[0], address(0xdeadbeef));
         assertEq(y[1], address(0xdeadbeef));
@@ -513,7 +514,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         bytes32[] memory y = vm.envOr("BYTES32_ARRAY_ENV_OR", ",", x);
         assertEq(y.length, 2);
         assertEq(y[0], 0x00000000000000000000000000000000000000000000000000000000DeaDBeef);
-        assertEq(y[1], 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);   
+        assertEq(y[1], 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
 
     }
 
@@ -524,7 +525,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         bytes32[] memory y = vm.envOr("BYTES32_ARRAY2", ",", x);
         assertEq(y.length, 2);
         assertEq(y[0], 0x00000000000000000000000000000000000000000000000000000000DeaDBeef);
-        assertEq(y[1], 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);   
+        assertEq(y[1], 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
 
     }
 
@@ -592,7 +593,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(return_bytes_lst[1], hex"DeaDBeef");
         assertEq(return_bytes_lst[2], hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef");
     }
-    
+
 
 
 
@@ -621,8 +622,8 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_env_exists() public {
-        assertEq(vm.envExists("KEY"),true);
-        assertEq(vm.envExists("nonexistent"),false);
+        assertEq(vm.envExists("KEY"), true);
+        assertEq(vm.envExists("nonexistent"), false);
     }
 }
 

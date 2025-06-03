@@ -56,6 +56,7 @@ from .constants import (
     VERBOSITY_TRACE_SETUP,
 )
 from .contract import CoverageReporter
+from .env import init_env
 from .exceptions import FailCheatcode, HalmosException
 from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
 from .logs import (
@@ -1572,6 +1573,8 @@ def _main(_args=None) -> MainResult:
     if args.version:
         print(f"halmos {metadata.version('halmos')}")
         return MainResult(0)
+
+    init_env(args.root)
 
     if args.disable_gc:
         gc.disable()
