@@ -6,6 +6,7 @@ import pytest
 
 from halmos.config import (
     Config,
+    ConfigSource,
     ParseArrayLengths,
     ParseCSVInt,
     ParseErrorCodes,
@@ -314,3 +315,23 @@ def test_parse_array_lengths_roundtrip():
         unparsed = ParseArrayLengths.unparse(original)
         parsed = ParseArrayLengths.parse(unparsed)
         assert parsed == original, f"Roundtrip failed for {original}"
+
+
+def test_value_with_source(config):
+    assert config.value_with_source("solver_threads") == (
+        config.solver_threads,
+        ConfigSource.default,
+    )
+
+    overrides = {"solver_threads": 42}
+
+    config_from_args = config.with_overrides(
+        source=ConfigSource.command_line, **overrides
+    )
+
+    val, source = config_from_args.value_with_source("solver_threads")
+    assert val == 42
+    assert source == ConfigSource.command_line
+
+    # overrides have higher precedence than defaults
+    assert source > ConfigSource.default
