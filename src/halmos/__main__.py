@@ -48,7 +48,13 @@ from .bytevec import ByteVec
 from .calldata import FunctionInfo, get_abi, mk_calldata
 from .cheatcodes import snapshot_state
 from .config import Config as HalmosConfig
-from .config import arg_parser, default_config, resolve_config_files, toml_parser
+from .config import (
+    ConfigSource,
+    arg_parser,
+    default_config,
+    resolve_config_files,
+    toml_parser,
+)
 from .constants import (
     VERBOSITY_TRACE_CONSTRUCTOR,
     VERBOSITY_TRACE_COUNTEREXAMPLE,
@@ -180,7 +186,8 @@ def with_devdoc(args: HalmosConfig, fn_sig: str, contract_json: dict) -> HalmosC
         return args
 
     overrides = arg_parser().parse_args(devdoc.split())
-    return args.with_overrides(source=fn_sig, **vars(overrides))
+    source = ConfigSource.function_annotation
+    return args.with_overrides(source, **vars(overrides))
 
 
 def with_natspec(
@@ -194,28 +201,32 @@ def with_natspec(
         return args
 
     overrides = arg_parser().parse_args(parsed.split())
-    return args.with_overrides(source=contract_name, **vars(overrides))
+    source = ConfigSource.contract_annotation
+    return args.with_overrides(source, **vars(overrides))
 
 
 def with_resolved_solver(args: HalmosConfig) -> HalmosConfig:
     solver, solver_source = args.value_with_source("solver")
     solver_command, solver_command_source = args.value_with_source("solver_command")
 
-    if solver_command:
-        if solver_source != "default":
-            sources = f"({solver_source=}, {solver_command_source=})"
-            raise RuntimeError(
-                f"can not provide both --solver-command and --solver {sources}"
+    # `--solver-command` overrides `--solver` if it is at least as high precedence
+    if solver_command and solver_command_source >= solver_source:
+        if solver_command_source == solver_source:
+            warn(
+                f"--solver-command and --solver are both provided at the same "
+                f"precedence level ({solver_source.name}), "
+                f"--solver-command will be used and --solver will be ignored",
+                allow_duplicate=False,
             )
-
-        # --solver-command is provided expliticly, it overrides the --solver default
         return args
-    else:
-        # --solver is provided, so we need to resolve it to an actual command
-        command = get_solver_command(solver)
-        if not command:
-            raise RuntimeError(f"Solver '{solver}' could not be found or installed.")
-        return args.with_overrides(source="solver resolution", solver_command=command)
+
+    # if no `--solver-command` is provided, or `--solver` has higher precedence,
+    # we need to resolve `--solver <name>` to an actual command
+    command = get_solver_command(solver)
+    if not command:
+        raise RuntimeError(f"Solver '{solver}' could not be found or installed.")
+    source = ConfigSource.dynamic_resolution
+    return args.with_overrides(source, solver_command=command)
 
 
 def load_config(_args) -> HalmosConfig:
@@ -233,10 +244,12 @@ def load_config(_args) -> HalmosConfig:
             sys.exit(2)
 
         overrides = toml_parser().parse_file(config_file)
-        config = config.with_overrides(source=config_file, **overrides)
+        config_file = ConfigSource.config_file
+        config = config.with_overrides(config_file, **overrides)
 
     # finally apply the CLI overrides
-    config = config.with_overrides(source="command line args", **vars(cli_overrides))
+    command_line = ConfigSource.command_line
+    config = config.with_overrides(command_line, **vars(cli_overrides))
 
     return config
 
@@ -1595,7 +1608,8 @@ def _main(_args=None) -> MainResult:
         else:
             error("flamegraph.pl not found in PATH")
             error("(see https://github.com/brendangregg/FlameGraph)")
-            args = args.with_overrides("halmos runtime", flamegraph=False)
+            dynamic_resolution = ConfigSource.dynamic_resolution
+            args = args.with_overrides(dynamic_resolution, flamegraph=False)
 
     #
     # compile

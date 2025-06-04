@@ -6,7 +6,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Any
 
 import toml
@@ -32,6 +32,29 @@ class TraceEvent(Enum):
     LOG = "LOG"
     SSTORE = "SSTORE"
     SLOAD = "SLOAD"
+
+
+class ConfigSource(IntEnum):
+    # no source, before defaults are applied
+    void = 0
+
+    # default value, lowest precedence
+    default = 1
+
+    # e.g. halmos.toml
+    config_file = 2
+
+    # contract-level annotation (e.g. @custom:halmos --some-option)
+    contract_annotation = 3
+
+    # function-level annotation (e.g. @custom:halmos --some-option)
+    function_annotation = 4
+
+    # from command line
+    command_line = 5
+
+    # dynamic resolution (e.g. after solver resolution)
+    dynamic_resolution = 6
 
 
 # helper to define config fields
@@ -82,6 +105,15 @@ class ParseTimeout(argparse.Action):
     def parse(values: str) -> float:
         # keeping ms as the default unit for backward compatibility
         return parse_time(values, default_unit="ms")
+
+    @staticmethod
+    def unparse(value: float) -> str:
+        # less than 1s, render as ms
+        if value < 1:
+            return f"{int(value * 1000)}ms"
+
+        # otherwise, render as s
+        return f"{int(value)}s"
 
 
 class ParseCSVTraceEvent(argparse.Action):
@@ -195,7 +227,7 @@ class Config:
         },
     )
 
-    _source: str = dataclass_field(
+    _source: ConfigSource = dataclass_field(
         metadata={
             internal: True,
         },
@@ -617,7 +649,7 @@ class Config:
 
         return value
 
-    def with_overrides(self, source: str, **overrides):
+    def with_overrides(self, source: ConfigSource, **overrides):
         """Create a new configuration object with some fields overridden.
 
         Use vars(namespace) to pass in the arguments from an argparse parser or
@@ -630,7 +662,7 @@ class Config:
             warn(f"error: unrecognized argument: {str(e).split()[-1]}")
             sys.exit(2)
 
-    def value_with_source(self, name: str) -> tuple[Any, str]:
+    def value_with_source(self, name: str) -> tuple[Any, ConfigSource]:
         # look up value in current object
         value = object.__getattribute__(self, name)
         if value is not None:
@@ -643,7 +675,7 @@ class Config:
 
         return (value, self._source)
 
-    def values_with_sources(self) -> dict[str, tuple[Any, str]]:
+    def values_with_sources(self) -> dict[str, tuple[Any, ConfigSource]]:
         # field -> (value, source)
         values = {}
         for field in fields(self):
@@ -665,7 +697,7 @@ class Config:
 
             yield field.name, field_value
 
-    def values_by_layer(self) -> dict[str, tuple[str, Any]]:
+    def values_by_layer(self) -> dict[ConfigSource, dict[str, Any]]:
         # source -> {field, value}
         if self._parent is None:
             return OrderedDict([(self._source, dict(self.values()))])
@@ -677,7 +709,7 @@ class Config:
     def formatted_layers(self) -> str:
         lines = []
         for layer, values in self.values_by_layer().items():
-            lines.append(f"{layer}:")
+            lines.append(f"{layer.name}:")
             for field, value in values.items():
                 lines.append(f"  {field}: {value}")
         return "\n".join(lines)
@@ -717,15 +749,15 @@ class TomlParser:
 
     def parse_file(self, toml_file_path: str) -> dict:
         with open(toml_file_path) as f:
-            return self.parse_str(f.read(), source=toml_file_path)
+            return self.parse_str(f.read())
 
     # exposed for easier testing
-    def parse_str(self, file_contents: str, source: str = "halmos.toml") -> dict:
+    def parse_str(self, file_contents: str) -> dict:
         parsed = toml.loads(file_contents)
-        return self.parse_dict(parsed, source=source)
+        return self.parse_dict(parsed)
 
     # exposed for easier testing
-    def parse_dict(self, parsed: dict, source: str = "halmos.toml") -> dict:
+    def parse_dict(self, parsed: dict) -> dict:
         if len(parsed) != 1:
             warn(
                 f"error: expected a single `[global]` section in the toml file, "
@@ -772,7 +804,7 @@ def _create_default_config() -> "Config":
         action = field.metadata.get("action", None)
         values[field.name] = action.parse(raw_value) if action else raw_value
 
-    return Config(_parent=None, _source="default", **values)
+    return Config(_parent=None, _source=ConfigSource.default, **values)
 
 
 def _create_arg_parser() -> argparse.ArgumentParser:
@@ -867,7 +899,9 @@ def main():
         return str(value)
 
     args = arg_parser().parse_args()
-    config = default_config().with_overrides(source="command-line", **vars(args))
+    config = default_config().with_overrides(
+        source=ConfigSource.command_line, **vars(args)
+    )
 
     # devs can have a little easter egg
     lines = [
@@ -921,7 +955,7 @@ def main():
         # callable defaults mean that the default value is not a hardcoded constant
         # it depends on the context, so don't emit it in the config file unless it
         # is explicitly set by the user on the command line
-        if value is None or (callable(default) and source != "command-line"):
+        if value is None or (callable(default) and source != ConfigSource.command_line):
             metavar = field_info.metadata.get("metavar", None)
             lines.append(f"# {name} = {metavar}")
         else:
