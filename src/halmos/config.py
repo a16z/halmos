@@ -35,6 +35,9 @@ class TraceEvent(Enum):
 
 
 class ConfigSource(IntEnum):
+    # no source, before defaults are applied
+    void = 0
+
     # default value, lowest precedence
     default = 1
 
