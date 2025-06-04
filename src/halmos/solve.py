@@ -28,6 +28,34 @@ EXIT_TIMEDOUT = 124
 
 
 @dataclass
+class DumpDirectory:
+    """Wrapper for directory used for dumping SMT files.
+    
+    Can wrap either a TemporaryDirectory or a regular directory path.
+    Provides a consistent .name property for both cases.
+    """
+    _temp_dir: TemporaryDirectory | None = None
+    _path: str | None = None
+    
+    @classmethod
+    def from_temp_dir(cls, temp_dir: TemporaryDirectory) -> "DumpDirectory":
+        return cls(_temp_dir=temp_dir)
+    
+    @classmethod 
+    def from_path(cls, path: str | Path) -> "DumpDirectory":
+        return cls(_path=str(path))
+    
+    @property
+    def name(self) -> str:
+        if self._temp_dir is not None:
+            return self._temp_dir.name
+        elif self._path is not None:
+            return self._path
+        else:
+            raise ValueError("DumpDirectory not properly initialized")
+
+
+@dataclass
 class ModelVariable:
     full_name: str
     variable_name: str
@@ -148,7 +176,7 @@ class ContractContext:
 @dataclass(frozen=True)
 class SolvingContext:
     # directory for dumping solver files
-    dump_dir: TemporaryDirectory
+    dump_dir: DumpDirectory
 
     # shared solver executor for all paths in the same function
     executor: PopenExecutor = field(default_factory=PopenExecutor)
@@ -203,25 +231,44 @@ class FunctionContext:
     def __post_init__(self):
         args = self.args
 
-        # create a temporary directory for dumping solver files
+        # create a directory for dumping solver files
         prefix = (
             f"{self.info.name}-"
             if self.info.name
             else f"{self.contract_ctx.name}-constructor-"
         )
 
-        # if the user explicitly enabled dumping, we don't want to delete the directory on exit
-        delete = not self.args.dump_smt_queries
+        if args.dump_smt_directory:
+            # use custom directory specified by user
+            custom_dir = Path(args.dump_smt_directory)
+            
+            # create the directory if it doesn't exist
+            custom_dir.mkdir(parents=True, exist_ok=True)
+            
+            # create a subdirectory with the prefix for this function/contract
+            function_dir = custom_dir / prefix.rstrip('-')
+            function_dir.mkdir(parents=True, exist_ok=True)
+            
+            dump_dir = DumpDirectory.from_path(function_dir)
+            
+            if args.verbose >= 1 or args.dump_smt_queries:
+                print(f"Generating SMT queries in {function_dir}")
+        else:
+            # use temporary directory (existing behavior)
+            # if the user explicitly enabled dumping, we don't want to delete the directory on exit
+            delete = not self.args.dump_smt_queries
 
-        # ideally we would pass `delete=delete` to the constructor, but it's in >=3.12
-        dump_dir = TemporaryDirectory(prefix=prefix, ignore_cleanup_errors=True)
+            # ideally we would pass `delete=delete` to the constructor, but it's in >=3.12
+            temp_dir = TemporaryDirectory(prefix=prefix, ignore_cleanup_errors=True)
 
-        # If user wants to keep the files, prevent cleanup on exit
-        if not delete:
-            dump_dir._finalizer.detach()
+            # If user wants to keep the files, prevent cleanup on exit
+            if not delete:
+                temp_dir._finalizer.detach()
 
-        if args.verbose >= 1 or args.dump_smt_queries:
-            print(f"Generating SMT queries in {dump_dir.name}")
+            dump_dir = DumpDirectory.from_temp_dir(temp_dir)
+            
+            if args.verbose >= 1 or args.dump_smt_queries:
+                print(f"Generating SMT queries in {temp_dir.name}")
 
         solving_ctx = SolvingContext(dump_dir=dump_dir)
         object.__setattr__(self, "solving_ctx", solving_ctx)
