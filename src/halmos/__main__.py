@@ -19,6 +19,7 @@ from concurrent.futures import Future
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
+from functools import partial
 from importlib import metadata
 from types import MappingProxyType
 
@@ -705,7 +706,9 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                         )
                     except ShutdownError:
                         if args.debug:
-                            print("aborting path exploration, executor has been shutdown")
+                            print(
+                                "aborting path exploration, executor has been shutdown"
+                            )
                         pass
 
                     # because this is a reverted state, we don't need to explore it further
@@ -783,7 +786,7 @@ def run_message(
 
 class CounterexampleHandler:
     """Handles potential counterexamples during symbolic execution."""
-    
+
     def __init__(
         self,
         ctx: FunctionContext,
@@ -810,7 +813,7 @@ class CounterexampleHandler:
     ) -> None:
         """
         Handles a potential counterexample by logging, storing traces, and submitting solving tasks.
-        
+
         Raises:
             ShutdownError: If the executor has been shutdown during task submission
         """
@@ -853,17 +856,21 @@ class CounterexampleHandler:
 
         # ShutdownError may be raised here and will be handled by the caller
         solve_future = self.ctx.thread_pool.submit(solve_end_to_end, path_ctx)
-        
-        # Create a lambda that captures the necessary parameters for the callback
-        callback = lambda future: self._solve_end_to_end_callback(future, ex, description=description)
-        solve_future.add_done_callback(callback)
-        
+        solve_future.add_done_callback(
+            partial(
+                self._solve_end_to_end_callback,
+                ex=ex,
+                description=description,
+            )
+        )
         self.submitted_futures.append(solve_future)
 
-    def _solve_end_to_end_callback(self, future: Future, ex: Exec, description: str) -> None:
+    def _solve_end_to_end_callback(
+        self, future: Future, ex: Exec, description: str
+    ) -> None:
         """
         Callback function for handling solver results.
-        
+
         Args:
             future: The Future object containing the solver result
             ex: The execution context
@@ -921,7 +928,9 @@ class CounterexampleHandler:
 
         path_id = solver_output.path_id
         if self.args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-            pid_str = f" #{path_id}" if self.args.verbose >= VERBOSITY_TRACE_PATHS else ""
+            pid_str = (
+                f" #{path_id}" if self.args.verbose >= VERBOSITY_TRACE_PATHS else ""
+            )
             print(f"Trace{pid_str}:")
             print(self.ctx.traces[path_id], end="")
 
@@ -931,7 +940,9 @@ class CounterexampleHandler:
 
             # add the stacks from the temporary flamegraph to the global one
             if self.flamegraph_enabled and self.is_invariant:
-                call_flamegraph.stacks.extend(self.potential_flamegraphs[path_id].stacks)
+                call_flamegraph.stacks.extend(
+                    self.potential_flamegraphs[path_id].stacks
+                )
 
             # we have a valid counterexample, so we are eligible for early exit
             if self.args.early_exit:
