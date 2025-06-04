@@ -698,7 +698,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                     msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
 
                     try:
-                        handler.handle_potential_counterexample(
+                        handler.handle_assertion_violation(
                             path_id=path_id,
                             ex=post_ex,
                             panic_found=panic_found,
@@ -804,7 +804,7 @@ class CounterexampleHandler:
         self.potential_flamegraphs = potential_flamegraphs
         self.submitted_futures = submitted_futures
 
-    def handle_potential_counterexample(
+    def handle_assertion_violation(
         self,
         path_id: int,
         ex: Exec,
@@ -812,10 +812,19 @@ class CounterexampleHandler:
         description: str = None,
     ) -> None:
         """
-        Handles a potential counterexample by logging, storing traces, and submitting solving tasks.
+        Handles a potential assertion violation by solving it in a separate process.
+
+        This method processes a potential counterexample by creating a solver query
+        and submitting it to the thread pool for asynchronous solving.
+
+        Args:
+            path_id: Unique identifier for the execution path
+            ex: The execution state containing the potential violation
+            panic_found: Whether it's a panic error or a legacy fail flag
+            description: Optional description of the violation
 
         Raises:
-            ShutdownError: If the executor has been shutdown during task submission
+            ShutdownError: If the executor has been shutdown during the solving process
         """
         if self.args.verbose >= 1:
             print(f"Found potential path with {path_id=} ", end="")
@@ -873,9 +882,11 @@ class CounterexampleHandler:
 
         Args:
             future: The Future object containing the solver result
-            ex: The execution context
+            ex: The execution state
             description: Optional description of counterexample
         """
+        # beware: this function may be called from threads other than the main thread,
+        # so we must be careful to avoid referencing any z3 objects / contexts
 
         if e := future.exception():
             if isinstance(e, ShutdownError):
@@ -1016,7 +1027,12 @@ def run_test(ctx: FunctionContext) -> TestResult:
         submitted_futures=submitted_futures,
     )
 
-    path_id = -1  # initialize before loop to handle case when no paths exist
+    #
+    # consume the sevm.run() generator
+    # (actually triggers path exploration)
+    #
+
+    path_id = 0  # default value in case we don't enter the loop body
     for path_id, ex in enumerate(exs):
         # check if early exit is triggered
         if ctx.solving_ctx.executor.is_shutdown():
@@ -1046,7 +1062,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
             potential += 1
 
             try:
-                handler.handle_potential_counterexample(
+                handler.handle_assertion_violation(
                     path_id=path_id,
                     ex=ex,
                     panic_found=panic_found,
