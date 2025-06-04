@@ -632,6 +632,8 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
     panic_error_codes = args.panic_error_codes
     flamegraph_enabled = args.flamegraph
 
+    # create a dummy function context for handling counterexamples for probes.
+    # this maintains the multithreaded solver executor for all probes at the current depth.
     dummy_function_ctx = FunctionContext(
         args=args,
         info=FunctionInfo(ctx.name, "_compute_frontier"),
@@ -785,7 +787,7 @@ def run_message(
 
 
 class CounterexampleHandler:
-    """Handles potential counterexamples during symbolic execution."""
+    """Handles potential assertion violations and generates counterexamples."""
 
     def __init__(
         self,
@@ -820,7 +822,7 @@ class CounterexampleHandler:
         Args:
             path_id: Unique identifier for the execution path
             ex: The execution state containing the potential violation
-            panic_found: Whether it's a panic error or a legacy fail flag
+            panic_found: Whether it's a panic error or a legacy hevm.fail flag
             description: Optional description of the violation
 
         Raises:
@@ -888,9 +890,12 @@ class CounterexampleHandler:
         # beware: this function may be called from threads other than the main thread,
         # so we must be careful to avoid referencing any z3 objects / contexts
 
+        ctx = self.ctx
+        args = self.args
+
         if e := future.exception():
             if isinstance(e, ShutdownError):
-                if self.args.debug:
+                if args.debug:
                     debug(
                         f"ignoring solver callback, executor has been shutdown: {e!r}"
                     )
@@ -905,17 +910,17 @@ class CounterexampleHandler:
         solver_output: SolverOutput = future.result()
         result, model = solver_output.result, solver_output.model
 
-        if self.ctx.solving_ctx.executor.is_shutdown():
+        if ctx.solving_ctx.executor.is_shutdown():
             # if the thread pool is in the process of shutting down,
             # we want to stop processing remaining models/timeouts/errors, etc.
             return
 
         # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
-        self.ctx.solver_outputs.append(solver_output)
+        ctx.solver_outputs.append(solver_output)
 
         if result == unsat:
             if solver_output.unsat_core:
-                self.ctx.append_unsat_core(solver_output.unsat_core)
+                ctx.append_unsat_core(solver_output.unsat_core)
             return
 
         if result == "err":
@@ -931,23 +936,21 @@ class CounterexampleHandler:
         # mark this probe as reported to avoid duplicate reporting
         # note: message.fun_info is used instead of ctx.info because the function context for probes is dummy.
         if self.is_probe:
-            self.ctx.contract_ctx.probes_reported.add(ex.context.message.fun_info)
+            ctx.contract_ctx.probes_reported.add(ex.context.message.fun_info)
 
         # print counterexample trace
         if description:
             print(description)
 
         path_id = solver_output.path_id
-        if self.args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-            pid_str = (
-                f" #{path_id}" if self.args.verbose >= VERBOSITY_TRACE_PATHS else ""
-            )
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            pid_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
             print(f"Trace{pid_str}:")
-            print(self.ctx.traces[path_id], end="")
+            print(ctx.traces[path_id], end="")
 
         if model.is_valid:
             print(red(f"Counterexample: {model}"))
-            self.ctx.valid_counterexamples.append(model)
+            ctx.valid_counterexamples.append(model)
 
             # add the stacks from the temporary flamegraph to the global one
             if self.flamegraph_enabled and self.is_invariant:
@@ -956,17 +959,17 @@ class CounterexampleHandler:
                 )
 
             # we have a valid counterexample, so we are eligible for early exit
-            if self.args.early_exit:
-                debug(f"Shutting down {self.ctx.info.name}'s solver executor")
-                self.ctx.solving_ctx.executor.shutdown(wait=False)
+            if args.early_exit:
+                debug(f"Shutting down {ctx.info.name}'s solver executor")
+                ctx.solving_ctx.executor.shutdown(wait=False)
         else:
             warn_str = f"Counterexample (potentially invalid): {model}"
             warn_code(COUNTEREXAMPLE_INVALID, warn_str)
 
-            self.ctx.invalid_counterexamples.append(model)
+            ctx.invalid_counterexamples.append(model)
 
         # print call sequence for invariant testing
-        if sequence := self.ctx.call_sequences[path_id]:
+        if sequence := ctx.call_sequences[path_id]:
             print(f"Sequence:\n{sequence}")
 
 
