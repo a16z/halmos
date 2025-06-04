@@ -211,6 +211,13 @@ def with_resolved_solver(args: HalmosConfig) -> HalmosConfig:
 
     # `--solver-command` overrides `--solver` if it is at least as high precedence
     if solver_command and solver_command_source >= solver_source:
+        if solver_command_source == solver_source:
+            warn(
+                f"--solver-command and --solver are both provided at the same "
+                f"precedence level ({solver_source.name}), "
+                f"--solver-command will be used and --solver will be ignored",
+                allow_duplicate=False,
+            )
         return args
 
     # if no `--solver-command` is provided, or `--solver` has higher precedence,
@@ -1601,9 +1608,8 @@ def _main(_args=None) -> MainResult:
         else:
             error("flamegraph.pl not found in PATH")
             error("(see https://github.com/brendangregg/FlameGraph)")
-            args = args.with_overrides(
-                ConfigSource.dynamic_resolution, flamegraph=False
-            )
+            dynamic_resolution = ConfigSource.dynamic_resolution
+            args = args.with_overrides(dynamic_resolution, flamegraph=False)
 
     #
     # compile
