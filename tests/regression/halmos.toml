@@ -27,6 +27,9 @@ match-test = ""
 # specify Panic error codes to be treated as test failures; use '*' to include all error codes
 panic-error-codes = "0x01"
 
+# set depth for invariant testing (length of the stateful sequence of calls)
+invariant-depth = 2
+
 # set loop unrolling bounds
 loop = 2
 
@@ -36,11 +39,15 @@ width = 0
 # set the maximum length in steps of a single path; 0 means unlimited
 depth = 0
 
-# set the length of dynamic-sized arrays including bytes and string (default: loop unrolling bound)
+# specify lengths for dynamic-sized arrays, bytes, and string types
+# Lengths can be specified as a comma-separated list of integers enclosed in curly braces, or as a single integer.
 array-lengths = ""
 
-# set the default length candidates for bytes and string not specified in --array-lengths
-default-bytes-lengths = "0,1024,65"
+# set default lengths for dynamic-sized arrays (excluding bytes and string) not specified in --array-lengths
+default-array-lengths = "0,1,2"
+
+# set default lengths for bytes and string types not specified in --array-lengths
+default-bytes-lengths = "0,65,1024"
 
 # Select one of the available storage layout models
 # The generic model should only be necessary for vyper, huff, or unconventional storage patterns in yul.
@@ -48,6 +55,9 @@ storage-layout = "solidity"
 
 # allow the usage of FFI to call external functions
 ffi = false
+
+# generate coverage report at the given file path (disabled by default)
+# coverage-output = COVERAGE_FILE_PATH
 
 ################################################################################
 #                              Debugging options                               #
@@ -59,11 +69,17 @@ verbose = 0
 # print statistics
 statistics = false
 
+# disable progress display
+no-status = false
+
 # run in debug mode
 debug = false
 
-# log every execution steps in JSON
-# log = LOG_FILE_PATH
+# debug config parsing (show all config values and their sources)
+debug-config = false
+
+# profile instruction execution frequencies
+profile-instructions = false
 
 # output test results in JSON
 # json-output = JSON_FILE_PATH
@@ -101,6 +117,16 @@ early-exit = false
 # dump SMT queries for assertion violations
 dump-smt-queries = false
 
+# disable Python's automatic garbage collection for cyclic objects
+# This does not affect reference counting based garbage collection.
+disable-gc = false
+
+# trace memory allocations and deallocations
+trace-memory = false
+
+# include specific events in traces
+trace-events = "LOG,SSTORE,SLOAD"
+
 ################################################################################
 #                                Build options                                 #
 ################################################################################
@@ -112,19 +138,28 @@ forge-build-out = "out"
 #                                Solver options                                #
 ################################################################################
 
+# specify the SMT solver to use
+# If not specified, defaults to 'yices'
+# If --solver-command is used, this is ignored.
+solver = "yices"
+
 # interpret constant power up to N
 smt-exp-by-const = 2
 
-# set timeout (in milliseconds) for solving branching conditions; 0 means no timeout
-solver-timeout-branching = 1
+# set timeout for solving branching conditions; 0 means no timeout
+# Can specify a unit, e.g
+# '200ms', '5s', '2m', '1h', etc.
+solver-timeout-branching = "1ms"
 
-# set timeout (in milliseconds) for solving assertion violation conditions; 0 means no timeout
-solver-timeout-assertion = 60000
+# set timeout for solving assertion violation conditions; 0 means no timeout
+# Can specify a unit, e.g
+# '200ms', '5s', '2m', '1h', etc.
+solver-timeout-assertion = "60s"
 
 # set memory limit (in megabytes) for the solver; 0 means no limit
 solver-max-memory = 0
 
-# use the given command when invoking the solver
+# use the given exact command when invoking the solver (overrides automatic solver detection/download triggered by --solver)
 # solver-command = COMMAND
 
 # set the number of threads for parallel solvers
@@ -139,3 +174,6 @@ cache-solver = false
 
 # support symbolic jump destination
 symbolic-jump = false
+
+# generate a flamegraph of the execution
+flamegraph = false

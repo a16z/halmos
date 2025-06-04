@@ -6,6 +6,7 @@ import pytest
 
 from halmos.config import (
     Config,
+    ConfigSource,
     ParseArrayLengths,
     ParseCSVInt,
     ParseErrorCodes,
@@ -16,6 +17,13 @@ from halmos.config import (
 from halmos.config import (
     toml_parser as get_toml_parser,
 )
+
+void = ConfigSource.void
+
+
+@pytest.fixture
+def void_config():
+    return Config(_parent=None, _source=void)
 
 
 @pytest.fixture
@@ -33,12 +41,11 @@ def toml_parser():
     return get_toml_parser()
 
 
-def test_fresh_config_has_only_None_values():
-    config = Config(_parent=None, _source="bogus")
-    for field in config.__dataclass_fields__.values():
+def test_fresh_config_has_only_None_values(void_config):
+    for field in void_config.__dataclass_fields__.values():
         if field.metadata.get("internal"):
             continue
-        assert getattr(config, field.name) is None
+        assert getattr(void_config, field.name) is None
 
 
 def test_default_config_immutable(config):
@@ -48,13 +55,12 @@ def test_default_config_immutable(config):
 
 def test_unknown_keys_config_constructor_raise():
     with pytest.raises(TypeError):
-        Config(_parent=None, _source="bogus", unknown_key=42)
+        Config(_parent=None, _source=void, unknown_key=42)
 
 
-def test_unknown_keys_config_object_raise():
-    config = Config(_parent=None, _source="bogus")
+def test_unknown_keys_config_object_raise(void_config):
     with pytest.raises(AttributeError):
-        config.unknown_key  # noqa: B018 (not a useless expression)
+        void_config.unknown_key  # noqa: B018 (not a useless expression)
 
 
 def test_count_arg(config, parser):
@@ -79,7 +85,7 @@ def test_choice_arg(config, parser):
 def test_override(config):
     verbose_before = config.verbose
 
-    override = Config(_parent=config, _source="override", verbose=42)
+    override = config.with_overrides(ConfigSource.command_line, verbose=42)
 
     # # the override is reflected in the new config
     assert override.verbose == 42
@@ -139,7 +145,7 @@ def test_config_file_invalid_key(config, toml_parser):
     # invalid keys result in an error and exit
     with pytest.raises(SystemExit) as exc_info:
         data = toml_parser.parse_str("[global]\ninvalid_key = 42")
-        config = config.with_overrides(source="halmos.toml", **data)
+        config = config.with_overrides(ConfigSource.config_file, **data)
     assert exc_info.value.code == 2
 
 
@@ -156,30 +162,30 @@ def test_config_file_snake_case(config, toml_parser):
     config_file_data = toml_parser.parse_str("[global]\nsolver-threads = 42")
     assert config_file_data["solver_threads"] == 42
 
-    config = config.with_overrides(source="halmos.toml", **config_file_data)
+    config = config.with_overrides(ConfigSource.config_file, **config_file_data)
     assert config.solver_threads == 42
 
 
 def test_config_e2e(config, parser, toml_parser):
     # when we apply overrides to the default config
     config_file_data = toml_parser.parse_str("[global]\nverbose = 42")
-    config = config.with_overrides(source="halmos.toml", **config_file_data)
+    config = config.with_overrides(ConfigSource.config_file, **config_file_data)
 
     args = parser.parse_args(["-vvv"])
-    config = config.with_overrides(source="command-line", **vars(args))
+    config = config.with_overrides(ConfigSource.command_line, **vars(args))
 
     # then the config object should have the expected values
     assert config.verbose == 3
     assert config.loop == 2
 
     # and each value should have the expected source
-    assert config.value_with_source("verbose") == (3, "command-line")
-    assert config.value_with_source("loop") == (2, "default")
+    assert config.value_with_source("verbose") == (3, ConfigSource.command_line)
+    assert config.value_with_source("loop") == (2, ConfigSource.default)
 
 
 def test_config_pickle(config, parser):
     args = parser.parse_args(["-vvv"])
-    config = config.with_overrides(source="command-line", **vars(args))
+    config = config.with_overrides(ConfigSource.command_line, **vars(args))
 
     # pickle and unpickle the config
     pickled = pickle.dumps(config)
@@ -187,7 +193,7 @@ def test_config_pickle(config, parser):
 
     # then the config object should be the same
     assert config == unpickled
-    assert unpickled.value_with_source("verbose") == (3, "command-line")
+    assert unpickled.value_with_source("verbose") == (3, ConfigSource.command_line)
 
 
 def test_parse_csv():
@@ -314,3 +320,23 @@ def test_parse_array_lengths_roundtrip():
         unparsed = ParseArrayLengths.unparse(original)
         parsed = ParseArrayLengths.parse(unparsed)
         assert parsed == original, f"Roundtrip failed for {original}"
+
+
+def test_value_with_source(config):
+    assert config.value_with_source("solver_threads") == (
+        config.solver_threads,
+        ConfigSource.default,
+    )
+
+    overrides = {"solver_threads": 42}
+
+    config_from_args = config.with_overrides(
+        source=ConfigSource.command_line, **overrides
+    )
+
+    val, source = config_from_args.value_with_source("solver_threads")
+    assert val == 42
+    assert source == ConfigSource.command_line
+
+    # overrides have higher precedence than defaults
+    assert source > ConfigSource.default
