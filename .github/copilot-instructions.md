@@ -104,6 +104,6 @@ Deeply nested or scattered `return` statements make control flow hard to followâ
 
 ### Don't Use Monkey-Patching
 
-Adding attributes or overriding functions are runtime is just bad form.
+Adding attributes or overriding functions at runtime is just bad form.
 
 
