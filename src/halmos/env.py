@@ -4,6 +4,7 @@ import os
 
 from dotenv import find_dotenv, load_dotenv
 
+from halmos.bitvec import HalmosBitVec as BV
 from halmos.logs import debug
 
 
@@ -36,18 +37,33 @@ def check_env_exists(key: str) -> bool:
 def env_string(key: str, default: str | None = None) -> str:
     value = os.getenv(key, default)
     if value is None:
-        raise ValueError(
-            f"Environment variable '{key}' is not set and no default provided."
-        )
+        raise KeyError(key)
     return value
 
 
-def env_int(key: str, default: str | None = None) -> int:
-    value = env_string(key, default=default)
+def env_int(key: str) -> int:
+    """
+    Returns the concrete integer value of the environment variable.
+
+    Raises KeyError if the environment variable is not set.
+    Raises ValueError if the environment variable is not a valid integer.
+    """
+
+    value = env_string(key)
+    return int(value, 0)  # auto-detects base (0x or decimal), supports sign
+
+
+def env_or_int(key: str, default: BV) -> BV:
+    """
+    Returns the default value if the environment variable is not set (concrete or symbolic).
+
+    Raises ValueError if the environment variable is not a valid integer.
+    """
+
     try:
-        return int(value, 0)  # auto-detects base (0x or decimal), supports sign
-    except ValueError as e:
-        raise ValueError(f"envInt parsing failed for {key} = {value}: {e}") from e
+        return BV(env_int(key))
+    except KeyError:
+        return default
 
 
 def env_uint(key: str, default: str | None = None) -> int:
@@ -181,17 +197,6 @@ def env_or_bytes32(key: str, default: str = "") -> bytes:
         return env_bytes32(key)
     except ValueError:
         return default
-
-
-def env_or_int(key: str, default: int | None = None) -> int:
-    try:
-        return env_int(key)
-    except ValueError:
-        if default is not None:
-            return default
-        raise ValueError(
-            f"Environment variable '{key}' is not set or invalid."
-        ) from None
 
 
 def env_or_uint(key: str, default: int | None = None) -> int:

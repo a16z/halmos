@@ -22,10 +22,8 @@ from z3 import (
     Concat,
     Extract,
     Function,
-    If,
     Not,
     Or,
-    SignExt,
     Solver,
     SolverFor,
     eq,
@@ -192,21 +190,6 @@ def uint160(x: Word) -> Address:
 
 def uint256(x: Any) -> Word:
     return uint(x, 256)
-
-
-def int256(x: BitVecRef) -> BitVecRef:
-    if isinstance(x, int):
-        return con(x, size_bits=256)
-
-    if is_bool(x):
-        return If(x, con(1, size_bits=256), con(0, size_bits=256))
-
-    bitsize = x.size()
-    if bitsize > 256:
-        raise ValueError(x)
-    if bitsize == 256:
-        return x
-    return simplify(SignExt(256 - bitsize, x))
 
 
 def address(x: Any) -> Address:

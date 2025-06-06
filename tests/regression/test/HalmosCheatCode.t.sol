@@ -380,7 +380,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
 
-// For all tests of env_or_* where a .env variable exists, 
+// For all tests of env_or_* where a .env variable exists,
 // provide an input value in Solidity that does NOT match the expected value in the assert.
 // This checks that the value is actually picked from the environment variable, not the Solidity input.
 // Example: pass address(0xdead) as input, but expect address(0xdeadbeef) from the .env variable.
@@ -396,7 +396,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_env_or_bool() public {
-        bool x = vm.envOr("BOOL", false); 
+        bool x = vm.envOr("BOOL", false);
         assertEq(x, true);
     }
 
@@ -443,31 +443,18 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(x, 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF);
     }
 
-    function check_env_or_int() public {
-        int y = -10;
-        int x = vm.envOr("INT_ENV_OR", y);
-        assertEq(x,57896044618658097711785492504343953926634992332820282019728792003956564819967 );
+    function check_env_or_int(int z) public {
+        assertEq(vm.envOr("INT_ENV_OR", -10), type(int).max);
+        assertEq(vm.envOr("MISSING_ENV_VAR", type(int).min), type(int).min);
+        assertEq(vm.envOr("MISSING_ENV_VAR", z), z);
     }
 
-    function check_env_or_int_without_env_var() public {
-        int y = -57896044618658097711785492504343953926634992332820282019728792003956564819967;
-        int x = vm.envOr("INT2", y);
-        assertEq(x, -57896044618658097711785492504343953926634992332820282019728792003956564819967);
+    function check_env_or_uint(uint z) public {
+        assertEq(vm.envOr("UINT_ENV_OR", uint256(1)), 1234);
+        assertEq(vm.envOr("UINT_ENV_OR", type(uint256).max), 1234);
+        assertEq(vm.envOr("MISSING_ENV_VAR", uint256(42)), 42);
+        assertEq(vm.envOr("MISSING_ENV_VAR", z), z);
     }
-
-    function check_env_or_uint() public {
-        uint y = 1;
-        uint x = vm.envOr("UNIT_ENV_OR", y);
-        assertEq(x, 2**256 - 1);
-    }
-
-    function check_env_or_uint_without_env_var() public {
-        uint y = 0;
-        uint x = vm.envOr("UINT2", y);
-        assertEq(x, 0);
-    }
-
-
 
     function check_env_or_address_array() public {
         address[] memory x = new address[](3);

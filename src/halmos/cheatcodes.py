@@ -63,7 +63,6 @@ from .utils import (
     f_ecrecover,
     green,
     hexify,
-    int256,
     int_of,
     red,
     secp256k1n,
@@ -457,7 +456,7 @@ def create_int(ex, arg, name: str | None = None, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name or name_of(extract_string_argument(arg, 1))
-    return ByteVec(int256(create_generic(ex, bits, name, f"int{bits}")))
+    return ByteVec(create_generic(ex, bits, name, f"int{bits}"))
 
 
 def create_int256(ex, arg, name: str | None = None, **kwargs):
@@ -588,7 +587,7 @@ def create_env_string(arg, **kwargs):
 def create_env_int(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     val = env.env_int(key)
-    int_val = int256(val)
+    int_val = BV(val)
     return ByteVec(int_val)
 
 
@@ -785,24 +784,14 @@ def create_env_or_bytes32(arg, **kwargs):
 
 def create_env_or_int(arg, **kwargs):
     key = decode_string_arg(arg, 0)
-    fallback_val = arg.slice(36, 68).unwrap()
-    hex_str = fallback_val.hex()
-    n = int(hex_str, 16)
-    if n >= 2**255:
-        n -= 2**256
-    val = env.env_or_int(key, n)
-    int_val = int256(val)
-    return ByteVec(int_val)
+    fallback_val = uint256(arg.get_word(36))
+    val = env.env_or_int(key, fallback_val)
+    return ByteVec(val)
 
 
 def create_env_or_uint(arg, **kwargs):
     key = decode_string_arg(arg, 0)
-    arg_input = arg.slice(36, 68).unwrap()
-    fallback_val = int(arg_input.hex(), 16)
-    if fallback_val < 0:
-        raise HalmosException(
-            f"Expected a non-negative integer but got: {fallback_val}"
-        )
+    fallback_val = uint256(arg.get_word(36))
     val = env.env_or_uint(key, fallback_val)
     uint_val = uint256(val)
     return ByteVec(uint_val)
@@ -1258,8 +1247,6 @@ class hevm_cheat_code:
     # bytes4(keccak256("randomBytes8()"))
     random_bytes8_sig: int = 0x0497B0A5
 
-    # newly added cheatcodes
-
     # bytes4(keccak256("envInt(string)"))
     env_int_sig: int = 0x892A0C61
     # bytes4(keccak256("envBytes32(string)"))
@@ -1274,7 +1261,6 @@ class hevm_cheat_code:
     env_string_sig: int = 0xF877CB19
     # bytes4(keccak256("envBytes(string)"))
     env_bytes_sig: int = 0x4D7BAF06
-    # --------------
 
     # bytes4(keccak256("envInt(string,string)"))
     env_int_array_sig: int = 0x42181150
