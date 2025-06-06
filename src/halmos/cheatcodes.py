@@ -793,8 +793,7 @@ def create_env_or_uint(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     fallback_val = uint256(arg.get_word(36))
     val = env.env_or_uint(key, fallback_val)
-    uint_val = uint256(val)
-    return ByteVec(uint_val)
+    return ByteVec(val)
 
 
 def create_env_or_address_array(arg, **kwargs):

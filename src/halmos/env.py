@@ -5,6 +5,7 @@ import os
 from dotenv import find_dotenv, load_dotenv
 
 from halmos.bitvec import HalmosBitVec as BV
+from halmos.bitvec import HalmosBool as Bool
 from halmos.logs import debug
 
 
@@ -66,17 +67,58 @@ def env_or_int(key: str, default: BV) -> BV:
         return default
 
 
-def env_uint(key: str, default: str | None = None) -> int:
-    value = env_string(key, default=default)
+def env_uint(key: str) -> int:
+    """
+    Returns the concrete unsigned integer value of the environment variable.
+
+    Raises KeyError if the environment variable is not set.
+    Raises ValueError if the environment variable is not a valid unsigned integer.
+    """
+
+    value = env_string(key)
+    result = int(value, 0)  # auto-detects base (0x or decimal), supports sign
+    if result < 0:
+        raise ValueError("value must be non-negative")
+    return result
+
+
+def env_or_uint(key: str, default: BV) -> BV:
+    """
+    Returns the default value if the environment variable is not set (concrete or symbolic).
+
+    Raises ValueError if the environment variable is not a valid unsigned integer.
+    """
+
     try:
-        result = value if isinstance(value, int) else int(value, 0)
-        if result < 0:
-            raise ValueError(
-                f"envUint parsing failed for {key} = {value}: value must be non-negative"
-            )
-        return result
-    except ValueError as e:
-        raise ValueError(f"envUint parsing failed for {key} = {value}: {e}") from e
+        return BV(env_uint(key))
+    except KeyError:
+        return default
+
+
+def env_bool(key: str) -> bool:
+    """
+    Returns the concrete boolean value of the environment variable.
+
+    Raises KeyError if the environment variable is not set.
+    Raises ValueError if the environment variable is not a valid boolean.
+    """
+
+    value = env_string(key)
+
+    match value.lower():
+        case "true":
+            return True
+        case "false":
+            return False
+        case _:
+            raise ValueError(value)
+
+
+def env_or_bool(key: str, default: Bool) -> Bool:
+    try:
+        return Bool(env_bool(key))
+    except KeyError:
+        return default
 
 
 def env_int_array(key: str, delimiter: str = ",") -> list[bytes]:
@@ -94,11 +136,6 @@ def env_int_array(key: str, delimiter: str = ",") -> list[bytes]:
 def env_uint_array(key: str, default: str | None = None, delimiter=",") -> list[int]:
     value = env_string(key, default=default)
     return [int(x.strip()).to_bytes(32, "big") for x in value.split(delimiter)]
-
-
-def env_bool(key: str, default: str | None = None) -> bool:
-    value = env_string(key, default=default)
-    return value.lower() in ["1", "true", "yes"]
 
 
 def env_address(key: str, default: str | None = None) -> bytes:
@@ -171,13 +208,6 @@ def env_or_address(key: str, default: str | None = None) -> str:
         ) from None
 
 
-def env_or_bool(key: str, default: bool = False) -> bool:
-    try:
-        return env_bool(key)
-    except ValueError:
-        return default
-
-
 def env_or_bytes(key: str, default: bytes = b"") -> bytes:
     try:
         return env_bytes(key)
@@ -197,17 +227,6 @@ def env_or_bytes32(key: str, default: str = "") -> bytes:
         return env_bytes32(key)
     except ValueError:
         return default
-
-
-def env_or_uint(key: str, default: int | None = None) -> int:
-    try:
-        return env_uint(key)
-    except ValueError:
-        if default is not None:
-            return default
-        raise ValueError(
-            f"Environment variable '{key}' is not set or invalid."
-        ) from None
 
 
 def env_or_address_array(
