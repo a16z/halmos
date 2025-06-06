@@ -7,7 +7,7 @@ from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from enum import Enum, IntEnum
-from typing import Any, Union
+from typing import Any
 
 import toml
 
@@ -476,7 +476,7 @@ class Config:
         group=debugging,
     )
 
-    dump_smt_directory: Union[str, None] = arg(
+    dump_smt_directory: str | None = arg(
         help="directory to dump SMT queries (defaults to temporary directory)",
         global_default=None,
         metavar="DIRECTORY_PATH",
