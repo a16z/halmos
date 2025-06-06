@@ -64,13 +64,11 @@ def test_match_dynamic_array_overflow_condition():
 
 
 def test_dirname_with_temporary_directory():
-    """Test dirname function with TemporaryDirectory"""
     with TemporaryDirectory() as temp_dir:
         assert dirname(TemporaryDirectory(dir=temp_dir)).startswith(temp_dir)
 
 
 def test_dirname_with_path():
-    """Test dirname function with Path"""
     with tempfile.TemporaryDirectory() as temp_dir:
         path_obj = Path(temp_dir)
         assert dirname(path_obj) == str(path_obj)
