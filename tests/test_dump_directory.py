@@ -3,50 +3,42 @@ import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from halmos.solve import DumpDirectory
+from halmos.solve import DumpDirectory, dirname
 from halmos.config import Config, ConfigSource
 
 
-def test_dump_directory_from_temp_dir():
-    """Test DumpDirectory.from_temp_dir creates correct wrapper"""
+def test_dump_directory_temp_dir():
+    """Test DumpDirectory with TemporaryDirectory"""
     with TemporaryDirectory() as temp_dir_path:
         temp_dir = TemporaryDirectory()
         temp_dir.name = temp_dir_path  # set a known path for testing
         
-        dump_dir = DumpDirectory.from_temp_dir(temp_dir)
+        dump_dir: DumpDirectory = temp_dir
         
-        assert dump_dir.name == temp_dir_path
-        assert dump_dir._temp_dir == temp_dir
-        assert dump_dir._path is None
+        assert dirname(dump_dir) == temp_dir_path
 
 
-def test_dump_directory_from_path_string():
-    """Test DumpDirectory.from_path with string path"""
+def test_dump_directory_path_string():
+    """Test DumpDirectory with string path"""
     with tempfile.TemporaryDirectory() as temp_dir:
-        dump_dir = DumpDirectory.from_path(temp_dir)
+        dump_dir: DumpDirectory = Path(temp_dir)
         
-        assert dump_dir.name == temp_dir
-        assert dump_dir._temp_dir is None
-        assert dump_dir._path == temp_dir
+        assert dirname(dump_dir) == temp_dir
 
 
-def test_dump_directory_from_path_pathlib():
-    """Test DumpDirectory.from_path with Path object"""
+def test_dump_directory_path_pathlib():
+    """Test DumpDirectory with Path object"""
     with tempfile.TemporaryDirectory() as temp_dir:
         path_obj = Path(temp_dir)
-        dump_dir = DumpDirectory.from_path(path_obj)
+        dump_dir: DumpDirectory = path_obj
         
-        assert dump_dir.name == str(path_obj)
-        assert dump_dir._temp_dir is None
-        assert dump_dir._path == str(path_obj)
+        assert dirname(dump_dir) == str(path_obj)
 
 
-def test_dump_directory_uninitialized():
-    """Test that uninitialized DumpDirectory raises error"""
-    dump_dir = DumpDirectory()
-    
-    with pytest.raises(ValueError, match="DumpDirectory not properly initialized"):
-        _ = dump_dir.name
+def test_dirname_invalid_type():
+    """Test that dirname with invalid type raises error"""
+    with pytest.raises(ValueError, match="Unexpected dump directory type"):
+        dirname("invalid_type")  # type: ignore
 
 
 def test_config_has_dump_smt_directory_field():

@@ -27,32 +27,19 @@ from halmos.utils import hexify
 EXIT_TIMEDOUT = 124
 
 
-@dataclass
-class DumpDirectory:
-    """Wrapper for directory used for dumping SMT files.
-    
-    Can wrap either a TemporaryDirectory or a regular directory path.
-    Provides a consistent .name property for both cases.
-    """
-    _temp_dir: TemporaryDirectory | None = None
-    _path: str | None = None
-    
-    @classmethod
-    def from_temp_dir(cls, temp_dir: TemporaryDirectory) -> "DumpDirectory":
-        return cls(_temp_dir=temp_dir)
-    
-    @classmethod 
-    def from_path(cls, path: str | Path) -> "DumpDirectory":
-        return cls(_path=str(path))
-    
-    @property
-    def name(self) -> str:
-        if self._temp_dir is not None:
-            return self._temp_dir.name
-        elif self._path is not None:
-            return self._path
-        else:
-            raise ValueError("DumpDirectory not properly initialized")
+# Type alias for directory used for dumping SMT files
+DumpDirectory = TemporaryDirectory | Path
+
+
+def dirname(dump_dir: DumpDirectory) -> str:
+    """Get the directory name from a DumpDirectory."""
+    match dump_dir:
+        case TemporaryDirectory():
+            return dump_dir.name
+        case Path():
+            return str(dump_dir)
+        case _:
+            raise ValueError(f"Unexpected dump directory type: {type(dump_dir)}")
 
 
 @dataclass
@@ -249,7 +236,7 @@ class FunctionContext:
             function_dir = custom_dir / prefix.rstrip('-')
             function_dir.mkdir(parents=True, exist_ok=True)
             
-            dump_dir = DumpDirectory.from_path(function_dir)
+            dump_dir = function_dir
             
             if args.verbose >= 1 or args.dump_smt_queries:
                 print(f"Generating SMT queries in {function_dir}")
@@ -265,7 +252,7 @@ class FunctionContext:
             if not delete:
                 temp_dir._finalizer.detach()
 
-            dump_dir = DumpDirectory.from_temp_dir(temp_dir)
+            dump_dir = temp_dir
             
             if args.verbose >= 1 or args.dump_smt_queries:
                 print(f"Generating SMT queries in {temp_dir.name}")
@@ -299,7 +286,7 @@ class PathContext:
         refined_str = ".refined" if self.is_refined else ""
         filename = f"{self.path_id}{refined_str}.smt2"
 
-        return Path(self.solving_ctx.dump_dir.name) / filename
+        return Path(dirname(self.solving_ctx.dump_dir)) / filename
 
     def refine(self) -> "PathContext":
         return PathContext(
