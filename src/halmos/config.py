@@ -478,7 +478,7 @@ class Config:
 
     dump_smt_directory: str = arg(
         help="directory to dump SMT queries (defaults to temporary directory)",
-        global_default=None,
+        global_default="",
         metavar="DIRECTORY_PATH",
         group=debugging,
     )
