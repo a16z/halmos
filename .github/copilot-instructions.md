@@ -102,6 +102,10 @@ Reduce nesting by validating inputs up front and returning early (or using `cont
 
 Deeply nested or scattered `return` statements make control flow hard to follow—limit them to guard clauses at the top.
 
+### Avoid Low Information Comments
+
+Don't write comments that merely restate what the code does (like `i += 1 # increment i`) or rephrase function names. Instead focus on the "why".
+
 ### Don't Use Monkey-Patching
 
 Adding attributes or overriding functions at runtime is just bad form.
