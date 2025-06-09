@@ -27,6 +27,21 @@ from halmos.utils import hexify
 EXIT_TIMEDOUT = 124
 
 
+# Type alias for directory used for dumping SMT files
+DumpDirectory = TemporaryDirectory | Path
+
+
+def dirname(dump_dir: DumpDirectory) -> str:
+    """Get the directory name from a DumpDirectory."""
+    match dump_dir:
+        case TemporaryDirectory():
+            return dump_dir.name
+        case Path():
+            return str(dump_dir)
+        case _:
+            raise ValueError(f"Unexpected dump directory type: {type(dump_dir)}")
+
+
 @dataclass
 class ModelVariable:
     full_name: str
@@ -148,7 +163,7 @@ class ContractContext:
 @dataclass(frozen=True)
 class SolvingContext:
     # directory for dumping solver files
-    dump_dir: TemporaryDirectory
+    dump_dir: DumpDirectory
 
     # shared solver executor for all paths in the same function
     executor: PopenExecutor = field(default_factory=PopenExecutor)
@@ -203,25 +218,44 @@ class FunctionContext:
     def __post_init__(self):
         args = self.args
 
-        # create a temporary directory for dumping solver files
+        # create a directory for dumping solver files
         prefix = (
             f"{self.info.name}-"
             if self.info.name
             else f"{self.contract_ctx.name}-constructor-"
         )
 
-        # if the user explicitly enabled dumping, we don't want to delete the directory on exit
-        delete = not self.args.dump_smt_queries
+        if args.dump_smt_directory:
+            # use custom directory specified by user
+            custom_dir = Path(args.dump_smt_directory)
 
-        # ideally we would pass `delete=delete` to the constructor, but it's in >=3.12
-        dump_dir = TemporaryDirectory(prefix=prefix, ignore_cleanup_errors=True)
+            # create the directory if it doesn't exist
+            custom_dir.mkdir(parents=True, exist_ok=True)
 
-        # If user wants to keep the files, prevent cleanup on exit
-        if not delete:
-            dump_dir._finalizer.detach()
+            # create a subdirectory with the prefix for this function/contract
+            function_dir = custom_dir / prefix.rstrip("-")
+            function_dir.mkdir(parents=True, exist_ok=True)
 
-        if args.verbose >= 1 or args.dump_smt_queries:
-            print(f"Generating SMT queries in {dump_dir.name}")
+            dump_dir = function_dir
+
+            if args.verbose >= 1 or args.dump_smt_queries:
+                print(f"Generating SMT queries in {function_dir}")
+        else:
+            # use temporary directory (existing behavior)
+            # if the user explicitly enabled dumping, we don't want to delete the directory on exit
+            delete = not self.args.dump_smt_queries
+
+            # ideally we would pass `delete=delete` to the constructor, but it's in >=3.12
+            temp_dir = TemporaryDirectory(prefix=prefix, ignore_cleanup_errors=True)
+
+            # If user wants to keep the files, prevent cleanup on exit
+            if not delete:
+                temp_dir._finalizer.detach()
+
+            dump_dir = temp_dir
+
+            if args.verbose >= 1 or args.dump_smt_queries:
+                print(f"Generating SMT queries in {temp_dir.name}")
 
         solving_ctx = SolvingContext(dump_dir=dump_dir)
         object.__setattr__(self, "solving_ctx", solving_ctx)
@@ -252,7 +286,7 @@ class PathContext:
         refined_str = ".refined" if self.is_refined else ""
         filename = f"{self.path_id}{refined_str}.smt2"
 
-        return Path(self.solving_ctx.dump_dir.name) / filename
+        return Path(dirname(self.solving_ctx.dump_dir)) / filename
 
     def refine(self) -> "PathContext":
         return PathContext(

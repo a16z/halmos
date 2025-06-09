@@ -476,6 +476,13 @@ class Config:
         group=debugging,
     )
 
+    dump_smt_directory: str = arg(
+        help="directory to dump SMT queries (defaults to temporary directory)",
+        global_default="",
+        metavar="DIRECTORY_PATH",
+        group=debugging,
+    )
+
     disable_gc: bool = arg(
         help="disable Python's automatic garbage collection for cyclic objects. This does not affect reference counting based garbage collection.",
         global_default=False,
