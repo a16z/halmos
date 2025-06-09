@@ -378,12 +378,6 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     }
 
-
-// For all tests of env_or_* where a .env variable exists,
-// provide an input value in Solidity that does NOT match the expected value in the assert.
-// This checks that the value is actually picked from the environment variable, not the Solidity input.
-// Example: pass address(0xdead) as input, but expect address(0xdeadbeef) from the .env variable.
-
     function check_env_or_address() public {
         address x = vm.envOr("ADDRESS", address(0xdead));
         assertEq(x, address(0xdeadbeef));
@@ -456,16 +450,11 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_env_or_address_array() public {
-        address[] memory x = new address[](3);
-        x[0] = address(0x00000000000000000000000000000000DeaDBe);
-        x[1] = address(0xdead);
-        x[2] = address(0xdeadbeef);
+        address[] memory x = new address[](0);
         address[] memory y = vm.envOr("ADDRESS_ARRAY", ",", x);
-        assertEq(y.length, 3);
+        assertEq(y.length, 2);
         assertEq(y[0], address(0xdeadbeef));
-        assertEq(y[1], address(0xdeadbeef));
-        assertEq(y[2], address(0xdeadbeef));
-
+        assertEq(y[1], 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
     }
 
     function check_env_or_address_array_without_env_var() public {

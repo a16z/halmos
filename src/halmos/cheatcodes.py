@@ -604,9 +604,9 @@ def abi_encode_array(values: list[Word]) -> ByteVec:
     # next 32 bytes is array length
     result.append(BV(len(values)))
 
-    # append each value (expecting 32 bytes each)
+    # append each value (expanded to 32 bytes each)
     for val in values:
-        result.append(val)
+        result.append(uint256(val))
 
     return result
 
@@ -622,6 +622,18 @@ def create_env_address_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_address_array(key, delimiter)
+    return abi_encode_array(values)
+
+
+def create_env_or_address_array(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    delimiter = decode_string_arg(arg, 32)
+    fallback_bytes = extract_bytes32_array_argument(arg, 2)
+
+    num_addresses = len(fallback_bytes) // 32
+    fallback_val = [uint160(fallback_bytes.get_word(i)) for i in range(num_addresses)]
+
+    values = env.env_or_address_array(key, default=fallback_val, delimiter=delimiter)
     return abi_encode_array(values)
 
 
@@ -713,12 +725,9 @@ def create_env_bytes_array(arg, **kwargs):
 
 def create_env_or_address(arg, **kwargs):
     key = decode_string_arg(arg, 0)
-    fallback_val = arg.get_word(36)
-    val = env.env_or_address(key, fallback_val)
-
-    # XXX too many conversions, env_or_address should return a word or uint160
-    address_val = address(val)
-    return ByteVec(uint256(address_val))
+    fallback_val = arg.slice(36, 68).unwrap()
+    address = env.env_or_address(key, fallback_val)
+    return ByteVec(uint256(address))
 
 
 def create_env_or_bool(arg, **kwargs):
@@ -802,19 +811,6 @@ def create_env_or_uint(arg, **kwargs):
     fallback_val = uint256(arg.get_word(36))
     val = env.env_or_uint(key, fallback_val)
     return ByteVec(val)
-
-
-def create_env_or_address_array(arg, **kwargs):
-    # envOr(string,string,address[])
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
-    fallback_val = extract_bytes32_array_argument(arg, 2)
-
-    values = env.env_or_address_array(key, default=fallback_val, delimiter=delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    for val in values:
-        result.append(val)
-    return result
 
 
 def create_env_or_bool_array(arg, **kwargs):

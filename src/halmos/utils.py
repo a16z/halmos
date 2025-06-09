@@ -280,7 +280,7 @@ def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0) -> Solver
     return solver
 
 
-def extract_bytes32_array_argument(data: Bytes, arg_idx: int):
+def extract_bytes32_array_argument(data: Bytes, arg_idx: int) -> Bytes:
     """Extracts idx-th argument of bytes32[] from calldata"""
     offset = int_of(
         extract_bytes(data, 4 + arg_idx * 32, 32),
