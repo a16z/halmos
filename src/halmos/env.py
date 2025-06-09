@@ -7,6 +7,7 @@ from dotenv import find_dotenv, load_dotenv
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bitvec import HalmosBool as Bool
 from halmos.logs import debug
+from halmos.utils import Address, uint160
 
 
 def init_env(path: str | None = None):
@@ -33,6 +34,27 @@ def init_env(path: str | None = None):
 
 def check_env_exists(key: str) -> bool:
     return os.getenv(key) is not None
+
+
+def address_str_to_bytes32(address: str) -> bytes:
+    """
+    Convert a textual Ethereum address to its 32-byte representation.
+
+    Args:
+        address: Ethereum address in format 0x... (42 characters)
+
+    Returns:
+        32-byte representation of the address (left-padded with zeros)
+
+    Raises:
+        ValueError: If address format is invalid
+    """
+
+    if not address.startswith("0x"):
+        raise ValueError(f"Missing 0x prefix: {address}")
+    if len(address) != 42:
+        raise ValueError(f"Invalid address length: {address}")
+    return bytes.fromhex(address[2:].rjust(64, "0"))
 
 
 def env_string(key: str, default: str | None = None) -> str:
@@ -121,6 +143,19 @@ def env_or_bool(key: str, default: Bool) -> Bool:
         return default
 
 
+def env_address(key: str) -> Address:
+    addr_str = env_string(key)
+    addr_bytes = address_str_to_bytes32(addr_str)
+    return uint160(addr_bytes)
+
+
+def env_or_address(key: str, default: Address) -> Address:
+    try:
+        return env_address(key)
+    except KeyError:
+        return default
+
+
 def env_int_array(key: str, delimiter: str = ",") -> list[bytes]:
     value = env_string(key)
     parts = [x.strip() for x in value.split(delimiter)]
@@ -138,13 +173,6 @@ def env_uint_array(key: str, default: str | None = None, delimiter=",") -> list[
     return [int(x.strip()).to_bytes(32, "big") for x in value.split(delimiter)]
 
 
-def env_address(key: str, default: str | None = None) -> bytes:
-    value = env_string(key, default=default)
-    if not value.startswith("0x") or len(value) != 42:
-        raise ValueError(f"Invalid Ethereum address format for {key}: {value}")
-    return bytes.fromhex(value.replace("0x", ""))
-
-
 def env_bytes32(key: str, default: str | None = None) -> bytes:
     value = env_string(key, default=default)
     if not value.startswith("0x") or len(value) != 66:
@@ -159,17 +187,10 @@ def env_bytes(key: str, default: str | None = None) -> bytes:
     return value.encode()
 
 
-def env_address_array(key: str, default: str | None = None, delimiter=",") -> list[str]:
-    value = env_string(key, default=default)
+def env_address_array(key: str, delimiter=",") -> list[bytes]:
+    value = env_string(key)
     addresses = [x.strip() for x in value.split(delimiter)]
-    for address in addresses:
-        if not address.startswith("0x") or len(address) != 42:
-            raise ValueError(
-                f"Invalid Ethereum address format in array for {key}: {address}"
-            )
-    return [
-        bytes.fromhex(address.replace("0x", "").rjust(64, "0")) for address in addresses
-    ]
+    return [address_str_to_bytes32(address) for address in addresses]
 
 
 def env_bool_array(key: str, default: str | None = None, delimiter=",") -> list[bool]:
@@ -197,17 +218,6 @@ def env_bytes_array(key: str, default: str | None = None, delimiter=",") -> list
     return [x.strip() for x in value.split(delimiter)]
 
 
-def env_or_address(key: str, default: str | None = None) -> str:
-    try:
-        return env_address(key)
-    except ValueError:
-        if default is not None:
-            return default
-        raise ValueError(
-            f"Environment variable '{key}' is not set or invalid."
-        ) from None
-
-
 def env_or_bytes(key: str, default: bytes = b"") -> bytes:
     try:
         return env_bytes(key)
@@ -230,12 +240,12 @@ def env_or_bytes32(key: str, default: str = "") -> bytes:
 
 
 def env_or_address_array(
-    key: str, default: list[str] | None = None, delimiter=","
-) -> list[str]:
+    key: str, default: list[bytes] | None = None, delimiter=","
+) -> list[bytes]:
     try:
         return env_address_array(key, delimiter=delimiter)
-    except ValueError:
-        return default if default is not None else []
+    except KeyError:
+        return default
 
 
 def env_or_bool_array(

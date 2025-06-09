@@ -323,7 +323,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_env_int_array() public {
-        int[] memory x = vm.envInt("INT_ARRAY",",");
+        int[] memory x = vm.envInt("INT_ARRAY", ",");
         int y = 1;
         assertEq(x.length, 4);
         assertEq(x[0], 1);
@@ -334,10 +334,9 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     function check_env_address_array() public {
         address[] memory x = vm.envAddress("ADDRESS_ARRAY", ",");
-        assertEq(x.length, 3);
+        assertEq(x.length, 2);
         assertEq(x[0], address(0x00000000000000000000000000000000DeaDBeef));
-        assertEq(x[1], address(0x00000000000000000000000000000000DeaDBeef));
-        assertEq(x[2], address(0x00000000000000000000000000000000DeaDBeef));
+        assertEq(x[1], address(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE));
     }
 
     function check_env_bool_array() public {

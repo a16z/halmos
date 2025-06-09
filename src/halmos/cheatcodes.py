@@ -57,6 +57,7 @@ from .utils import (
     decode_hex,
     dict_of_unsupported_cheatcodes,
     extract_bytes,
+    extract_bytes32_array_argument,
     extract_funsig,
     extract_string_argument,
     extract_word,
@@ -594,30 +595,42 @@ def create_env_int(arg, **kwargs):
 # returning dynamic arrays
 
 
+def abi_encode_array(values: list[Word]) -> ByteVec:
+    result = ByteVec()
+
+    # first 32 bytes is offset (always 32)
+    result.append(BV(32))
+
+    # next 32 bytes is array length
+    result.append(BV(len(values)))
+
+    # append each value (expecting 32 bytes each)
+    for val in values:
+        result.append(val)
+
+    return result
+
+
 def create_env_int_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_int_array(key, delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    for val in values:
-        result.append(val)
-    return result
+    return abi_encode_array(values)
 
 
 def create_env_address_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_address_array(key, delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    for val in values:
-        result.append(val)
-    return result
+    return abi_encode_array(values)
 
 
 def create_env_bool_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_bool_array(key, delimiter)
+
+    # XXX
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
         bool_val = con(1 if val else 0, 1)
@@ -629,11 +642,7 @@ def create_env_bytes32_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_bytes32_array(key, delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    for val in values:
-        bytes32_val = bytes.fromhex(val.replace("0x", "").rjust(64, "0"))
-        result.append(bytes32_val)
-    return result
+    return abi_encode_array(values)
 
 
 def create_env_string_array(arg, **kwargs):
@@ -671,10 +680,7 @@ def create_env_uint_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_uint_array(key, delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    for val in values:
-        result.append(val)
-    return result
+    return abi_encode_array(values)
 
 
 def create_env_bytes_array(arg, **kwargs):
@@ -707,8 +713,10 @@ def create_env_bytes_array(arg, **kwargs):
 
 def create_env_or_address(arg, **kwargs):
     key = decode_string_arg(arg, 0)
-    fallback_val = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
+    fallback_val = arg.get_word(36)
     val = env.env_or_address(key, fallback_val)
+
+    # XXX too many conversions, env_or_address should return a word or uint160
     address_val = address(val)
     return ByteVec(uint256(address_val))
 
@@ -797,28 +805,12 @@ def create_env_or_uint(arg, **kwargs):
 
 
 def create_env_or_address_array(arg, **kwargs):
+    # envOr(string,string,address[])
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
-    array_location = 0
-    array_size = 0
-    copy_offset = []
-    fallback_val = []
+    fallback_val = extract_bytes32_array_argument(arg, 2)
 
-    for offset, chunk in arg.chunks.items():
-        # finding array start location
-        if offset == 68:
-            array_location = int.from_bytes(chunk.unwrap(), "big") + 4
-
-        # finding array size and adding a the location at which each elements is stored in copy_offset
-        if offset == array_location and array_location != 0:
-            array_size = int.from_bytes(chunk.unwrap(), "big")
-            for i in range(array_size):
-                copy_offset.append(offset + (32 * i) + 32)
-
-        if offset in copy_offset:
-            fallback_val.append(chunk.unwrap())
-
-    values = env.env_or_address_array(key, fallback_val, delimiter)
+    values = env.env_or_address_array(key, default=fallback_val, delimiter=delimiter)
     result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
     for val in values:
         result.append(val)
@@ -1112,15 +1104,14 @@ def decode_string_arg(data: ByteVec, base_offset: int) -> str:
     """
 
     # Step 1: get offset to actual string data
-    str_offset_bytes = data[4 + base_offset : 4 + base_offset + 32].unwrap()
-    str_offset = int.from_bytes(str_offset_bytes, "big")
+    str_offset = data.get_word(base_offset + 4)
 
     # Step 2: get length of the string
-    str_len_bytes = data[4 + str_offset : 4 + str_offset + 32].unwrap()
-    str_len = int.from_bytes(str_len_bytes, "big")
+    str_len = data.get_word(str_offset + 4)
 
     # Step 3: extract the string bytes
-    str_data_bytes = data[4 + str_offset + 32 : 4 + str_offset + 32 + str_len].unwrap()
+    str_data_offset = 4 + str_offset + 32
+    str_data_bytes = data.slice(str_data_offset, str_data_offset + str_len).unwrap()
     return str_data_bytes.decode("utf-8")
 
 
