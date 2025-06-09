@@ -1,5 +1,7 @@
 # halmos/cheatcodes/env.py
 
+from __future__ import annotations
+
 import os
 
 from dotenv import find_dotenv, load_dotenv
@@ -7,7 +9,7 @@ from dotenv import find_dotenv, load_dotenv
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bitvec import HalmosBool as Bool
 from halmos.logs import debug
-from halmos.utils import Address, uint160
+from halmos.utils import Address, Bytes, Word, uint160
 
 
 def init_env(path: str | None = None):
@@ -36,25 +38,16 @@ def check_env_exists(key: str) -> bool:
     return os.getenv(key) is not None
 
 
-def address_str_to_bytes32(address: str) -> bytes:
-    """
-    Convert a textual Ethereum address to its 32-byte representation.
+def parse_bytes32(value: str, expected_hexstr_len: int = 64) -> bytes:
+    if not value.startswith("0x"):
+        raise ValueError(f"Missing 0x prefix: {value}")
 
-    Args:
-        address: Ethereum address in format 0x... (42 characters)
-
-    Returns:
-        32-byte representation of the address (left-padded with zeros)
-
-    Raises:
-        ValueError: If address format is invalid
-    """
-
-    if not address.startswith("0x"):
-        raise ValueError(f"Missing 0x prefix: {address}")
-    if len(address) != 42:
-        raise ValueError(f"Invalid address length: {address}")
-    return bytes.fromhex(address[2:].rjust(64, "0"))
+    value = value[2:]
+    if len(value) != expected_hexstr_len:
+        raise ValueError(
+            f"Expected {expected_hexstr_len} characters, got {len(value)}: {value}"
+        )
+    return bytes.fromhex(value.rjust(64, "0"))
 
 
 def env_string(key: str, default: str | None = None) -> str:
@@ -145,7 +138,7 @@ def env_or_bool(key: str, default: Bool) -> Bool:
 
 def env_address(key: str) -> Address:
     addr_str = env_string(key)
-    addr_bytes = address_str_to_bytes32(addr_str)
+    addr_bytes = parse_bytes32(addr_str, expected_hexstr_len=40)
     return uint160(addr_bytes)
 
 
@@ -156,147 +149,132 @@ def env_or_address(key: str, default: Address) -> Address:
         return default
 
 
+def env_bytes32(key: str) -> bytes:
+    value = env_string(key)
+    return parse_bytes32(value, expected_hexstr_len=64)
+
+
+def env_bytes(key: str) -> bytes:
+    value = env_string(key)
+    # optional 0x prefix
+    if value.startswith("0x"):
+        value = value[2:]
+    return bytes.fromhex(value)
+
+
+def env_or_bytes(key: str, default: Bytes) -> Bytes:
+    try:
+        return env_bytes(key)
+    except KeyError:
+        return default
+
+
 def env_int_array(key: str, delimiter: str = ",") -> list[bytes]:
     value = env_string(key)
     parts = [x.strip() for x in value.split(delimiter)]
-    try:
-        return [
-            int(x, 0).to_bytes(32, "big", signed=True) for x in parts
-        ]  # base 0 supports hex/dec
-    # val.to_bytes(32, "big", signed=True)
-    except ValueError as e:
-        raise ValueError(f"envIntArray failed to parse: {e}") from e
+
+    # may raise ValueError if not a valid integer
+    # may raise OverflowError if too large
+    # base 0 supports hex/dec
+    return [int(x, 0).to_bytes(32, "big", signed=True) for x in parts]
 
 
-def env_uint_array(key: str, default: str | None = None, delimiter=",") -> list[int]:
-    value = env_string(key, default=default)
+def env_uint_array(key: str, delimiter=",") -> list[int]:
+    value = env_string(key)
     return [int(x.strip()).to_bytes(32, "big") for x in value.split(delimiter)]
 
 
-def env_bytes32(key: str, default: str | None = None) -> bytes:
-    value = env_string(key, default=default)
-    if not value.startswith("0x") or len(value) != 66:
-        raise ValueError(f"Invalid bytes32 format for {key}: {value}")
-    return bytes.fromhex(value.replace("0x", ""))
-
-
-def env_bytes(key: str, default: str | None = None) -> bytes:
-    value = env_string(key, default=default)
-    if value.startswith("0x"):
-        return bytes.fromhex(value[2:])
-    return value.encode()
-
-
-def env_address_array(key: str, delimiter=",") -> list[bytes]:
+def env_address_array(key: str, delimiter=",") -> list[Address]:
     value = env_string(key)
     addresses = [x.strip() for x in value.split(delimiter)]
-    return [address_str_to_bytes32(address) for address in addresses]
+    return [
+        uint160(parse_bytes32(addr_str, expected_hexstr_len=40))
+        for addr_str in addresses
+    ]
 
 
-def env_bool_array(key: str, default: str | None = None, delimiter=",") -> list[bool]:
-    value = env_string(key, default=default)
+def env_bool_array(key: str, delimiter=",") -> list[bool]:
+    value = env_string(key)
     bool_array = [x.strip() for x in value.split(delimiter)]
     return [x.lower() in ["1", "true", "yes"] for x in bool_array]
 
 
-def env_bytes32_array(key: str, default: str | None = None, delimiter=",") -> list[str]:
-    value = env_string(key, default=default)
+def env_bytes32_array(key: str, delimiter=",") -> list[bytes]:
+    value = env_string(key)
     parts = [x.strip() for x in value.split(delimiter)]
-    for part in parts:
-        if not part.startswith("0x") or len(part) != 66:
-            raise ValueError(f"Invalid bytes32 format in array for {key}: {part}")
-    return [part.lower() for part in parts]
+    return [parse_bytes32(part, expected_hexstr_len=64) for part in parts]
 
 
-def env_string_array(key: str, default: str | None = None, delimiter=",") -> list[str]:
-    value = env_string(key, default=default)
+def env_string_array(key: str, delimiter=",") -> list[str]:
+    value = env_string(key)
     return [x.strip() for x in value.split(delimiter)]
 
 
-def env_bytes_array(key: str, default: str | None = None, delimiter=",") -> list[bytes]:
-    value = env_string(key, default=default)
+def env_bytes_array(key: str, delimiter=",") -> list[bytes]:
+    value = env_string(key)
     return [x.strip() for x in value.split(delimiter)]
 
 
-def env_or_bytes(key: str, default: bytes = b"") -> bytes:
-    try:
-        return env_bytes(key)
-    except ValueError:
-        return default
-
-
-def env_or_string(key: str, default: str = "") -> str:
+def env_or_string(key: str, default: str) -> str:
     try:
         return env_string(key)
-    except ValueError:
+    except KeyError:
         return default
 
 
-def env_or_bytes32(key: str, default: str = "") -> bytes:
+def env_or_bytes32(key: str, default: bytes) -> bytes:
     try:
         return env_bytes32(key)
-    except ValueError:
+    except KeyError:
         return default
 
 
 def env_or_address_array(
-    key: str, default: list[bytes] | None = None, delimiter=","
-) -> list[bytes]:
+    key: str, default: list[Address], delimiter=","
+) -> list[Address]:
     try:
         return env_address_array(key, delimiter=delimiter)
     except KeyError:
         return default
 
 
-def env_or_bool_array(
-    key: str, default: list[bool] | None = None, delimiter=","
-) -> list[bool]:
+def env_or_bool_array(key: str, default: list[bool], delimiter=",") -> list[bool]:
     try:
         return env_bool_array(key, delimiter=delimiter)
-    except ValueError:
-        return default if default is not None else []
+    except KeyError:
+        return default
 
 
-def env_or_bytes32_array(
-    key: str, default: list[str] | None = None, delimiter=","
-) -> list[str]:
+def env_or_bytes32_array(key: str, default: list[Word], delimiter=",") -> list[Word]:
     try:
         return env_bytes32_array(key, delimiter=delimiter)
-    except ValueError:
-        return default if default is not None else []
+    except KeyError:
+        return default
 
 
-def env_or_int_array(
-    key: str, default: list[int] | None = None, delimiter=","
-) -> list[int]:
+def env_or_int_array(key: str, default: list[Word], delimiter=",") -> list[Word]:
     try:
         return env_int_array(key, delimiter=delimiter)
-    except ValueError:
-        return default if default is not None else []
+    except KeyError:
+        return default
 
 
-def env_or_uint_array(
-    key: str, default: list[int] | None = None, delimiter=","
-) -> list[int]:
+def env_or_uint_array(key: str, default: list[Word], delimiter=",") -> list[Word]:
     try:
         return env_uint_array(key, delimiter=delimiter)
-    except ValueError:
-        return default if default is not None else []
+    except KeyError:
+        return default
 
 
-def env_or_bytes_array(
-    key: str, default: list[bytes] | None = None, delimiter=","
-) -> list[bytes]:
+def env_or_bytes_array(key: str, default: list[bytes], delimiter=",") -> list[bytes]:
     try:
         return env_bytes_array(key, delimiter=delimiter)
-    except ValueError:
-        return default if default is not None else []
+    except KeyError:
+        return default
 
 
-def env_or_string_array(
-    key: str, default: list[str] | None = None, delimiter=","
-) -> list[str]:
+def env_or_string_array(key: str, default: list[str], delimiter=",") -> list[str]:
     try:
         return env_string_array(key, delimiter=delimiter)
-    except ValueError:
-        return default if default is not None else []
+    except KeyError:
+        return default
