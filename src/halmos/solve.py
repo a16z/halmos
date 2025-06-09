@@ -228,16 +228,16 @@ class FunctionContext:
         if args.dump_smt_directory:
             # use custom directory specified by user
             custom_dir = Path(args.dump_smt_directory)
-            
+
             # create the directory if it doesn't exist
             custom_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # create a subdirectory with the prefix for this function/contract
-            function_dir = custom_dir / prefix.rstrip('-')
+            function_dir = custom_dir / prefix.rstrip("-")
             function_dir.mkdir(parents=True, exist_ok=True)
-            
+
             dump_dir = function_dir
-            
+
             if args.verbose >= 1 or args.dump_smt_queries:
                 print(f"Generating SMT queries in {function_dir}")
         else:
@@ -253,7 +253,7 @@ class FunctionContext:
                 temp_dir._finalizer.detach()
 
             dump_dir = temp_dir
-            
+
             if args.verbose >= 1 or args.dump_smt_queries:
                 print(f"Generating SMT queries in {temp_dir.name}")
 
