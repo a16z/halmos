@@ -12,11 +12,11 @@ from z3 import (
     simplify,
 )
 
+from halmos.solve import dirname
 from halmos.utils import (
     f_sha3_256,
     match_dynamic_array_overflow_condition,
 )
-from halmos.solve import dirname
 
 
 def test_match_dynamic_array_overflow_condition():
