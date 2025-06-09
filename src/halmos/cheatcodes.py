@@ -630,6 +630,13 @@ def create_env_or_address_array(arg, **kwargs):
     delimiter = decode_string_arg(arg, 32)
     fallback_bytes = extract_bytes32_array_argument(arg, 2)
 
+    # wrap into ByteVec if needed (more convenient)
+    fallback_bytes = (
+        ByteVec(fallback_bytes)
+        if not isinstance(fallback_bytes, ByteVec)
+        else fallback_bytes
+    )
+
     num_addresses = len(fallback_bytes) // 32
     fallback_val = [uint160(fallback_bytes.get_word(i)) for i in range(num_addresses)]
 

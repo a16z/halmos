@@ -458,13 +458,11 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_env_or_address_array_without_env_var() public {
-        address[] memory x = new address[](2);
-        x[0] = address(0xDeaDBeef);
-        x[1] = address(0xdeadbeef);
-        address[] memory y = vm.envOr("ADDRESS_ARRAY2", ",", x);
-        assertEq(y.length, 2);
-        assertEq(y[0], address(0xdeadbeef));
-        assertEq(y[1], address(0xdeadbeef));
+        address[] memory x = new address[](1);
+        x[0] = address(0xaabbccdd);
+        address[] memory y = vm.envOr("MISSING", ",", x);
+        assertEq(y.length, 1);
+        assertEq(y[0], x[0]);
     }
 
     function check_env_or_bool_array() public {
