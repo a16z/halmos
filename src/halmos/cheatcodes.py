@@ -2,6 +2,7 @@
 
 import json
 import re
+from contextlib import suppress
 from dataclasses import dataclass
 from subprocess import PIPE, Popen
 
@@ -27,6 +28,7 @@ from z3 import (
 from . import env
 from .assertions import assert_cheatcode_handler
 from .bitvec import HalmosBitVec as BV
+from .bitvec import HalmosBool as Bool
 from .bytevec import ByteVec
 from .calldata import (
     FunctionInfo,
@@ -626,35 +628,33 @@ def create_env_address_array(arg, **kwargs):
 
 
 def create_env_or_address_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
-    fallback_bytes = extract_bytes32_array_argument(arg, 2)
+    with suppress(KeyError):
+        return create_env_address_array(arg, **kwargs)
 
-    # wrap into ByteVec if needed (more convenient)
-    fallback_bytes = (
-        ByteVec(fallback_bytes)
-        if not isinstance(fallback_bytes, ByteVec)
-        else fallback_bytes
-    )
-
-    num_addresses = len(fallback_bytes) // 32
-    fallback_val = [uint160(fallback_bytes.get_word(i)) for i in range(num_addresses)]
-
-    values = env.env_or_address_array(key, default=fallback_val, delimiter=delimiter)
-    return abi_encode_array(values)
+    # wrap into ByteVec if needed (easier to process)
+    fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
+    num_parts = len(fallback_bytes) // 32
+    fallback_val = [uint160(fallback_bytes.get_word(i * 32)) for i in range(num_parts)]
+    return abi_encode_array(fallback_val)
 
 
 def create_env_bool_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_bool_array(key, delimiter)
+    return abi_encode_array(values)
 
-    # XXX
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    for val in values:
-        bool_val = con(1 if val else 0, 1)
-        result.append(uint256(bool_val))
-    return result
+
+def create_env_or_bool_array(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_bool_array(arg, **kwargs)
+
+    fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
+    num_parts = len(fallback_bytes) // 32
+    fallback_val = [
+        Bool(fallback_bytes.get_word(i * 32) != 0) for i in range(num_parts)
+    ]
+    return abi_encode_array(fallback_val)
 
 
 def create_env_bytes32_array(arg, **kwargs):
@@ -818,34 +818,6 @@ def create_env_or_uint(arg, **kwargs):
     fallback_val = uint256(arg.get_word(36))
     val = env.env_or_uint(key, fallback_val)
     return ByteVec(val)
-
-
-def create_env_or_bool_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
-    array_location = 0
-    array_size = 0
-    copy_offset = []
-    fallback_val = []
-
-    for offset, chunk in arg.chunks.items():
-        if offset == 68:
-            array_location = int.from_bytes(chunk.unwrap(), "big") + 4
-
-        if offset == array_location and array_location != 0:
-            array_size = int.from_bytes(chunk.unwrap(), "big")
-            for i in range(array_size):
-                copy_offset.append(offset + (32 * i) + 32)
-
-        if offset in copy_offset:
-            fallback_val.append(bool(int.from_bytes(chunk.unwrap(), "big")))
-
-    values = env.env_or_bool_array(key, fallback_val, delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    for val in values:
-        bool_val = con(1 if val else 0, 1)
-        result.append(uint256(bool_val))
-    return result
 
 
 def create_env_or_bytes32_array(arg, **kwargs):

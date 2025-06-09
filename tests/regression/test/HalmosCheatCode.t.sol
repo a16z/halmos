@@ -476,13 +476,15 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_env_or_bool_array_without_env_var() public {
-        bool[] memory x = new bool[](2);
+        bool[] memory x = new bool[](3);
         x[0] = true;
         x[1] = false;
-        bool[] memory y = vm.envOr("BOOL_ARRAY2", ",", x);
-        assertEq(y.length, 2);
-        assertEq(y[0], true);
-        assertEq(y[1], false);
+        x[2] = true;
+        bool[] memory y = vm.envOr("MISSING", ",", x);
+        assertEq(y.length, 3);
+        assertEq(y[0], x[0]);
+        assertEq(y[1], x[1]);
+        assertEq(y[2], x[2]);
     }
 
     function check_env_or_bytes32_array() public {
