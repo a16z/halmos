@@ -57,6 +57,13 @@ def env_string(key: str, default: str | None = None) -> str:
     return value
 
 
+def env_or_string(key: str, default: Bytes) -> Bytes:
+    try:
+        return env_string(key)
+    except KeyError:
+        return default
+
+
 def env_int(key: str) -> int:
     """
     Returns the concrete integer value of the environment variable.
@@ -154,6 +161,13 @@ def env_bytes32(key: str) -> bytes:
     return parse_bytes32(value, expected_hexstr_len=64)
 
 
+def env_or_bytes32(key: str, default: Word) -> Word:
+    try:
+        return env_bytes32(key)
+    except KeyError:
+        return default
+
+
 def env_bytes(key: str) -> bytes:
     value = env_string(key)
     # optional 0x prefix
@@ -179,9 +193,23 @@ def env_int_array(key: str, delimiter: str = ",") -> list[bytes]:
     return [int(x, 0).to_bytes(32, "big", signed=True) for x in parts]
 
 
+def env_or_int_array(key: str, default: list[Word], delimiter=",") -> list[Word]:
+    try:
+        return env_int_array(key, delimiter=delimiter)
+    except KeyError:
+        return default
+
+
 def env_uint_array(key: str, delimiter=",") -> list[int]:
     value = env_string(key)
     return [int(x.strip()).to_bytes(32, "big") for x in value.split(delimiter)]
+
+
+def env_or_uint_array(key: str, default: list[Word], delimiter=",") -> list[Word]:
+    try:
+        return env_uint_array(key, delimiter=delimiter)
+    except KeyError:
+        return default
 
 
 def env_address_array(key: str, delimiter=",") -> list[Address]:
@@ -193,42 +221,6 @@ def env_address_array(key: str, delimiter=",") -> list[Address]:
     ]
 
 
-def env_bool_array(key: str, delimiter=",") -> list[bool]:
-    value = env_string(key)
-    bool_array = [x.strip() for x in value.split(delimiter)]
-    return [x.lower() in ["1", "true", "yes"] for x in bool_array]
-
-
-def env_bytes32_array(key: str, delimiter=",") -> list[bytes]:
-    value = env_string(key)
-    parts = [x.strip() for x in value.split(delimiter)]
-    return [parse_bytes32(part, expected_hexstr_len=64) for part in parts]
-
-
-def env_string_array(key: str, delimiter=",") -> list[str]:
-    value = env_string(key)
-    return [x.strip() for x in value.split(delimiter)]
-
-
-def env_bytes_array(key: str, delimiter=",") -> list[bytes]:
-    value = env_string(key)
-    return [x.strip() for x in value.split(delimiter)]
-
-
-def env_or_string(key: str, default: str) -> str:
-    try:
-        return env_string(key)
-    except KeyError:
-        return default
-
-
-def env_or_bytes32(key: str, default: bytes) -> bytes:
-    try:
-        return env_bytes32(key)
-    except KeyError:
-        return default
-
-
 def env_or_address_array(
     key: str, default: list[Address], delimiter=","
 ) -> list[Address]:
@@ -238,11 +230,23 @@ def env_or_address_array(
         return default
 
 
-def env_or_bool_array(key: str, default: list[bool], delimiter=",") -> list[bool]:
+def env_bool_array(key: str, delimiter=",") -> list[bool]:
+    value = env_string(key)
+    bool_array = [x.strip() for x in value.split(delimiter)]
+    return [x.lower() in ["1", "true", "yes"] for x in bool_array]
+
+
+def env_or_bool_array(key: str, default: list[Bool], delimiter=",") -> list[Bool]:
     try:
         return env_bool_array(key, delimiter=delimiter)
     except KeyError:
         return default
+
+
+def env_bytes32_array(key: str, delimiter=",") -> list[bytes]:
+    value = env_string(key)
+    parts = [x.strip() for x in value.split(delimiter)]
+    return [parse_bytes32(part, expected_hexstr_len=64) for part in parts]
 
 
 def env_or_bytes32_array(key: str, default: list[Word], delimiter=",") -> list[Word]:
@@ -252,29 +256,25 @@ def env_or_bytes32_array(key: str, default: list[Word], delimiter=",") -> list[W
         return default
 
 
-def env_or_int_array(key: str, default: list[Word], delimiter=",") -> list[Word]:
-    try:
-        return env_int_array(key, delimiter=delimiter)
-    except KeyError:
-        return default
+def env_string_array(key: str, delimiter=",") -> list[str]:
+    value = env_string(key)
+    return [x.strip() for x in value.split(delimiter)]
 
 
-def env_or_uint_array(key: str, default: list[Word], delimiter=",") -> list[Word]:
-    try:
-        return env_uint_array(key, delimiter=delimiter)
-    except KeyError:
-        return default
-
-
-def env_or_bytes_array(key: str, default: list[bytes], delimiter=",") -> list[bytes]:
-    try:
-        return env_bytes_array(key, delimiter=delimiter)
-    except KeyError:
-        return default
-
-
-def env_or_string_array(key: str, default: list[str], delimiter=",") -> list[str]:
+def env_or_string_array(key: str, default: list[Bytes], delimiter=",") -> list[Bytes]:
     try:
         return env_string_array(key, delimiter=delimiter)
+    except KeyError:
+        return default
+
+
+def env_bytes_array(key: str, delimiter=",") -> list[bytes]:
+    value = env_string(key)
+    return [x.strip() for x in value.split(delimiter)]
+
+
+def env_or_bytes_array(key: str, default: list[Bytes], delimiter=",") -> list[Bytes]:
+    try:
+        return env_bytes_array(key, delimiter=delimiter)
     except KeyError:
         return default
