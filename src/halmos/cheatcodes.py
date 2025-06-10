@@ -97,7 +97,9 @@ def name_of(x: str) -> str:
     return re.sub(r"\s+", "_", x)
 
 
-def extract_string_array_argument(calldata: ByteVec, arg_idx: int) -> list[bytes]:
+def extract_string_array_argument(
+    calldata: ByteVec, arg_idx: int, decode: bool = True
+) -> list[bytes | str]:
     """Extracts idx-th argument of string array from calldata"""
 
     array_slot = int_of(calldata.get_word(4 + 32 * arg_idx))
@@ -108,13 +110,9 @@ def extract_string_array_argument(calldata: ByteVec, arg_idx: int) -> list[bytes
     for i in range(num_strings):
         string_offset = int_of(calldata.get_word(4 + array_slot + 32 * (i + 1)))
         string_length = int_of(calldata.get_word(4 + array_slot + 32 + string_offset))
-        string_value = int_of(
-            extract_bytes(
-                calldata, 4 + array_slot + 32 + string_offset + 32, string_length
-            )
-        )
-        string_bytes = string_value.to_bytes(string_length, "big")
-        string_array.append(string_bytes.decode("utf-8"))
+        string_data_offset = 4 + array_slot + 32 + string_offset + 32
+        string_bytes = extract_bytes(calldata, string_data_offset, string_length)
+        string_array.append(string_bytes.decode("utf-8") if decode else string_bytes)
 
     return string_array
 
@@ -906,61 +904,16 @@ def create_env_or_bytes_array(arg, **kwargs):
     with suppress(KeyError):
         return create_env_bytes_array(arg, **kwargs)
 
-    fallback: list[bytes] = extract_string_array_argument(arg, 2)
+    fallback: list[bytes] = extract_string_array_argument(arg, 2, decode=False)
     return abi_encode_array_bytes(fallback)
 
 
 def create_env_or_string_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
-    fallback_val = []
-    string_array_location = 0
-    string_array_size = 0
-    string_array_copy_len_list = []
-    string_array_copy_location_list = []
-    string_offset_for_length = 0
-    for offset, chunk in arg.chunks.items():
-        if offset == 68:
-            string_array_location = int.from_bytes(chunk.unwrap(), "big") + 4
-        if offset == string_array_location and string_array_location != 0:
-            string_array_size = int.from_bytes(chunk.unwrap(), "big")
-            string_offset_for_length = offset + 32
-            for i in range(string_array_size):
-                string_array_copy_len_list.append(string_array_location + 32 + (i * 32))
+    with suppress(KeyError):
+        return create_env_string_array(arg, **kwargs)
 
-        if offset in string_array_copy_len_list:
-            val = (
-                int.from_bytes(chunk.unwrap(), "big") + string_offset_for_length
-            ) + 32
-            string_array_copy_location_list.append(val)
-
-        if offset in string_array_copy_location_list:
-            fallback_val.append(chunk.unwrap().decode("utf-8"))
-
-    values = env.env_or_bytes_array(key, fallback_val, delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    len_of_values = len(values)
-    total_String_length = 0
-
-    for val in values:
-        hex_val = val.encode("utf-8")
-        length_of_currentstring = len(hex_val)
-        n = len_of_values * 32 + total_String_length
-        encoded_val = (n + total_String_length).to_bytes(32, "big")
-        result.append(encoded_val)  # location of the string
-        num_chunks = (length_of_currentstring + 31) // 32
-        total_String_length += num_chunks * 32
-
-    for val in values:
-        hex_val = val.encode("utf-8")
-        result.append(int(len(hex_val)).to_bytes(32, "big"))  # length of the string
-        for i in range(0, len(hex_val), 32):
-            chunk = hex_val[i : i + 32]
-            if len(chunk) < 32:
-                chunk = chunk.ljust(32, b"\x00")  # pad with zeros
-            result.append(chunk)  # adding value of the string
-
-    return result
+    fallback: list[bytes] = extract_string_array_argument(arg, 2, decode=False)
+    return abi_encode_array_bytes(fallback)
 
 
 def apply_vmaddr(ex, private_key: Word):

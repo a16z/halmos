@@ -592,14 +592,14 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     function check_env_or_string_array_without_env_var() public {
         string[] memory string_lst = new string[](3);
-        string_lst[0] =  "hello";
-        string_lst[1] =  "world";
+        string_lst[0] =  "some short string";
+        string_lst[1] =  "";
         string_lst[2] =  "This string is definitely longer than thirty-one bytes!";
-        string[] memory return_string_lst = vm.envOr("STRING_ARRAY2",",",string_lst);
+        string[] memory return_string_lst = vm.envOr("MISSING",",",string_lst);
         assertEq(return_string_lst.length, 3);
-        assertEq(return_string_lst[0], "hello");
-        assertEq(return_string_lst[1], "world");
-        assertEq(return_string_lst[2], "This string is definitely longer than thirty-one bytes!");
+        assertEq(return_string_lst[0], string_lst[0]);
+        assertEq(return_string_lst[1], string_lst[1]);
+        assertEq(return_string_lst[2], string_lst[2]);
     }
 
     function check_env_exists() public {
