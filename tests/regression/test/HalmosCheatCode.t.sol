@@ -385,7 +385,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_env_or_address_without_env_var() public {
-        address x = vm.envOr("ADDRESS2", address(0xdeadbeef));
+        address x = vm.envOr("MISSING", address(0xdeadbeef));
         assertEq(x, address(0xdeadbeef));
     }
 
@@ -396,6 +396,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     function check_env_or_bool_without_env_var(bool x) public {
         assertEq(vm.envOr("MISSING", true), true);
+        assertEq(vm.envOr("MISSING", false), false);
         assertEq(vm.envOr("MISSING", x), x);
     }
 
