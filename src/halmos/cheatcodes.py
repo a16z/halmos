@@ -818,32 +818,16 @@ def create_env_or_uint(arg, **kwargs):
 
 
 def create_env_or_bytes32_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
-    array_location = 0
-    array_size = 0
-    copy_offset = []
-    fallback_val = []
+    with suppress(KeyError):
+        return create_env_bytes32_array(arg, **kwargs)
 
-    for offset, chunk in arg.chunks.items():
-        if offset == 68:
-            array_location = int.from_bytes(chunk.unwrap(), "big") + 4
-
-        if offset == array_location and array_location != 0:
-            array_size = int.from_bytes(chunk.unwrap(), "big")
-            for i in range(array_size):
-                copy_offset.append(offset + (32 * i) + 32)
-
-        if offset in copy_offset:
-            fallback_val.append("0x" + chunk.unwrap().hex())
-
-    values = env.env_or_bytes32_array(key, fallback_val, delimiter)
-
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    for val in values:
-        bytes32_val = bytes.fromhex(val.replace("0x", "").rjust(64, "0"))
-        result.append(bytes32_val)
-    return result
+    # wrap into ByteVec if needed (easier to process)
+    fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
+    num_parts = len(fallback_bytes) // 32
+    fallback_val: list[Word] = [
+        fallback_bytes.slice(i * 32, (i + 1) * 32).unwrap() for i in range(num_parts)
+    ]
+    return abi_encode_array_words(fallback_val)
 
 
 def create_env_or_int_array(arg, **kwargs):

@@ -565,18 +565,15 @@ contract HalmosCheatCodeTest is SymTest, Test {
 
     function check_env_or_bytes_array_without_env_var() public {
         bytes[] memory bytes_lst = new bytes[](3);
-        bytes_lst[0] =  hex"00000000000000000000000000000000000000000000000000000000DeaDBeef";
-        bytes_lst[1] =  hex"DeaDBeef";
+        bytes_lst[0] =  hex"ab";
+        bytes_lst[1] =  hex"";
         bytes_lst[2] =  hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef";
-        bytes[] memory return_bytes_lst = vm.envOr("BYTES_ARRAY2",",",bytes_lst);
+        bytes[] memory return_bytes_lst = vm.envOr("MISSING",",",bytes_lst);
         assertEq(return_bytes_lst.length, 3);
-        assertEq(return_bytes_lst[0], hex"00000000000000000000000000000000000000000000000000000000DeaDBeef");
-        assertEq(return_bytes_lst[1], hex"DeaDBeef");
-        assertEq(return_bytes_lst[2], hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef");
+        assertEq(return_bytes_lst[0], bytes_lst[0]);
+        assertEq(return_bytes_lst[1], bytes_lst[1]);
+        assertEq(return_bytes_lst[2], bytes_lst[2]);
     }
-
-
-
 
     function check_env_or_string_array() public {
         string[] memory string_lst = new string[](3);
