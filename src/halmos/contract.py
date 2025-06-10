@@ -2,19 +2,19 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import ClassVar
 
-from .bitvec import HalmosBitVec as BV
-from .bytevec import ByteVec, ConcreteChunk
-from .constants import MAX_MEMORY_SIZE
-from .exceptions import (
+from halmos.bitvec import HalmosBitVec as BV
+from halmos.bytevec import ByteVec, ConcreteChunk
+from halmos.constants import MAX_MEMORY_SIZE
+from halmos.exceptions import (
     NotConcreteError,
     OutOfGasError,
 )
-from .logs import (
+from halmos.logs import (
     LIBRARY_PLACEHOLDER,
     warn_code,
 )
-from .mapper import SingletonMeta, SourceFileMap
-from .utils import (
+from halmos.mapper import SingletonMeta, SourceFileMap
+from halmos.utils import (
     Address,
     Byte,
     con_addr,

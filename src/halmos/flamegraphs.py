@@ -5,10 +5,10 @@ import time
 import traceback
 from dataclasses import dataclass, field
 
-from .logs import debug, warn
-from .sevm import CallContext, CallSequence, Message
-from .traces import rendered_address
-from .utils import hexify
+from halmos.logs import debug, warn
+from halmos.sevm import CallContext, CallSequence, Message
+from halmos.traces import rendered_address
+from halmos.utils import hexify
 
 AUTO_REFRESH_INTERVAL_SECONDS = 0.250
 

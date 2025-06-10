@@ -9,20 +9,20 @@ from typing import Literal
 
 from z3 import CheckSatResult, Solver, sat, unknown, unsat
 
-from .calldata import FunctionInfo
-from .config import Config as HalmosConfig
-from .logs import (
+from halmos.calldata import FunctionInfo
+from halmos.config import Config as HalmosConfig
+from halmos.logs import (
     debug,
     error,
     warn,
 )
-from .processes import (
+from halmos.processes import (
     ExecutorRegistry,
     PopenExecutor,
     PopenFuture,
 )
-from .sevm import Address, Exec, SMTQuery
-from .utils import hexify
+from halmos.sevm import Address, Exec, SMTQuery
+from halmos.utils import hexify
 
 EXIT_TIMEDOUT = 124
 

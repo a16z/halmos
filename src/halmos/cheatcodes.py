@@ -25,17 +25,17 @@ from z3 import (
     unsat,
 )
 
-from .assertions import assert_cheatcode_handler
-from .bitvec import HalmosBitVec as BV
-from .bitvec import HalmosBool as Bool
-from .bytevec import ByteVec
-from .calldata import (
+from halmos.assertions import assert_cheatcode_handler
+from halmos.bitvec import HalmosBitVec as BV
+from halmos.bitvec import HalmosBool as Bool
+from halmos.bytevec import ByteVec
+from halmos.calldata import (
     FunctionInfo,
     get_abi,
     mk_calldata,
 )
-from .constants import MAX_MEMORY_SIZE
-from .env import (
+from halmos.constants import MAX_MEMORY_SIZE
+from halmos.env import (
     getenv_address,
     getenv_address_array,
     getenv_bool,
@@ -52,16 +52,16 @@ from .env import (
     getenv_uint,
     getenv_uint_array,
 )
-from .exceptions import (
+from halmos.exceptions import (
     FailCheatcode,
     HalmosException,
     InfeasiblePath,
     NotConcreteError,
     OutOfGasError,
 )
-from .logs import debug
-from .mapper import BuildOut
-from .utils import (
+from halmos.logs import debug
+from halmos.mapper import BuildOut
+from halmos.utils import (
     Address,
     BitVecSort8,
     BitVecSort160,

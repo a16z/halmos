@@ -37,35 +37,35 @@ from z3 import (
 
 import halmos.traces
 
-from .build import (
+from halmos.build import (
     build_output_iterator,
     import_libs,
     parse_build_out,
     parse_devdoc,
     parse_natspec,
 )
-from .bytevec import ByteVec
-from .calldata import FunctionInfo, get_abi, mk_calldata
-from .cheatcodes import snapshot_state
-from .config import Config as HalmosConfig
-from .config import (
+from halmos.bytevec import ByteVec
+from halmos.calldata import FunctionInfo, get_abi, mk_calldata
+from halmos.cheatcodes import snapshot_state
+from halmos.config import Config as HalmosConfig
+from halmos.config import (
     ConfigSource,
     arg_parser,
     default_config,
     resolve_config_files,
     toml_parser,
 )
-from .constants import (
+from halmos.constants import (
     VERBOSITY_TRACE_CONSTRUCTOR,
     VERBOSITY_TRACE_COUNTEREXAMPLE,
     VERBOSITY_TRACE_PATHS,
     VERBOSITY_TRACE_SETUP,
 )
-from .contract import CoverageReporter
-from .env import init_env
-from .exceptions import FailCheatcode, HalmosException
-from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
-from .logs import (
+from halmos.contract import CoverageReporter
+from halmos.env import init_env
+from halmos.exceptions import FailCheatcode, HalmosException
+from halmos.flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
+from halmos.logs import (
     COUNTEREXAMPLE_INVALID,
     INTERNAL_ERROR,
     LOOP_BOUND,
@@ -77,9 +77,9 @@ from .logs import (
     warn,
     warn_code,
 )
-from .mapper import BuildOut, DeployAddressMapper
-from .processes import ExecutorRegistry, ShutdownError
-from .sevm import (
+from halmos.mapper import BuildOut, DeployAddressMapper
+from halmos.processes import ExecutorRegistry, ShutdownError
+from halmos.sevm import (
     EMPTY_BALANCE,
     FOUNDRY_CALLER,
     FOUNDRY_ORIGIN,
@@ -99,7 +99,7 @@ from .sevm import (
     jumpid_str,
     mnemonic,
 )
-from .solve import (
+from halmos.solve import (
     ContractContext,
     FunctionContext,
     InvariantTestingContext,
@@ -108,15 +108,15 @@ from .solve import (
     solve_end_to_end,
     solve_low_level,
 )
-from .solvers import get_solver_command
-from .traces import (
+from halmos.solvers import get_solver_command
+from halmos.traces import (
     render_trace,
     rendered_address,
     rendered_call_sequence,
     rendered_trace,
 )
-from .ui import suspend_status, ui
-from .utils import (
+from halmos.ui import suspend_status, ui
+from halmos.utils import (
     EVM,
     Address,
     BitVecSort256,

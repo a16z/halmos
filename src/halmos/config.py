@@ -11,9 +11,9 @@ from typing import Any
 
 import toml
 
-from .logs import warn
-from .solvers import SOLVERS
-from .utils import parse_time
+from halmos.logs import warn
+from halmos.solvers import SOLVERS
+from halmos.utils import parse_time
 
 # common strings
 internal = "internal"
