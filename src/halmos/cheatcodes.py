@@ -541,47 +541,47 @@ def create_bytes8(ex, arg, name: str | None = None, **kwargs):
 
 
 def check_env_exists(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    key = extract_string_argument(arg, 0)
     val = env.check_env_exists(key)
     bool_val = con(1 if val else 0, 1)
     return ByteVec(uint256(bool_val))
 
 
 def create_env_bytes32(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    key = extract_string_argument(arg, 0)
     bytes32_val = env.env_bytes32(key)
     return ByteVec(bytes32_val)
 
 
 def create_env_address(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    key = extract_string_argument(arg, 0)
     val = env.env_address(key)
     address_val = address(val)
     return ByteVec(uint256(address_val))
 
 
 def create_env_bool(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    key = extract_string_argument(arg, 0)
     val = env.env_bool(key)
     bool_val = con(1 if val else 0, 1)
     return ByteVec(uint256(bool_val))
 
 
 def create_env_uint(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    key = extract_string_argument(arg, 0)
     val = env.env_uint(key)
     uint_val = uint256(val)
     return ByteVec(uint_val)
 
 
 def create_env_bytes(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    key = extract_string_argument(arg, 0)
     val = env.env_bytes(key)
     return encode_tuple_bytes(val)
 
 
 def create_env_string(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    key = extract_string_argument(arg, 0)
     val = env.env_string(key)
     if isinstance(val, str):
         val = val.encode("utf-8")
@@ -589,13 +589,10 @@ def create_env_string(arg, **kwargs):
 
 
 def create_env_int(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    key = extract_string_argument(arg, 0)
     val = env.env_int(key)
     int_val = BV(val)
     return ByteVec(int_val)
-
-
-# returning dynamic arrays
 
 
 def abi_encode_array_words(values: list[Bool | Address | Word]) -> ByteVec:
@@ -672,22 +669,22 @@ def abi_encode_array_bytes(values: list[Bytes]) -> ByteVec:
 
 
 def create_env_int_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
     values = env.env_int_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
 def create_env_uint_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
     values = env.env_uint_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
 def create_env_address_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
     values = env.env_address_array(key, delimiter)
     return abi_encode_array_words(values)
 
@@ -704,8 +701,8 @@ def create_env_or_address_array(arg, **kwargs):
 
 
 def create_env_bool_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
     values = env.env_bool_array(key, delimiter)
     return abi_encode_array_words(values)
 
@@ -723,23 +720,23 @@ def create_env_or_bool_array(arg, **kwargs):
 
 
 def create_env_bytes32_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
     values = env.env_bytes32_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
 def create_env_string_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
     values: list[str] = env.env_string_array(key, delimiter)
     encoded_values: list[bytes] = [val.encode("utf-8") for val in values]
     return abi_encode_array_bytes(encoded_values)
 
 
 def create_env_bytes_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
     values = env.env_bytes_array(key, delimiter)
     return abi_encode_array_bytes(values)
 
@@ -915,23 +912,6 @@ class halmos_cheat_code:
 
         error_msg = f"Unknown halmos cheat code: function selector = 0x{funsig:0>8x}, calldata = {hexify(arg)}"
         raise HalmosException(error_msg)
-
-
-def decode_string_arg(data: ByteVec, base_offset: int) -> str:
-    """
-    Decode a dynamic `string` argument from ABI calldata.
-    """
-
-    # Step 1: get offset to actual string data
-    str_offset = data.get_word(base_offset + 4)
-
-    # Step 2: get length of the string
-    str_len = data.get_word(str_offset + 4)
-
-    # Step 3: extract the string bytes
-    str_data_offset = 4 + str_offset + 32
-    str_data_bytes = data.slice(str_data_offset, str_data_offset + str_len).unwrap()
-    return str_data_bytes.decode("utf-8")
 
 
 class hevm_cheat_code:
