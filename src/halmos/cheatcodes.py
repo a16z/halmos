@@ -97,7 +97,7 @@ def name_of(x: str) -> str:
     return re.sub(r"\s+", "_", x)
 
 
-def extract_string_array_argument(calldata: ByteVec, arg_idx: int):
+def extract_string_array_argument(calldata: ByteVec, arg_idx: int) -> list[bytes]:
     """Extracts idx-th argument of string array from calldata"""
 
     array_slot = int_of(calldata.get_word(4 + 32 * arg_idx))
@@ -903,58 +903,11 @@ def create_env_or_uint_array(arg, **kwargs):
 
 
 def create_env_or_bytes_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
-    fallback_val = []
-    byte_array_location = 0
-    byte_array_size = 0
-    byte_array_copy_len_list = []
-    byte_array_copy_location_list = []
-    byte_offset_for_length = 0
+    with suppress(KeyError):
+        return create_env_bytes_array(arg, **kwargs)
 
-    for offset, chunk in arg.chunks.items():
-        if offset == 68:
-            byte_array_location = int.from_bytes(chunk.unwrap(), "big") + 4
-
-        if offset == byte_array_location and byte_array_location != 0:
-            byte_array_size = int.from_bytes(chunk.unwrap(), "big")
-            byte_offset_for_length = offset + 32
-
-            for i in range(byte_array_size):
-                byte_array_copy_len_list.append(byte_array_location + 32 + (i * 32))
-
-        # this step is  required as bytes can be larger than 32 bytes
-        if offset in byte_array_copy_len_list:
-            val = (int.from_bytes(chunk.unwrap(), "big") + byte_offset_for_length) + 32
-            byte_array_copy_location_list.append(val)
-
-        if offset in byte_array_copy_location_list:
-            fallback_val.append("0x" + chunk.unwrap().hex())
-
-    values = env.env_or_bytes_array(key, fallback_val, delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    len_of_values = len(values)
-
-    total_String_length = 0
-    # encoding the return value similar to calldata
-    for val in values:
-        bytes_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
-        length_of_currentstring = len(bytes_val)
-        n = len_of_values * 32 + total_String_length
-        encoded_val = (n + total_String_length).to_bytes(32, "big")
-        result.append(encoded_val)  # location of the bytes
-        num_chunks = (length_of_currentstring + 31) // 32
-        total_String_length += num_chunks * 32
-
-    for val in values:
-        bytes_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
-        result.append(int(len(bytes_val)).to_bytes(32, "big"))  # length of the bytes
-        for i in range(0, len(bytes_val), 32):
-            chunk = bytes_val[i : i + 32]
-            if len(chunk) < 32:
-                chunk = chunk.ljust(32, b"\x00")  # pad with zeros
-            result.append(chunk)  # adding values of the bytes
-    return result
+    fallback: list[bytes] = extract_string_array_argument(arg, 2)
+    return abi_encode_array_bytes(fallback)
 
 
 def create_env_or_string_array(arg, **kwargs):
