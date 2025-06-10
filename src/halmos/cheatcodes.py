@@ -25,7 +25,6 @@ from z3 import (
     unsat,
 )
 
-from . import env
 from .assertions import assert_cheatcode_handler
 from .bitvec import HalmosBitVec as BV
 from .bitvec import HalmosBool as Bool
@@ -36,6 +35,23 @@ from .calldata import (
     mk_calldata,
 )
 from .constants import MAX_MEMORY_SIZE
+from .env import (
+    getenv_address,
+    getenv_address_array,
+    getenv_bool,
+    getenv_bool_array,
+    getenv_bytes,
+    getenv_bytes32,
+    getenv_bytes32_array,
+    getenv_bytes_array,
+    getenv_exists,
+    getenv_int,
+    getenv_int_array,
+    getenv_string,
+    getenv_string_array,
+    getenv_uint,
+    getenv_uint_array,
+)
 from .exceptions import (
     FailCheatcode,
     HalmosException,
@@ -540,57 +556,57 @@ def create_bytes8(ex, arg, name: str | None = None, **kwargs):
     return result
 
 
-def check_env_exists(arg, **kwargs):
+def env_exists(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = env.check_env_exists(key)
+    val = getenv_exists(key)
     bool_val = con(1 if val else 0, 1)
     return ByteVec(uint256(bool_val))
 
 
-def create_env_bytes32(arg, **kwargs):
+def env_bytes32(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    bytes32_val = env.env_bytes32(key)
+    bytes32_val = getenv_bytes32(key)
     return ByteVec(bytes32_val)
 
 
-def create_env_address(arg, **kwargs):
+def env_address(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = env.env_address(key)
+    val = getenv_address(key)
     address_val = address(val)
     return ByteVec(uint256(address_val))
 
 
-def create_env_bool(arg, **kwargs):
+def env_bool(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = env.env_bool(key)
+    val = getenv_bool(key)
     bool_val = con(1 if val else 0, 1)
     return ByteVec(uint256(bool_val))
 
 
-def create_env_uint(arg, **kwargs):
+def env_uint(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = env.env_uint(key)
+    val = getenv_uint(key)
     uint_val = uint256(val)
     return ByteVec(uint_val)
 
 
-def create_env_bytes(arg, **kwargs):
+def env_bytes(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = env.env_bytes(key)
+    val = getenv_bytes(key)
     return encode_tuple_bytes(val)
 
 
-def create_env_string(arg, **kwargs):
+def env_string(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = env.env_string(key)
+    val = getenv_string(key)
     if isinstance(val, str):
         val = val.encode("utf-8")
     return encode_tuple_bytes(val)
 
 
-def create_env_int(arg, **kwargs):
+def env_int(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = env.env_int(key)
+    val = getenv_int(key)
     int_val = BV(val)
     return ByteVec(int_val)
 
@@ -668,30 +684,30 @@ def abi_encode_array_bytes(values: list[Bytes]) -> ByteVec:
     return result
 
 
-def create_env_int_array(arg, **kwargs):
+def env_int_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = env.env_int_array(key, delimiter)
+    values = getenv_int_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
-def create_env_uint_array(arg, **kwargs):
+def env_uint_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = env.env_uint_array(key, delimiter)
+    values = getenv_uint_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
-def create_env_address_array(arg, **kwargs):
+def env_address_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = env.env_address_array(key, delimiter)
+    values = getenv_address_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
-def create_env_or_address_array(arg, **kwargs):
+def env_or_address_array(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_address_array(arg, **kwargs)
+        return env_address_array(arg, **kwargs)
 
     # wrap into ByteVec if needed (easier to process)
     fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
@@ -700,16 +716,16 @@ def create_env_or_address_array(arg, **kwargs):
     return abi_encode_array_words(fallback_val)
 
 
-def create_env_bool_array(arg, **kwargs):
+def env_bool_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = env.env_bool_array(key, delimiter)
+    values = getenv_bool_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
-def create_env_or_bool_array(arg, **kwargs):
+def env_or_bool_array(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_bool_array(arg, **kwargs)
+        return env_bool_array(arg, **kwargs)
 
     fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
     num_parts = len(fallback_bytes) // 32
@@ -719,89 +735,89 @@ def create_env_or_bool_array(arg, **kwargs):
     return abi_encode_array_words(fallback_val)
 
 
-def create_env_bytes32_array(arg, **kwargs):
+def env_bytes32_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = env.env_bytes32_array(key, delimiter)
+    values = getenv_bytes32_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
-def create_env_string_array(arg, **kwargs):
+def env_string_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values: list[str] = env.env_string_array(key, delimiter)
+    values: list[str] = getenv_string_array(key, delimiter)
     encoded_values: list[bytes] = [val.encode("utf-8") for val in values]
     return abi_encode_array_bytes(encoded_values)
 
 
-def create_env_bytes_array(arg, **kwargs):
+def env_bytes_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = env.env_bytes_array(key, delimiter)
+    values = getenv_bytes_array(key, delimiter)
     return abi_encode_array_bytes(values)
 
 
-def create_env_or_address(arg, **kwargs):
+def env_or_address(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_address(arg, **kwargs)
+        return env_address(arg, **kwargs)
 
     fallback_val = uint160(arg.get_word(36))
     return ByteVec(uint256(fallback_val))
 
 
-def create_env_or_bool(arg, **kwargs):
+def env_or_bool(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_bool(arg, **kwargs)
+        return env_bool(arg, **kwargs)
 
     fallback_val = arg.get_word(36)
     bool_val = Bool(fallback_val != 0)
     return ByteVec(uint256(bool_val))
 
 
-def create_env_or_bytes(arg, **kwargs):
+def env_or_bytes(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_bytes(arg, **kwargs)
+        return env_bytes(arg, **kwargs)
 
     fallback_bytes = ByteVec(extract_bytes_argument(arg, 1))
     return encode_tuple_bytes(fallback_bytes)
 
 
-def create_env_or_string(arg, **kwargs):
+def env_or_string(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_string(arg, **kwargs)
+        return env_string(arg, **kwargs)
 
     fallback_bytes = ByteVec(extract_bytes_argument(arg, 1))
     return encode_tuple_bytes(fallback_bytes)
 
 
-def create_env_or_bytes32(arg, **kwargs):
+def env_or_bytes32(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_bytes32(arg, **kwargs)
+        return env_bytes32(arg, **kwargs)
 
     fallback_val = arg.slice(36, 68)
     bytes32_val = padded_bytes(fallback_val, right_pad=False)
     return ByteVec(bytes32_val)
 
 
-def create_env_or_int(arg, **kwargs):
+def env_or_int(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_int(arg, **kwargs)
+        return env_int(arg, **kwargs)
 
     fallback_val = uint256(arg.get_word(36))
     return ByteVec(fallback_val)
 
 
-def create_env_or_uint(arg, **kwargs):
+def env_or_uint(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_uint(arg, **kwargs)
+        return env_uint(arg, **kwargs)
 
     fallback_val = uint256(arg.get_word(36))
     return ByteVec(fallback_val)
 
 
-def create_env_or_bytes32_array(arg, **kwargs):
+def env_or_bytes32_array(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_bytes32_array(arg, **kwargs)
+        return env_bytes32_array(arg, **kwargs)
 
     # wrap into ByteVec if needed (easier to process)
     fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
@@ -812,9 +828,9 @@ def create_env_or_bytes32_array(arg, **kwargs):
     return abi_encode_array_words(fallback_val)
 
 
-def create_env_or_int_array(arg, **kwargs):
+def env_or_int_array(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_int_array(arg, **kwargs)
+        return env_int_array(arg, **kwargs)
 
     fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
     num_parts = len(fallback_bytes) // 32
@@ -824,9 +840,9 @@ def create_env_or_int_array(arg, **kwargs):
     return abi_encode_array_words(fallback_val)
 
 
-def create_env_or_uint_array(arg, **kwargs):
+def env_or_uint_array(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_uint_array(arg, **kwargs)
+        return env_uint_array(arg, **kwargs)
 
     fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
     num_parts = len(fallback_bytes) // 32
@@ -836,17 +852,17 @@ def create_env_or_uint_array(arg, **kwargs):
     return abi_encode_array_words(fallback_val)
 
 
-def create_env_or_bytes_array(arg, **kwargs):
+def env_or_bytes_array(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_bytes_array(arg, **kwargs)
+        return env_bytes_array(arg, **kwargs)
 
     fallback: list[bytes] = extract_string_array_argument(arg, 2, decode=False)
     return abi_encode_array_bytes(fallback)
 
 
-def create_env_or_string_array(arg, **kwargs):
+def env_or_string_array(arg, **kwargs):
     with suppress(KeyError):
-        return create_env_string_array(arg, **kwargs)
+        return env_string_array(arg, **kwargs)
 
     fallback: list[bytes] = extract_string_array_argument(arg, 2, decode=False)
     return abi_encode_array_bytes(fallback)
@@ -1446,91 +1462,91 @@ class hevm_cheat_code:
             return create_bytes8(ex, arg, name="vmRandomBytes8")
 
         elif funsig == hevm_cheat_code.env_int_sig:
-            return create_env_int(arg)
+            return env_int(arg)
 
         elif funsig == hevm_cheat_code.env_bytes32_sig:
-            return create_env_bytes32(arg)
+            return env_bytes32(arg)
 
         elif funsig == hevm_cheat_code.env_address_sig:
-            return create_env_address(arg)
+            return env_address(arg)
 
         elif funsig == hevm_cheat_code.env_bool_sig:
-            return create_env_bool(arg)
+            return env_bool(arg)
 
         elif funsig == hevm_cheat_code.env_uint_sig:
-            return create_env_uint(arg)
+            return env_uint(arg)
 
         elif funsig == hevm_cheat_code.env_bytes_sig:
-            return create_env_bytes(arg)
+            return env_bytes(arg)
 
         elif funsig == hevm_cheat_code.env_string_sig:
-            return create_env_string(arg)
+            return env_string(arg)
 
         elif funsig == hevm_cheat_code.env_int_array_sig:
-            return create_env_int_array(arg)
+            return env_int_array(arg)
 
         elif funsig == hevm_cheat_code.env_address_array_sig:
-            return create_env_address_array(arg)
+            return env_address_array(arg)
 
         elif funsig == hevm_cheat_code.env_bool_array_sig:
-            return create_env_bool_array(arg)
+            return env_bool_array(arg)
 
         elif funsig == hevm_cheat_code.env_bytes32_array_sig:
-            return create_env_bytes32_array(arg)
+            return env_bytes32_array(arg)
 
         elif funsig == hevm_cheat_code.env_string_array_sig:
-            return create_env_string_array(arg)
+            return env_string_array(arg)
 
         elif funsig == hevm_cheat_code.env_uint_array_sig:
-            return create_env_uint_array(arg)
+            return env_uint_array(arg)
 
         elif funsig == hevm_cheat_code.env_bytes_array_sig:
-            return create_env_bytes_array(arg)
+            return env_bytes_array(arg)
 
         elif funsig == hevm_cheat_code.env_or_address_sig:
-            return create_env_or_address(arg)
+            return env_or_address(arg)
 
         elif funsig == hevm_cheat_code.env_or_bool_sig:
-            return create_env_or_bool(arg)
+            return env_or_bool(arg)
 
         elif funsig == hevm_cheat_code.env_or_bytes_sig:
-            return create_env_or_bytes(arg)
+            return env_or_bytes(arg)
 
         elif funsig == hevm_cheat_code.env_or_string_sig:
-            return create_env_or_string(arg)
+            return env_or_string(arg)
 
         elif funsig == hevm_cheat_code.env_or_bytes32_sig:
-            return create_env_or_bytes32(arg)
+            return env_or_bytes32(arg)
 
         elif funsig == hevm_cheat_code.env_or_int_sig:
-            return create_env_or_int(arg)
+            return env_or_int(arg)
 
         elif funsig == hevm_cheat_code.env_or_uint_sig:
-            return create_env_or_uint(arg)
+            return env_or_uint(arg)
 
         elif funsig == hevm_cheat_code.env_or_address_array_sig:
-            return create_env_or_address_array(arg)
+            return env_or_address_array(arg)
 
         elif funsig == hevm_cheat_code.env_or_bool_array_sig:
-            return create_env_or_bool_array(arg)
+            return env_or_bool_array(arg)
 
         elif funsig == hevm_cheat_code.env_or_bytes32_array_sig:
-            return create_env_or_bytes32_array(arg)
+            return env_or_bytes32_array(arg)
 
         elif funsig == hevm_cheat_code.env_or_int_array_sig:
-            return create_env_or_int_array(arg)
+            return env_or_int_array(arg)
 
         elif funsig == hevm_cheat_code.env_or_uint_arrray_sig:
-            return create_env_or_uint_array(arg)
+            return env_or_uint_array(arg)
 
         elif funsig == hevm_cheat_code.env_or_bytes_array_sig:
-            return create_env_or_bytes_array(arg)
+            return env_or_bytes_array(arg)
 
         elif funsig == hevm_cheat_code.env_or_string_array_sig:
-            return create_env_or_string_array(arg)
+            return env_or_string_array(arg)
 
         elif funsig == hevm_cheat_code.env_exists_sig:
-            return check_env_exists(arg)
+            return env_exists(arg)
 
         elif funsig in dict_of_unsupported_cheatcodes:
             msg = f"Unsupported cheat code: {dict_of_unsupported_cheatcodes[funsig]}"
