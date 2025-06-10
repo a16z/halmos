@@ -419,9 +419,9 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
      function check_env_or_string_without_env_var() public {
-        string memory y = "This string is definitely longer than thirty-one bytes!";
-        string memory x = vm.envOr("STRING2", y);
-        assertEq(x, "This string is definitely longer than thirty-one bytes!");
+        string memory y = "Beep boop scabadeepdap dooweep woop woop hewooo!";
+        string memory x = vm.envOr("MISSING", y);
+        assertEq(x, y);
     }
 
 

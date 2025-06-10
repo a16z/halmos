@@ -767,31 +767,11 @@ def create_env_or_bytes(arg, **kwargs):
 
 
 def create_env_or_string(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    size_location = 0
-    fallback_val = ""
-    for offset, chunk in arg.chunks.items():
-        if offset == 36:
-            size_location = int.from_bytes(chunk.unwrap(), "big")
+    with suppress(KeyError):
+        return create_env_string(arg, **kwargs)
 
-        if 4 + size_location == offset and size_location != 0:
-            byte_size = int.from_bytes(chunk.unwrap(), "big")
-
-        if (
-            offset == size_location + 36
-            and size_location != 0
-            and byte_size == (len(chunk.unwrap().hex()) + 1) // 2
-        ):
-            # This is the chunk we need
-            fallback_val = (chunk.unwrap()).decode("utf-8")
-            break
-
-    value = env.env_or_string(key, fallback_val)
-
-    if isinstance(value, str):
-        value = value.encode("utf-8")
-
-    return encode_tuple_bytes(value)
+    fallback_bytes = ByteVec(extract_string_argument(arg, 1, decode=False))
+    return encode_tuple_bytes(fallback_bytes)
 
 
 def create_env_or_bytes32(arg, **kwargs):
@@ -804,17 +784,19 @@ def create_env_or_bytes32(arg, **kwargs):
 
 
 def create_env_or_int(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    with suppress(KeyError):
+        return create_env_int(arg, **kwargs)
+
     fallback_val = uint256(arg.get_word(36))
-    val = env.env_or_int(key, fallback_val)
-    return ByteVec(val)
+    return ByteVec(fallback_val)
 
 
 def create_env_or_uint(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
+    with suppress(KeyError):
+        return create_env_uint(arg, **kwargs)
+
     fallback_val = uint256(arg.get_word(36))
-    val = env.env_or_uint(key, fallback_val)
-    return ByteVec(val)
+    return ByteVec(fallback_val)
 
 
 def create_env_or_bytes32_array(arg, **kwargs):
