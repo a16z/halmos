@@ -31,6 +31,7 @@ from z3 import (
     BoolRef,
     Solver,
     ZeroExt,
+    eq,
     set_option,
     unsat,
 )
@@ -1372,6 +1373,8 @@ def resolve_target_selectors(
                 yield (fun_sig, fun_selector)
 
     else:
+        is_test_contract = eq(addr, FOUNDRY_TEST)
+
         for fun_sig, fun_selector in method_identifiers:
             # skip if 'pure' or 'view' function that doesn't change the state
             if (state_mutability := abi[fun_sig]["stateMutability"]) in [
@@ -1383,7 +1386,7 @@ def resolve_target_selectors(
 
             # https://github.com/a16z/halmos/issues/514
             # exclude special functions like test_, check_, setUp(), etc.
-            if (
+            if is_test_contract and (
                 fun_sig.startswith("test_")
                 or fun_sig.startswith("check_")
                 or fun_sig.startswith("prove_")
