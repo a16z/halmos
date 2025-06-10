@@ -24,8 +24,10 @@ from z3 import (
     Concat,
     Extract,
     Function,
+    If,
     Not,
     Or,
+    SignExt,
     Solver,
     SolverFor,
     eq,
@@ -199,6 +201,21 @@ def uint256(x: Any) -> Word:
     return uint(x, 256)
 
 
+def int256(x: Any) -> Word:
+    if isinstance(x, int):
+        return con(x, size_bits=256)
+
+    if is_bool(x):
+        return If(x, con(1, size_bits=256), con(0, size_bits=256))
+
+    bitsize = x.size()
+    if bitsize > 256:
+        raise ValueError(x)
+    if bitsize == 256:
+        return x
+    return simplify(SignExt(256 - bitsize, x))
+
+
 def address(x: Any) -> Address:
     return uint(x, 160)
 
@@ -309,14 +326,10 @@ def extract_bytes_argument(data: Bytes, arg_idx: int) -> bytes:
     return bv_value_to_bytes(bytes) if is_bv_value(bytes) else bytes
 
 
-def extract_string_argument(data: Bytes, arg_idx: int, decode: bool = True) -> Bytes:
+def extract_string_argument(data: Bytes, arg_idx: int) -> Bytes:
     """Extracts idx-th argument of string from data"""
     string_bytes = extract_bytes_argument(data, arg_idx)
-    return (
-        string_bytes.decode("utf-8")
-        if is_concrete(string_bytes) and decode
-        else string_bytes
-    )
+    return string_bytes.decode("utf-8") if is_concrete(string_bytes) else string_bytes
 
 
 def extract_bytes(data: Bytes, offset: int, size_bytes: int) -> Bytes:

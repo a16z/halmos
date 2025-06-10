@@ -61,12 +61,14 @@ from .utils import (
     dict_of_unsupported_cheatcodes,
     extract_bytes,
     extract_bytes32_array_argument,
+    extract_bytes_argument,
     extract_funsig,
     extract_string_argument,
     extract_word,
     f_ecrecover,
     green,
     hexify,
+    int256,
     int_of,
     red,
     secp256k1n,
@@ -458,7 +460,7 @@ def create_int(ex, arg, name: str | None = None, **kwargs):
         raise HalmosException(f"bitsize larger than 256: {bits}")
 
     name = name or name_of(extract_string_argument(arg, 1))
-    return ByteVec(create_generic(ex, bits, name, f"int{bits}"))
+    return ByteVec(int256(create_generic(ex, bits, name, f"int{bits}")))
 
 
 def create_int256(ex, arg, name: str | None = None, **kwargs):
@@ -763,7 +765,7 @@ def create_env_or_bytes(arg, **kwargs):
     with suppress(KeyError):
         return create_env_bytes(arg, **kwargs)
 
-    fallback_bytes = ByteVec(extract_string_argument(arg, 1, decode=False))
+    fallback_bytes = ByteVec(extract_bytes_argument(arg, 1))
     return encode_tuple_bytes(fallback_bytes)
 
 
@@ -771,7 +773,7 @@ def create_env_or_string(arg, **kwargs):
     with suppress(KeyError):
         return create_env_string(arg, **kwargs)
 
-    fallback_bytes = ByteVec(extract_string_argument(arg, 1, decode=False))
+    fallback_bytes = ByteVec(extract_bytes_argument(arg, 1))
     return encode_tuple_bytes(fallback_bytes)
 
 
