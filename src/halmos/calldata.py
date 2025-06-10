@@ -10,10 +10,10 @@ from z3 import (
     BitVecRef,
 )
 
-from .bytevec import ByteVec
-from .config import Config as HalmosConfig
-from .logs import debug_once
-from .utils import con, uid
+from halmos.bytevec import ByteVec
+from halmos.config import Config as HalmosConfig
+from halmos.logs import debug_once
+from halmos.utils import con, uid
 
 
 @dataclass(frozen=True)

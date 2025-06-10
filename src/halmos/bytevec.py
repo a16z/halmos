@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
@@ -6,9 +7,9 @@ from typing import Any
 from sortedcontainers import SortedDict
 from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
 
-from .bitvec import HalmosBitVec as BV
-from .logs import warn
-from .utils import (
+from halmos.bitvec import HalmosBitVec as BV
+from halmos.logs import warn
+from halmos.utils import (
     Byte,
     Word,
     bv_value_to_bytes,

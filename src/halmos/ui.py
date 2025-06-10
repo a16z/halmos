@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 from dataclasses import dataclass, field
 
 from rich import get_console

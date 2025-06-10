@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 from z3 import BitVec
 
 from halmos.bitvec import HalmosBitVec as BV

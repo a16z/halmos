@@ -53,16 +53,16 @@ from z3 import (
 )
 from z3.z3util import is_expr_var
 
-from .bitvec import ONE, ZERO, is_power_of_two
-from .bitvec import HalmosBitVec as BV
-from .bitvec import HalmosBool as Bool
-from .bytevec import ByteVec, SymbolicChunk
-from .calldata import FunctionInfo
-from .cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
-from .config import Config as HalmosConfig
-from .console import console
-from .constants import MAX_ETH, MAX_MEMORY_SIZE
-from .contract import (
+from halmos.bitvec import ONE, ZERO, is_power_of_two
+from halmos.bitvec import HalmosBitVec as BV
+from halmos.bitvec import HalmosBool as Bool
+from halmos.bytevec import ByteVec, SymbolicChunk
+from halmos.calldata import FunctionInfo
+from halmos.cheatcodes import Prank, halmos_cheat_code, hevm_cheat_code
+from halmos.config import Config as HalmosConfig
+from halmos.console import console
+from halmos.constants import MAX_ETH, MAX_MEMORY_SIZE
+from halmos.contract import (
     CALL_OPCODES,
     CREATE_OPCODES,
     OP_ADD,
@@ -156,7 +156,7 @@ from .contract import (
     Instruction,
     mnemonic,
 )
-from .exceptions import (
+from halmos.exceptions import (
     AddressCollision,
     EvmException,
     FailCheatcode,
@@ -174,16 +174,16 @@ from .exceptions import (
     StackUnderflowError,
     WriteInStaticContext,
 )
-from .logs import (
+from halmos.logs import (
     INTERNAL_ERROR,
     debug,
     debug_once,
     warn,
     warn_code,
 )
-from .mapper import BuildOut
-from .ui import ui
-from .utils import (
+from halmos.mapper import BuildOut
+from halmos.ui import ui
+from halmos.utils import (
     Address,
     BitVecSort160,
     BitVecSort256,

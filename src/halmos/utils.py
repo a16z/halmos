@@ -42,12 +42,12 @@ from z3 import (
     substitute,
 )
 
-from .bitvec import HalmosBitVec as BV
-from .bitvec import HalmosBool as Bool
-from .exceptions import HalmosException, NotConcreteError
-from .hashes import keccak256_256, keccak256_512
-from .logs import warn
-from .mapper import Mapper
+from halmos.bitvec import HalmosBitVec as BV
+from halmos.bitvec import HalmosBool as Bool
+from halmos.exceptions import HalmosException, NotConcreteError
+from halmos.hashes import keccak256_256, keccak256_512
+from halmos.logs import warn
+from halmos.mapper import Mapper
 
 # order of the secp256k1 curve
 secp256k1n = (
