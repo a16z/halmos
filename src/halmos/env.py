@@ -163,4 +163,4 @@ def env_string_array(key: str, delimiter=",") -> list[str]:
 
 def env_bytes_array(key: str, delimiter=",") -> list[bytes]:
     value = env_string(key)
-    return [x.strip() for x in value.split(delimiter)]
+    return [bytes.fromhex(x.strip().replace("0x", "")) for x in value.split(delimiter)]

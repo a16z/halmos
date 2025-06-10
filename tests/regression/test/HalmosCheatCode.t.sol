@@ -368,6 +368,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(x[1], 2);
         assertEq(x[2], 3);
     }
+
     function check_env_bytes_array() public {
         bytes[] memory x = vm.envBytes("BYTES_ARRAY", ",");
         assertEq(x.length, 4);

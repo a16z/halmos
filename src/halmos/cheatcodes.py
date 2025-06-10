@@ -734,28 +734,7 @@ def create_env_bytes_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_bytes_array(key, delimiter)
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    len_of_values = len(values)
-
-    total_String_length = 0
-    for val in values:
-        bytes_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
-        length_of_currentstring = len(bytes_val)
-        n = len_of_values * 32 + total_String_length
-        encoded_val = (n + total_String_length).to_bytes(32, "big")
-        result.append(encoded_val)  # location of the string
-        num_chunks = (length_of_currentstring + 31) // 32
-        total_String_length += num_chunks * 32
-
-    for val in values:
-        bytes_val = bytes.fromhex(val.replace("0x", ""))  # Convert hex string to bytes
-        result.append(int(len(bytes_val)).to_bytes(32, "big"))  # length of the string
-        for i in range(0, len(bytes_val), 32):
-            chunk = bytes_val[i : i + 32]
-            if len(chunk) < 32:
-                chunk = chunk.ljust(32, b"\x00")  # pad with zeros
-            result.append(chunk)
-    return result
+    return abi_encode_array_bytes(values)
 
 
 def create_env_or_address(arg, **kwargs):
