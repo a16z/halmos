@@ -51,6 +51,7 @@ from .utils import (
     BitVecSort160,
     BitVecSort256,
     BitVecSorts,
+    Bytes,
     Word,
     address,
     assert_address,
@@ -597,7 +598,7 @@ def create_env_int(arg, **kwargs):
 # returning dynamic arrays
 
 
-def abi_encode_array(values: list[Word]) -> ByteVec:
+def abi_encode_array_words(values: list[Bool | Address | Word]) -> ByteVec:
     result = ByteVec()
 
     # first 32 bytes is offset (always 32)
@@ -613,18 +614,75 @@ def abi_encode_array(values: list[Word]) -> ByteVec:
     return result
 
 
+def padded_bytes(val: Bytes) -> Bytes:
+    """
+    Pads a bytes value to the nearest multiple of 32 bytes.
+    """
+
+    curr_len = len(val)
+    new_len = (curr_len + 31) // 32 * 32
+
+    if curr_len == new_len:
+        # no padding needed
+        return val
+
+    if isinstance(val, bytes):
+        return val.ljust(new_len, b"\x00")
+
+    if isinstance(val, ByteVec):
+        result = ByteVec(val)
+        result.append(b"\x00" * (new_len - curr_len))
+        return result
+
+    raise ValueError(f"unsupported bytes type: {type(val)}")
+
+
+def abi_encode_array_bytes(values: list[Bytes]) -> ByteVec:
+    result = ByteVec()
+
+    # first 32 bytes is offset (always 32)
+    result.append(BV(32))
+
+    # next 32 bytes is array length
+    num_values = len(values)
+    result.append(BV(num_values))
+
+    # right-pad each value to nearest multiple of 32 bytes
+    padded_values = [padded_bytes(v) for v in values]
+
+    # write offset for each value
+    next_offset = 32 * num_values
+    for padded_val in padded_values:
+        result.append(BV(next_offset))
+        next_offset += 32 + len(padded_val)
+
+    for i, padded_val in enumerate(padded_values):
+        unpadded_length = len(values[i])
+        result.append(BV(unpadded_length))
+        result.append(padded_val)
+
+    return result
+
+
 def create_env_int_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_int_array(key, delimiter)
-    return abi_encode_array(values)
+    return abi_encode_array_words(values)
+
+
+def create_env_uint_array(arg, **kwargs):
+    key = decode_string_arg(arg, 0)
+    delimiter = decode_string_arg(arg, 32)
+    values = env.env_uint_array(key, delimiter)
+    return abi_encode_array_words(values)
 
 
 def create_env_address_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_address_array(key, delimiter)
-    return abi_encode_array(values)
+    return abi_encode_array_words(values)
 
 
 def create_env_or_address_array(arg, **kwargs):
@@ -635,14 +693,14 @@ def create_env_or_address_array(arg, **kwargs):
     fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
     num_parts = len(fallback_bytes) // 32
     fallback_val = [uint160(fallback_bytes.get_word(i * 32)) for i in range(num_parts)]
-    return abi_encode_array(fallback_val)
+    return abi_encode_array_words(fallback_val)
 
 
 def create_env_bool_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_bool_array(key, delimiter)
-    return abi_encode_array(values)
+    return abi_encode_array_words(values)
 
 
 def create_env_or_bool_array(arg, **kwargs):
@@ -654,52 +712,22 @@ def create_env_or_bool_array(arg, **kwargs):
     fallback_val = [
         Bool(fallback_bytes.get_word(i * 32) != 0) for i in range(num_parts)
     ]
-    return abi_encode_array(fallback_val)
+    return abi_encode_array_words(fallback_val)
 
 
 def create_env_bytes32_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
     values = env.env_bytes32_array(key, delimiter)
-    return abi_encode_array(values)
+    return abi_encode_array_words(values)
 
 
 def create_env_string_array(arg, **kwargs):
     key = decode_string_arg(arg, 0)
     delimiter = decode_string_arg(arg, 32)
-    values = env.env_string_array(key, delimiter)
-
-    # Start ABI encoding: first 32 bytes is offset (always 32), next 32 bytes is array length
-    result = ByteVec((32).to_bytes(32) + int(len(values)).to_bytes(32))
-    len_of_values = len(values)
-    total_String_length = 0
-
-    for val in values:
-        hex_val = val.encode("utf-8")
-        length_of_currentstring = len(hex_val)
-        n = len_of_values * 32 + total_String_length
-        encoded_val = (n + total_String_length).to_bytes(32, "big")
-        result.append(encoded_val)  # location of the string
-        num_chunks = (length_of_currentstring + 31) // 32
-        total_String_length += num_chunks * 32
-
-    for val in values:
-        hex_val = val.encode("utf-8")
-        result.append(int(len(hex_val)).to_bytes(32, "big"))  # length of the string
-        for i in range(0, len(hex_val), 32):
-            chunk = hex_val[i : i + 32]
-            if len(chunk) < 32:
-                chunk = chunk.ljust(32, b"\x00")  # pad with zeros
-            result.append(chunk)
-
-    return result
-
-
-def create_env_uint_array(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    delimiter = decode_string_arg(arg, 32)
-    values = env.env_uint_array(key, delimiter)
-    return abi_encode_array(values)
+    values: list[str] = env.env_string_array(key, delimiter)
+    encoded_values: list[bytes] = [val.encode("utf-8") for val in values]
+    return abi_encode_array_bytes(encoded_values)
 
 
 def create_env_bytes_array(arg, **kwargs):

@@ -16,6 +16,7 @@ from .utils import (
     con,
     concat,
     extract_bytes,
+    hexify,
     try_bv_value_to_bytes,
     unbox_int,
 )
@@ -404,6 +405,11 @@ class ByteVec:
 
     def __iter__(self):
         raise TypeError("ByteVec object is not iterable")
+
+    def dump(self):
+        for idx in range(0, len(self), 32):
+            word = self.slice(idx, idx + 32)
+            print(f"{idx:04x}: {hexify(word)}")
 
     ### internal methods
 
