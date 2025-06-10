@@ -2281,7 +2281,6 @@ class SEVM:
                     depth=ex.context.depth + 1,
                 )
             )
-            print("Insufficient funds for call:", message)
             fail_ex.st.push(ZERO)
             fail_ex.advance()
             stack.push(fail_ex)
