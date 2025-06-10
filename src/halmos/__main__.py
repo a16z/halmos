@@ -62,6 +62,7 @@ from .constants import (
     VERBOSITY_TRACE_SETUP,
 )
 from .contract import CoverageReporter
+from .env import init_env
 from .exceptions import FailCheatcode, HalmosException
 from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
 from .logs import (
@@ -1071,7 +1072,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
     )
 
     for path_id, _, err in stuck:
-        warn_code(INTERNAL_ERROR, f"Encountered {err}")
+        warn_code(INTERNAL_ERROR, f"Encountered {type(err).__name__}: {err}")
         if args.print_blocked_states:
             print(f"\nPath #{path_id}")
             print(ctx.traces[path_id], end="")
@@ -1585,6 +1586,8 @@ def _main(_args=None) -> MainResult:
     if args.version:
         print(f"halmos {metadata.version('halmos')}")
         return MainResult(0)
+
+    init_env(args.root)
 
     if args.disable_gc:
         gc.disable()

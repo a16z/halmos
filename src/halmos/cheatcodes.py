@@ -2,6 +2,7 @@
 
 import json
 import re
+from contextlib import suppress
 from dataclasses import dataclass
 from subprocess import PIPE, Popen
 
@@ -24,8 +25,10 @@ from z3 import (
     unsat,
 )
 
+from . import env
 from .assertions import assert_cheatcode_handler
 from .bitvec import HalmosBitVec as BV
+from .bitvec import HalmosBool as Bool
 from .bytevec import ByteVec
 from .calldata import (
     FunctionInfo,
@@ -48,12 +51,17 @@ from .utils import (
     BitVecSort160,
     BitVecSort256,
     BitVecSorts,
+    Bytes,
     Word,
+    address,
     assert_address,
     con,
     con_addr,
     decode_hex,
+    dict_of_unsupported_cheatcodes,
     extract_bytes,
+    extract_bytes32_array_argument,
+    extract_bytes_argument,
     extract_funsig,
     extract_string_argument,
     extract_word,
@@ -91,7 +99,9 @@ def name_of(x: str) -> str:
     return re.sub(r"\s+", "_", x)
 
 
-def extract_string_array_argument(calldata: ByteVec, arg_idx: int):
+def extract_string_array_argument(
+    calldata: ByteVec, arg_idx: int, decode: bool = True
+) -> list[bytes | str]:
     """Extracts idx-th argument of string array from calldata"""
 
     array_slot = int_of(calldata.get_word(4 + 32 * arg_idx))
@@ -102,13 +112,9 @@ def extract_string_array_argument(calldata: ByteVec, arg_idx: int):
     for i in range(num_strings):
         string_offset = int_of(calldata.get_word(4 + array_slot + 32 * (i + 1)))
         string_length = int_of(calldata.get_word(4 + array_slot + 32 + string_offset))
-        string_value = int_of(
-            extract_bytes(
-                calldata, 4 + array_slot + 32 + string_offset + 32, string_length
-            )
-        )
-        string_bytes = string_value.to_bytes(string_length, "big")
-        string_array.append(string_bytes.decode("utf-8"))
+        string_data_offset = 4 + array_slot + 32 + string_offset + 32
+        string_bytes = extract_bytes(calldata, string_data_offset, string_length)
+        string_array.append(string_bytes.decode("utf-8") if decode else string_bytes)
 
     return string_array
 
@@ -359,7 +365,6 @@ def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
 
     encoding of a tuple (bytes): 32 (offset) + length + data
     """
-
     length = data.size() // 8 if is_bv(data) else len(data)
     result = ByteVec((32).to_bytes(32) + int(length).to_bytes(32))
     result.append(data)
@@ -416,6 +421,7 @@ def create_calldata_generic(
             sevm.options,
             new_symbol_id=ex.new_symbol_id,
         )
+
         # TODO: this may accumulate dynamic size candidates from multiple calldata into a single path object,
         # which is not optimal, as unnecessary size candidates will need to be copied during path branching for each calldata.
         ex.path.process_dyn_params(dyn_params)
@@ -534,6 +540,318 @@ def create_bytes8(ex, arg, name: str | None = None, **kwargs):
     return result
 
 
+def check_env_exists(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    val = env.check_env_exists(key)
+    bool_val = con(1 if val else 0, 1)
+    return ByteVec(uint256(bool_val))
+
+
+def create_env_bytes32(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    bytes32_val = env.env_bytes32(key)
+    return ByteVec(bytes32_val)
+
+
+def create_env_address(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    val = env.env_address(key)
+    address_val = address(val)
+    return ByteVec(uint256(address_val))
+
+
+def create_env_bool(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    val = env.env_bool(key)
+    bool_val = con(1 if val else 0, 1)
+    return ByteVec(uint256(bool_val))
+
+
+def create_env_uint(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    val = env.env_uint(key)
+    uint_val = uint256(val)
+    return ByteVec(uint_val)
+
+
+def create_env_bytes(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    val = env.env_bytes(key)
+    return encode_tuple_bytes(val)
+
+
+def create_env_string(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    val = env.env_string(key)
+    if isinstance(val, str):
+        val = val.encode("utf-8")
+    return encode_tuple_bytes(val)
+
+
+def create_env_int(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    val = env.env_int(key)
+    int_val = BV(val)
+    return ByteVec(int_val)
+
+
+def abi_encode_array_words(values: list[Bool | Address | Word]) -> ByteVec:
+    result = ByteVec()
+
+    # first 32 bytes is offset (always 32)
+    result.append(BV(32))
+
+    # next 32 bytes is array length
+    result.append(BV(len(values)))
+
+    # append each value (expanded to 32 bytes each)
+    for val in values:
+        result.append(uint256(val))
+
+    return result
+
+
+def padded_bytes(val: Bytes, right_pad: bool = True) -> Bytes:
+    """
+    Pads a bytes value to the nearest multiple of 32 bytes.
+    """
+
+    curr_len = len(val)
+    new_len = (curr_len + 31) // 32 * 32
+
+    if curr_len == new_len:
+        # no padding needed
+        return val
+
+    if isinstance(val, bytes):
+        if right_pad:
+            return val.ljust(new_len, b"\x00")
+        else:
+            return val.rjust(new_len, b"\x00")
+
+    if isinstance(val, ByteVec):
+        if right_pad:
+            result = ByteVec(val)
+            result.append(b"\x00" * (new_len - curr_len))
+        else:
+            result = ByteVec(b"\x00" * (new_len - curr_len))
+            result.append(val)
+        return result
+
+    raise ValueError(f"unsupported bytes type: {type(val)}")
+
+
+def abi_encode_array_bytes(values: list[Bytes]) -> ByteVec:
+    result = ByteVec()
+
+    # first 32 bytes is offset (always 32)
+    result.append(BV(32))
+
+    # next 32 bytes is array length
+    num_values = len(values)
+    result.append(BV(num_values))
+
+    # right-pad each value to nearest multiple of 32 bytes
+    padded_values = [padded_bytes(v) for v in values]
+
+    # write offset for each value
+    next_offset = 32 * num_values
+    for padded_val in padded_values:
+        result.append(BV(next_offset))
+        next_offset += 32 + len(padded_val)
+
+    for i, padded_val in enumerate(padded_values):
+        unpadded_length = len(values[i])
+        result.append(BV(unpadded_length))
+        result.append(padded_val)
+
+    return result
+
+
+def create_env_int_array(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
+    values = env.env_int_array(key, delimiter)
+    return abi_encode_array_words(values)
+
+
+def create_env_uint_array(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
+    values = env.env_uint_array(key, delimiter)
+    return abi_encode_array_words(values)
+
+
+def create_env_address_array(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
+    values = env.env_address_array(key, delimiter)
+    return abi_encode_array_words(values)
+
+
+def create_env_or_address_array(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_address_array(arg, **kwargs)
+
+    # wrap into ByteVec if needed (easier to process)
+    fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
+    num_parts = len(fallback_bytes) // 32
+    fallback_val = [uint160(fallback_bytes.get_word(i * 32)) for i in range(num_parts)]
+    return abi_encode_array_words(fallback_val)
+
+
+def create_env_bool_array(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
+    values = env.env_bool_array(key, delimiter)
+    return abi_encode_array_words(values)
+
+
+def create_env_or_bool_array(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_bool_array(arg, **kwargs)
+
+    fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
+    num_parts = len(fallback_bytes) // 32
+    fallback_val = [
+        Bool(fallback_bytes.get_word(i * 32) != 0) for i in range(num_parts)
+    ]
+    return abi_encode_array_words(fallback_val)
+
+
+def create_env_bytes32_array(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
+    values = env.env_bytes32_array(key, delimiter)
+    return abi_encode_array_words(values)
+
+
+def create_env_string_array(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
+    values: list[str] = env.env_string_array(key, delimiter)
+    encoded_values: list[bytes] = [val.encode("utf-8") for val in values]
+    return abi_encode_array_bytes(encoded_values)
+
+
+def create_env_bytes_array(arg, **kwargs):
+    key = extract_string_argument(arg, 0)
+    delimiter = extract_string_argument(arg, 1)
+    values = env.env_bytes_array(key, delimiter)
+    return abi_encode_array_bytes(values)
+
+
+def create_env_or_address(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_address(arg, **kwargs)
+
+    fallback_val = uint160(arg.get_word(36))
+    return ByteVec(uint256(fallback_val))
+
+
+def create_env_or_bool(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_bool(arg, **kwargs)
+
+    fallback_val = arg.get_word(36)
+    bool_val = Bool(fallback_val != 0)
+    return ByteVec(uint256(bool_val))
+
+
+def create_env_or_bytes(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_bytes(arg, **kwargs)
+
+    fallback_bytes = ByteVec(extract_bytes_argument(arg, 1))
+    return encode_tuple_bytes(fallback_bytes)
+
+
+def create_env_or_string(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_string(arg, **kwargs)
+
+    fallback_bytes = ByteVec(extract_bytes_argument(arg, 1))
+    return encode_tuple_bytes(fallback_bytes)
+
+
+def create_env_or_bytes32(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_bytes32(arg, **kwargs)
+
+    fallback_val = arg.slice(36, 68)
+    bytes32_val = padded_bytes(fallback_val, right_pad=False)
+    return ByteVec(bytes32_val)
+
+
+def create_env_or_int(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_int(arg, **kwargs)
+
+    fallback_val = uint256(arg.get_word(36))
+    return ByteVec(fallback_val)
+
+
+def create_env_or_uint(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_uint(arg, **kwargs)
+
+    fallback_val = uint256(arg.get_word(36))
+    return ByteVec(fallback_val)
+
+
+def create_env_or_bytes32_array(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_bytes32_array(arg, **kwargs)
+
+    # wrap into ByteVec if needed (easier to process)
+    fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
+    num_parts = len(fallback_bytes) // 32
+    fallback_val: list[Word] = [
+        fallback_bytes.slice(i * 32, (i + 1) * 32).unwrap() for i in range(num_parts)
+    ]
+    return abi_encode_array_words(fallback_val)
+
+
+def create_env_or_int_array(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_int_array(arg, **kwargs)
+
+    fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
+    num_parts = len(fallback_bytes) // 32
+    fallback_val: list[Word] = [
+        fallback_bytes.get_word(i * 32) for i in range(num_parts)
+    ]
+    return abi_encode_array_words(fallback_val)
+
+
+def create_env_or_uint_array(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_uint_array(arg, **kwargs)
+
+    fallback_bytes = ByteVec(extract_bytes32_array_argument(arg, 2))
+    num_parts = len(fallback_bytes) // 32
+    fallback_val: list[Word] = [
+        fallback_bytes.get_word(i * 32) for i in range(num_parts)
+    ]
+    return abi_encode_array_words(fallback_val)
+
+
+def create_env_or_bytes_array(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_bytes_array(arg, **kwargs)
+
+    fallback: list[bytes] = extract_string_array_argument(arg, 2, decode=False)
+    return abi_encode_array_bytes(fallback)
+
+
+def create_env_or_string_array(arg, **kwargs):
+    with suppress(KeyError):
+        return create_env_string_array(arg, **kwargs)
+
+    fallback: list[bytes] = extract_string_array_argument(arg, 2, decode=False)
+    return abi_encode_array_bytes(fallback)
+
+
 def apply_vmaddr(ex, private_key: Word):
     # check if this private key has an existing address associated with it
     known_keys = ex.known_keys
@@ -615,492 +933,6 @@ class hevm_cheat_code:
             + "0000000000000000000000000000000000000000000000000000000000000001"
         )
     )
-
-    dict_of_unsupported_cheatcodes = {
-        0x23361207: "expectCall(address,uint256,uint64,bytes)",
-        0x97624631: "assertEq(bytes,bytes)",
-        0x743E4CB7: "accessList((address,bytes32[])[])",
-        0x240F839D: "assertApproxEqAbs(int256,int256,uint256)",
-        0x8289E621: "assertApproxEqAbs(int256,int256,uint256,string)",
-        0x16D207C6: "assertApproxEqAbs(uint256,uint256,uint256)",
-        0xF710B062: "assertApproxEqAbs(uint256,uint256,uint256,string)",
-        0x3D5BC8BC: "assertApproxEqAbsDecimal(int256,int256,uint256,uint256)",
-        0x6A5066D4: "assertApproxEqAbsDecimal(int256,int256,uint256,uint256,string)",
-        0x045C55CE: "assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256)",
-        0x60429EB2: "assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256,string)",
-        0xFEA2D14F: "assertApproxEqRel(int256,int256,uint256)",
-        0xEF277D72: "assertApproxEqRel(int256,int256,uint256,string)",
-        0x8CF25EF4: "assertApproxEqRel(uint256,uint256,uint256)",
-        0x1ECB7D33: "assertApproxEqRel(uint256,uint256,uint256,string)",
-        0xABBF21CC: "assertApproxEqRelDecimal(int256,int256,uint256,uint256)",
-        0xFCCC11C4: "assertApproxEqRelDecimal(int256,int256,uint256,uint256,string)",
-        0x21ED2977: "assertApproxEqRelDecimal(uint256,uint256,uint256,uint256)",
-        0x82D6C8FD: "assertApproxEqRelDecimal(uint256,uint256,uint256,uint256,string)",
-        0x515361F6: "assertEq(address,address)",
-        0x2F2769D1: "assertEq(address,address,string)",
-        0x3868AC34: "assertEq(address[],address[])",
-        0x3E9173C5: "assertEq(address[],address[],string)",
-        0xF7FE3477: "assertEq(bool,bool)",
-        0x4DB19E7E: "assertEq(bool,bool,string)",
-        0x707DF785: "assertEq(bool[],bool[])",
-        0xE48A8F8D: "assertEq(bool[],bool[],string)",
-        0xE24FED00: "assertEq(bytes,bytes,string)",
-        0x7C84C69B: "assertEq(bytes32,bytes32)",
-        0xC1FA1ED0: "assertEq(bytes32,bytes32,string)",
-        0x0CC9EE84: "assertEq(bytes32[],bytes32[])",
-        0xE03E9177: "assertEq(bytes32[],bytes32[],string)",
-        0xE5FB9B4A: "assertEq(bytes[],bytes[])",
-        0xF413F0B6: "assertEq(bytes[],bytes[],string)",
-        0xFE74F05B: "assertEq(int256,int256)",
-        0x714A2F13: "assertEq(int256,int256,string)",
-        0x711043AC: "assertEq(int256[],int256[])",
-        0x191F1B30: "assertEq(int256[],int256[],string)",
-        0xF320D963: "assertEq(string,string)",
-        0x36F656D8: "assertEq(string,string,string)",
-        0xCF1C049C: "assertEq(string[],string[])",
-        0xEFF6B27D: "assertEq(string[],string[],string)",
-        0x98296C54: "assertEq(uint256,uint256)",
-        0x88B44C85: "assertEq(uint256,uint256,string)",
-        0x975D5A12: "assertEq(uint256[],uint256[])",
-        0x5D18C73A: "assertEq(uint256[],uint256[],string)",
-        0x48016C04: "assertEqDecimal(int256,int256,uint256)",
-        0x7E77B0C5: "assertEqDecimal(int256,int256,uint256,string)",
-        0x27AF7D9C: "assertEqDecimal(uint256,uint256,uint256)",
-        0xD0CBBDEF: "assertEqDecimal(uint256,uint256,uint256,string)",
-        0xA5982885: "assertFalse(bool)",
-        0x7BA04809: "assertFalse(bool,string)",
-        0x0A30B771: "assertGe(int256,int256)",
-        0xA84328DD: "assertGe(int256,int256,string)",
-        0xA8D4D1D9: "assertGe(uint256,uint256)",
-        0xE25242C0: "assertGe(uint256,uint256,string)",
-        0xDC28C0F1: "assertGeDecimal(int256,int256,uint256)",
-        0x5DF93C9B: "assertGeDecimal(int256,int256,uint256,string)",
-        0x3D1FE08A: "assertGeDecimal(uint256,uint256,uint256)",
-        0x8BFF9133: "assertGeDecimal(uint256,uint256,uint256,string)",
-        0x5A362D45: "assertGt(int256,int256)",
-        0xF8D33B9B: "assertGt(int256,int256,string)",
-        0xDB07FCD2: "assertGt(uint256,uint256)",
-        0xD9A3C4D2: "assertGt(uint256,uint256,string)",
-        0x78611F0E: "assertGtDecimal(int256,int256,uint256)",
-        0x04A5C7AB: "assertGtDecimal(int256,int256,uint256,string)",
-        0xECCD2437: "assertGtDecimal(uint256,uint256,uint256)",
-        0x64949A8D: "assertGtDecimal(uint256,uint256,uint256,string)",
-        0x95FD154E: "assertLe(int256,int256)",
-        0x4DFE692C: "assertLe(int256,int256,string)",
-        0x8466F415: "assertLe(uint256,uint256)",
-        0xD17D4B0D: "assertLe(uint256,uint256,string)",
-        0x11D1364A: "assertLeDecimal(int256,int256,uint256)",
-        0xAA5CF788: "assertLeDecimal(int256,int256,uint256,string)",
-        0xC304AAB7: "assertLeDecimal(uint256,uint256,uint256)",
-        0x7FEFBBE0: "assertLeDecimal(uint256,uint256,uint256,string)",
-        0x3E914080: "assertLt(int256,int256)",
-        0x9FF531E3: "assertLt(int256,int256,string)",
-        0xB12FC005: "assertLt(uint256,uint256)",
-        0x65D5C135: "assertLt(uint256,uint256,string)",
-        0xDBE8D88B: "assertLtDecimal(int256,int256,uint256)",
-        0x40F0B4E0: "assertLtDecimal(int256,int256,uint256,string)",
-        0x2077337E: "assertLtDecimal(uint256,uint256,uint256)",
-        0xA972D037: "assertLtDecimal(uint256,uint256,uint256,string)",
-        0xB12E1694: "assertNotEq(address,address)",
-        0x8775A591: "assertNotEq(address,address,string)",
-        0x46D0B252: "assertNotEq(address[],address[])",
-        0x72C7E0B5: "assertNotEq(address[],address[],string)",
-        0x236E4D66: "assertNotEq(bool,bool)",
-        0x1091A261: "assertNotEq(bool,bool,string)",
-        0x286FAFEA: "assertNotEq(bool[],bool[])",
-        0x62C6F9FB: "assertNotEq(bool[],bool[],string)",
-        0x3CF78E28: "assertNotEq(bytes,bytes)",
-        0x9507540E: "assertNotEq(bytes,bytes,string)",
-        0x898E83FC: "assertNotEq(bytes32,bytes32)",
-        0xB2332F51: "assertNotEq(bytes32,bytes32,string)",
-        0x0603EA68: "assertNotEq(bytes32[],bytes32[])",
-        0xB873634C: "assertNotEq(bytes32[],bytes32[],string)",
-        0xEDECD035: "assertNotEq(bytes[],bytes[])",
-        0x1DCD1F68: "assertNotEq(bytes[],bytes[],string)",
-        0xF4C004E3: "assertNotEq(int256,int256)",
-        0x4724C5B9: "assertNotEq(int256,int256,string)",
-        0x0B72F4EF: "assertNotEq(int256[],int256[])",
-        0xD3977322: "assertNotEq(int256[],int256[],string)",
-        0x6A8237B3: "assertNotEq(string,string)",
-        0x78BDCEA7: "assertNotEq(string,string,string)",
-        0xBDFACBE8: "assertNotEq(string[],string[])",
-        0xB67187F3: "assertNotEq(string[],string[],string)",
-        0xB7909320: "assertNotEq(uint256,uint256)",
-        0x98F9BDBD: "assertNotEq(uint256,uint256,string)",
-        0x56F29CBA: "assertNotEq(uint256[],uint256[])",
-        0x9A7FBD8F: "assertNotEq(uint256[],uint256[],string)",
-        0x14E75680: "assertNotEqDecimal(int256,int256,uint256)",
-        0x33949F0B: "assertNotEqDecimal(int256,int256,uint256,string)",
-        0x669EFCA7: "assertNotEqDecimal(uint256,uint256,uint256)",
-        0xF5A55558: "assertNotEqDecimal(uint256,uint256,uint256,string)",
-        0x0C9FD581: "assertTrue(bool)",
-        0xA34EDC03: "assertTrue(bool,string)",
-        0xD8591EEB: "assumeNoRevert((address,bool,bytes))",
-        0x8A4592CC: "assumeNoRevert((address,bool,bytes)[])",
-        0x10CB385C: "attachBlob(bytes)",
-        0x6D315D7E: "blobBaseFee(uint256)",
-        0x129DE7EB: "blobhashes(bytes32[])",
-        0x8C0C72E0: "broadcastRawTransaction(bytes)",
-        0x533D61C9: "cloneAccount(address,address)",
-        0x890C283B: "computeCreate2Address(bytes32,bytes32)",
-        0xD323826A: "computeCreate2Address(bytes32,bytes32,address)",
-        0x74637A7A: "computeCreateAddress(address,uint256)",
-        0x3FB18AEC: "contains(string,string)",
-        0x40FF9F21: "cool(address)",
-        0x8C78E654: "coolSlot(address,bytes32)",
-        0xA54A87D8: "copyFile(string,string)",
-        0x168B64D3: "createDir(string,bool)",
-        0xA6368557: "deleteSnapshot(uint256)",
-        0x421AE469: "deleteSnapshots()",
-        0x9A8325A0: "deployCode(string)",
-        0x29CE9DDE: "deployCode(string,bytes)",
-        0x016155BF: "deployCode(string,bytes,bytes32)",
-        0xFF5D64E4: "deployCode(string,bytes,uint256)",
-        0x3AA773EA: "deployCode(string,bytes,uint256,bytes32)",
-        0x17AB1D79: "deployCode(string,bytes32)",
-        0x0AF6A701: "deployCode(string,uint256)",
-        0x002CB687: "deployCode(string,uint256,bytes32)",
-        0x29233B1F: "deriveKey(string,string,uint32,string)",
-        0x32C8176D: "deriveKey(string,uint32,string)",
-        0x709ECD3F: "dumpState(string)",
-        0x8C374C65: "ensNamehash(string)",
-        0x4D7BAF06: "envBytes(string)",
-        0xDDC2651B: "envBytes(string,string)",
-        0xCE8365F9: "envExists(string)",
-        0x35E1349B: "eth_getLogs(uint256,uint256,address,bytes32[])",
-        0x65B7B7CC: "expectCall(address,uint256,uint64,bytes,uint64)",
-        0x08E4E116: "expectCallMinGas(address,uint256,uint64,bytes)",
-        0xE13A1834: "expectCallMinGas(address,uint256,uint64,bytes,uint64)",
-        0x73CDCE36: "expectCreate(bytes,address)",
-        0xEA54A472: "expectCreate2(bytes,address)",
-        0xB43AECE3: "expectEmit(address,uint64)",
-        0xC339D02C: "expectEmit(bool,bool,bool,bool,address,uint64)",
-        0x5E1D1C33: "expectEmit(bool,bool,bool,bool,uint64)",
-        0x4C74A335: "expectEmit(uint64)",
-        0x2E5F270C: "expectEmitAnonymous()",
-        0x6FC68705: "expectEmitAnonymous(address)",
-        0xC948DB5E: "expectEmitAnonymous(bool,bool,bool,bool,bool)",
-        0x71C95899: "expectEmitAnonymous(bool,bool,bool,bool,bool,address)",
-        0x6D016688: "expectSafeMemory(uint64,uint64)",
-        0x05838BF4: "expectSafeMemoryCall(uint64,uint64)",
-        0x6248BE1F: "foundryVersionAtLeast(string)",
-        0xCA7B0A09: "foundryVersionCmp(string)",
-        0xAF368A08: "fsMetadata(string)",
-        0xEB74848C: "getArtifactPathByCode(bytes)",
-        0x6D853BA5: "getArtifactPathByDeployedCode(bytes)",
-        0x1F6D6EF7: "getBlobBaseFee()",
-        0xF56FF18B: "getBlobhashes()",
-        0x3DC90CB3: "getBroadcast(string,uint64,uint8)",
-        0xF2FA4A26: "getBroadcasts(string,uint64)",
-        0xF7AFE919: "getBroadcasts(string,uint64,uint8)",
-        0x4CC1C2BB: "getChain(string)",
-        0xB6791AD4: "getChain(uint256)",
-        0xA8091D97: "getDeployment(string)",
-        0x0DEBD5D6: "getDeployment(string,uint64)",
-        0x74E133DD: "getDeployments(string,uint64)",
-        0xEA991BB5: "getFoundryVersion()",
-        0x876E24E6: "getMappingKeyAndParentOf(address,bytes32)",
-        0x2F2FD63F: "getMappingLength(address,bytes32)",
-        0xEBC73AB4: "getMappingSlotAt(address,bytes32,uint256)",
-        0x80DF01CC: "getStateDiff()",
-        0xF54FE009: "getStateDiffJson()",
-        0xDB7A4605: "getWallets()",
-        0x8A0807B7: "indexOf(string,string)",
-        0x838653C7: "interceptInitcode()",
-        0x2B589B28: "lastCallGas()",
-        0xB3A056D7: "loadAllocs(string)",
-        0x08E0C537: "mockCall(address,bytes4,bytes)",
-        0xE7B36A3D: "mockCall(address,uint256,bytes4,bytes)",
-        0x2DFBA5DF: "mockCallRevert(address,bytes4,bytes)",
-        0x596C8F04: "mockCallRevert(address,uint256,bytes4,bytes)",
-        0x238AD778: "noAccessList()",
-        0x1E19E657: "parseJsonAddress(string,string)",
-        0x2FCE7883: "parseJsonAddressArray(string,string)",
-        0x9F86DC91: "parseJsonBool(string,string)",
-        0x91F3B94F: "parseJsonBoolArray(string,string)",
-        0xFD921BE8: "parseJsonBytes(string,string)",
-        0x1777E59D: "parseJsonBytes32(string,string)",
-        0x91C75BC3: "parseJsonBytes32Array(string,string)",
-        0x6631AA99: "parseJsonBytesArray(string,string)",
-        0x7B048CCD: "parseJsonInt(string,string)",
-        0x9983C28A: "parseJsonIntArray(string,string)",
-        0x49C4FAC8: "parseJsonString(string,string)",
-        0x498FDCF4: "parseJsonStringArray(string,string)",
-        0xA9DA313B: "parseJsonType(string,string)",
-        0xE3F5AE33: "parseJsonType(string,string,string)",
-        0x0175D535: "parseJsonTypeArray(string,string,string)",
-        0xADDDE2B6: "parseJsonUint(string,string)",
-        0x522074AB: "parseJsonUintArray(string,string)",
-        0x65E7C844: "parseTomlAddress(string,string)",
-        0x65C428E7: "parseTomlAddressArray(string,string)",
-        0xD30DCED6: "parseTomlBool(string,string)",
-        0x127CFE9A: "parseTomlBoolArray(string,string)",
-        0xD77BFDB9: "parseTomlBytes(string,string)",
-        0x8E214810: "parseTomlBytes32(string,string)",
-        0x3E716F81: "parseTomlBytes32Array(string,string)",
-        0xB197C247: "parseTomlBytesArray(string,string)",
-        0xC1350739: "parseTomlInt(string,string)",
-        0xD3522AE6: "parseTomlIntArray(string,string)",
-        0x8BB8DD43: "parseTomlString(string,string)",
-        0x9F629281: "parseTomlStringArray(string,string)",
-        0x47FA5E11: "parseTomlType(string,string)",
-        0xF9FA5CDB: "parseTomlType(string,string,string)",
-        0x49BE3743: "parseTomlTypeArray(string,string,string)",
-        0xCC7B0487: "parseTomlUint(string,string)",
-        0xB5DF27C8: "parseTomlUintArray(string,string)",
-        0xC94D1F90: "pauseTracing()",
-        0x9CB1C0D4: "prevrandao(uint256)",
-        0x62EE05F4: "promptAddress(string)",
-        0x652FD489: "promptUint(string)",
-        0xC453949E: "publicKeyP256(uint256)",
-        0x1497876C: "readDir(string,uint64)",
-        0x8102D70D: "readDir(string,uint64,bool)",
-        0xF8D58EAF: "rememberKeys(string,string,string,uint32)",
-        0x97CB9189: "rememberKeys(string,string,uint32)",
-        0x45C62011: "removeDir(string,bool)",
-        0xE00AD03E: "replace(string,string,string)",
-        0x1C72346D: "resetNonce(address)",
-        0x72A09CCB: "resumeTracing()",
-        0x44D7F0A4: "revertTo(uint256)",
-        0x03E0ACA9: "revertToAndDelete(uint256)",
-        0x0199A220: "rpc(string,string,string)",
-        0x9D2AD72A: "rpcUrlStructs()",
-        0x6D4F96A6: "serializeJsonType(string,bytes)",
-        0x6F93BCCB: "serializeJsonType(string,string,string,bytes)",
-        0xAE5A2AE8: "serializeUintToHex(string,string,uint256)",
-        0xD3EC2A0B: "setArbitraryStorage(address,bool)",
-        0x5314B54A: "setBlockhash(uint256,bytes32)",
-        0x9B67B21C: "setNonceUnsafe(address,uint64)",
-        0x54F1469C: "shuffle(uint256[])",
-        0x8C1AA205: "sign(address,bytes32)",
-        0x799CD333: "sign(bytes32)",
-        0xCDE3E5BE: "signAndAttachDelegation(address,uint256,uint64)",
-        0x3D0E292F: "signCompact((address,uint256,uint256,uint256),bytes32)",
-        0x8E2F97BF: "signCompact(address,bytes32)",
-        0xA282DC4B: "signCompact(bytes32)",
-        0xCC2A781F: "signCompact(uint256,bytes32)",
-        0xCEBA2EC3: "signDelegation(address,uint256,uint64)",
-        0x83211B40: "signP256(uint256,bytes32)",
-        0xC42A80A7: "skip(bool,string)",
-        0x9711715A: "snapshot()",
-        0x9EC8B026: "sort(uint256[])",
-        0x8BB75533: "split(string,string)",
-        0x419C8832: "startDebugTraceRecording()",
-        0x3E9705C0: "startMappingRecording()",
-        0xCED398A2: "stopAndReturnDebugTraceRecording()",
-        0x0956441B: "stopExpectSafeMemory()",
-        0x0D4AAE9B: "stopMappingRecording()",
-        0xA5CBFE65: "toBase64(bytes)",
-        0x3F8BE2C8: "toBase64(string)",
-        0xC8BD0E4A: "toBase64URL(bytes)",
-        0xAE3165B3: "toBase64URL(string)",
-        0x50BB0884: "toLowercase(string)",
-        0x074AE3D7: "toUppercase(string)",
-        0xB2DAD155: "trim(string)",
-        0xF45C1CE7: "tryFfi(string[])",
-        0xB23184CF: "warmSlot(address,bytes32)",
-        0x1F21FC80: "writeFileBinary(string,bytes)",
-        0xBD6AF434: "expectCall(address,bytes)",
-        0xC1ADBBFF: "expectCall(address,bytes,uint64)",
-        0xF30C7BA3: "expectCall(address,uint256,bytes)",
-        0xA2B1A1AE: "expectCall(address,uint256,bytes,uint64)",
-        0x440ED10D: "expectEmit()",
-        0x86B9620D: "expectEmit(address)",
-        0x491CC7C2: "expectEmit(bool,bool,bool,bool)",
-        0x81BAD6F3: "expectEmit(bool,bool,bool,bool,address)",
-        0x11FB5B9C: "expectPartialRevert(bytes4)",
-        0x51AA008A: "expectPartialRevert(bytes4,address)",
-        0xF4844814: "expectRevert()",
-        0xD814F38A: "expectRevert(address)",
-        0x1FF5F952: "expectRevert(address,uint64)",
-        0xF28DCEB3: "expectRevert(bytes)",
-        0x61EBCF12: "expectRevert(bytes,address)",
-        0xD345FB1F: "expectRevert(bytes,address,uint64)",
-        0x4994C273: "expectRevert(bytes,uint64)",
-        0xC31EB0E0: "expectRevert(bytes4)",
-        0x260BC5DE: "expectRevert(bytes4,address)",
-        0xB0762D73: "expectRevert(bytes4,address,uint64)",
-        0xE45CA72D: "expectRevert(bytes4,uint64)",
-        0x4EE38244: "expectRevert(uint64)",
-        0x65BC9481: "accesses(address)",
-        0xAFC98040: "broadcast()",
-        0xE6962CDB: "broadcast(address)",
-        0xF67A965B: "broadcast(uint256)",
-        0x3FDF4E15: "clearMockedCalls()",
-        0x08D6B37A: "deleteStateSnapshot(uint256)",
-        0xE0933C74: "deleteStateSnapshots()",
-        0x796B89B9: "getBlockTimestamp()",
-        0xA5748AAD: "getNonce((address,uint256,uint256,uint256))",
-        0x2D0335AB: "getNonce(address)",
-        0x191553A4: "getRecordedLogs()",
-        0x64AF255D: "isContext(uint8)",
-        0xB96213E4: "mockCall(address,bytes,bytes)",
-        0x81409B91: "mockCall(address,uint256,bytes,bytes)",
-        0xDBAAD147: "mockCallRevert(address,bytes,bytes)",
-        0xD23CD037: "mockCallRevert(address,uint256,bytes,bytes)",
-        0x5C5C3DE9: "mockCalls(address,bytes,bytes[])",
-        0x08BCBAE1: "mockCalls(address,uint256,bytes,bytes[])",
-        0xADF84D21: "mockFunction(address,address,bytes)",
-        0xD1A5B36F: "pauseGasMetering()",
-        0x7D73D042: "prank(address,address,bool)",
-        0xA7F8BF5C: "prank(address,bool)",
-        0x3B925549: "prevrandao(bytes32)",
-        0x4AD0BAC9: "readCallers()",
-        0x266CF109: "record()",
-        0x41AF2F52: "recordLogs()",
-        0xBE367DD3: "resetGasMetering()",
-        0x2BCD50E0: "resumeGasMetering()",
-        0xC2527405: "revertToState(uint256)",
-        0x3A1985DC: "revertToStateAndDelete(uint256)",
-        0xF8E18B57: "setNonce(address,uint64)",
-        0xDD9FCA12: "snapshotGasLastCall(string)",
-        0x200C6772: "snapshotGasLastCall(string,string)",
-        0x6D2B27D8: "snapshotValue(string,string,uint256)",
-        0x51DB805A: "snapshotValue(string,uint256)",
-        0x7FB5297F: "startBroadcast()",
-        0x7FEC2A8D: "startBroadcast(address)",
-        0xCE817D47: "startBroadcast(uint256)",
-        0x4EB859B5: "startPrank(address,address,bool)",
-        0x1CC0B435: "startPrank(address,bool)",
-        0x3CAD9D7B: "startSnapshotGas(string)",
-        0x6CD0CC53: "startSnapshotGas(string,string)",
-        0xCF22E3C9: "startStateDiffRecording()",
-        0xAA5CF90E: "stopAndReturnStateDiff()",
-        0x76EADD36: "stopBroadcast()",
-        0xF6402EDA: "stopSnapshotGas()",
-        0x773B2805: "stopSnapshotGas(string)",
-        0x0C9DB707: "stopSnapshotGas(string,string)",
-        0x48F50C0F: "txGasPrice(uint256)",
-        0x285B366A: "assumeNoRevert()",
-        0x98680034: "createSelectFork(string)",
-        0x2F103F22: "activeFork()",
-        0xEA060291: "allowCheatcodes(address)",
-        0x31BA3498: "createFork(string)",
-        0x7CA29682: "createFork(string,bytes32)",
-        0x6BA3BA2B: "createFork(string,uint256)",
-        0x84D52B7A: "createSelectFork(string,bytes32)",
-        0x71EE464D: "createSelectFork(string,uint256)",
-        0xD92D8EFD: "isPersistent(address)",
-        0x57E22DDE: "makePersistent(address)",
-        0x4074E0A8: "makePersistent(address,address)",
-        0xEFB77A75: "makePersistent(address,address,address)",
-        0x1D9E269E: "makePersistent(address[])",
-        0x997A0222: "revokePersistent(address)",
-        0x3CE969E6: "revokePersistent(address[])",
-        0x0F29772B: "rollFork(bytes32)",
-        0xD9BBF3A1: "rollFork(uint256)",
-        0xF2830F7B: "rollFork(uint256,bytes32)",
-        0xD74C83A4: "rollFork(uint256,uint256)",
-        0x9EBF6827: "selectFork(uint256)",
-        0xBE646DA1: "transact(bytes32)",
-        0x4D8ABC4B: "transact(uint256,bytes32)",
-        0x42181150: "envInt(string,string)",
-        0x74318528: "envOr(string,string,uint256[])",
-        0x97949042: "envBytes32(string)",
-        0x350D56BF: "envAddress(string)",
-        0xAD31B9FA: "envAddress(string,string)",
-        0x7ED1EC7D: "envBool(string)",
-        0xAAADDEAF: "envBool(string,string)",
-        0x953C097E: "envBytes(bytes)",
-        0x6C42F03F: "envBytes(bytes,bytes)",
-        0x5AF231C1: "envBytes32(string,string)",
-        0x892A0C61: "envInt(string)",
-        0x561FE540: "envOr(string,address)",
-        0x4777F3CF: "envOr(string,bool)",
-        0xB3E47705: "envOr(string,bytes)",
-        0xB4A85892: "envOr(string,bytes32)",
-        0xBBCB713E: "envOr(string,int256)",
-        0xD145736C: "envOr(string,string)",
-        0xC74E9DEB: "envOr(string,string,address[])",
-        0xEB85E83B: "envOr(string,string,bool[])",
-        0x2281F367: "envOr(string,string,bytes32[])",
-        0x64BC3E64: "envOr(string,string,bytes[])",
-        0x4700D74B: "envOr(string,string,int256[])",
-        0x859216BC: "envOr(string,string,string[])",
-        0x5E97348F: "envOr(string,uint256)",
-        0xF877CB19: "envString(string)",
-        0x14B02BC9: "envString(string,string)",
-        0xC1978D1F: "envUint(string)",
-        0xF3DEC099: "envUint(string,string)",
-        0x3EBF73B4: "getDeployedCode(string)",
-        0x528A683C: "keyExists(string,string)",
-        0xDB4235F6: "keyExistsJson(string,string)",
-        0x600903AD: "keyExistsToml(string,string)",
-        0x6A82600A: "parseJson(string)",
-        0x85940EF1: "parseJson(string,string)",
-        0x213E4198: "parseJsonKeys(string,string)",
-        0x592151F0: "parseToml(string)",
-        0x37736E08: "parseToml(string,string)",
-        0x812A44B2: "parseTomlKeys(string,string)",
-        0xD930A0E6: "projectRoot()",
-        0x47EAF474: "prompt(string)",
-        0x1E279D41: "promptSecret(string)",
-        0x69CA02B7: "promptSecretUint(string)",
-        0x972C6062: "serializeAddress(string,string,address)",
-        0x1E356E1A: "serializeAddress(string,string,address[])",
-        0xAC22E971: "serializeBool(string,string,bool)",
-        0x92925AA1: "serializeBool(string,string,bool[])",
-        0xF21D52C7: "serializeBytes(string,string,bytes)",
-        0x9884B232: "serializeBytes(string,string,bytes[])",
-        0x2D812B44: "serializeBytes32(string,string,bytes32)",
-        0x201E43E2: "serializeBytes32(string,string,bytes32[])",
-        0x3F33DB60: "serializeInt(string,string,int256)",
-        0x7676E127: "serializeInt(string,string,int256[])",
-        0x9B3358B0: "serializeJson(string,string)",
-        0x88DA6D35: "serializeString(string,string,string)",
-        0x561CD6F3: "serializeString(string,string,string[])",
-        0x129E9002: "serializeUint(string,string,uint256)",
-        0xFEE9A469: "serializeUint(string,string,uint256[])",
-        0x3D5923EE: "setEnv(string,string)",
-        0xFA9D8713: "sleep(uint256)",
-        0x625387DC: "unixTime()",
-        0xE23CD19F: "writeJson(string,string)",
-        0x35D6AD46: "writeJson(string,string,string)",
-        0xC0865BA7: "writeToml(string,string)",
-        0x51AC6A33: "writeToml(string,string,string)",
-        0x14AE3519: "attachDelegation((uint8,bytes32,bytes32,uint64,address))",
-        0xB25C5A25: "sign((address,uint256,uint256,uint256),bytes32)",
-        0xC7FA7288: "signAndAttachDelegation(address,uint256)",
-        0x5B593C7B: "signDelegation(address,uint256)",
-        0x22100064: "rememberKey(uint256)",
-        0xF0259E92: "breakpoint(string)",
-        0xF7D39A8D: "breakpoint(string,bool)",
-        0x203DAC0D: "copyStorage(address,address)",
-        0x7404F1D2: "createWallet(string)",
-        0x7A675BB6: "createWallet(uint256)",
-        0xED7C5462: "createWallet(uint256,string)",
-        0x6BCB2C1B: "deriveKey(string,string,uint32)",
-        0x6229498B: "deriveKey(string,uint32)",
-        0x28A249B0: "getLabel(address)",
-        0xC6CE059D: "parseAddress(string)",
-        0x974EF924: "parseBool(string)",
-        0x8F5D232D: "parseBytes(string)",
-        0x087E6E81: "parseBytes32(string)",
-        0x42346C5E: "parseInt(string)",
-        0xFA91454D: "parseUint(string)",
-        0xDD82D13E: "skip(bool)",
-        0x56CA623E: "toString(address)",
-        0x71DCE7DA: "toString(bool)",
-        0x71AAD10D: "toString(bytes)",
-        0xB11A19E8: "toString(bytes32)",
-        0xA322C40E: "toString(int256)",
-        0x6900A3AE: "toString(uint256)",
-        0x1206C8A8: "rpc(string,string)",
-        0x975A6CE9: "rpcUrl(string)",
-        0xA85A8418: "rpcUrls()",
-        0x48C3241F: "closeFile(string)",
-        0x261A323E: "exists(string)",
-        0x7D15D019: "isDir(string)",
-        0xE0EB04D4: "isFile(string)",
-        0xC4BC59E0: "readDir(string)",
-        0x60F9BB11: "readFile(string)",
-        0x16ED7BC4: "readFileBinary(string)",
-        0x70F55728: "readLine(string)",
-        0x9F5684A2: "readLink(string)",
-        0xF1AFE04D: "removeFile(string)",
-        0x897E0A97: "writeFile(string,string)",
-        0x619D897F: "writeLine(string,string)",
-    }
 
     # bytes4(keccak256("assume(bool)"))
     assume_sig: int = 0x4C63E562
@@ -1204,11 +1036,73 @@ class hevm_cheat_code:
     # bytes4(keccak256("randomBytes8()"))
     random_bytes8_sig: int = 0x0497B0A5
 
+    # bytes4(keccak256("envInt(string)"))
+    env_int_sig: int = 0x892A0C61
+    # bytes4(keccak256("envBytes32(string)"))
+    env_bytes32_sig: int = 0x97949042
+    # bytes4(keccak256("envAddress(string)"))
+    env_address_sig: int = 0x350D56BF
+    # bytes4(keccak256("envBool(string)"))
+    env_bool_sig: int = 0x7ED1EC7D
+    # bytes4(keccak256("envUint(string)"))
+    env_uint_sig: int = 0xC1978D1F
+    # bytes4(keccak256("envString(string)"))
+    env_string_sig: int = 0xF877CB19
+    # bytes4(keccak256("envBytes(string)"))
+    env_bytes_sig: int = 0x4D7BAF06
+
+    # bytes4(keccak256("envInt(string,string)"))
+    env_int_array_sig: int = 0x42181150
+    # bytes4(keccak256("envAddress(string,string)"))
+    env_address_array_sig: int = 0xAD31B9FA
+    # bytes4(keccak256("envBool(string,string)"))
+    env_bool_array_sig: int = 0xAAADDEAF
+    # bytes4(keccak256("envBytes32(string,string)"))
+    env_bytes32_array_sig: int = 0x5AF231C1
+    # bytes4(keccak256("envString(string,string)"))
+    env_string_array_sig: int = 0x14B02BC9
+    # bytes4(keccak256("envUint(string,string)"))
+    env_uint_array_sig: int = 0xF3DEC099
+    # bytes4(keccak256("envBytes(string,string)"))
+    env_bytes_array_sig: int = 0xDDC2651B
+
+    # bytes4(keccak256("envOr(string,address)"))
+    env_or_address_sig: int = 0x561FE540
+    # bytes4(keccak256("envOr(string,bool)"))
+    env_or_bool_sig: int = 0x4777F3CF
+    # bytes4(keccak256("envOr(string,bytes)"))
+    env_or_bytes_sig: int = 0xB3E47705
+    # bytes4(keccak256("envOr(string,string)"))
+    env_or_string_sig: int = 0xD145736C
+    # bytes4(keccak256("envOr(string,bytes32)"))
+    env_or_bytes32_sig: int = 0xB4A85892
+    # bytes4(keccak256("envOr(string,int256)"))
+    env_or_int_sig: int = 0xBBCB713E
+    # bytes4(keccak256("envOr(string,uint256)"))
+    env_or_uint_sig: int = 0x5E97348F
+
+    # bytes4(keccak256("envOr(string,string,address[])"))
+    env_or_address_array_sig: int = 0xC74E9DEB
+    # bytes4(keccak256("envOr(string,string,bool[])"))
+    env_or_bool_array_sig: int = 0xEB85E83B
+    # bytes4(keccak256("envOr(string,string,bytes32[])"))
+    env_or_bytes32_array_sig: int = 0x2281F367
+    # bytes4(keccak256("envOr(string,string,int256[])"))
+    env_or_int_array_sig: int = 0x4700D74B
+    # bytes4(keccak256("envOr(string,string,uint256[])"))
+    env_or_uint_arrray_sig: int = 0x74318528
+    # bytes4(keccak256("envOr(string,string,bytes[])"))
+    env_or_bytes_array_sig: int = 0x64BC3E64
+    # bytes4(keccak256("envOr(string,string,string[])"))
+    env_or_string_array_sig: int = 0x859216BC
+
+    # bytes4(keccak256("envExists(string)"))
+    env_exists_sig: int = 0xCE8365F9
+
     @staticmethod
     def handle(sevm, ex, arg: ByteVec, stack) -> ByteVec | None:
         funsig: int = int_of(arg[:4].unwrap(), "symbolic hevm cheatcode")
         ret = ByteVec()
-
         # vm.assert*
         if funsig in assert_cheatcode_handler:
             vm_assert = assert_cheatcode_handler[funsig](arg)
@@ -1551,8 +1445,95 @@ class hevm_cheat_code:
         elif funsig == hevm_cheat_code.random_bytes8_sig:
             return create_bytes8(ex, arg, name="vmRandomBytes8")
 
-        elif funsig in hevm_cheat_code.dict_of_unsupported_cheatcodes:
-            msg = f"Unsupported cheat code: {hevm_cheat_code.dict_of_unsupported_cheatcodes[funsig]}"
+        elif funsig == hevm_cheat_code.env_int_sig:
+            return create_env_int(arg)
+
+        elif funsig == hevm_cheat_code.env_bytes32_sig:
+            return create_env_bytes32(arg)
+
+        elif funsig == hevm_cheat_code.env_address_sig:
+            return create_env_address(arg)
+
+        elif funsig == hevm_cheat_code.env_bool_sig:
+            return create_env_bool(arg)
+
+        elif funsig == hevm_cheat_code.env_uint_sig:
+            return create_env_uint(arg)
+
+        elif funsig == hevm_cheat_code.env_bytes_sig:
+            return create_env_bytes(arg)
+
+        elif funsig == hevm_cheat_code.env_string_sig:
+            return create_env_string(arg)
+
+        elif funsig == hevm_cheat_code.env_int_array_sig:
+            return create_env_int_array(arg)
+
+        elif funsig == hevm_cheat_code.env_address_array_sig:
+            return create_env_address_array(arg)
+
+        elif funsig == hevm_cheat_code.env_bool_array_sig:
+            return create_env_bool_array(arg)
+
+        elif funsig == hevm_cheat_code.env_bytes32_array_sig:
+            return create_env_bytes32_array(arg)
+
+        elif funsig == hevm_cheat_code.env_string_array_sig:
+            return create_env_string_array(arg)
+
+        elif funsig == hevm_cheat_code.env_uint_array_sig:
+            return create_env_uint_array(arg)
+
+        elif funsig == hevm_cheat_code.env_bytes_array_sig:
+            return create_env_bytes_array(arg)
+
+        elif funsig == hevm_cheat_code.env_or_address_sig:
+            return create_env_or_address(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bool_sig:
+            return create_env_or_bool(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bytes_sig:
+            return create_env_or_bytes(arg)
+
+        elif funsig == hevm_cheat_code.env_or_string_sig:
+            return create_env_or_string(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bytes32_sig:
+            return create_env_or_bytes32(arg)
+
+        elif funsig == hevm_cheat_code.env_or_int_sig:
+            return create_env_or_int(arg)
+
+        elif funsig == hevm_cheat_code.env_or_uint_sig:
+            return create_env_or_uint(arg)
+
+        elif funsig == hevm_cheat_code.env_or_address_array_sig:
+            return create_env_or_address_array(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bool_array_sig:
+            return create_env_or_bool_array(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bytes32_array_sig:
+            return create_env_or_bytes32_array(arg)
+
+        elif funsig == hevm_cheat_code.env_or_int_array_sig:
+            return create_env_or_int_array(arg)
+
+        elif funsig == hevm_cheat_code.env_or_uint_arrray_sig:
+            return create_env_or_uint_array(arg)
+
+        elif funsig == hevm_cheat_code.env_or_bytes_array_sig:
+            return create_env_or_bytes_array(arg)
+
+        elif funsig == hevm_cheat_code.env_or_string_array_sig:
+            return create_env_or_string_array(arg)
+
+        elif funsig == hevm_cheat_code.env_exists_sig:
+            return check_env_exists(arg)
+
+        elif funsig in dict_of_unsupported_cheatcodes:
+            msg = f"Unsupported cheat code: {dict_of_unsupported_cheatcodes[funsig]}"
             raise HalmosException(msg)
 
         else:

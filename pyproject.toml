@@ -31,6 +31,7 @@ dependencies = [
     "psutil>=6.1.0",
     "requests>=2.32.3",
     "yices-solver>=2.6.4,<2.6.5",
+    "python-dotenv>=1.1.0",
 ]
 dynamic = ["version"]
 
