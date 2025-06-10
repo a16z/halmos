@@ -36,7 +36,6 @@ from z3 import (
 )
 
 import halmos.traces
-
 from halmos.build import (
     build_output_iterator,
     import_libs,
