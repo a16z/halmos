@@ -1,4 +1,6 @@
-# SPDX-License-Identifier: AGPL-3.0
+# halmos/cheatcodes/env.py
+
+from __future__ import annotations
 
 import os
 
