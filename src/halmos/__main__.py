@@ -1343,7 +1343,7 @@ def resolve_target_contracts(ctx: InvariantTestingContext, ex: Exec) -> set[Addr
     # or targetContract(FOUNDRY_TEST) is provided.
     resolved_target_contracts = (
         resolved_target_contracts
-        if (target_selectors.get(FOUNDRY_TEST) or FOUNDRY_TEST in target_contracts)
+        if (FOUNDRY_TEST in target_contracts or target_selectors.get(FOUNDRY_TEST))
         else resolved_target_contracts - {FOUNDRY_TEST}
     )
 
