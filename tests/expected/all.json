@@ -3281,7 +3281,7 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/InvariantTargetThis.t.sol:InvariantTest": [
+        "test/InvariantTargetThis.t.sol:InvariantTargetBase": [
             {
                 "name": "check_foo()",
                 "exitcode": 0,
@@ -3292,7 +3292,81 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_foo_called()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_this()",
+                "exitcode": 5,
+                "num_models": null,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/InvariantTargetThis.t.sol:InvariantTargetThis": [
+            {
+                "name": "check_foo()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_foo_called()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "invariant_targets_foo_included()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_targets_inception_check_included()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_targets_inception_invariant_included()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_targets_inception_setUp_included()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_targets_inception_test_included()",
                 "exitcode": 1,
                 "num_models": 1,
                 "models": null,
