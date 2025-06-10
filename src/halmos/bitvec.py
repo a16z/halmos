@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 from typing import Any, TypeAlias
 
 from z3 import (

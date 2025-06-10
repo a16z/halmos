@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import ClassVar

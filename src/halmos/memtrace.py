@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 import io
 import linecache
 import threading
