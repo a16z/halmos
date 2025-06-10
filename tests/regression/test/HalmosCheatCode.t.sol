@@ -394,9 +394,9 @@ contract HalmosCheatCodeTest is SymTest, Test {
         assertEq(x, true);
     }
 
-    function check_env_or_bool_without_env_var() public {
-        bool x = vm.envOr("BOOL2", true);
-        assertEq(x, true);
+    function check_env_or_bool_without_env_var(bool x) public {
+        assertEq(vm.envOr("MISSING", true), true);
+        assertEq(vm.envOr("MISSING", x), x);
     }
 
     function check_env_or_bytes() public {

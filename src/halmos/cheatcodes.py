@@ -743,18 +743,19 @@ def create_env_bytes_array(arg, **kwargs):
 
 
 def create_env_or_address(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    fallback_val = arg.slice(36, 68).unwrap()
-    address = env.env_or_address(key, fallback_val)
-    return ByteVec(uint256(address))
+    with suppress(KeyError):
+        return create_env_address(arg, **kwargs)
+
+    fallback_val = uint160(arg.get_word(36))
+    return ByteVec(uint256(fallback_val))
 
 
 def create_env_or_bool(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    arg_input = arg.slice(36, 68).unwrap()  # Use the next 32 bytes as delimiter
-    fallback_val = bool(int.from_bytes(arg_input, "big"))
-    val = env.env_or_bool(key, fallback_val)
-    bool_val = con(1 if val else 0, 1)
+    with suppress(KeyError):
+        return create_env_bool(arg, **kwargs)
+
+    fallback_val = arg.get_word(36)
+    bool_val = Bool(fallback_val != 0)
     return ByteVec(uint256(bool_val))
 
 
