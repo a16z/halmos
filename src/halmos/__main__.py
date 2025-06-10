@@ -31,6 +31,7 @@ from z3 import (
     BoolRef,
     Solver,
     ZeroExt,
+    eq,
     set_option,
     unsat,
 )
@@ -1315,18 +1316,16 @@ def get_target_selectors(
 def get_excluded_selectors(
     ctx: ContractContext, setup_ex: Exec
 ) -> MappingProxyType[Address, frozenset[Bytes]]:
-    # function excludeSelectors() public view returns (FuzzSelector[] memory excludedSelectors_) {
+    # function excludeSelectors() public view returns (FuzzSelector[] memory excludedSelectors_)
     selector = "b0464fdc"
     funname = "excludeSelectors"
     fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
 
     returndata = execute_simple_getter(ctx, setup_ex, fun_info)
 
+    result = abi_decode_FuzzSelector_array(returndata)
     return MappingProxyType(
-        {
-            target: frozenset(selectors)
-            for target, selectors in abi_decode_FuzzSelector_array(returndata).items()
-        }
+        {target: frozenset(selectors) for target, selectors in result.items()}
     )
 
 
@@ -1340,22 +1339,18 @@ def resolve_target_contracts(ctx: InvariantTestingContext, ex: Exec) -> set[Addr
     resolved_target_contracts -= ctx.excluded_contracts
     resolved_target_contracts |= target_selectors.keys()
 
-    # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it, even if targetContract(FOUNDRY_TEST) is provided.
-    result = (
+    # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it
+    # or targetContract(FOUNDRY_TEST) is provided.
+    resolved_target_contracts = (
         resolved_target_contracts
-        if target_selectors.get(FOUNDRY_TEST)
+        if (FOUNDRY_TEST in target_contracts or target_selectors.get(FOUNDRY_TEST))
         else resolved_target_contracts - {FOUNDRY_TEST}
     )
 
-    if not result:
-        msg = (
-            "A targetSelector() must be specified if the test contract is set as a target."
-            if target_contracts
-            else "No contracts have been deployed during setUp()."
-        )
-        raise HalmosException(f"No target contracts available. {msg}")
+    if not resolved_target_contracts:
+        raise HalmosException("No target contracts available.")
 
-    return result
+    return resolved_target_contracts
 
 
 # TODO: implement memoization
@@ -1378,13 +1373,27 @@ def resolve_target_selectors(
                 yield (fun_sig, fun_selector)
 
     else:
+        is_test_contract = eq(addr, FOUNDRY_TEST)
+
         for fun_sig, fun_selector in method_identifiers:
             # skip if 'pure' or 'view' function that doesn't change the state
-            state_mutability = abi[fun_sig]["stateMutability"]
-            if state_mutability in ["pure", "view"]:
-                if ctx.debug:
-                    fun_name = fun_sig.split("(")[0]
-                    print(f"Skipping {fun_name} ({state_mutability})")
+            if (state_mutability := abi[fun_sig]["stateMutability"]) in [
+                "pure",
+                "view",
+            ]:
+                debug(f"Skipping {fun_sig} ({state_mutability})")
+                continue
+
+            # https://github.com/a16z/halmos/issues/514
+            # exclude special functions like test_, check_, setUp(), etc.
+            if is_test_contract and (
+                fun_sig.startswith("test_")
+                or fun_sig.startswith("check_")
+                or fun_sig.startswith("prove_")
+                or fun_sig.startswith("invariant_")
+                or fun_sig.startswith("setUp")
+            ):
+                debug(f"Skipping special function {fun_sig}")
                 continue
 
             yield (fun_sig, fun_selector)
