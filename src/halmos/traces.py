@@ -4,11 +4,11 @@ from contextvars import ContextVar
 
 from z3 import Z3_OP_CONCAT, BitVecNumRef, BitVecRef, is_app
 
-from halmos.bytevec import ByteVec
-from halmos.config import Config, TraceEvent
-from halmos.exceptions import HalmosException
-from halmos.mapper import DeployAddressMapper, Mapper
-from halmos.sevm import (
+from .bytevec import ByteVec
+from .config import Config, TraceEvent
+from .exceptions import HalmosException
+from .mapper import DeployAddressMapper, Mapper
+from .sevm import (
     CallContext,
     CallSequence,
     EventLog,
@@ -16,7 +16,7 @@ from halmos.sevm import (
     StorageWrite,
     mnemonic,
 )
-from halmos.utils import (
+from .utils import (
     Address,
     byte_length,
     cyan,

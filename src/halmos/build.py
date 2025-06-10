@@ -3,10 +3,10 @@ import os
 import re
 import traceback
 
-from halmos.config import Config as HalmosConfig
-from halmos.logs import PARSING_ERROR, debug, warn_code
-from halmos.mapper import Mapper, SourceFileMap
-from halmos.ui import ui
+from .config import Config as HalmosConfig
+from .logs import PARSING_ERROR, debug, warn_code
+from .mapper import Mapper, SourceFileMap
+from .ui import ui
 
 
 def get_contract_type(

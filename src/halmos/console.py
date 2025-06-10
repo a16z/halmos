@@ -1,11 +1,11 @@
 from z3 import BitVec
 
-from halmos.bitvec import HalmosBitVec as BV
-from halmos.logs import (
+from .bitvec import HalmosBitVec as BV
+from .logs import (
     info,
     warn,
 )
-from halmos.utils import (
+from .utils import (
     extract_bytes,
     extract_bytes_argument,
     extract_funsig,

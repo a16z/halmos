@@ -6,8 +6,8 @@ import os
 
 from dotenv import find_dotenv, load_dotenv
 
-from halmos.logs import debug
-from halmos.utils import Address, uint160
+from .logs import debug
+from .utils import Address, uint160
 
 
 def init_env(path: str | None = None):

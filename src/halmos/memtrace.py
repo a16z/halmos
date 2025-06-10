@@ -6,7 +6,7 @@ import tracemalloc
 
 from rich.console import Console
 
-from halmos.logs import debug
+from .logs import debug
 
 console = Console()
 

@@ -32,7 +32,7 @@ from z3 import (
     simplify,
 )
 
-from halmos.exceptions import NotConcreteError
+from .exceptions import NotConcreteError
 
 BV: TypeAlias = "HalmosBitVec"
 AnyValue: TypeAlias = "int | bytes | BitVecRef | BV | HalmosBool | str"
