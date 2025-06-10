@@ -81,14 +81,13 @@ contract InvariantTargetTest_0_1_2_3 is InvariantTargetTest {
     }
 }
 
-contract InvariantTargetTest_no_target is InvariantTargetTest {
+contract InvariantTargetTest_target_contract_this is InvariantTargetTest {
     function setUp() public {
         c = new C();
         d = new D();
 
-        // without targetSelector(), the test contract is not set as a target.
-        // also, the use of targetContract() excludes any contracts not explicitly mentioned.
-        // as a result, no contracts are set as a target.
+        // https://github.com/a16z/halmos/issues/506
+        // C and D are not set as a targets, because targetContract(address(this)) is used
         targetContract(address(this));
     }
 }
