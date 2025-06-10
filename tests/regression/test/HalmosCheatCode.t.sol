@@ -524,7 +524,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         int[] memory x = new int[](2);
         x[0] = 1;
         x[1] = -1;
-        int[] memory y = vm.envOr("INT_ARRAY2", ",", x);
+        int[] memory y = vm.envOr("MISSING", ",", x);
         assertEq(y.length, 2);
         assertEq(y[0], 1);
         assertEq(y[1], -1);
@@ -545,7 +545,7 @@ contract HalmosCheatCodeTest is SymTest, Test {
         uint[] memory x = new uint[](2);
         x[0] = 1;
         x[1] = 3;
-        uint[] memory y = vm.envOr("UINT_ARRAY2", ",", x);
+        uint[] memory y = vm.envOr("MISSING", ",", x);
         assertEq(y.length, 2);
         assertEq(y[0], 1);
         assertEq(y[1], 3);
