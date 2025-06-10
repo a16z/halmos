@@ -614,7 +614,7 @@ def abi_encode_array_words(values: list[Bool | Address | Word]) -> ByteVec:
     return result
 
 
-def padded_bytes(val: Bytes) -> Bytes:
+def padded_bytes(val: Bytes, right_pad: bool = True) -> Bytes:
     """
     Pads a bytes value to the nearest multiple of 32 bytes.
     """
@@ -627,11 +627,18 @@ def padded_bytes(val: Bytes) -> Bytes:
         return val
 
     if isinstance(val, bytes):
-        return val.ljust(new_len, b"\x00")
+        if right_pad:
+            return val.ljust(new_len, b"\x00")
+        else:
+            return val.rjust(new_len, b"\x00")
 
     if isinstance(val, ByteVec):
-        result = ByteVec(val)
-        result.append(b"\x00" * (new_len - curr_len))
+        if right_pad:
+            result = ByteVec(val)
+            result.append(b"\x00" * (new_len - curr_len))
+        else:
+            result = ByteVec(b"\x00" * (new_len - curr_len))
+            result.append(val)
         return result
 
     raise ValueError(f"unsupported bytes type: {type(val)}")
@@ -754,27 +761,11 @@ def create_env_or_bool(arg, **kwargs):
 
 
 def create_env_or_bytes(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    size_location = 0
-    fallback_val = b""
-    for offset, chunk in arg.chunks.items():
-        if offset == 36:
-            size_location = int.from_bytes(chunk.unwrap(), "big")
+    with suppress(KeyError):
+        return create_env_bytes(arg, **kwargs)
 
-        if 4 + size_location == offset and size_location != 0:
-            byte_size = int.from_bytes(chunk.unwrap(), "big")
-
-        if (
-            offset == size_location + 36
-            and size_location != 0
-            and byte_size == (len(chunk.unwrap().hex()) + 1) // 2
-        ):
-            # This is the chunk we need
-            fallback_val = chunk
-            break
-
-    values = env.env_or_bytes(key, fallback_val)
-    return encode_tuple_bytes(values)
+    fallback_bytes = ByteVec(extract_string_argument(arg, 1))
+    return encode_tuple_bytes(fallback_bytes)
 
 
 def create_env_or_string(arg, **kwargs):
@@ -806,10 +797,11 @@ def create_env_or_string(arg, **kwargs):
 
 
 def create_env_or_bytes32(arg, **kwargs):
-    key = decode_string_arg(arg, 0)
-    fallback_val = arg.slice(36, 68).unwrap()
-    val = env.env_or_bytes32(key, fallback_val)
-    bytes32_val = val.rjust(32, b"\x00")
+    with suppress(KeyError):
+        return create_env_bytes32(arg, **kwargs)
+
+    fallback_val = arg.slice(36, 68)
+    bytes32_val = padded_bytes(fallback_val, right_pad=False)
     return ByteVec(bytes32_val)
 
 

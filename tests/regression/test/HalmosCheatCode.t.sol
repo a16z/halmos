@@ -400,15 +400,15 @@ contract HalmosCheatCodeTest is SymTest, Test {
     }
 
     function check_env_or_bytes() public {
-        bytes memory y = hex"00000000000000000000000000000000000000000000000000000000Dead";
-        bytes memory x = vm.envOr("BYTES_ENV_OR",y);
+        bytes memory y = hex"abcd";
+        bytes memory x = vm.envOr("BYTES_ENV_OR", y);
         assertEq(x, hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef");
     }
 
     function check_env_or_bytes_without_env_var() public {
-        bytes memory y = hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef";
-        bytes memory x = vm.envOr("BYTES2",y);
-        assertEq(x, hex"00000000000000000000000000000000000000000000000000000000DeaDBeefDeaDBeef");
+        bytes memory y = hex"abcd";
+        bytes memory x = vm.envOr("MISSING", y);
+        assertEq(x, y);
     }
 
 
