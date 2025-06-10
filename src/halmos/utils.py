@@ -1,13 +1,11 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-from __future__ import annotations
-
 import math
 import re
 import uuid
 from functools import partial
 from timeit import default_timer as timer
-from typing import TYPE_CHECKING, Any, TypeAlias, Union
+from typing import Any
 
 from z3 import (
     Z3_OP_BADD,
@@ -54,16 +52,11 @@ secp256k1n = (
     115792089237316195423570985008687907852837564279074904382605163141518161494337
 )
 
-if TYPE_CHECKING:
-    from halmos.bytevec import ByteVec
-
 Byte = int | BitVecRef | BV  # uint8
 Bytes4 = int | BitVecRef | BV  # uint32
 Address = int | BitVecRef | BV  # uint160
 Word = int | BitVecRef | BV  # uint256
-Bytes: TypeAlias = Union[
-    bytes, BitVecRef, "ByteVec"
-]  # arbitrary-length sequence of bytes
+Bytes = "bytes | BitVecRef | ByteVec"  # arbitrary-length sequence of bytes
 
 
 # dynamic BitVecSort sizes
@@ -1021,7 +1014,7 @@ class OffsetMap:
         assert (existing := self._map.get(raw_key)) is None or existing == raw_value
         self._map[raw_key] = raw_value
 
-    def copy(self) -> OffsetMap:
+    def copy(self) -> "OffsetMap":
         new_map = OffsetMap(self._offset_bits)
         new_map._map = self._map.copy()
         return new_map
