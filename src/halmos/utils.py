@@ -309,10 +309,14 @@ def extract_bytes_argument(data: Bytes, arg_idx: int) -> bytes:
     return bv_value_to_bytes(bytes) if is_bv_value(bytes) else bytes
 
 
-def extract_string_argument(data: Bytes, arg_idx: int):
+def extract_string_argument(data: Bytes, arg_idx: int, decode: bool = True) -> Bytes:
     """Extracts idx-th argument of string from data"""
     string_bytes = extract_bytes_argument(data, arg_idx)
-    return string_bytes.decode("utf-8") if is_concrete(string_bytes) else string_bytes
+    return (
+        string_bytes.decode("utf-8")
+        if is_concrete(string_bytes) and decode
+        else string_bytes
+    )
 
 
 def extract_bytes(data: Bytes, offset: int, size_bytes: int) -> Bytes:

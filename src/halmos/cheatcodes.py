@@ -762,7 +762,7 @@ def create_env_or_bytes(arg, **kwargs):
     with suppress(KeyError):
         return create_env_bytes(arg, **kwargs)
 
-    fallback_bytes = ByteVec(extract_string_argument(arg, 1))
+    fallback_bytes = ByteVec(extract_string_argument(arg, 1, decode=False))
     return encode_tuple_bytes(fallback_bytes)
 
 
