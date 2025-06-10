@@ -25,6 +25,7 @@ from z3 import (
     unsat,
 )
 
+from halmos import env
 from halmos.assertions import assert_cheatcode_handler
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bitvec import HalmosBool as Bool
@@ -35,23 +36,6 @@ from halmos.calldata import (
     mk_calldata,
 )
 from halmos.constants import MAX_MEMORY_SIZE
-from halmos.env import (
-    getenv_address,
-    getenv_address_array,
-    getenv_bool,
-    getenv_bool_array,
-    getenv_bytes,
-    getenv_bytes32,
-    getenv_bytes32_array,
-    getenv_bytes_array,
-    getenv_exists,
-    getenv_int,
-    getenv_int_array,
-    getenv_string,
-    getenv_string_array,
-    getenv_uint,
-    getenv_uint_array,
-)
 from halmos.exceptions import (
     FailCheatcode,
     HalmosException,
@@ -558,47 +542,47 @@ def create_bytes8(ex, arg, name: str | None = None, **kwargs):
 
 def env_exists(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = getenv_exists(key)
+    val = env.exists(key)
     bool_val = con(1 if val else 0, 1)
     return ByteVec(uint256(bool_val))
 
 
 def env_bytes32(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    bytes32_val = getenv_bytes32(key)
+    bytes32_val = env.get_bytes32(key)
     return ByteVec(bytes32_val)
 
 
 def env_address(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = getenv_address(key)
+    val = env.get_address(key)
     address_val = address(val)
     return ByteVec(uint256(address_val))
 
 
 def env_bool(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = getenv_bool(key)
+    val = env.get_bool(key)
     bool_val = con(1 if val else 0, 1)
     return ByteVec(uint256(bool_val))
 
 
 def env_uint(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = getenv_uint(key)
+    val = env.get_uint(key)
     uint_val = uint256(val)
     return ByteVec(uint_val)
 
 
 def env_bytes(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = getenv_bytes(key)
+    val = env.get_bytes(key)
     return encode_tuple_bytes(val)
 
 
 def env_string(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = getenv_string(key)
+    val = env.get_string(key)
     if isinstance(val, str):
         val = val.encode("utf-8")
     return encode_tuple_bytes(val)
@@ -606,7 +590,7 @@ def env_string(arg, **kwargs):
 
 def env_int(arg, **kwargs):
     key = extract_string_argument(arg, 0)
-    val = getenv_int(key)
+    val = env.get_int(key)
     int_val = BV(val)
     return ByteVec(int_val)
 
@@ -687,21 +671,21 @@ def abi_encode_array_bytes(values: list[Bytes]) -> ByteVec:
 def env_int_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = getenv_int_array(key, delimiter)
+    values = env.get_int_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
 def env_uint_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = getenv_uint_array(key, delimiter)
+    values = env.get_uint_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
 def env_address_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = getenv_address_array(key, delimiter)
+    values = env.get_address_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
@@ -719,7 +703,7 @@ def env_or_address_array(arg, **kwargs):
 def env_bool_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = getenv_bool_array(key, delimiter)
+    values = env.get_bool_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
@@ -738,14 +722,14 @@ def env_or_bool_array(arg, **kwargs):
 def env_bytes32_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = getenv_bytes32_array(key, delimiter)
+    values = env.get_bytes32_array(key, delimiter)
     return abi_encode_array_words(values)
 
 
 def env_string_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values: list[str] = getenv_string_array(key, delimiter)
+    values: list[str] = env.get_string_array(key, delimiter)
     encoded_values: list[bytes] = [val.encode("utf-8") for val in values]
     return abi_encode_array_bytes(encoded_values)
 
@@ -753,7 +737,7 @@ def env_string_array(arg, **kwargs):
 def env_bytes_array(arg, **kwargs):
     key = extract_string_argument(arg, 0)
     delimiter = extract_string_argument(arg, 1)
-    values = getenv_bytes_array(key, delimiter)
+    values = env.get_bytes_array(key, delimiter)
     return abi_encode_array_bytes(values)
 
 

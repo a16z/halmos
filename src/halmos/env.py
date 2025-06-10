@@ -32,7 +32,7 @@ def init_env(path: str | None = None):
     debug(f"file {path} is not a file")
 
 
-def getenv_exists(key: str) -> bool:
+def exists(key: str) -> bool:
     return os.getenv(key) is not None
 
 
@@ -48,14 +48,14 @@ def parse_bytes32(value: str, expected_hexstr_len: int = 64) -> bytes:
     return bytes.fromhex(value.rjust(64, "0"))
 
 
-def getenv_string(key: str, default: str | None = None) -> str:
+def get_string(key: str, default: str | None = None) -> str:
     value = os.getenv(key, default)
     if value is None:
         raise KeyError(key)
     return value
 
 
-def getenv_int(key: str) -> int:
+def get_int(key: str) -> int:
     """
     Returns the concrete integer value of the environment variable.
 
@@ -63,11 +63,11 @@ def getenv_int(key: str) -> int:
     Raises ValueError if the environment variable is not a valid integer.
     """
 
-    value = getenv_string(key)
+    value = get_string(key)
     return int(value, 0)  # auto-detects base (0x or decimal), supports sign
 
 
-def getenv_uint(key: str) -> int:
+def get_uint(key: str) -> int:
     """
     Returns the concrete unsigned integer value of the environment variable.
 
@@ -75,14 +75,14 @@ def getenv_uint(key: str) -> int:
     Raises ValueError if the environment variable is not a valid unsigned integer.
     """
 
-    value = getenv_string(key)
+    value = get_string(key)
     result = int(value, 0)  # auto-detects base (0x or decimal), supports sign
     if result < 0:
         raise ValueError("value must be non-negative")
     return result
 
 
-def getenv_bool(key: str) -> bool:
+def get_bool(key: str) -> bool:
     """
     Returns the concrete boolean value of the environment variable.
 
@@ -90,7 +90,7 @@ def getenv_bool(key: str) -> bool:
     Raises ValueError if the environment variable is not a valid boolean.
     """
 
-    value = getenv_string(key)
+    value = get_string(key)
 
     match value.lower():
         case "true":
@@ -101,27 +101,27 @@ def getenv_bool(key: str) -> bool:
             raise ValueError(value)
 
 
-def getenv_address(key: str) -> Address:
-    addr_str = getenv_string(key)
+def get_address(key: str) -> Address:
+    addr_str = get_string(key)
     addr_bytes = parse_bytes32(addr_str, expected_hexstr_len=40)
     return uint160(addr_bytes)
 
 
-def getenv_bytes32(key: str) -> bytes:
-    value = getenv_string(key)
+def get_bytes32(key: str) -> bytes:
+    value = get_string(key)
     return parse_bytes32(value, expected_hexstr_len=64)
 
 
-def getenv_bytes(key: str) -> bytes:
-    value = getenv_string(key)
+def get_bytes(key: str) -> bytes:
+    value = get_string(key)
     # optional 0x prefix
     if value.startswith("0x"):
         value = value[2:]
     return bytes.fromhex(value)
 
 
-def getenv_int_array(key: str, delimiter: str = ",") -> list[bytes]:
-    value = getenv_string(key)
+def get_int_array(key: str, delimiter: str = ",") -> list[bytes]:
+    value = get_string(key)
     parts = [x.strip() for x in value.split(delimiter)]
 
     # may raise ValueError if not a valid integer
@@ -130,13 +130,13 @@ def getenv_int_array(key: str, delimiter: str = ",") -> list[bytes]:
     return [int(x, 0).to_bytes(32, "big", signed=True) for x in parts]
 
 
-def getenv_uint_array(key: str, delimiter=",") -> list[int]:
-    value = getenv_string(key)
+def get_uint_array(key: str, delimiter=",") -> list[int]:
+    value = get_string(key)
     return [int(x.strip()).to_bytes(32, "big") for x in value.split(delimiter)]
 
 
-def getenv_address_array(key: str, delimiter=",") -> list[Address]:
-    value = getenv_string(key)
+def get_address_array(key: str, delimiter=",") -> list[Address]:
+    value = get_string(key)
     addresses = [x.strip() for x in value.split(delimiter)]
     return [
         uint160(parse_bytes32(addr_str, expected_hexstr_len=40))
@@ -144,23 +144,23 @@ def getenv_address_array(key: str, delimiter=",") -> list[Address]:
     ]
 
 
-def getenv_bool_array(key: str, delimiter=",") -> list[bool]:
-    value = getenv_string(key)
+def get_bool_array(key: str, delimiter=",") -> list[bool]:
+    value = get_string(key)
     bool_array = [x.strip() for x in value.split(delimiter)]
     return [x.lower() in ["1", "true", "yes"] for x in bool_array]
 
 
-def getenv_bytes32_array(key: str, delimiter=",") -> list[bytes]:
-    value = getenv_string(key)
+def get_bytes32_array(key: str, delimiter=",") -> list[bytes]:
+    value = get_string(key)
     parts = [x.strip() for x in value.split(delimiter)]
     return [parse_bytes32(part, expected_hexstr_len=64) for part in parts]
 
 
-def getenv_string_array(key: str, delimiter=",") -> list[str]:
-    value = getenv_string(key)
+def get_string_array(key: str, delimiter=",") -> list[str]:
+    value = get_string(key)
     return [x.strip() for x in value.split(delimiter)]
 
 
-def getenv_bytes_array(key: str, delimiter=",") -> list[bytes]:
-    value = getenv_string(key)
+def get_bytes_array(key: str, delimiter=",") -> list[bytes]:
+    value = get_string(key)
     return [bytes.fromhex(x.strip().replace("0x", "")) for x in value.split(delimiter)]
