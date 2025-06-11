@@ -340,3 +340,60 @@ def test_value_with_source(config):
 
     # overrides have higher precedence than defaults
     assert source > ConfigSource.default
+
+
+def test_solver_resolution_preserves_precedence():
+    """Test that solver resolution preserves the original solver source precedence."""
+    from halmos.__main__ import with_resolved_solver
+
+    config = default_config()
+
+    # Test function-level solver annotation
+    config_with_function_solver = config.with_overrides(
+        ConfigSource.function_annotation, solver="z3"
+    )
+
+    resolved_config = with_resolved_solver(config_with_function_solver)
+
+    solver_val, solver_source = resolved_config.value_with_source("solver")
+    solver_cmd_val, solver_cmd_source = resolved_config.value_with_source(
+        "solver_command"
+    )
+
+    # solver_command should have the same precedence as the original solver
+    assert solver_source == ConfigSource.function_annotation
+    assert solver_cmd_source == ConfigSource.function_annotation
+    assert solver_cmd_val is not None  # should be resolved to actual command
+
+    # Test contract-level solver annotation
+    config_with_contract_solver = config.with_overrides(
+        ConfigSource.contract_annotation, solver="yices"
+    )
+
+    resolved_config = with_resolved_solver(config_with_contract_solver)
+
+    solver_val, solver_source = resolved_config.value_with_source("solver")
+    solver_cmd_val, solver_cmd_source = resolved_config.value_with_source(
+        "solver_command"
+    )
+
+    assert solver_source == ConfigSource.contract_annotation
+    assert solver_cmd_source == ConfigSource.contract_annotation
+    assert solver_cmd_val is not None
+
+    # Test that solver_command doesn't get redundantly resolved when already present
+    config_with_both = config.with_overrides(
+        ConfigSource.function_annotation,
+        solver="z3",
+        solver_command=["/custom/solver"],
+    )
+
+    resolved_config = with_resolved_solver(config_with_both)
+
+    solver_cmd_val, solver_cmd_source = resolved_config.value_with_source(
+        "solver_command"
+    )
+
+    # Should preserve the original solver_command, not resolve again
+    assert solver_cmd_val == ["/custom/solver"]
+    assert solver_cmd_source == ConfigSource.function_annotation

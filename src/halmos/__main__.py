@@ -227,7 +227,8 @@ def with_resolved_solver(args: HalmosConfig) -> HalmosConfig:
     command = get_solver_command(solver)
     if not command:
         raise RuntimeError(f"Solver '{solver}' could not be found or installed.")
-    source = ConfigSource.dynamic_resolution
+    # use the same source as the original solver to preserve precedence
+    source = solver_source
     return args.with_overrides(source, solver_command=command)
 
 
