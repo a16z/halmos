@@ -79,7 +79,7 @@ from halmos.logs import (
     warn_code,
 )
 from halmos.mapper import BuildOut, DeployAddressMapper
-from halmos.processes import ExecutorRegistry, ShutdownError
+from halmos.processes import ExecutorRegistry, ShutdownError, get_global_executor
 from halmos.sevm import (
     EMPTY_BALANCE,
     FOUNDRY_CALLER,
@@ -432,6 +432,7 @@ def setup(ctx: FunctionContext) -> Exec:
                     path_id=path_id,
                     query=query,
                     solving_ctx=ctx.solving_ctx,
+                    tag=ctx.info.name,
                 )
                 solver_output = solve_low_level(path_ctx)
                 if solver_output.result != unsat:
@@ -714,11 +715,14 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                     msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
 
                     try:
+                        # Use a unique tag for this specific probe
+                        probe_tag = f"probe-{fun_info.contract_name}-{fun_info.name}"
                         handler.handle_assertion_violation(
                             path_id=path_id,
                             ex=post_ex,
                             panic_found=panic_found,
                             description=msg,
+                            probe_tag=probe_tag,
                         )
                     except ShutdownError:
                         if args.debug:
@@ -817,6 +821,7 @@ class CounterexampleHandler:
         ex: Exec,
         panic_found: bool,
         description: str = None,
+        probe_tag: str = None,
     ) -> None:
         """
         Handles a potential assertion violation by solving it in a separate process.
@@ -871,6 +876,7 @@ class CounterexampleHandler:
             path_id=path_id,
             query=query,
             solving_ctx=ctx.solving_ctx,
+            tag=probe_tag if probe_tag else ctx.info.name,
         )
 
         # ShutdownError may be raised here and will be handled by the caller
@@ -918,7 +924,7 @@ class CounterexampleHandler:
         solver_output: SolverOutput = future.result()
         result, model = solver_output.result, solver_output.model
 
-        if ctx.solving_ctx.executor.is_shutdown():
+        if get_global_executor().is_shutdown():
             # if the thread pool is in the process of shutting down,
             # we want to stop processing remaining models/timeouts/errors, etc.
             return
@@ -968,8 +974,8 @@ class CounterexampleHandler:
 
             # we have a valid counterexample, so we are eligible for early exit
             if args.early_exit:
-                debug(f"Shutting down {ctx.info.name}'s solver executor")
-                ctx.solving_ctx.executor.shutdown(wait=False)
+                debug(f"Interrupting {ctx.info.name}'s solver queries")
+                get_global_executor().interrupt(ctx.info.name)
         else:
             warn_str = f"Counterexample (potentially invalid): {model}"
             warn_code(COUNTEREXAMPLE_INVALID, warn_str)
@@ -1046,7 +1052,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
     path_id = 0  # default value in case we don't enter the loop body
     for path_id, ex in enumerate(exs):
         # check if early exit is triggered
-        if ctx.solving_ctx.executor.is_shutdown():
+        if get_global_executor().is_shutdown():
             if args.debug:
                 print("aborting path exploration, executor has been shutdown")
             break
@@ -1090,6 +1096,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
                 path_id=path_id,
                 query=ex.path.to_smt2(args),
                 solving_ctx=ctx.solving_ctx,
+                tag=ctx.info.name,
             )
             solver_output = solve_low_level(path_ctx)
             if solver_output.result != unsat:

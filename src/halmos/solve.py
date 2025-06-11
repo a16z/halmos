@@ -22,6 +22,7 @@ from halmos.processes import (
     ExecutorRegistry,
     PopenExecutor,
     PopenFuture,
+    get_global_executor,
 )
 from halmos.sevm import Address, Exec, SMTQuery
 from halmos.utils import hexify
@@ -167,9 +168,6 @@ class SolvingContext:
     # directory for dumping solver files
     dump_dir: DumpDirectory
 
-    # shared solver executor for all paths in the same function
-    executor: PopenExecutor = field(default_factory=PopenExecutor)
-
     # list of unsat cores
     unsat_cores: list[list] = field(default_factory=list)
 
@@ -268,9 +266,6 @@ class FunctionContext:
         )
         object.__setattr__(self, "thread_pool", thread_pool)
 
-        # register the solver executor to be shutdown on exit
-        ExecutorRegistry().register(solving_ctx.executor)
-
     def append_unsat_core(self, unsat_core: list[str]) -> None:
         self.solving_ctx.unsat_cores.append(unsat_core)
 
@@ -282,6 +277,7 @@ class PathContext:
     solving_ctx: SolvingContext
     query: SMTQuery
     is_refined: bool = False
+    tag: str | None = None  # optional tag for grouping solver queries
 
     @property
     def dump_file(self) -> Path:
@@ -297,6 +293,7 @@ class PathContext:
             solving_ctx=self.solving_ctx,
             query=refine(self.query),
             is_refined=True,
+            tag=self.tag,
         )
 
 
@@ -499,10 +496,10 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
         else args.solver_command
     )
     cmd_with_file = cmd_list + [smt2_filename]
-    future = PopenFuture(cmd_with_file, timeout=timeout_seconds)
+    future = PopenFuture(cmd_with_file, timeout=timeout_seconds, tag=path_ctx.tag)
 
     # starts the subprocess asynchronously
-    path_ctx.solving_ctx.executor.submit(future)
+    get_global_executor().submit(future)
 
     # block until the external solver returns, times out, is interrupted, fails, etc.
     try:
