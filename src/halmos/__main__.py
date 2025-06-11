@@ -226,7 +226,8 @@ def with_resolved_solver(args: HalmosConfig) -> HalmosConfig:
     # we need to resolve `--solver <name>` to an actual command
     command = get_solver_command(solver)
     if not command:
-        raise RuntimeError(f"Solver '{solver}' could not be found or installed.")
+        error(f"Solver '{solver}' could not be found or installed.")
+        sys.exit(1)
     # use the same source as the original solver to preserve precedence
     source = solver_source
     return args.with_overrides(source, solver_command=command)
