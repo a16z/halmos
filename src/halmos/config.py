@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 import argparse
 import os
 import re
@@ -473,6 +475,13 @@ class Config:
     dump_smt_queries: bool = arg(
         help="dump SMT queries for assertion violations",
         global_default=False,
+        group=debugging,
+    )
+
+    dump_smt_directory: str = arg(
+        help="directory to dump SMT queries (defaults to temporary directory)",
+        global_default="",
+        metavar="DIRECTORY_PATH",
         group=debugging,
     )
 

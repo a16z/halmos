@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 import io
 import linecache
 import threading
@@ -16,9 +18,9 @@ def readable_size(num: int | float) -> str:
         return f"{num}B"
 
     if num < 1024 * 1024:
-        return f"{num/1024:.1f}KiB"
+        return f"{num / 1024:.1f}KiB"
 
-    return f"{num/(1024*1024):.1f}MiB"
+    return f"{num / (1024 * 1024):.1f}MiB"
 
 
 def pretty_size(num: int | float) -> str:
@@ -42,7 +44,7 @@ def pretty_frame_info(
     frame: tracemalloc.Frame, result_number: int | None = None
 ) -> str:
     result_number_str = (
-        f"[grey37]# {result_number+1}:[/grey37] " if result_number is not None else ""
+        f"[grey37]# {result_number + 1}:[/grey37] " if result_number is not None else ""
     )
     filename_str = f"[grey37]{frame.filename}:[/grey37]"
     lineno_str = f"[grey37]{frame.lineno}:[/grey37]"
@@ -95,7 +97,7 @@ class MemTracer:
         for i, stat in enumerate(stats[:10]):
             frame = stat.traceback[0]
             line = linecache.getline(frame.filename, frame.lineno).strip()
-            out.write(f"{pretty_frame_info(frame, i)} " f"{pretty_size(stat.size)}\n")
+            out.write(f"{pretty_frame_info(frame, i)} {pretty_size(stat.size)}\n")
             out.write(f"{pretty_line(line)}\n")
         out.write("\n")
 

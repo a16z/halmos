@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 import concurrent.futures
 import contextlib
 import subprocess

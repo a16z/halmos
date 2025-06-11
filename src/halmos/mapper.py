@@ -1,11 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 import bisect
 import os
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any, ForwardRef, Optional
 
-from .exceptions import HalmosException
-from .logs import debug
+from halmos.exceptions import HalmosException
+from halmos.logs import debug
 
 SELECTOR_FIELDS = {
     "VariableDeclaration": "functionSelector",
@@ -495,7 +497,7 @@ def main():
     import json
     import sys
 
-    from .utils import cyan
+    from halmos.utils import cyan
 
     def read_json_file(file_path: str) -> dict:
         with open(file_path) as f:

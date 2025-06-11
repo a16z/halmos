@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: AGPL-3.0
+
 import pathlib
 import subprocess
 import threading

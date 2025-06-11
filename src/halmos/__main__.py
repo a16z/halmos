@@ -32,40 +32,41 @@ from z3 import (
     BoolRef,
     Solver,
     ZeroExt,
+    eq,
     set_option,
     unsat,
 )
 
 import halmos.traces
-
-from .build import (
+from halmos.build import (
     build_output_iterator,
     import_libs,
     parse_build_out,
     parse_devdoc,
     parse_natspec,
 )
-from .bytevec import ByteVec
-from .calldata import FunctionInfo, get_abi, mk_calldata
-from .cheatcodes import snapshot_state
-from .config import Config as HalmosConfig
-from .config import (
+from halmos.bytevec import ByteVec
+from halmos.calldata import FunctionInfo, get_abi, mk_calldata
+from halmos.cheatcodes import snapshot_state
+from halmos.config import Config as HalmosConfig
+from halmos.config import (
     ConfigSource,
     arg_parser,
     default_config,
     resolve_config_files,
     toml_parser,
 )
-from .constants import (
+from halmos.constants import (
     VERBOSITY_TRACE_CONSTRUCTOR,
     VERBOSITY_TRACE_COUNTEREXAMPLE,
     VERBOSITY_TRACE_PATHS,
     VERBOSITY_TRACE_SETUP,
 )
-from .contract import CoverageReporter
-from .exceptions import FailCheatcode, HalmosException
-from .flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
-from .logs import (
+from halmos.contract import CoverageReporter
+from halmos.env import init_env
+from halmos.exceptions import FailCheatcode, HalmosException
+from halmos.flamegraphs import CallSequenceFlamegraph, call_flamegraph, exec_flamegraph
+from halmos.logs import (
     COUNTEREXAMPLE_INVALID,
     INTERNAL_ERROR,
     LOOP_BOUND,
@@ -77,9 +78,9 @@ from .logs import (
     warn,
     warn_code,
 )
-from .mapper import BuildOut, DeployAddressMapper
-from .processes import ExecutorRegistry, ShutdownError
-from .sevm import (
+from halmos.mapper import BuildOut, DeployAddressMapper
+from halmos.processes import ExecutorRegistry, ShutdownError
+from halmos.sevm import (
     EMPTY_BALANCE,
     FOUNDRY_CALLER,
     FOUNDRY_ORIGIN,
@@ -99,7 +100,7 @@ from .sevm import (
     jumpid_str,
     mnemonic,
 )
-from .solve import (
+from halmos.solve import (
     ContractContext,
     FunctionContext,
     InvariantTestingContext,
@@ -108,15 +109,15 @@ from .solve import (
     solve_end_to_end,
     solve_low_level,
 )
-from .solvers import get_solver_command
-from .traces import (
+from halmos.solvers import get_solver_command
+from halmos.traces import (
     render_trace,
     rendered_address,
     rendered_call_sequence,
     rendered_trace,
 )
-from .ui import suspend_status, ui
-from .utils import (
+from halmos.ui import suspend_status, ui
+from halmos.utils import (
     EVM,
     Address,
     BitVecSort256,
@@ -1192,7 +1193,7 @@ def run_test(ctx: FunctionContext) -> TestResult:
     )
 
     for path_id, _, err in stuck:
-        warn_code(INTERNAL_ERROR, f"Encountered {err}")
+        warn_code(INTERNAL_ERROR, f"Encountered {type(err).__name__}: {err}")
         if args.print_blocked_states:
             print(f"\nPath #{path_id}")
             print(ctx.traces[path_id], end="")
@@ -1435,18 +1436,16 @@ def get_target_selectors(
 def get_excluded_selectors(
     ctx: ContractContext, setup_ex: Exec
 ) -> MappingProxyType[Address, frozenset[Bytes]]:
-    # function excludeSelectors() public view returns (FuzzSelector[] memory excludedSelectors_) {
+    # function excludeSelectors() public view returns (FuzzSelector[] memory excludedSelectors_)
     selector = "b0464fdc"
     funname = "excludeSelectors"
     fun_info = FunctionInfo(ctx.name, "funname", f"{funname}()", selector)
 
     returndata = execute_simple_getter(ctx, setup_ex, fun_info)
 
+    result = abi_decode_FuzzSelector_array(returndata)
     return MappingProxyType(
-        {
-            target: frozenset(selectors)
-            for target, selectors in abi_decode_FuzzSelector_array(returndata).items()
-        }
+        {target: frozenset(selectors) for target, selectors in result.items()}
     )
 
 
@@ -1460,22 +1459,18 @@ def resolve_target_contracts(ctx: InvariantTestingContext, ex: Exec) -> set[Addr
     resolved_target_contracts -= ctx.excluded_contracts
     resolved_target_contracts |= target_selectors.keys()
 
-    # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it, even if targetContract(FOUNDRY_TEST) is provided.
-    result = (
+    # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it
+    # or targetContract(FOUNDRY_TEST) is provided.
+    resolved_target_contracts = (
         resolved_target_contracts
-        if target_selectors.get(FOUNDRY_TEST)
+        if (FOUNDRY_TEST in target_contracts or target_selectors.get(FOUNDRY_TEST))
         else resolved_target_contracts - {FOUNDRY_TEST}
     )
 
-    if not result:
-        msg = (
-            "A targetSelector() must be specified if the test contract is set as a target."
-            if target_contracts
-            else "No contracts have been deployed during setUp()."
-        )
-        raise HalmosException(f"No target contracts available. {msg}")
+    if not resolved_target_contracts:
+        raise HalmosException("No target contracts available.")
 
-    return result
+    return resolved_target_contracts
 
 
 # TODO: implement memoization
@@ -1498,13 +1493,27 @@ def resolve_target_selectors(
                 yield (fun_sig, fun_selector)
 
     else:
+        is_test_contract = eq(addr, FOUNDRY_TEST)
+
         for fun_sig, fun_selector in method_identifiers:
             # skip if 'pure' or 'view' function that doesn't change the state
-            state_mutability = abi[fun_sig]["stateMutability"]
-            if state_mutability in ["pure", "view"]:
-                if ctx.debug:
-                    fun_name = fun_sig.split("(")[0]
-                    print(f"Skipping {fun_name} ({state_mutability})")
+            if (state_mutability := abi[fun_sig]["stateMutability"]) in [
+                "pure",
+                "view",
+            ]:
+                debug(f"Skipping {fun_sig} ({state_mutability})")
+                continue
+
+            # https://github.com/a16z/halmos/issues/514
+            # exclude special functions like test_, check_, setUp(), etc.
+            if is_test_contract and (
+                fun_sig.startswith("test_")
+                or fun_sig.startswith("check_")
+                or fun_sig.startswith("prove_")
+                or fun_sig.startswith("invariant_")
+                or fun_sig.startswith("setUp")
+            ):
+                debug(f"Skipping special function {fun_sig}")
                 continue
 
             yield (fun_sig, fun_selector)
@@ -1706,6 +1715,8 @@ def _main(_args=None) -> MainResult:
     if args.version:
         print(f"halmos {metadata.version('halmos')}")
         return MainResult(0)
+
+    init_env(args.root)
 
     if args.disable_gc:
         gc.disable()
