@@ -19,6 +19,7 @@ from concurrent.futures import Future
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
+from functools import partial
 from importlib import metadata
 from types import MappingProxyType
 
@@ -640,8 +641,30 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
 
     visited = ctx.visited
 
-    panic_error_codes = ctx.args.panic_error_codes
-    flamegraph_enabled = ctx.args.flamegraph
+    args = with_resolved_solver(ctx.args)
+
+    panic_error_codes = args.panic_error_codes
+    flamegraph_enabled = args.flamegraph
+
+    # create a dummy function context for handling counterexamples for probes.
+    # this maintains the multithreaded solver executor for all probes at the current depth.
+    dummy_function_ctx = FunctionContext(
+        args=args,
+        info=FunctionInfo(ctx.name, "_compute_frontier"),
+        solver=None,
+        contract_ctx=ctx,
+        setup_ex=None,
+        max_call_depth=None,
+    )
+    handler = CounterexampleHandler(
+        ctx=dummy_function_ctx,
+        is_invariant=True,
+        is_probe=True,
+        flamegraph_enabled=flamegraph_enabled,
+        potential_flamegraphs={},
+        submitted_futures=[],
+    )
+    path_id = 0
 
     contract_name = ctx.name
     for idx, pre_ex in enumerate(curr_exs):
@@ -659,7 +682,11 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
             post_exs = run_target_contract(ctx, pre_ex, addr)
 
             for post_ex in post_exs:
+                path_id += 1
                 subcall = post_ex.context
+
+                # update call sequences
+                post_ex.call_sequence = pre_ex.call_sequence + [subcall]
 
                 if flamegraph_enabled:
                     call_flamegraph.add_with_sequence(post_ex.call_sequence, subcall)
@@ -674,7 +701,8 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                 # ignore if reverted
                 if subcall.output.error:
                     # ignore normal reverts
-                    if not post_ex.is_panic_of(panic_error_codes):
+                    panic_found = post_ex.is_panic_of(panic_error_codes)
+                    if not panic_found and not is_global_fail_set(subcall):
                         continue
 
                     fun_info = subcall.message.fun_info
@@ -683,15 +711,21 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                     if fun_info in ctx.probes_reported:
                         continue
 
-                    ctx.probes_reported.add(fun_info)
-
-                    # print error trace
-                    sequence = (
-                        rendered_call_sequence(post_ex.call_sequence) or "    (empty)\n"
-                    )
-                    trace = rendered_trace(subcall)
                     msg = f"Assertion failure detected in {fun_info.contract_name}.{fun_info.sig}"
-                    ui.print(f"{msg}\nSequence:\n{sequence}\nTrace:\n{trace}")
+
+                    try:
+                        handler.handle_assertion_violation(
+                            path_id=path_id,
+                            ex=post_ex,
+                            panic_found=panic_found,
+                            description=msg,
+                        )
+                    except ShutdownError:
+                        if args.debug:
+                            print(
+                                "aborting path exploration, executor has been shutdown"
+                            )
+                        pass
 
                     # because this is a reverted state, we don't need to explore it further
                     continue
@@ -705,9 +739,6 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                 # update visited set
                 # TODO: check path feasibility
                 visited.add(post_id)
-
-                # update call sequences
-                post_ex.call_sequence = pre_ex.call_sequence + [subcall]
 
                 # update timestamp
                 timestamp_name = f"halmos_block_timestamp_depth{depth}_{uid()}"
@@ -769,6 +800,187 @@ def run_message(
                 reset(solver)
 
 
+@dataclass(frozen=True)
+class CounterexampleHandler:
+    """Handles potential assertion violations and generates counterexamples."""
+
+    ctx: FunctionContext
+    is_invariant: bool
+    is_probe: bool
+    flamegraph_enabled: bool
+    potential_flamegraphs: dict
+    submitted_futures: list
+
+    def handle_assertion_violation(
+        self,
+        path_id: int,
+        ex: Exec,
+        panic_found: bool,
+        description: str = None,
+    ) -> None:
+        """
+        Handles a potential assertion violation by solving it in a separate process.
+
+        This method processes a potential counterexample by creating a solver query
+        and submitting it to the thread pool for asynchronous solving.
+
+        Args:
+            path_id: Unique identifier for the execution path
+            ex: The execution state containing the potential violation
+            panic_found: Whether it's a panic error or a legacy hevm.fail flag
+            description: Optional description of the violation
+
+        Raises:
+            ShutdownError: If the executor has been shutdown during the solving process
+        """
+        ctx = self.ctx
+        args = ctx.args
+
+        if args.verbose >= 1:
+            print(f"Found potential path with {path_id=} ", end="")
+            output = ex.context.output
+            error_output = output.error
+            if panic_found:
+                panic_code = unbox_int(output.data[4:36].unwrap())
+                print(f"Panic(0x{panic_code:02x}) {error_output}")
+            else:  # fail_found
+                print(f"(fail flag set) {error_output}")
+
+        # we don't know yet if this will lead to a counterexample
+        # so we save the rendered trace here and potentially print it later
+        # if a valid counterexample is found
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            ctx.traces[path_id] = rendered_trace(ex.context)
+        ctx.call_sequences[path_id] = rendered_call_sequence(ex.call_sequence)
+
+        if self.flamegraph_enabled and self.is_invariant:
+            # render the flamegraph to a temporary holder,
+            # until we can confirm that it's a valid counterexample
+            tmp_flamegraph = CallSequenceFlamegraph(title="Temp")
+            tmp_flamegraph.add_with_sequence(
+                ex.call_sequence, ex.context, mark_as_fail=True
+            )
+            self.potential_flamegraphs[path_id] = tmp_flamegraph
+
+        query: SMTQuery = ex.path.to_smt2(args)
+
+        # beware: because this object crosses thread boundaries, we must be careful to
+        # avoid any reference to z3 objects
+        path_ctx = PathContext(
+            args=args,
+            path_id=path_id,
+            query=query,
+            solving_ctx=ctx.solving_ctx,
+        )
+
+        # ShutdownError may be raised here and will be handled by the caller
+        solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
+        solve_future.add_done_callback(
+            partial(
+                self._solve_end_to_end_callback,
+                ex=ex,
+                description=description,
+            )
+        )
+        self.submitted_futures.append(solve_future)
+
+    def _solve_end_to_end_callback(
+        self, future: Future, ex: Exec, description: str
+    ) -> None:
+        """
+        Callback function for handling solver results.
+
+        Args:
+            future: The Future object containing the solver result
+            ex: The execution state
+            description: Optional description of counterexample
+        """
+        # beware: this function may be called from threads other than the main thread,
+        # so we must be careful to avoid referencing any z3 objects / contexts
+
+        ctx = self.ctx
+        args = ctx.args
+
+        if e := future.exception():
+            if isinstance(e, ShutdownError):
+                if args.debug:
+                    debug(
+                        f"ignoring solver callback, executor has been shutdown: {e!r}"
+                    )
+                return
+
+            error(f"encountered exception during assertion solving: {e!r}")
+
+        #
+        # we are done solving, process and triage the result
+        #
+
+        solver_output: SolverOutput = future.result()
+        result, model = solver_output.result, solver_output.model
+
+        if ctx.solving_ctx.executor.is_shutdown():
+            # if the thread pool is in the process of shutting down,
+            # we want to stop processing remaining models/timeouts/errors, etc.
+            return
+
+        # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
+        ctx.solver_outputs.append(solver_output)
+
+        if result == unsat:
+            if solver_output.unsat_core:
+                ctx.append_unsat_core(solver_output.unsat_core)
+            return
+
+        if result == "err":
+            error(
+                f"solver error: {solver_output.error} (returncode={solver_output.returncode})"
+            )
+            return
+
+        # model could be an empty dict here, so compare to None explicitly
+        if model is None:
+            return
+
+        # mark this probe as reported to avoid duplicate reporting
+        # note: message.fun_info is used instead of ctx.info because the function context for probes is dummy.
+        if self.is_probe:
+            ctx.contract_ctx.probes_reported.add(ex.context.message.fun_info)
+
+        # print counterexample trace
+        if description:
+            print(description)
+
+        path_id = solver_output.path_id
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            pid_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
+            print(f"Trace{pid_str}:")
+            print(ctx.traces[path_id], end="")
+
+        if model.is_valid:
+            print(red(f"Counterexample: {model}"))
+            ctx.valid_counterexamples.append(model)
+
+            # add the stacks from the temporary flamegraph to the global one
+            if self.flamegraph_enabled and self.is_invariant:
+                call_flamegraph.stacks.extend(
+                    self.potential_flamegraphs[path_id].stacks
+                )
+
+            # we have a valid counterexample, so we are eligible for early exit
+            if args.early_exit:
+                debug(f"Shutting down {ctx.info.name}'s solver executor")
+                ctx.solving_ctx.executor.shutdown(wait=False)
+        else:
+            warn_str = f"Counterexample (potentially invalid): {model}"
+            warn_code(COUNTEREXAMPLE_INVALID, warn_str)
+
+            ctx.invalid_counterexamples.append(model)
+
+        # print call sequence for invariant testing
+        if sequence := ctx.call_sequences[path_id]:
+            print(f"Sequence:\n{sequence}")
+
+
 def run_test(ctx: FunctionContext) -> TestResult:
     args = ctx.args
     fun_info = ctx.info
@@ -815,79 +1027,16 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
     flamegraph_enabled = args.flamegraph
     potential_flamegraphs: dict[int, CallSequenceFlamegraph] = {}
+    submitted_futures = []
 
-    def solve_end_to_end_callback(future: Future):
-        # beware: this function may be called from threads other than the main thread,
-        # so we must be careful to avoid referencing any z3 objects / contexts
-
-        if e := future.exception():
-            if isinstance(e, ShutdownError):
-                if args.debug:
-                    debug(
-                        f"ignoring solver callback, executor has been shutdown: {e!r}"
-                    )
-                return
-
-            error(f"encountered exception during assertion solving: {e!r}")
-
-        #
-        # we are done solving, process and triage the result
-        #
-
-        solver_output: SolverOutput = future.result()
-        result, model = solver_output.result, solver_output.model
-
-        if ctx.solving_ctx.executor.is_shutdown():
-            # if the thread pool is in the process of shutting down,
-            # we want to stop processing remaining models/timeouts/errors, etc.
-            return
-
-        # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
-        ctx.solver_outputs.append(solver_output)
-
-        if result == unsat:
-            if solver_output.unsat_core:
-                ctx.append_unsat_core(solver_output.unsat_core)
-            return
-
-        if result == "err":
-            error(
-                f"solver error: {solver_output.error} (returncode={solver_output.returncode})"
-            )
-            return
-
-        # model could be an empty dict here, so compare to None explicitly
-        if model is None:
-            return
-
-        # print counterexample trace
-        path_id = solver_output.path_id
-        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-            pid_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
-            print(f"Trace{pid_str}:")
-            print(ctx.traces[path_id], end="")
-
-        if model.is_valid:
-            print(red(f"Counterexample: {model}"))
-            ctx.valid_counterexamples.append(model)
-
-            # add the stacks from the temporary flamegraph to the global one
-            if flamegraph_enabled and is_invariant:
-                call_flamegraph.stacks.extend(potential_flamegraphs[path_id].stacks)
-
-            # we have a valid counterexample, so we are eligible for early exit
-            if args.early_exit:
-                debug(f"Shutting down {ctx.info.name}'s solver executor")
-                ctx.solving_ctx.executor.shutdown(wait=False)
-        else:
-            warn_str = f"Counterexample (potentially invalid): {model}"
-            warn_code(COUNTEREXAMPLE_INVALID, warn_str)
-
-            ctx.invalid_counterexamples.append(model)
-
-        # print call sequence for invariant testing
-        if sequence := ctx.call_sequences[path_id]:
-            print(f"Sequence:\n{sequence}")
+    handler = CounterexampleHandler(
+        ctx=ctx,
+        is_invariant=is_invariant,
+        is_probe=False,
+        flamegraph_enabled=flamegraph_enabled,
+        potential_flamegraphs=potential_flamegraphs,
+        submitted_futures=submitted_futures,
+    )
 
     #
     # consume the sevm.run() generator
@@ -895,7 +1044,6 @@ def run_test(ctx: FunctionContext) -> TestResult:
     #
 
     path_id = 0  # default value in case we don't enter the loop body
-    submitted_futures = []
     for path_id, ex in enumerate(exs):
         # check if early exit is triggered
         if ctx.solving_ctx.executor.is_shutdown():
@@ -921,48 +1069,15 @@ def run_test(ctx: FunctionContext) -> TestResult:
         error_output = output.error
         panic_found = ex.is_panic_of(args.panic_error_codes)
 
-        if panic_found or (fail_found := is_global_fail_set(ex.context)):
+        if panic_found or is_global_fail_set(ex.context):
             potential += 1
 
-            if args.verbose >= 1:
-                print(f"Found potential path with {path_id=} ", end="")
-                if panic_found:
-                    panic_code = unbox_int(output.data[4:36].unwrap())
-                    print(f"Panic(0x{panic_code:02x}) {error_output}")
-                elif fail_found:
-                    print(f"(fail flag set) {error_output}")
-
-            # we don't know yet if this will lead to a counterexample
-            # so we save the rendered trace here and potentially print it later
-            # if a valid counterexample is found
-            if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-                ctx.traces[path_id] = rendered_trace(ex.context)
-            ctx.call_sequences[path_id] = rendered_call_sequence(ex.call_sequence)
-
-            if flamegraph_enabled and is_invariant:
-                # render the flamegraph to a temporary holder,
-                # until we can confirm that it's a valid counterexample
-                tmp_flamegraph = CallSequenceFlamegraph(title="Temp")
-                tmp_flamegraph.add_with_sequence(
-                    ex.call_sequence, ex.context, mark_as_fail=True
-                )
-                potential_flamegraphs[path_id] = tmp_flamegraph
-
-            query: SMTQuery = ex.path.to_smt2(args)
-
-            # beware: because this object crosses thread boundaries, we must be careful to
-            # avoid any reference to z3 objects
-            path_ctx = PathContext(
-                args=args,
-                path_id=path_id,
-                query=query,
-                solving_ctx=ctx.solving_ctx,
-            )
-
             try:
-                solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
-                solve_future.add_done_callback(solve_end_to_end_callback)
-                submitted_futures.append(solve_future)
+                handler.handle_assertion_violation(
+                    path_id=path_id,
+                    ex=ex,
+                    panic_found=panic_found,
+                )
             except ShutdownError:
                 if args.debug:
                     print("aborting path exploration, executor has been shutdown")
