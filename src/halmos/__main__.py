@@ -1734,10 +1734,9 @@ def _main(_args=None) -> MainResult:
                 f" and {call_flamegraph.out_filepath}"
             )
         else:
-            error("flamegraph.pl not found in PATH")
-            error("(see https://github.com/brendangregg/FlameGraph)")
-            dynamic_resolution = ConfigSource.dynamic_resolution
-            args = args.with_overrides(dynamic_resolution, flamegraph=False)
+            raise RuntimeError(
+                "flamegraph.pl not found in PATH (see https://github.com/brendangregg/FlameGraph)"
+            )
 
     #
     # compile

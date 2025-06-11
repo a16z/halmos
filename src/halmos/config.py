@@ -55,9 +55,6 @@ class ConfigSource(IntEnum):
     # from command line
     command_line = 5
 
-    # dynamic resolution (e.g. after solver resolution)
-    dynamic_resolution = 6
-
 
 # helper to define config fields
 def arg(

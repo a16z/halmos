@@ -342,8 +342,8 @@ def test_value_with_source(config):
     assert source > ConfigSource.default
 
 
-def test_solver_resolution_preserves_precedence():
-    """Test that solver resolution preserves the original solver source precedence."""
+def test_solver_resolution_preserves_function_annotation_precedence():
+    """Test that solver resolution preserves function-level annotation precedence."""
     from halmos.__main__ import with_resolved_solver
 
     config = default_config()
@@ -363,7 +363,14 @@ def test_solver_resolution_preserves_precedence():
     # solver_command should have the same precedence as the original solver
     assert solver_source == ConfigSource.function_annotation
     assert solver_cmd_source == ConfigSource.function_annotation
-    assert solver_cmd_val is not None  # should be resolved to actual command
+    assert "z3" in str(solver_cmd_val)  # should be resolved to actual z3 command
+
+
+def test_solver_resolution_preserves_contract_annotation_precedence():
+    """Test that solver resolution preserves contract-level annotation precedence."""
+    from halmos.__main__ import with_resolved_solver
+
+    config = default_config()
 
     # Test contract-level solver annotation
     config_with_contract_solver = config.with_overrides(
@@ -379,7 +386,14 @@ def test_solver_resolution_preserves_precedence():
 
     assert solver_source == ConfigSource.contract_annotation
     assert solver_cmd_source == ConfigSource.contract_annotation
-    assert solver_cmd_val is not None
+    assert "yices" in str(solver_cmd_val)  # should be resolved to actual yices command
+
+
+def test_solver_resolution_preserves_existing_solver_command():
+    """Test that solver_command doesn't get redundantly resolved when already present."""
+    from halmos.__main__ import with_resolved_solver
+
+    config = default_config()
 
     # Test that solver_command doesn't get redundantly resolved when already present
     config_with_both = config.with_overrides(
