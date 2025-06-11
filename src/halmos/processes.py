@@ -43,7 +43,9 @@ class PopenFuture(concurrent.futures.Future):
     end_time: float | None
     _exception: Exception | None
 
-    def __init__(self, cmd: list[str], timeout: float | None = None, tag: str | None = None):
+    def __init__(
+        self, cmd: list[str], timeout: float | None = None, tag: str | None = None
+    ):
         super().__init__()
         self.cmd = cmd
         self.timeout = timeout
@@ -199,7 +201,8 @@ class PopenExecutor(concurrent.futures.Executor):
         """Interrupts all futures with the specified tag.
         
         Args:
-            tag: The tag identifying futures to interrupt. Futures without tags are not affected.
+            tag: The tag identifying futures to interrupt. 
+                 Futures without tags are not affected.
         """
         if not tag:
             return
@@ -289,7 +292,10 @@ def main():
             "echo hello",
         ]
 
-        futures = [PopenFuture(command.split(), tag=f"test-{i}") for i, command in enumerate(commands)]
+        futures = [
+            PopenFuture(command.split(), tag=f"test-{i}")
+            for i, command in enumerate(commands)
+        ]
 
         for future in futures:
             future.add_done_callback(done_callback)

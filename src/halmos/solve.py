@@ -19,8 +19,6 @@ from halmos.logs import (
     warn,
 )
 from halmos.processes import (
-    ExecutorRegistry,
-    PopenExecutor,
     PopenFuture,
     get_global_executor,
 )

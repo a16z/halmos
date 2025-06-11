@@ -1,8 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-import pytest
 import threading
-import time
 from unittest.mock import Mock
 
 from halmos.processes import PopenFuture, get_global_executor
@@ -14,7 +12,9 @@ class TestGlobalExecutor:
         executor1 = get_global_executor()
         executor2 = get_global_executor()
         
-        assert executor1 is executor2, "get_global_executor should return the same instance"
+        assert (
+            executor1 is executor2
+        ), "get_global_executor should return the same instance"
 
     def test_global_executor_multithreaded(self):
         """Test that get_global_executor works correctly across threads."""
