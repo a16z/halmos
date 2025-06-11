@@ -1390,9 +1390,10 @@ def resolve_target_selectors(
                 or fun_sig.startswith("check_")
                 or fun_sig.startswith("prove_")
                 or fun_sig.startswith("invariant_")
-                or fun_sig.startswith("setUp")
+                or fun_sig == "setUp()"
+                or fun_sig == "afterInvariant()"
             ):
-                debug(f"Skipping special function {fun_sig}")
+                debug(f"Skipping {fun_sig} (reserved function)")
                 continue
 
             yield (fun_sig, fun_selector)
