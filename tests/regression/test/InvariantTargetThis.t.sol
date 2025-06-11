@@ -10,6 +10,7 @@ contract InvariantTargetBase {
     bool public test_foo_called;
     bool public check_foo_called;
     bool public setUpSymbolic_called;
+    bool public afterInvariant_called;
 
     function setUp() public virtual {
         setUp_called = true;
@@ -25,6 +26,10 @@ contract InvariantTargetBase {
 
     function invariant_this() public {
         _invariant_this_called = true;
+    }
+
+    function afterInvariant() public {
+        afterInvariant_called = true;
     }
 
     // should be included
@@ -63,6 +68,7 @@ contract InvariantTargetThis is InvariantTargetBase, Test {
         assertEq(setUpSymbolic_called, false);
         assertEq(test_foo_called, false);
         assertEq(_invariant_this_called, false);
+        assertEq(afterInvariant_called, false);
     }
 
     // we expect a counterexample, showing that setUp is called
@@ -83,6 +89,11 @@ contract InvariantTargetThis is InvariantTargetBase, Test {
     // we expect a counterexample, showing that check_foo is called
     function invariant_targets_inception_check_included() public view {
         assertEq(inception.check_foo_called(), false);
+    }
+
+    // we expect a counterexample, showing that afterInvariant is called
+    function invariant_targets_inception_afterInvariant_included() public view {
+        assertEq(inception.afterInvariant_called(), false);
     }
 
     // we expect a counterexample, showing that foo is indeed called
