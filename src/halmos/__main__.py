@@ -800,25 +800,16 @@ def run_message(
                 reset(solver)
 
 
+@dataclass(frozen=True)
 class CounterexampleHandler:
     """Handles potential assertion violations and generates counterexamples."""
 
-    def __init__(
-        self,
-        ctx: FunctionContext,
-        is_invariant: bool,
-        is_probe: bool,
-        flamegraph_enabled: bool,
-        potential_flamegraphs: dict,
-        submitted_futures: list,
-    ):
-        self.ctx = ctx
-        self.args = ctx.args
-        self.is_invariant = is_invariant
-        self.is_probe = is_probe
-        self.flamegraph_enabled = flamegraph_enabled
-        self.potential_flamegraphs = potential_flamegraphs
-        self.submitted_futures = submitted_futures
+    ctx: FunctionContext
+    is_invariant: bool
+    is_probe: bool
+    flamegraph_enabled: bool
+    potential_flamegraphs: dict
+    submitted_futures: list
 
     def handle_assertion_violation(
         self,
@@ -842,7 +833,10 @@ class CounterexampleHandler:
         Raises:
             ShutdownError: If the executor has been shutdown during the solving process
         """
-        if self.args.verbose >= 1:
+        ctx = self.ctx
+        args = ctx.args
+
+        if args.verbose >= 1:
             print(f"Found potential path with {path_id=} ", end="")
             output = ex.context.output
             error_output = output.error
@@ -855,9 +849,9 @@ class CounterexampleHandler:
         # we don't know yet if this will lead to a counterexample
         # so we save the rendered trace here and potentially print it later
         # if a valid counterexample is found
-        if self.args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-            self.ctx.traces[path_id] = rendered_trace(ex.context)
-        self.ctx.call_sequences[path_id] = rendered_call_sequence(ex.call_sequence)
+        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+            ctx.traces[path_id] = rendered_trace(ex.context)
+        ctx.call_sequences[path_id] = rendered_call_sequence(ex.call_sequence)
 
         if self.flamegraph_enabled and self.is_invariant:
             # render the flamegraph to a temporary holder,
@@ -868,19 +862,19 @@ class CounterexampleHandler:
             )
             self.potential_flamegraphs[path_id] = tmp_flamegraph
 
-        query: SMTQuery = ex.path.to_smt2(self.args)
+        query: SMTQuery = ex.path.to_smt2(args)
 
         # beware: because this object crosses thread boundaries, we must be careful to
         # avoid any reference to z3 objects
         path_ctx = PathContext(
-            args=self.args,
+            args=args,
             path_id=path_id,
             query=query,
-            solving_ctx=self.ctx.solving_ctx,
+            solving_ctx=ctx.solving_ctx,
         )
 
         # ShutdownError may be raised here and will be handled by the caller
-        solve_future = self.ctx.thread_pool.submit(solve_end_to_end, path_ctx)
+        solve_future = ctx.thread_pool.submit(solve_end_to_end, path_ctx)
         solve_future.add_done_callback(
             partial(
                 self._solve_end_to_end_callback,
@@ -905,7 +899,7 @@ class CounterexampleHandler:
         # so we must be careful to avoid referencing any z3 objects / contexts
 
         ctx = self.ctx
-        args = self.args
+        args = ctx.args
 
         if e := future.exception():
             if isinstance(e, ShutdownError):
