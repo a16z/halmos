@@ -1,13 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-from unittest.mock import Mock, patch
+import contextlib
 import tempfile
 from pathlib import Path
+from unittest.mock import Mock, patch
 
-from halmos.solve import SolvingContext, PathContext, solve_low_level
-from halmos.sevm import SMTQuery
 from halmos.config import Config as HalmosConfig
-from halmos.processes import get_global_executor, PopenFuture
+from halmos.processes import PopenFuture, get_global_executor
+from halmos.sevm import SMTQuery
+from halmos.solve import PathContext, SolvingContext, solve_low_level
 
 
 class TestSolverIntegration:
@@ -51,11 +52,9 @@ class TestSolverIntegration:
             
             # Mock the global executor's submit method
             with patch.object(get_global_executor(), 'submit', side_effect=mock_submit):
-                try:
-                    solve_low_level(path_ctx)
-                except Exception:
+                with contextlib.suppress(Exception):
                     # We expect this might fail due to mocking, that's OK
-                    pass
+                    solve_low_level(path_ctx)
                 
                 # Verify that a future was submitted with the correct tag
                 assert len(submitted_futures) == 1

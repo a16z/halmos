@@ -38,19 +38,30 @@ class TestGlobalExecutor:
         cmd = ["echo", "hello"]
         tag = "test-tag"
         
-        future = PopenFuture(cmd, tag=tag)
+        future = PopenFuture(cmd, tag)
         
         assert future.cmd == cmd
         assert future.tag == tag
 
-    def test_popen_future_without_tag(self):
-        """Test that PopenFuture works without tag parameter."""
+    def test_popen_future_with_minimal_args(self):
+        """Test that PopenFuture works with minimal required parameters."""
         cmd = ["echo", "hello"]
+        tag = "test-minimal"
         
-        future = PopenFuture(cmd)
+        future = PopenFuture(cmd, tag)
         
         assert future.cmd == cmd
-        assert future.tag is None
+        assert future.tag == tag
+
+    def test_popen_future_empty_tag_assertion(self):
+        """Test that PopenFuture raises assertion error for empty tag."""
+        cmd = ["echo", "hello"]
+        
+        try:
+            PopenFuture(cmd, "")
+            raise AssertionError("Expected AssertionError for empty tag")
+        except AssertionError:
+            pass  # Expected
 
     def test_interrupt_by_tag(self):
         """Test that interrupt() cancels futures with matching tags."""
@@ -64,7 +75,7 @@ class TestGlobalExecutor:
         future3 = Mock(spec=PopenFuture)
         future3.tag = "tag1"
         future4 = Mock(spec=PopenFuture)
-        future4.tag = None
+        future4.tag = "tag3"
         
         # Add to executor's futures list
         executor._futures = [future1, future2, future3, future4]
@@ -79,7 +90,7 @@ class TestGlobalExecutor:
         future4.cancel.assert_not_called()
 
     def test_interrupt_with_empty_tag(self):
-        """Test that interrupt() with empty tag does nothing."""
+        """Test that interrupt() with empty tag raises assertion error."""
         executor = get_global_executor()
         
         # Create mock future
@@ -87,8 +98,12 @@ class TestGlobalExecutor:
         future.tag = "some-tag"
         executor._futures = [future]
         
-        # Interrupt with empty tag
-        executor.interrupt("")
+        # Interrupt with empty tag should raise assertion error
+        try:
+            executor.interrupt("")
+            raise AssertionError("Expected AssertionError for empty tag")
+        except AssertionError:
+            pass  # Expected
         
         # No futures should be cancelled
         future.cancel.assert_not_called()

@@ -274,8 +274,8 @@ class PathContext:
     path_id: int
     solving_ctx: SolvingContext
     query: SMTQuery
+    tag: str  # tag for grouping solver queries
     is_refined: bool = False
-    tag: str | None = None  # optional tag for grouping solver queries
 
     @property
     def dump_file(self) -> Path:
@@ -290,8 +290,8 @@ class PathContext:
             path_id=self.path_id,
             solving_ctx=self.solving_ctx,
             query=refine(self.query),
-            is_refined=True,
             tag=self.tag,
+            is_refined=True,
         )
 
 
@@ -494,7 +494,7 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
         else args.solver_command
     )
     cmd_with_file = cmd_list + [smt2_filename]
-    future = PopenFuture(cmd_with_file, timeout=timeout_seconds, tag=path_ctx.tag)
+    future = PopenFuture(cmd_with_file, path_ctx.tag, timeout=timeout_seconds)
 
     # starts the subprocess asynchronously
     get_global_executor().submit(future)

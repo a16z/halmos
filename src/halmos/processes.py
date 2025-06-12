@@ -34,7 +34,7 @@ class ExecutorRegistry:
 class PopenFuture(concurrent.futures.Future):
     cmd: list[str]
     timeout: float | None  # in seconds, None means no timeout
-    tag: str | None  # optional tag for grouping and selective cancellation
+    tag: str  # tag for grouping and selective cancellation
     process: subprocess.Popen | None
     stdout: str | None
     stderr: str | None
@@ -43,10 +43,9 @@ class PopenFuture(concurrent.futures.Future):
     end_time: float | None
     _exception: Exception | None
 
-    def __init__(
-        self, cmd: list[str], timeout: float | None = None, tag: str | None = None
-    ):
+    def __init__(self, cmd: list[str], tag: str, timeout: float | None = None):
         super().__init__()
+        assert tag, "tag cannot be empty"
         self.cmd = cmd
         self.timeout = timeout
         self.tag = tag
@@ -199,18 +198,17 @@ class PopenExecutor(concurrent.futures.Executor):
 
     def interrupt(self, tag: str) -> None:
         """Interrupts all futures with the specified tag.
-        
+
         Args:
-            tag: The tag identifying futures to interrupt. 
-                 Futures without tags are not affected.
+            tag: The tag identifying futures to interrupt.
+                 Futures with a different tag are not affected.
         """
-        if not tag:
-            return
-            
+        assert tag, "tag cannot be empty"
+
         with self._lock:
             # Find all futures with the matching tag and cancel them
             futures_to_cancel = [f for f in self._futures if f.tag == tag]
-            
+
         # Cancel outside the lock to avoid deadlocks
         for future in futures_to_cancel:
             future.cancel()
@@ -251,22 +249,13 @@ class PopenExecutor(concurrent.futures.Executor):
 
 
 # Global PopenExecutor instance for shared use across all tests and probes
-_global_executor: PopenExecutor | None = None
-_global_executor_lock = threading.Lock()
+_executor = PopenExecutor()
+ExecutorRegistry().register(_executor)
 
 
 def get_global_executor() -> PopenExecutor:
-    """Get the global PopenExecutor instance, creating it if necessary."""
-    global _global_executor
-    
-    if _global_executor is None:
-        with _global_executor_lock:
-            if _global_executor is None:
-                _global_executor = PopenExecutor()
-                # Register with the ExecutorRegistry so it gets shut down properly
-                ExecutorRegistry().register(_global_executor)
-    
-    return _global_executor
+    """Get the global PopenExecutor instance."""
+    return _executor
 
 
 def main():
@@ -293,7 +282,7 @@ def main():
         ]
 
         futures = [
-            PopenFuture(command.split(), tag=f"test-{i}")
+            PopenFuture(command.split(), f"test-{i}")
             for i, command in enumerate(commands)
         ]
 

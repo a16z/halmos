@@ -430,8 +430,8 @@ def setup(ctx: FunctionContext) -> Exec:
                 path_ctx = PathContext(
                     args=args,
                     path_id=path_id,
-                    query=query,
                     solving_ctx=ctx.solving_ctx,
+                    query=query,
                     tag=ctx.info.sig,
                 )
                 solver_output = solve_low_level(path_ctx)
@@ -874,8 +874,8 @@ class CounterexampleHandler:
         path_ctx = PathContext(
             args=args,
             path_id=path_id,
-            query=query,
             solving_ctx=ctx.solving_ctx,
+            query=query,
             tag=probe_tag if probe_tag else ctx.info.sig,
         )
 
@@ -1094,8 +1094,8 @@ def run_test(ctx: FunctionContext) -> TestResult:
             path_ctx = PathContext(
                 args=args,
                 path_id=path_id,
-                query=ex.path.to_smt2(args),
                 solving_ctx=ctx.solving_ctx,
+                query=ex.path.to_smt2(args),
                 tag=ctx.info.sig,
             )
             solver_output = solve_low_level(path_ctx)
