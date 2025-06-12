@@ -226,11 +226,10 @@ def with_resolved_solver(args: HalmosConfig) -> HalmosConfig:
     # we need to resolve `--solver <name>` to an actual command
     command = get_solver_command(solver)
     if not command:
-        error(f"Solver '{solver}' could not be found or installed.")
-        sys.exit(1)
+        raise RuntimeError(f"Solver '{solver}' could not be found or installed.")
+
     # use the same source as the original solver to preserve precedence
-    source = solver_source
-    return args.with_overrides(source, solver_command=command)
+    return args.with_overrides(solver_source, solver_command=command)
 
 
 def load_config(_args) -> HalmosConfig:
@@ -1735,9 +1734,10 @@ def _main(_args=None) -> MainResult:
                 f" and {call_flamegraph.out_filepath}"
             )
         else:
-            raise RuntimeError(
+            error(
                 "flamegraph.pl not found in PATH (see https://github.com/brendangregg/FlameGraph)"
             )
+            return MainResult(1)
 
     #
     # compile
