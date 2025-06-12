@@ -722,7 +722,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
                             ex=post_ex,
                             panic_found=panic_found,
                             description=msg,
-                            probe_tag=probe_tag,
+                            tag=probe_tag,
                         )
                     except ShutdownError:
                         if args.debug:
@@ -821,7 +821,7 @@ class CounterexampleHandler:
         ex: Exec,
         panic_found: bool,
         description: str = None,
-        probe_tag: str = None,
+        tag: str | None = None,
     ) -> None:
         """
         Handles a potential assertion violation by solving it in a separate process.
@@ -876,7 +876,7 @@ class CounterexampleHandler:
             path_id=path_id,
             solving_ctx=ctx.solving_ctx,
             query=query,
-            tag=probe_tag if probe_tag else ctx.info.sig,
+            tag=tag if tag else ctx.info.sig,
         )
 
         # ShutdownError may be raised here and will be handled by the caller
@@ -974,8 +974,8 @@ class CounterexampleHandler:
 
             # we have a valid counterexample, so we are eligible for early exit
             if args.early_exit:
-                debug(f"Interrupting {ctx.info.name}'s solver queries")
-                get_global_executor().interrupt(ctx.info.name)
+                debug(f"Interrupting {ctx.info.sig}'s solver queries")
+                get_global_executor().interrupt(ctx.info.sig)
         else:
             warn_str = f"Counterexample (potentially invalid): {model}"
             warn_code(COUNTEREXAMPLE_INVALID, warn_str)
