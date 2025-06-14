@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0
 
 import re
+import shlex
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -485,21 +486,15 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
     # make sure the smt2 file has been written
     dump(path_ctx)
 
+    solver_command = args.resolved_solver_command + [smt2_filename]
     if args.verbose >= 1:
         print("  Checking with external solver process")
-        print(f"    {args.solver_command} {smt2_filename} > {smt2_filename}.out")
+        print(f"    {shlex.join(solver_command)} > {smt2_filename}.out")
 
     # solver_timeout_assertion == 0 means no timeout,
     # which translates to timeout_seconds=None for subprocess.run
     timeout_seconds = t if (t := args.solver_timeout_assertion) else None
-
-    cmd_list = (
-        args.solver_command.split()
-        if isinstance(args.solver_command, str)
-        else args.solver_command
-    )
-    cmd_with_file = cmd_list + [smt2_filename]
-    future = PopenFuture(cmd_with_file, timeout=timeout_seconds)
+    future = PopenFuture(solver_command, timeout=timeout_seconds)
 
     # starts the subprocess asynchronously
     path_ctx.solving_ctx.executor.submit(future)

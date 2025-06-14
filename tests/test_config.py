@@ -340,3 +340,48 @@ def test_value_with_source(config):
 
     # overrides have higher precedence than defaults
     assert source > ConfigSource.default
+
+
+def test_solver_resolution_precedence(config):
+    # default config
+    assert config.solver == "yices"
+    assert config.solver_command == ""
+
+    # the resolved solver command is derived from the default solver
+    assert "yices" in " ".join(config.resolved_solver_command)
+
+    #########################################################
+    # command line overrides
+    #########################################################
+
+    cli_config = config.with_overrides(ConfigSource.command_line, solver="cvc5")
+    assert cli_config.solver == "cvc5"
+
+    # the solver command is inherited from the default config
+    assert cli_config.solver_command == config.solver_command
+
+    # but the actual command is derived from the solver option (at a higher precedence)
+    assert "cvc5" in " ".join(cli_config.resolved_solver_command)
+
+    #########################################################
+    # contract annotation overrides
+    #########################################################
+
+    contract_config = cli_config.with_overrides(
+        ConfigSource.contract_annotation,
+        solver_command="path/to/bitwuzla --produce-models",
+    )
+    # the solver option is inherited from the command line config
+    assert contract_config.value_with_source("solver") == (
+        "cvc5",
+        ConfigSource.command_line,
+    )
+
+    # the solver command comes from the contract annotation
+    assert contract_config.solver_command == "path/to/bitwuzla --produce-models"
+
+    # the resolved solver command is derived from the contract annotation
+    assert contract_config.resolved_solver_command == [
+        "path/to/bitwuzla",
+        "--produce-models",
+    ]

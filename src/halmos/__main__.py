@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -109,7 +110,6 @@ from halmos.solve import (
     solve_end_to_end,
     solve_low_level,
 )
-from halmos.solvers import get_solver_command
 from halmos.traces import (
     render_trace,
     rendered_address,
@@ -187,7 +187,7 @@ def with_devdoc(args: HalmosConfig, fn_sig: str, contract_json: dict) -> HalmosC
     if not devdoc:
         return args
 
-    overrides = arg_parser().parse_args(devdoc.split())
+    overrides = arg_parser().parse_args(shlex.split(devdoc))
     source = ConfigSource.function_annotation
     return args.with_overrides(source, **vars(overrides))
 
@@ -202,33 +202,9 @@ def with_natspec(
     if not parsed:
         return args
 
-    overrides = arg_parser().parse_args(parsed.split())
+    overrides = arg_parser().parse_args(shlex.split(parsed))
     source = ConfigSource.contract_annotation
     return args.with_overrides(source, **vars(overrides))
-
-
-def with_resolved_solver(args: HalmosConfig) -> HalmosConfig:
-    solver, solver_source = args.value_with_source("solver")
-    solver_command, solver_command_source = args.value_with_source("solver_command")
-
-    # `--solver-command` overrides `--solver` if it is at least as high precedence
-    if solver_command and solver_command_source >= solver_source:
-        if solver_command_source == solver_source:
-            warn(
-                f"--solver-command and --solver are both provided at the same "
-                f"precedence level ({solver_source.name}), "
-                f"--solver-command will be used and --solver will be ignored",
-                allow_duplicate=False,
-            )
-        return args
-
-    # if no `--solver-command` is provided, or `--solver` has higher precedence,
-    # we need to resolve `--solver <name>` to an actual command
-    command = get_solver_command(solver)
-    if not command:
-        raise RuntimeError(f"Solver '{solver}' could not be found or installed.")
-    source = ConfigSource.dynamic_resolution
-    return args.with_overrides(source, solver_command=command)
 
 
 def load_config(_args) -> HalmosConfig:
@@ -641,8 +617,7 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
 
     visited = ctx.visited
 
-    args = with_resolved_solver(ctx.args)
-
+    args = ctx.args
     panic_error_codes = args.panic_error_codes
     flamegraph_enabled = args.flamegraph
 
@@ -1523,10 +1498,9 @@ def run_contract(ctx: ContractContext) -> list[TestResult]:
 
     try:
         setup_config = with_devdoc(args, setup_info.sig, ctx.contract_json)
-        setup_config = with_resolved_solver(setup_config)
 
         if setup_config.debug_config:
-            debug(f"{setup_config.formatted_layers()}")
+            debug(f"config for setUp():\n{setup_config.formatted_layers()}")
 
         setup_solver = mk_solver(setup_config)
         setup_ctx = FunctionContext(
@@ -1634,11 +1608,8 @@ def run_tests(
         try:
             test_config = with_devdoc(args, funsig, ctx.contract_json)
 
-            # resolve the solver command at the function level
-            test_config = with_resolved_solver(test_config)
-
             if debug_config:
-                debug(f"{test_config.formatted_layers()}")
+                debug(f"config for {funsig}:\n{test_config.formatted_layers()}")
 
             max_call_depth = (
                 test_config.invariant_depth if funsig.startswith("invariant_") else 0
@@ -1733,10 +1704,10 @@ def _main(_args=None) -> MainResult:
                 f" and {call_flamegraph.out_filepath}"
             )
         else:
-            error("flamegraph.pl not found in PATH")
-            error("(see https://github.com/brendangregg/FlameGraph)")
-            dynamic_resolution = ConfigSource.dynamic_resolution
-            args = args.with_overrides(dynamic_resolution, flamegraph=False)
+            error(
+                "flamegraph.pl not found in PATH (see https://github.com/brendangregg/FlameGraph)"
+            )
+            return MainResult(1)
 
     #
     # compile
