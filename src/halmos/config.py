@@ -3,18 +3,20 @@
 import argparse
 import os
 import re
+import shlex
 import sys
 from collections import OrderedDict
 from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from enum import Enum, IntEnum
+from functools import cached_property
 from typing import Any
 
 import toml
 
 from halmos.logs import warn
-from halmos.solvers import SOLVERS
+from halmos.solvers import SOLVERS, get_solver_command
 from halmos.utils import parse_time
 
 # common strings
@@ -46,14 +48,14 @@ class ConfigSource(IntEnum):
     # e.g. halmos.toml
     config_file = 2
 
+    # from command line
+    command_line = 3
+
     # contract-level annotation (e.g. @custom:halmos --some-option)
-    contract_annotation = 3
+    contract_annotation = 4
 
     # function-level annotation (e.g. @custom:halmos --some-option)
-    function_annotation = 4
-
-    # from command line
-    command_line = 5
+    function_annotation = 5
 
 
 # helper to define config fields
@@ -558,6 +560,8 @@ class Config:
         group=solver_group,
     )
 
+    # this is the low-level option that overrides the `--solver` option
+    # use `resolved_solver_command` to get the actual command as a list of strings
     solver_command: str = arg(
         help="use the given exact command when invoking the solver (overrides automatic solver detection/download triggered by --solver)",
         global_default=None,
@@ -719,6 +723,38 @@ class Config:
             for field, value in values.items():
                 lines.append(f"  {field}: {value}")
         return "\n".join(lines)
+
+    @cached_property
+    def resolved_solver_command(self) -> list[str]:
+        """
+        Dynamically resolve the solver command from the `--solver` and `--solver-command` options.
+        """
+
+        solver, solver_source = self.value_with_source("solver")
+        solver_command, solver_command_source = self.value_with_source("solver_command")
+
+        # `--solver-command` overrides `--solver` if it is at least as high precedence
+        if (
+            solver_command
+            and solver_command_source
+            and solver_command_source >= solver_source
+        ):
+            if solver_command_source == solver_source:
+                warn(
+                    f"--solver-command and --solver are both provided at the same "
+                    f"precedence level ({solver_source.name}), "
+                    f"--solver-command will be used and --solver will be ignored",
+                    allow_duplicate=False,
+                )
+            return shlex.split(solver_command)
+
+        # if no `--solver-command` is provided, or `--solver` has higher precedence,
+        # we need to resolve `--solver <name>` to an actual command
+        command = get_solver_command(solver)
+        if not command:
+            raise RuntimeError(f"Solver '{solver}' could not be found or installed.")
+
+        return command
 
 
 def resolve_config_files(args: list[str], include_missing: bool = False) -> list[str]:
