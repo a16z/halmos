@@ -564,7 +564,7 @@ class Config:
     # use `resolved_solver_command` to get the actual command as a list of strings
     solver_command: str = arg(
         help="use the given exact command when invoking the solver (overrides automatic solver detection/download triggered by --solver)",
-        global_default=None,
+        global_default="",
         metavar="COMMAND",
         group=solver_group,
     )
