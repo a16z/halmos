@@ -67,7 +67,9 @@ def test_count_arg(config, parser):
     args = parser.parse_args(["-vvvvvv"])
     assert args.verbose == 6
 
-    config_from_args = config.with_overrides(source="command-line", **vars(args))
+    config_from_args = config.with_overrides(
+        source=ConfigSource.command_line, **vars(args)
+    )
     assert config_from_args.verbose == 6
 
 
@@ -78,7 +80,7 @@ def test_choice_arg(config, parser):
 
     # valid choice works
     args = parser.parse_args(["--storage-layout", "generic"])
-    overrides = config.with_overrides(source="command-line", **vars(args))
+    overrides = config.with_overrides(source=ConfigSource.command_line, **vars(args))
     assert overrides.storage_layout == "generic"
 
 
@@ -380,8 +382,50 @@ def test_solver_resolution_precedence(config):
     # the solver command comes from the contract annotation
     assert contract_config.solver_command == "path/to/bitwuzla --produce-models"
 
-    # the resolved solver command is derived from the contract annotation
-    assert contract_config.resolved_solver_command == [
-        "path/to/bitwuzla",
-        "--produce-models",
-    ]
+    # the resolved solver command is derived from the solver option (command line)
+    # because command line has higher precedence than contract annotation
+    assert "cvc5" in " ".join(contract_config.resolved_solver_command)
+
+
+def test_command_line_precedence_over_annotations(config):
+    """Test that command line options have highest precedence, overriding annotations."""
+
+    # Start with default config
+    assert config.solver == "yices"
+
+    # Apply config file override
+    config_file_config = config.with_overrides(ConfigSource.config_file, solver="z3")
+    assert config_file_config.solver == "z3"
+    assert config_file_config.value_with_source("solver") == (
+        "z3",
+        ConfigSource.config_file,
+    )
+
+    # Apply command line override (should have highest precedence)
+    cli_config = config_file_config.with_overrides(
+        ConfigSource.command_line, solver="cvc5"
+    )
+    assert cli_config.solver == "cvc5"
+    assert cli_config.value_with_source("solver") == ("cvc5", ConfigSource.command_line)
+
+    # Apply contract annotation override (should NOT override command line)
+    contract_config = cli_config.with_overrides(
+        ConfigSource.contract_annotation, solver="bitwuzla"
+    )
+    # Command line should still win
+    assert contract_config.solver == "cvc5"
+    assert contract_config.value_with_source("solver") == (
+        "cvc5",
+        ConfigSource.command_line,
+    )
+
+    # Apply function annotation override (should NOT override command line)
+    function_config = contract_config.with_overrides(
+        ConfigSource.function_annotation, solver="yices"
+    )
+    # Command line should still win
+    assert function_config.solver == "cvc5"
+    assert function_config.value_with_source("solver") == (
+        "cvc5",
+        ConfigSource.command_line,
+    )

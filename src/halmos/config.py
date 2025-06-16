@@ -10,7 +10,7 @@ from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from enum import Enum, IntEnum
-from functools import cached_property
+from functools import cached_property, lru_cache
 from typing import Any
 
 import toml
@@ -48,14 +48,14 @@ class ConfigSource(IntEnum):
     # e.g. halmos.toml
     config_file = 2
 
-    # from command line
-    command_line = 3
-
     # contract-level annotation (e.g. @custom:halmos --some-option)
-    contract_annotation = 4
+    contract_annotation = 3
 
     # function-level annotation (e.g. @custom:halmos --some-option)
-    function_annotation = 5
+    function_annotation = 4
+
+    # from command line, highest precedence
+    command_line = 5
 
 
 # helper to define config fields
@@ -639,25 +639,33 @@ class Config:
 
     ### Methods
 
+    def __hash__(self):
+        return id(self)
+
+    # cachable because each layer is immutable
+    @lru_cache(maxsize=64)  # noqa: B019
     def __getattribute__(self, name):
-        """Look up values in parent object if they are not set in the current object.
-
-        This is because we consider the current object to override its parent.
-
-        Because of this, printing a Config object will show a "flattened/resolved" view of the configuration.
         """
+        Look up values based on precedence, where higher ConfigSource values override lower ones.
+        """
+        # Handle internal attributes normally
+        if name[0] == "_" or name in (
+            "value_with_source",
+            "values",
+            "values_by_layer",
+            "formatted_layers",
+            "resolved_solver_command",
+            "with_overrides",
+        ):
+            return object.__getattribute__(self, name)
 
-        # look up value in current object
-        value = object.__getattribute__(self, name)
-        if value is not None:
+        # For config fields, use precedence-based lookup
+        try:
+            value, _ = self.value_with_source(name)
             return value
-
-        # look up value in parent object
-        parent = object.__getattribute__(self, "_parent")
-        if parent is not None:
-            return getattr(parent, name)
-
-        return value
+        except AttributeError:
+            # Fall back to normal attribute lookup for non-config fields
+            return object.__getattribute__(self, name)
 
     def with_overrides(self, source: ConfigSource, **overrides):
         """Create a new configuration object with some fields overridden.
@@ -673,26 +681,16 @@ class Config:
             sys.exit(2)
 
     def value_with_source(self, name: str) -> tuple[Any, ConfigSource]:
-        # look up value in current object
-        value = object.__getattribute__(self, name)
-        if value is not None:
-            return (value, self._source)
+        best_value, best_source = None, ConfigSource.void
 
-        # look up value in parent object
-        parent = self._parent
-        if parent is not None:
-            return parent.value_with_source(name)
+        current = self
+        while current is not None:
+            value = object.__getattribute__(current, name)
+            if value is not None and (current_source := current._source) > best_source:
+                best_value, best_source = value, current_source
+            current = current._parent
 
-        return (value, self._source)
-
-    def values_with_sources(self) -> dict[str, tuple[Any, ConfigSource]]:
-        # field -> (value, source)
-        values = {}
-        for field in fields(self):
-            if field.metadata.get(internal):
-                continue
-            values[field.name] = self.value_with_source(field.name)
-        return values
+        return (best_value, best_source)
 
     def values(self):
         skip_empty = self._parent is not None
