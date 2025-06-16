@@ -48,14 +48,14 @@ class ConfigSource(IntEnum):
     # e.g. halmos.toml
     config_file = 2
 
-    # from command line
-    command_line = 3
-
     # contract-level annotation (e.g. @custom:halmos --some-option)
-    contract_annotation = 4
+    contract_annotation = 3
 
     # function-level annotation (e.g. @custom:halmos --some-option)
-    function_annotation = 5
+    function_annotation = 4
+
+    # from command line, highest precedence
+    command_line = 5
 
 
 # helper to define config fields
@@ -640,24 +640,30 @@ class Config:
     ### Methods
 
     def __getattribute__(self, name):
-        """Look up values in parent object if they are not set in the current object.
+        """Look up values based on precedence, where higher ConfigSource values override lower ones.
 
-        This is because we consider the current object to override its parent.
-
-        Because of this, printing a Config object will show a "flattened/resolved" view of the configuration.
+        This ensures that command line options have the highest precedence.
         """
 
-        # look up value in current object
-        value = object.__getattribute__(self, name)
-        if value is not None:
+        # Handle internal attributes normally
+        if name.startswith("_") or name in (
+            "value_with_source",
+            "values_with_sources",
+            "values",
+            "values_by_layer",
+            "formatted_layers",
+            "resolved_solver_command",
+            "with_overrides",
+        ):
+            return object.__getattribute__(self, name)
+
+        # For config fields, use precedence-based lookup
+        try:
+            value, _ = self.value_with_source(name)
             return value
-
-        # look up value in parent object
-        parent = object.__getattribute__(self, "_parent")
-        if parent is not None:
-            return getattr(parent, name)
-
-        return value
+        except (AttributeError, RecursionError):
+            # Fall back to normal attribute lookup for non-config fields
+            return object.__getattribute__(self, name)
 
     def with_overrides(self, source: ConfigSource, **overrides):
         """Create a new configuration object with some fields overridden.
@@ -673,17 +679,21 @@ class Config:
             sys.exit(2)
 
     def value_with_source(self, name: str) -> tuple[Any, ConfigSource]:
-        # look up value in current object
-        value = object.__getattribute__(self, name)
-        if value is not None:
-            return (value, self._source)
+        # Collect all non-None values from the chain with their sources
+        candidates = []
+        current = self
 
-        # look up value in parent object
-        parent = self._parent
-        if parent is not None:
-            return parent.value_with_source(name)
+        while current is not None:
+            value = object.__getattribute__(current, name)
+            if value is not None:
+                candidates.append((value, current._source))
+            current = current._parent
 
-        return (value, self._source)
+        if not candidates:
+            return (None, self._source)
+
+        # Return the value with the highest precedence (highest ConfigSource value)
+        return max(candidates, key=lambda x: x[1])
 
     def values_with_sources(self) -> dict[str, tuple[Any, ConfigSource]]:
         # field -> (value, source)
