@@ -67,6 +67,7 @@ jobs:
             | tee tests/regression/halmos.toml
 
       - name: Run pytest
+        shell: bash
         run: |
           uv run pytest -v -k "not long and not ffi" --ignore=tests/lib \
             --halmos-options="-st --disable-gc --solver-threads 1 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
