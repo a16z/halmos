@@ -58,5 +58,14 @@ jobs:
         run: |
           uv sync --extra dev
 
+      - name: Write halmos.toml
+        run: |
+          python -m halmos.config \
+            | sed 's|storage-layout = "[^"]*"|storage-layout = "${{ matrix.storage-layout }}"|' \
+            | sed 's|cache-solver = "[^"]*"|cache-solver = "${{ matrix.cache-solver }}"|' \
+            | tee tests/regression/halmos.toml
+
       - name: Run pytest
-        run: uv run pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-st --disable-gc --solver-threads 1 --storage-layout ${{ matrix.storage-layout }} ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
+        run: |
+          uv run pytest -v -k "not long and not ffi" --ignore=tests/lib \
+            --halmos-options="-st --disable-gc --solver-threads 1 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
