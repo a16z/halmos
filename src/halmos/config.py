@@ -10,7 +10,7 @@ from collections.abc import Callable, Generator
 from dataclasses import MISSING, dataclass, fields
 from dataclasses import field as dataclass_field
 from enum import Enum, IntEnum
-from functools import cached_property
+from functools import cached_property, lru_cache
 from typing import Any
 
 import toml
@@ -639,10 +639,14 @@ class Config:
 
     ### Methods
 
-    def __getattribute__(self, name):
-        """Look up values based on precedence, where higher ConfigSource values override lower ones.
+    def __hash__(self):
+        return id(self)
 
-        This ensures that command line options have the highest precedence.
+    # cachable because each layer is immutable
+    @lru_cache(maxsize=64)  # noqa: B019
+    def __getattribute__(self, name):
+        """
+        Look up values based on precedence, where higher ConfigSource values override lower ones.
         """
         # Handle internal attributes normally
         if name[0] == "_" or name in (
@@ -659,7 +663,8 @@ class Config:
         try:
             value, _ = self.value_with_source(name)
             return value
-        except (AttributeError, RecursionError):
+        except AttributeError:
+            # Fall back to normal attribute lookup for non-config fields
             return object.__getattribute__(self, name)
 
     def with_overrides(self, source: ConfigSource, **overrides):
