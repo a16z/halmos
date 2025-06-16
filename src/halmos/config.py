@@ -644,11 +644,9 @@ class Config:
 
         This ensures that command line options have the highest precedence.
         """
-
         # Handle internal attributes normally
-        if name.startswith("_") or name in (
+        if name[0] == "_" or name in (
             "value_with_source",
-            "values_with_sources",
             "values",
             "values_by_layer",
             "formatted_layers",
@@ -662,7 +660,6 @@ class Config:
             value, _ = self.value_with_source(name)
             return value
         except (AttributeError, RecursionError):
-            # Fall back to normal attribute lookup for non-config fields
             return object.__getattribute__(self, name)
 
     def with_overrides(self, source: ConfigSource, **overrides):
@@ -679,30 +676,16 @@ class Config:
             sys.exit(2)
 
     def value_with_source(self, name: str) -> tuple[Any, ConfigSource]:
-        # Collect all non-None values from the chain with their sources
-        candidates = []
-        current = self
+        best_value, best_source = None, ConfigSource.void
 
+        current = self
         while current is not None:
             value = object.__getattribute__(current, name)
-            if value is not None:
-                candidates.append((value, current._source))
+            if value is not None and (current_source := current._source) > best_source:
+                best_value, best_source = value, current_source
             current = current._parent
 
-        if not candidates:
-            return (None, self._source)
-
-        # Return the value with the highest precedence (highest ConfigSource value)
-        return max(candidates, key=lambda x: x[1])
-
-    def values_with_sources(self) -> dict[str, tuple[Any, ConfigSource]]:
-        # field -> (value, source)
-        values = {}
-        for field in fields(self):
-            if field.metadata.get(internal):
-                continue
-            values[field.name] = self.value_with_source(field.name)
-        return values
+        return (best_value, best_source)
 
     def values(self):
         skip_empty = self._parent is not None
