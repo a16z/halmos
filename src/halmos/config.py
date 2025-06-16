@@ -48,14 +48,14 @@ class ConfigSource(IntEnum):
     # e.g. halmos.toml
     config_file = 2
 
-    # from command line
-    command_line = 3
-
     # contract-level annotation (e.g. @custom:halmos --some-option)
-    contract_annotation = 4
+    contract_annotation = 3
 
     # function-level annotation (e.g. @custom:halmos --some-option)
-    function_annotation = 5
+    function_annotation = 4
+
+    # from command line - highest precedence
+    command_line = 5
 
 
 # helper to define config fields

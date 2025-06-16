@@ -380,8 +380,5 @@ def test_solver_resolution_precedence(config):
     # the solver command comes from the contract annotation
     assert contract_config.solver_command == "path/to/bitwuzla --produce-models"
 
-    # the resolved solver command is derived from the contract annotation
-    assert contract_config.resolved_solver_command == [
-        "path/to/bitwuzla",
-        "--produce-models",
-    ]
+    # the resolved solver command is derived from the command line solver (higher precedence)
+    assert "cvc5" in " ".join(contract_config.resolved_solver_command)
