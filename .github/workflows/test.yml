@@ -60,7 +60,7 @@ jobs:
 
       - name: Write halmos.toml
         run: |
-          python -m halmos.config \
+          uv run python -m halmos.config \
             | sed 's|storage-layout = "[^"]*"|storage-layout = "${{ matrix.storage-layout }}"|' \
             | sed 's|cache-solver = "[^"]*"|cache-solver = "${{ matrix.cache-solver }}"|' \
             | tee tests/regression/halmos.toml
