@@ -59,6 +59,7 @@ jobs:
           uv sync --extra dev
 
       - name: Write halmos.toml
+        shell: bash
         run: |
           uv run python -m halmos.config \
             | sed 's|storage-layout = "[^"]*"|storage-layout = "${{ matrix.storage-layout }}"|' \
