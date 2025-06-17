@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {ERC721Test} from "./ERC721Test.sol";
+import {ERC721InvariantTest} from "./ERC721InvariantTest.sol";
 
 import {SoladyERC721} from "../src/SoladyERC721.sol";
 
@@ -47,5 +48,28 @@ contract SoladyERC721Test is ERC721Test {
     function check_NoBackdoor() public {
         bytes memory _calldata = svm.createCalldata("SoladyERC721");
         _check_NoBackdoor(_calldata);
+    }
+}
+
+/// @custom:halmos --storage-layout generic --solver bitwuzla-abs --loop 4
+contract SoladyERC721InvariantTest is ERC721InvariantTest {
+    function setUp() public override {
+        deployer = address(0x1000);
+
+        SoladyERC721 token_ = new SoladyERC721("SoladyERC721", "SoladyERC721", 5, deployer);
+        token = address(token_);
+
+        accounts = new address[](3);
+        accounts[0] = address(0x1001);
+        accounts[1] = address(0x1002);
+        accounts[2] = address(0x1003);
+
+        // setup initial balances
+        vm.startPrank(deployer);
+        token_.transferFrom(deployer, accounts[0], 1);
+        token_.transferFrom(deployer, accounts[0], 2);
+        token_.transferFrom(deployer, accounts[1], 3);
+        token_.transferFrom(deployer, accounts[2], 4);
+        vm.stopPrank();
     }
 }
