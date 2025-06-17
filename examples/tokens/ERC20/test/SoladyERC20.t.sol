@@ -2,6 +2,7 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {ERC20Test} from "./ERC20Test.sol";
+import {ERC20InvariantTest} from "./ERC20InvariantTest.sol";
 
 import {SoladyERC20} from "../src/SoladyERC20.sol";
 
@@ -37,5 +38,28 @@ contract SoladyERC20Test is ERC20Test {
     function check_NoBackdoor(bytes4 selector, address caller, address other) public {
         bytes memory args = svm.createBytes(1024, 'data');
         _checkNoBackdoor(selector, args, caller, other);
+    }
+}
+
+/// @custom:halmos --storage-layout generic --solver bitwuzla-abs --loop 4
+contract SoladyERC20InvariantTest is ERC20InvariantTest {
+    function setUp() public override {
+        address deployer = address(0x1000);
+
+        SoladyERC20 token_ = new SoladyERC20("SoladyERC20", "SoladyERC20", 18, 1_000_000_000e18, deployer);
+        token = address(token_);
+
+        holders = new address[](4);
+        holders[0] = deployer;
+        holders[1] = address(0x1001);
+        holders[2] = address(0x1002);
+        holders[3] = address(0x1003);
+
+        for (uint i = 0; i < holders.length; i++) {
+            vm.prank(deployer);
+            token_.transfer(holders[i], 1_000_000e18);
+        }
+
+        super.setUp();
     }
 }
