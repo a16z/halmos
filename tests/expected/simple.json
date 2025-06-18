@@ -70,17 +70,6 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/MiniVat.t.sol:MiniVatTest": [
-            {
-                "name": "invariant_dai()",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
         "test/Multicaller.t.sol:MulticallerWithSenderSymTest": [
             {
                 "name": "check_0_0_0_1()",
@@ -245,64 +234,6 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/Reentrancy.t.sol:ReentrancyTest": [
-            {
-                "name": "check_setup()",
-                "exitcode": 0,
-                "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            },
-            {
-                "name": "invariant_no_stolen_funds()",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
-        "test/SimpleState.t.sol:SimpleStateTest": [
-            {
-                "name": "check_buggy_excluding_view()",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            },
-            {
-                "name": "check_buggy_with_state_snapshot()",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            },
-            {
-                "name": "check_buggy_with_storage_snapshot()",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            },
-            {
-                "name": "invariant_buggy()",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
         "test/TotalPrice.t.sol:TotalPriceTest": [
             {
                 "name": "check_eq_totalPriceFixed_totalPriceConservative(uint96,uint32)",
@@ -326,17 +257,6 @@
                 "name": "check_totalPriceFixed(uint96,uint32)",
                 "exitcode": 0,
                 "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
-        "test/Vat.t.sol:VatTest": [
-            {
-                "name": "invariant_dai()",
-                "exitcode": 1,
-                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,

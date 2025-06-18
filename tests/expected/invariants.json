@@ -1,0 +1,71 @@
+{
+    "exitcode": 1,
+    "test_results": {
+        "test/ERC20.t.sol:ERC20Test": [
+            {
+                "name": "invariant_sumOfBalancesEqualsTotalSupply()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/ERC721.t.sol:ERC721Test": [
+            {
+                "name": "invariant_ownerHasAtLeastOneToken()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/MiniVat.t.sol:MiniVatTest": [
+            {
+                "name": "invariant_dai()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Reentrancy.t.sol:ReentrancyTest": [
+            {
+                "name": "invariant_no_stolen_funds()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SimpleState.t.sol:SimpleStateTest": [
+            {
+                "name": "invariant_buggy()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/Vat.t.sol:VatTest": [
+            {
+                "name": "invariant_dai()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
+}

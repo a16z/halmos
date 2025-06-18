@@ -3,6 +3,7 @@
 #### Usage Examples
 
 - [Simple examples](simple/test/)
+- [Invariant testing](invariants/test/)
 - [ERC20](tokens/ERC20/test/): verifies OpenZeppelin, Solady, Solmate ERC20 tokens, and CurveTokenV3.
   - Includes identifying the DEI token bug exploited in the [Deus DAO hack](https://rekt.news/deus-dao-r3kt/).
 - [ERC721](tokens/ERC721/test/): verifies OpenZeppelin, Solady, and Solmate ERC721 tokens.
