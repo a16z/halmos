@@ -6,6 +6,8 @@ pragma solidity >=0.8.0 <0.9.0;
 import "forge-std/Test.sol";
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
+uint256 constant N = 5;
+
 contract SimpleState {
     uint counter = 0;
 
@@ -20,7 +22,7 @@ contract SimpleState {
     }
 
     function buggy() public view returns (bool) {
-        return counter == 2;
+        return counter == N;
     }
 }
 
@@ -34,8 +36,7 @@ contract SimpleStateTest is SymTest, Test {
     function check_buggy_excluding_view() public {
         bool success;
 
-        // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
-        for (uint i = 0; i < 2; i++) {
+        for (uint i = 0; i < N; i++) {
             (success,) = address(target).call(svm.createCalldata("SimpleState")); // excluding view functions
             vm.assume(success);
         }
@@ -49,8 +50,7 @@ contract SimpleStateTest is SymTest, Test {
         // take the initial storage snapshot
         uint prev = svm.snapshotStorage(address(target));
 
-        // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
-        for (uint i = 0; i < 2; i++) {
+        for (uint i = 0; i < N; i++) {
             (success,) = address(target).call(svm.createCalldata("SimpleState", true)); // including view functions
             vm.assume(success);
 
@@ -69,8 +69,7 @@ contract SimpleStateTest is SymTest, Test {
         // take the initial state snapshot
         uint prev = vm.snapshotState();
 
-        // note: a total of 253 feasible paths are generated, of which only 10 unique states exist
-        for (uint i = 0; i < 2; i++) {
+        for (uint i = 0; i < N; i++) {
             (success,) = address(target).call(svm.createCalldata("SimpleState", true)); // including view functions
             vm.assume(success);
 
