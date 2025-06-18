@@ -4,7 +4,6 @@ pragma solidity >=0.8.0 <0.9.0;
 // from ItyFuzz paper (Figure 2): https://arxiv.org/pdf/2306.17135
 
 import "forge-std/Test.sol";
-import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 contract SimpleState {
     uint counter = 0;
@@ -24,7 +23,7 @@ contract SimpleState {
     }
 }
 
-contract SimpleStateTest is SymTest, Test {
+contract SimpleStateTest is Test {
     SimpleState target;
 
     function setUp() public {
@@ -32,7 +31,7 @@ contract SimpleStateTest is SymTest, Test {
     }
 
     /// @custom:halmos --invariant-depth 10
-    function invariant_buggy() public {
+    function invariant_buggy() public view {
         assertFalse(target.buggy());
     }
 }

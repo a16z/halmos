@@ -6,6 +6,7 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 import {ERC1155, IERC1155} from "openzeppelin/token/ERC1155/ERC1155.sol";
 import {ERC1155Holder} from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
+import {ReentrancyGuard} from "openzeppelin/utils/ReentrancyGuard.sol";
 
 uint256 constant TOKEN_ID = 1;
 
@@ -15,7 +16,7 @@ contract ERC1155Mock is ERC1155 {
     }
 }
 
-contract BuggyVault is ERC1155Holder {
+contract BuggyVault is ERC1155Holder, ReentrancyGuard {
     mapping(address => uint) balances;
     IERC1155 token;
 
@@ -37,7 +38,7 @@ contract BuggyVault is ERC1155Holder {
     }
 }
 
-contract Attacker is SymTest {
+contract Attacker is SymTest, Test {
     uint depth; // reentrancy depth
     address target; // reentrancy target
 
@@ -68,7 +69,7 @@ contract Attacker is SymTest {
 }
 
 /// @custom:halmos --early-exit
-contract ReentrancyTest is SymTest, Test, ERC1155Holder {
+contract ReentrancyTest is Test, ERC1155Holder {
     ERC1155Mock token;
     BuggyVault vault;
     Attacker attacker;
@@ -105,7 +106,7 @@ contract ReentrancyTest is SymTest, Test, ERC1155Holder {
         assertEq(token.balanceOf(address(vault), TOKEN_ID), 2_000_000 ether);
     }
 
-    function invariant_no_stolen_funds() public {
+    function invariant_no_stolen_funds() public view {
         assertLe(token.balanceOf(address(attacker), TOKEN_ID), ATTACKER_INITIAL_BALANCE);
     }
 }

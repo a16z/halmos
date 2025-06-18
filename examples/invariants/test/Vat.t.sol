@@ -2,12 +2,11 @@
 pragma solidity ^0.8.13;
 
 import "forge-std/Test.sol";
-import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 import {Vat} from "../src/Vat.sol";
 
 /// @custom:halmos --early-exit
-contract VatTest is Test, SymTest {
+contract VatTest is Test {
     Vat public vat;
     bytes32 ilk;
 
@@ -18,7 +17,7 @@ contract VatTest is Test, SymTest {
         vat.init(ilk);
     }
 
-    function invariant_dai() public {
+    function invariant_dai() public view {
         assertEq(
             vat.debt(),
             vat.vice() + vat.Art(ilk) * vat.rate(ilk),
