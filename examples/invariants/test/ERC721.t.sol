@@ -26,6 +26,10 @@ contract ERC721Test is Test {
     // invariant: the owner of any token ID must have at least one token
     function invariant_ownerHasAtLeastOneToken() public {
         uint256 tokenId = vm.randomUint();
-        assertGe(token.balanceOf(token.ownerOf(tokenId)), 1);
+        try token.ownerOf(tokenId) returns (address owner) {
+            assertGe(token.balanceOf(owner), 1);
+        } catch {
+            // nothing to do if the token does not exist
+        }
     }
 }
