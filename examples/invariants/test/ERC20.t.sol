@@ -60,6 +60,11 @@ contract ERC20Test is Test {
         return token.mint(to, amount);
     }
 
+    function burn(address from, uint256 amount) public {
+        vm.prank(msg.sender);
+        return token.burn(from, amount);
+    }
+
     function approve(address spender, uint256 amount) public returns (bool) {
         vm.prank(msg.sender);
         return token.approve(spender, amount);
