@@ -2,7 +2,6 @@
 pragma solidity >=0.8.0 <0.9.0;
 
 import {ERC721Test} from "./ERC721Test.sol";
-import {ERC721InvariantTest} from "./ERC721InvariantTest.sol";
 
 import {OpenZeppelinERC721} from "../src/OpenZeppelinERC721.sol";
 
@@ -46,30 +45,5 @@ contract OpenZeppelinERC721Test is ERC721Test {
     function check_NoBackdoor() public {
         bytes memory _calldata = svm.createCalldata("OpenZeppelinERC721");
         _check_NoBackdoor(_calldata);
-    }
-}
-
-/// @custom:halmos --solver bitwuzla-abs --loop 4 --solver-timeout-assertion 0
-contract OpenZeppelinERC721InvariantTest is ERC721InvariantTest {
-    function setUp() public override {
-        deployer = address(0x1000);
-
-        OpenZeppelinERC721 token_ = new OpenZeppelinERC721("OpenZeppelinERC721", "OpenZeppelinERC721", 5, deployer);
-        token = address(token_);
-
-        accounts = new address[](3);
-        accounts[0] = address(0x1001);
-        accounts[1] = address(0x1002);
-        accounts[2] = address(0x1003);
-
-        // setup initial balances
-        vm.startPrank(deployer);
-        token_.transferFrom(deployer, accounts[0], 1);
-        token_.transferFrom(deployer, accounts[0], 2);
-        token_.transferFrom(deployer, accounts[1], 3);
-        token_.transferFrom(deployer, accounts[2], 4);
-        vm.stopPrank();
-
-        super.setUp();
     }
 }

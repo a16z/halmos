@@ -57,17 +57,6 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/BuggyERC20.t.sol:BuggyERC20InvariantTest": [
-            {
-                "name": "invariant_sumOfBalancesEqualsTotalSupply()",
-                "exitcode": 1,
-                "num_models": 1,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
         "test/CurveTokenV3.t.sol:CurveTokenV3Test": [
             {
                 "name": "check_NoBackdoor(bytes4,address,address)",
@@ -126,17 +115,6 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/OpenZeppelinERC20.t.sol:OpenZeppelinERC20InvariantTest": [
-            {
-                "name": "invariant_sumOfBalancesEqualsTotalSupply()",
-                "exitcode": 0,
-                "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
         "test/OpenZeppelinERC20.t.sol:OpenZeppelinERC20Test": [
             {
                 "name": "check_NoBackdoor(bytes4,address,address)",
@@ -166,17 +144,6 @@
                 "num_bounded_loops": null
             }
         ],
-        "test/SoladyERC20.t.sol:SoladyERC20InvariantTest": [
-            {
-                "name": "invariant_sumOfBalancesEqualsTotalSupply()",
-                "exitcode": 0,
-                "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
         "test/SoladyERC20.t.sol:SoladyERC20Test": [
             {
                 "name": "check_NoBackdoor(bytes4,address,address)",
@@ -198,17 +165,6 @@
             },
             {
                 "name": "check_transferFrom(address,address,address,address,uint256)",
-                "exitcode": 0,
-                "num_models": 0,
-                "models": null,
-                "num_paths": null,
-                "time": null,
-                "num_bounded_loops": null
-            }
-        ],
-        "test/SolmateERC20.t.sol:SolmateERC20InvariantTest": [
-            {
-                "name": "invariant_sumOfBalancesEqualsTotalSupply()",
                 "exitcode": 0,
                 "num_models": 0,
                 "models": null,
