@@ -29,6 +29,10 @@ from halmos.traces import rendered_calldata
             "tests/expected/simple.json",
         ),
         (
+            ["--root", "examples/invariants"],
+            "tests/expected/invariants.json",
+        ),
+        (
             ["--root", "examples/tokens/ERC20"],
             "tests/expected/erc20.json",
         ),
@@ -42,6 +46,7 @@ from halmos.traces import rendered_calldata
         "tests/ffi",
         "long:tests/solver",
         "long:examples/simple",
+        "long:examples/invariants",
         "long:examples/tokens/ERC20",
         "long:examples/tokens/ERC721",
     ),

@@ -22,6 +22,7 @@ jobs:
         testname:
           - "tests/solver"
           - "examples/simple"
+          - "examples/invariants"
           - "examples/tokens/ERC20"
           - "examples/tokens/ERC721"
 

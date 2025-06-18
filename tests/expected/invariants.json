@@ -1,0 +1,27 @@
+{
+    "exitcode": 0,
+    "test_results": {
+        "test/ERC20.t.sol:ERC20Test": [
+            {
+                "name": "invariant_sumOfBalancesEqualsTotalSupply()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/ERC721.t.sol:ERC721Test": [
+            {
+                "name": "invariant_ownerHasAtLeastOneToken()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ]
+    }
+}

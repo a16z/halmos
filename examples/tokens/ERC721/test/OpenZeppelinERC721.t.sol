@@ -69,5 +69,7 @@ contract OpenZeppelinERC721InvariantTest is ERC721InvariantTest {
         token_.transferFrom(deployer, accounts[1], 3);
         token_.transferFrom(deployer, accounts[2], 4);
         vm.stopPrank();
+
+        super.setUp();
     }
 }
