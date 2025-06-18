@@ -60,7 +60,8 @@ contract Attacker is SymTest {
         depth--;
 
         bytes memory data = svm.createCalldata(target);
-        target.call(data);
+        (bool success,) = target.call(data);
+        vm.assume(success);
 
         return this.onERC1155Received.selector;
     }
