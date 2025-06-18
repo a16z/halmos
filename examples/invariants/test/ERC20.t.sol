@@ -16,8 +16,6 @@ contract ERC20Test is Test {
 
     function setUp() public virtual {
         // deploy token
-        address deployer = address(0x1000);
-        vm.prank(deployer);
         token = new ERC20("ERC20", "ERC20");
 
         // declare token holders
@@ -27,45 +25,22 @@ contract ERC20Test is Test {
         holders[2] = address(0x1003);
 
         // setup initial balances
-        for (uint i = 1; i < holders.length; i++) {
-            vm.prank(deployer);
+        for (uint i = 0; i < holders.length; i++) {
             token.mint(holders[i], 1_000_000e18);
         }
 
-        // setup target senders
-        targetSender(deployer);
-        for (uint i = 0; i < holders.length; i++) {
-            targetSender(holders[i]);
-        }
-
-        // setup target contracts
-        targetContract(address(token));
-
-        bytes4[] memory selectors;
-
-        // specify handlers
+        // register this contract as the target to call the handler functions
         targetContract(address(this));
-        selectors = new bytes4[](3);
-        selectors[0] = this.transfer.selector;
-        selectors[1] = this.transferFrom.selector;
-        selectors[2] = this.mint.selector;
-        targetSelector(FuzzSelector({
-            addr: address(this),
-            selectors: selectors
-        }));
-
-        // exclude original functions that are replaced by handlers
-        selectors = new bytes4[](3);
-        selectors[0] = token.transfer.selector;
-        selectors[1] = token.transferFrom.selector;
-        selectors[2] = token.mint.selector;
-        excludeSelector(FuzzSelector({
-            addr: address(token),
-            selectors: selectors
-        }));
     }
 
-    // handlers
+    /*
+     * handlers
+     *
+     * handlers are used to track token holders, allowing us to iterate over
+     * them when calculating the sum of balances for specifying invariants.
+     * for simplicity, in this example, only the initial token holders are
+     * allowed as recipients of tokens.
+     */
 
     function transfer(address to, uint256 amount) public returns (bool) {
         vm.assume(_contains(holders, to));
@@ -85,6 +60,11 @@ contract ERC20Test is Test {
         return token.mint(to, amount);
     }
 
+    function approve(address spender, uint256 amount) public returns (bool) {
+        vm.prank(msg.sender);
+        return token.approve(spender, amount);
+    }
+
     function _contains(address[] storage array, address value) internal view returns (bool) {
         for (uint256 i = 0; i < array.length; i++) {
             if (array[i] == value) {
@@ -94,8 +74,7 @@ contract ERC20Test is Test {
         return false;
     }
 
-    // invariants
-
+    // invariant: the sum of balances must equal the total supply
     function invariant_sumOfBalancesEqualsTotalSupply() public view {
         uint256 sumOfBalances = 0;
         for (uint256 i = 0; i < holders.length; i++) {
