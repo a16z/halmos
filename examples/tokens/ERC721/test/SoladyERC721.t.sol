@@ -51,7 +51,7 @@ contract SoladyERC721Test is ERC721Test {
     }
 }
 
-/// @custom:halmos --storage-layout generic --solver bitwuzla-abs --loop 4
+/// @custom:halmos --storage-layout generic --solver bitwuzla-abs --loop 4 --solver-timeout-assertion 0
 contract SoladyERC721InvariantTest is ERC721InvariantTest {
     function setUp() public override {
         deployer = address(0x1000);

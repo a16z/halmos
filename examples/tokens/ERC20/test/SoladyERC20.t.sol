@@ -41,7 +41,7 @@ contract SoladyERC20Test is ERC20Test {
     }
 }
 
-/// @custom:halmos --storage-layout generic --solver bitwuzla-abs --loop 4
+/// @custom:halmos --storage-layout generic --solver bitwuzla-abs --loop 4 --solver-timeout-assertion 0
 contract SoladyERC20InvariantTest is ERC20InvariantTest {
     function setUp() public override {
         address deployer = address(0x1000);

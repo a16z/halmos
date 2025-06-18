@@ -6,7 +6,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {ERC20} from "../src/ERC20.sol";
 import {Test} from "forge-std/Test.sol";
 
-/// @custom:halmos --solver bitwuzla-abs --loop 3
+/// @custom:halmos --solver bitwuzla-abs --loop 3 --solver-timeout-assertion 0
 contract ERC20Test is Test {
     // token address
     ERC20 internal token;

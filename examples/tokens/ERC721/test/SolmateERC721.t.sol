@@ -51,7 +51,7 @@ contract SolmateERC721Test is ERC721Test {
     }
 }
 
-/// @custom:halmos --solver bitwuzla-abs --loop 4
+/// @custom:halmos --solver bitwuzla-abs --loop 4 --solver-timeout-assertion 0
 contract SolmateERC721InvariantTest is ERC721InvariantTest {
     function setUp() public override {
         deployer = address(0x1000);

@@ -41,7 +41,7 @@ contract OpenZeppelinERC20Test is ERC20Test {
     }
 }
 
-/// @custom:halmos --solver bitwuzla-abs --loop 4
+/// @custom:halmos --solver bitwuzla-abs --loop 4 --solver-timeout-assertion 0
 contract OpenZeppelinERC20InvariantTest is ERC20InvariantTest {
     function setUp() public override {
         address deployer = address(0x1000);

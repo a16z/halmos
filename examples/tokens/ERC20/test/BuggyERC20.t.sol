@@ -5,7 +5,7 @@ import {ERC20InvariantTest} from "./ERC20InvariantTest.sol";
 
 import {BuggyERC20} from "../src/BuggyERC20.sol";
 
-/// @custom:halmos --solver bitwuzla-abs --loop 4 --early-exit
+/// @custom:halmos --solver bitwuzla-abs --loop 4 --early-exit --solver-timeout-assertion 0
 contract BuggyERC20InvariantTest is ERC20InvariantTest {
     function setUp() public override {
         address deployer = address(0x1000);
