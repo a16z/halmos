@@ -6,7 +6,6 @@ import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
 import {ERC1155, IERC1155} from "openzeppelin/token/ERC1155/ERC1155.sol";
 import {ERC1155Holder} from "openzeppelin/token/ERC1155/utils/ERC1155Holder.sol";
-import {ReentrancyGuard} from "openzeppelin/utils/ReentrancyGuard.sol";
 
 uint256 constant TOKEN_ID = 1;
 
@@ -16,7 +15,7 @@ contract ERC1155Mock is ERC1155 {
     }
 }
 
-contract ReentrancyVault is ReentrancyGuard, ERC1155Holder {
+contract BuggyVault is ERC1155Holder {
     mapping(address => uint) balances;
     IERC1155 token;
 
@@ -70,7 +69,7 @@ contract Attacker is SymTest {
 /// @custom:halmos --early-exit
 contract ReentrancyTest is SymTest, Test, ERC1155Holder {
     ERC1155Mock token;
-    ReentrancyVault vault;
+    BuggyVault vault;
     Attacker attacker;
 
     uint256 constant ATTACKER_INITIAL_BALANCE = 100_000_000 ether;
@@ -79,7 +78,7 @@ contract ReentrancyTest is SymTest, Test, ERC1155Holder {
         token = new ERC1155Mock();
 
         // deploy vault with initial deposit
-        vault = new ReentrancyVault(IERC1155(token));
+        vault = new BuggyVault(IERC1155(token));
         token.setApprovalForAll(address(vault), true);
         vault.deposit(1_000_000 ether);
 
@@ -98,9 +97,8 @@ contract ReentrancyTest is SymTest, Test, ERC1155Holder {
         attacker.setTarget(address(vault));
 
         targetContract(address(vault));
-    }
 
-    function check_setup() public {
+        // check setup
         assertEq(token.balanceOf(address(this), TOKEN_ID), 999_000_000 ether - ATTACKER_INITIAL_BALANCE);
         assertEq(token.balanceOf(address(attacker), TOKEN_ID), 99_000_000 ether);
         assertEq(token.balanceOf(address(vault), TOKEN_ID), 2_000_000 ether);
