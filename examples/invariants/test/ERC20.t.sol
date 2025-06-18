@@ -42,32 +42,39 @@ contract ERC20Test is Test {
      * allowed as recipients of tokens.
      */
 
-    function transfer(address to, uint256 amount) public returns (bool) {
-        vm.assume(_contains(holders, to));
-        vm.prank(msg.sender);
+    function transfer(address to, uint256 amount) public asCaller assumeHolder(to) returns (bool) {
         return token.transfer(to, amount);
     }
 
-    function transferFrom(address from, address to, uint256 amount) public returns (bool) {
-        vm.assume(_contains(holders, to));
-        vm.prank(msg.sender);
+    function transferFrom(address from, address to, uint256 amount) public asCaller assumeHolder(to) returns (bool) {
         return token.transferFrom(from, to, amount);
     }
 
-    function mint(address to, uint256 amount) public {
-        vm.assume(_contains(holders, to));
-        vm.prank(msg.sender);
-        return token.mint(to, amount);
+    function mint(address to, uint256 amount) public asCaller assumeHolder(to) {
+        token.mint(to, amount);
     }
 
-    function burn(address from, uint256 amount) public {
-        vm.prank(msg.sender);
-        return token.burn(from, amount);
+    function burn(address from, uint256 amount) public asCaller {
+        token.burn(from, amount);
     }
 
-    function approve(address spender, uint256 amount) public returns (bool) {
-        vm.prank(msg.sender);
+    function approve(address spender, uint256 amount) public asCaller returns (bool) {
         return token.approve(spender, amount);
+    }
+
+    /*
+     * helpers
+     */
+
+    modifier asCaller() {
+        vm.startPrank(msg.sender);
+        _;
+        vm.stopPrank();
+    }
+
+    modifier assumeHolder(address account) {
+        vm.assume(_contains(holders, account));
+        _;
     }
 
     function _contains(address[] storage array, address value) internal view returns (bool) {
