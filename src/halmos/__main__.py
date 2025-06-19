@@ -885,18 +885,33 @@ class CounterexampleHandler:
                 return
 
             error(f"encountered exception during assertion solving: {e!r}")
+            return
+
+        # check if the executor has been shutdown before processing the result
+        if ctx.solving_ctx.executor.is_shutdown():
+            # if the thread pool is in the process of shutting down,
+            # we want to stop processing remaining models/timeouts/errors, etc.
+            return
 
         #
         # we are done solving, process and triage the result
         #
 
-        solver_output: SolverOutput = future.result()
-        result, model = solver_output.result, solver_output.model
+        try:
+            solver_output: SolverOutput = future.result()
+        except OSError as e:
+            # handle bad file descriptor errors that can occur when the executor
+            # has been shutdown and process file descriptors are closed
+            if e.errno == 9:  # Bad file descriptor
+                if args.debug:
+                    debug(
+                        f"ignoring solver callback, file descriptor closed: {e!r}"
+                    )
+                return
+            # re-raise other OSErrors
+            raise
 
-        if ctx.solving_ctx.executor.is_shutdown():
-            # if the thread pool is in the process of shutting down,
-            # we want to stop processing remaining models/timeouts/errors, etc.
-            return
+        result, model = solver_output.result, solver_output.model
 
         # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
         ctx.solver_outputs.append(solver_output)
