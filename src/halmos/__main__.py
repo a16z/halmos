@@ -143,8 +143,9 @@ from halmos.utils import (
     yellow,
 )
 
-faulthandler.enable()
+BAD_FILE_DESCRIPTOR = 9
 
+faulthandler.enable()
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -876,32 +877,18 @@ class CounterexampleHandler:
         ctx = self.ctx
         args = ctx.args
 
-        # check if the executor has been shutdown before accessing future results
         if ctx.solving_ctx.executor.is_shutdown():
             # if the thread pool is in the process of shutting down,
             # we want to stop processing remaining models/timeouts/errors, etc.
             return
 
-        try:
-            e = future.exception()
-        except OSError as os_error:
-            # handle bad file descriptor errors that can occur when the executor
-            # has been shutdown and process file descriptors are closed
-            if os_error.errno == 9:  # Bad file descriptor
-                if args.debug:
-                    debug(
-                        f"ignoring solver callback, file descriptor closed during exception check: {os_error!r}"
-                    )
-                return
-            # re-raise other OSErrors
-            raise
-
-        if e:
+        if e := future.exception():
             if isinstance(e, ShutdownError):
-                if args.debug:
-                    debug(
-                        f"ignoring solver callback, executor has been shutdown: {e!r}"
-                    )
+                return
+
+            # we close file descriptors forcibly to avoid this issue:
+            # https://github.com/a16z/halmos/pull/527
+            if isinstance(e, OSError) and e.errno == BAD_FILE_DESCRIPTOR:
                 return
 
             error(f"encountered exception during assertion solving: {e!r}")
@@ -914,12 +901,9 @@ class CounterexampleHandler:
         try:
             solver_output: SolverOutput = future.result()
         except OSError as e:
-            # handle bad file descriptor errors that can occur when the executor
-            # has been shutdown and process file descriptors are closed
-            if e.errno == 9:  # Bad file descriptor
-                if args.debug:
-                    debug(f"ignoring solver callback, file descriptor closed: {e!r}")
+            if e.errno == BAD_FILE_DESCRIPTOR:
                 return
+
             # re-raise other OSErrors
             raise
 
