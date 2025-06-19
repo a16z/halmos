@@ -1549,7 +1549,7 @@ class Exec:  # an execution path
         # an injectivity axiom for f_sha3_[size](data) can be formulated as:
         # - there exists f_inv_sha3 such that: f_inv_sha3(f_sha3_[size](data)) == (data, size)
         #
-        # to avoid using a tuple as the return data type, the above can be re-formulated using seperate functions such that:
+        # to avoid using a tuple as the return data type, the above can be re-formulated using separate functions such that:
         # - f_inv_sha3_data(f_sha3_[size](data)) == data
         # - f_inv_sha3_size(f_sha3_[size](data)) == size
         #
@@ -3092,7 +3092,7 @@ class SEVM:
                     ex.path.activate()
 
                 # PathEndingException may not be immediately raised; it could be delayed until it comes out of the worklist
-                # see the assert cheatcode hanlder logic for the delayed case
+                # see the assert cheatcode handler logic for the delayed case
                 if isinstance(ex.context.output.error, PathEndingException):
                     raise ex.context.output.error
 
