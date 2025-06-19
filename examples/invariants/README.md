@@ -8,7 +8,7 @@ This directory contains examples demonstrating various approaches to invariant t
 
 - **ERC721 Test** ([`ERC721.t.sol`](test/ERC721.t.sol)): Simple ERC721 invariant testing without handlers. Demonstrates how straightforward invariant testing can be when state tracking isn't needed.
 
-- **MiniVat Test** ([`MiniVat.t.sol`](test/MiniVat.t.sol)): Halmos version of [Antonio's MiniVat test](https://github.com/aviggiano/property-based-testing-benchmark/blob/main/projects/dai-certora/test/TargetFunctions.sol). Unlike other fuzzers, no bounds are needed, so no handlers required. Simply deploy the contract and write the invariant.
+- **MiniVat Test** ([`MiniVat.t.sol`](test/MiniVat.t.sol)): Halmos version of [Antonio's MiniVat test](https://github.com/aviggiano/property-based-testing-benchmark/blob/main/projects/dai-certora/test/TargetFunctions.sol). Unlike other fuzzers, no bounds are needed, so no handlers are required. Simply deploy the contract and write the invariant.
 
 - **Vat Test** ([`Vat.t.sol`](test/Vat.t.sol)): Tests the full Vat contract using the same invariant as MiniVat. It is more comprehensive and takes longer to run.
 
