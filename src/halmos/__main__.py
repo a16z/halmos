@@ -22,6 +22,7 @@ from datetime import timedelta
 from enum import Enum
 from functools import partial
 from importlib import metadata
+from tempfile import TemporaryDirectory
 from types import MappingProxyType
 
 from rich.console import Group
@@ -35,6 +36,7 @@ from z3 import (
     ZeroExt,
     eq,
     set_option,
+    unknown,
     unsat,
 )
 
@@ -923,6 +925,32 @@ class CounterexampleHandler:
             )
             return
 
+        path_id = solver_output.path_id
+
+        # handle "unknown" (timeout) result
+        if result == unknown:
+            query_file = solver_output.query_file
+            print(f"Timeout query file: {query_file}")
+
+            # prevent temporary directory cleanup so user can access the query file
+            dump_dir = ctx.solving_ctx.dump_dir
+            if isinstance(dump_dir, TemporaryDirectory):
+                # detach the finalizer to prevent automatic cleanup
+                dump_dir._finalizer.detach()
+
+            # save call sequence to a separate file for debugging context
+            if call_sequence := ctx.call_sequences.get(path_id):
+                call_seq_file = f"{query_file}.callseq"
+                try:
+                    with open(call_seq_file, "w") as f:
+                        f.write(call_sequence)
+                        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+                            f.write(f"\nTrace:\n{ctx.traces[path_id]}")
+                except Exception as e:
+                    print(f"Could not save call sequence: {e}")
+
+            return
+
         # model could be an empty dict here, so compare to None explicitly
         if model is None:
             return
@@ -936,7 +964,6 @@ class CounterexampleHandler:
         if description:
             print(description)
 
-        path_id = solver_output.path_id
         if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
             pid_str = f" #{path_id}" if args.verbose >= VERBOSITY_TRACE_PATHS else ""
             print(f"Trace{pid_str}:")
