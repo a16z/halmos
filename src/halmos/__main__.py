@@ -22,7 +22,6 @@ from datetime import timedelta
 from enum import Enum
 from functools import partial
 from importlib import metadata
-from tempfile import TemporaryDirectory
 from types import MappingProxyType
 
 from rich.console import Group
@@ -109,6 +108,7 @@ from halmos.solve import (
     InvariantTestingContext,
     PathContext,
     SolverOutput,
+    dirname,
     solve_end_to_end,
     solve_low_level,
 )
@@ -929,18 +929,19 @@ class CounterexampleHandler:
 
         # handle "unknown" (timeout) result
         if result == unknown:
+            # copy timeout query to separate timeout directory
+            timeout_dir = f"{dirname(ctx.solving_ctx.dump_dir)}-timeout"
+            os.makedirs(timeout_dir, exist_ok=True)
             query_file = solver_output.query_file
-            print(f"Timeout query file: {query_file}")
-
-            # prevent temporary directory cleanup so user can access the query file
-            dump_dir = ctx.solving_ctx.dump_dir
-            if isinstance(dump_dir, TemporaryDirectory):
-                # detach the finalizer to prevent automatic cleanup
-                dump_dir._finalizer.detach()
+            timeout_query_file = os.path.join(timeout_dir, os.path.basename(query_file))
+            try:
+                shutil.copy2(query_file, timeout_query_file)
+            except Exception as e:
+                print(f"Could not copy timeout query to timeout directory: {e}")
 
             # save call sequence to a separate file for debugging context
             if call_sequence := ctx.call_sequences.get(path_id):
-                call_seq_file = f"{query_file}.callseq"
+                call_seq_file = f"{timeout_query_file}.callseq"
                 try:
                     with open(call_seq_file, "w") as f:
                         f.write(call_sequence)
@@ -1198,6 +1199,11 @@ def run_test(ctx: FunctionContext) -> TestResult:
         f"{passfail} {funsig} (paths: {num_execs}, {time_info}, "
         f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
     )
+
+    if exitcode == Exitcode.TIMEOUT.value:
+        # print timeout query directory information
+        timeout_dir = f"{dirname(ctx.solving_ctx.dump_dir)}-timeout"
+        print(f"Timeout queries saved in: {timeout_dir}")
 
     for path_id, _, err in stuck:
         warn_code(INTERNAL_ERROR, f"Encountered {type(err).__name__}: {err}")
