@@ -128,21 +128,20 @@ from halmos.utils import (
     Word,
     address,
     color_error,
+    color_good,
+    color_info,
+    color_warn,
     con,
     con_addr,
     create_solver,
-    cyan,
     extract_bytes,
-    green,
     hexify,
     indent_text,
     int_of,
-    red,
     smt_and,
     smt_or,
     uid,
     unbox_int,
-    yellow,
 )
 
 BAD_FILE_DESCRIPTOR = 9
@@ -648,11 +647,11 @@ def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:
     for idx, pre_ex in enumerate(curr_exs):
         ui.update_status(
             f"{contract_name}: "
-            f"depth: {cyan(depth)} | "
-            f"starting states: {cyan(len(curr_exs))} | "
-            f"unique states: {cyan(len(visited))} | "
-            f"frontier states: {cyan(len(next_exs))} | "
-            f"completed paths: {cyan(idx)} "
+            f"depth: {color_info(depth)} | "
+            f"starting states: {color_info(len(curr_exs))} | "
+            f"unique states: {color_info(len(visited))} | "
+            f"frontier states: {color_info(len(next_exs))} | "
+            f"completed paths: {color_info(idx)} "
         )
 
         for addr in resolve_target_contracts(ctx.inv_ctx, pre_ex):
@@ -910,6 +909,7 @@ class CounterexampleHandler:
             raise
 
         result, model = solver_output.result, solver_output.model
+        path_id = solver_output.path_id
 
         # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
         ctx.solver_outputs.append(solver_output)
@@ -920,36 +920,15 @@ class CounterexampleHandler:
             return
 
         if result == "err":
+            self._save_failed_query(path_id, solver_output, "error")
             error(
                 f"solver error: {solver_output.error} (returncode={solver_output.returncode})"
             )
             return
 
-        path_id = solver_output.path_id
-
         # handle "unknown" (timeout) result
         if result == unknown:
-            # copy timeout query to separate timeout directory
-            timeout_dir = f"{dirname(ctx.solving_ctx.dump_dir)}-timeout"
-            os.makedirs(timeout_dir, exist_ok=True)
-            query_file = solver_output.query_file
-            timeout_query_file = os.path.join(timeout_dir, os.path.basename(query_file))
-            try:
-                shutil.copy2(query_file, timeout_query_file)
-            except Exception as e:
-                print(f"Could not copy timeout query to timeout directory: {e}")
-
-            # save call sequence to a separate file for debugging context
-            if call_sequence := ctx.call_sequences.get(path_id):
-                call_seq_file = f"{timeout_query_file}.callseq"
-                try:
-                    with open(call_seq_file, "w") as f:
-                        f.write(call_sequence)
-                        if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
-                            f.write(f"\nTrace:\n{ctx.traces[path_id]}")
-                except Exception as e:
-                    print(f"Could not save call sequence: {e}")
-
+            self._save_failed_query(path_id, solver_output, "timeout")
             return
 
         # model could be an empty dict here, so compare to None explicitly
@@ -971,7 +950,7 @@ class CounterexampleHandler:
             print(ctx.traces[path_id], end="")
 
         if model.is_valid:
-            print(red(f"Counterexample: {model}"))
+            print(color_error(f"Counterexample: {model}"))
             ctx.valid_counterexamples.append(model)
 
             # add the stacks from the temporary flamegraph to the global one
@@ -993,6 +972,33 @@ class CounterexampleHandler:
         # print call sequence for invariant testing
         if sequence := ctx.call_sequences[path_id]:
             print(f"Sequence:\n{sequence}")
+
+    def _save_failed_query(
+        self, path_id: int, solver_output: SolverOutput, failure_type: str
+    ) -> None:
+        """Save query and call sequence to a separate directory for debugging."""
+        ctx = self.ctx
+        args = ctx.args
+
+        debug_dir = f"{dirname(ctx.solving_ctx.dump_dir)}-{failure_type}"
+        os.makedirs(debug_dir, exist_ok=True)
+        query_file = solver_output.query_file
+        debug_query_file = os.path.join(debug_dir, os.path.basename(query_file))
+        try:
+            shutil.copy2(query_file, debug_query_file)
+        except Exception as e:
+            error(f"Could not copy failed query to {failure_type} directory: {e}")
+
+        # save call sequence to a separate file for debugging context
+        if call_sequence := ctx.call_sequences.get(path_id):
+            call_seq_file = f"{debug_query_file}.callseq"
+            try:
+                with open(call_seq_file, "w") as f:
+                    f.write(call_sequence)
+                    if args.verbose >= VERBOSITY_TRACE_COUNTEREXAMPLE:
+                        f.write(f"\nTrace:\n{ctx.traces[path_id]}")
+            except Exception as e:
+                error(f"Could not save call sequence: {e}")
 
 
 def run_test(ctx: FunctionContext) -> TestResult:
@@ -1169,26 +1175,26 @@ def run_test(ctx: FunctionContext) -> TestResult:
 
     counter = Counter(str(m.result) for m in ctx.solver_outputs)
     if counter["sat"] > 0:
-        passfail = red("[FAIL]")
+        passfail = color_error("[FAIL]")
         exitcode = Exitcode.COUNTEREXAMPLE.value
     elif counter["err"] > 0:
-        passfail = red("[ERROR]")
+        passfail = color_error("[ERROR]")
         exitcode = Exitcode.EXCEPTION.value
     elif counter["unknown"] > 0:
-        passfail = yellow("[TIMEOUT]")
+        passfail = color_warn("[TIMEOUT]")
         exitcode = Exitcode.TIMEOUT.value
     elif len(stuck) > 0:
-        passfail = red("[ERROR]")
+        passfail = color_error("[ERROR]")
         exitcode = Exitcode.STUCK.value
     elif normal == 0:
-        passfail = red("[ERROR]")
+        passfail = color_error("[ERROR]")
         exitcode = Exitcode.REVERT_ALL.value
         warn_code(
             REVERT_ALL,
             f"{funsig}: all paths have been reverted; the setup state or inputs may have been too restrictive.",
         )
     else:
-        passfail = green("[PASS]")
+        passfail = color_good("[PASS]")
         exitcode = Exitcode.PASS.value
 
     timer.stop()
@@ -1200,10 +1206,11 @@ def run_test(ctx: FunctionContext) -> TestResult:
         f"bounds: [{', '.join([str(x) for x in dyn_params])}])"
     )
 
-    if exitcode == Exitcode.TIMEOUT.value:
-        # print timeout query directory information
-        timeout_dir = f"{dirname(ctx.solving_ctx.dump_dir)}-timeout"
-        print(f"Timeout queries saved in: {timeout_dir}")
+    if exitcode in (Exitcode.TIMEOUT.value, Exitcode.EXCEPTION.value):
+        # print query directory information
+        failure_type = "timeout" if exitcode == Exitcode.TIMEOUT.value else "error"
+        query_dir = f"{dirname(ctx.solving_ctx.dump_dir)}-{failure_type}"
+        print(color_info(f"{failure_type.capitalize()} queries saved in: {query_dir}"))
 
     for path_id, _, err in stuck:
         warn_code(INTERNAL_ERROR, f"Encountered {type(err).__name__}: {err}")
