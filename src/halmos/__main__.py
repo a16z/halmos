@@ -143,8 +143,9 @@ from halmos.utils import (
     yellow,
 )
 
-faulthandler.enable()
+BAD_FILE_DESCRIPTOR = 9
 
+faulthandler.enable()
 
 # Python version >=3.8.14, >=3.9.14, >=3.10.7, or >=3.11
 if hasattr(sys, "set_int_max_str_digits"):
@@ -876,27 +877,37 @@ class CounterexampleHandler:
         ctx = self.ctx
         args = ctx.args
 
+        if ctx.solving_ctx.executor.is_shutdown():
+            # if the thread pool is in the process of shutting down,
+            # we want to stop processing remaining models/timeouts/errors, etc.
+            return
+
         if e := future.exception():
             if isinstance(e, ShutdownError):
-                if args.debug:
-                    debug(
-                        f"ignoring solver callback, executor has been shutdown: {e!r}"
-                    )
+                return
+
+            # we close file descriptors forcibly to avoid this issue:
+            # https://github.com/a16z/halmos/pull/527
+            if isinstance(e, OSError) and e.errno == BAD_FILE_DESCRIPTOR:
                 return
 
             error(f"encountered exception during assertion solving: {e!r}")
+            return
 
         #
         # we are done solving, process and triage the result
         #
 
-        solver_output: SolverOutput = future.result()
-        result, model = solver_output.result, solver_output.model
+        try:
+            solver_output: SolverOutput = future.result()
+        except OSError as e:
+            if e.errno == BAD_FILE_DESCRIPTOR:
+                return
 
-        if ctx.solving_ctx.executor.is_shutdown():
-            # if the thread pool is in the process of shutting down,
-            # we want to stop processing remaining models/timeouts/errors, etc.
-            return
+            # re-raise other OSErrors
+            raise
+
+        result, model = solver_output.result, solver_output.model
 
         # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
         ctx.solver_outputs.append(solver_output)
