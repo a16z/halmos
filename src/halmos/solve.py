@@ -313,6 +313,9 @@ class SolverOutput:
     # references to Exec objects past the lifetime of the path
     path_id: int
 
+    # input query file path
+    query_file: str
+
     # solver model
     model: PotentialModel | None = None
 
@@ -331,21 +334,27 @@ class SolverOutput:
         first_line = stdout[:newline_idx] if newline_idx != -1 else stdout
 
         args, path_id = path_ctx.args, path_ctx.path_id
+        query_file = str(path_ctx.dump_file)
+
         if args.verbose >= 1:
             debug(f"    {first_line}")
 
         match first_line:
             case "unsat":
                 unsat_core = parse_unsat_core(stdout) if args.cache_solver else None
-                return SolverOutput(unsat, returncode, path_id, unsat_core=unsat_core)
+                return SolverOutput(
+                    unsat, returncode, path_id, query_file, unsat_core=unsat_core
+                )
             case "sat":
                 is_valid = is_model_valid(stdout)
                 model = PotentialModel(model=parse_model_str(stdout), is_valid=is_valid)
-                return SolverOutput(sat, returncode, path_id, model=model)
+                return SolverOutput(sat, returncode, path_id, query_file, model=model)
             case "unknown":
-                return SolverOutput(unknown, returncode, path_id)
+                return SolverOutput(unknown, returncode, path_id, query_file)
             case _:
-                return SolverOutput("err", returncode, path_id, error=stderr)
+                return SolverOutput(
+                    "err", returncode, path_id, query_file, error=stderr
+                )
 
 
 def parse_const_value(value: str) -> int:
@@ -504,7 +513,10 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
         stdout, stderr, returncode = future.result()
     except subprocess.TimeoutExpired:
         return SolverOutput(
-            result=unknown, returncode=EXIT_TIMEDOUT, path_id=path_ctx.path_id
+            result=unknown,
+            returncode=EXIT_TIMEDOUT,
+            path_id=path_ctx.path_id,
+            query_file=smt2_filename,
         )
 
     # save solver stdout to file
@@ -536,7 +548,7 @@ def solve_end_to_end(ctx: PathContext) -> SolverOutput:
     # if the query contains an unsat-core, it is unsat; no need to run the solver
     if check_unsat_cores(query, ctx.solving_ctx.unsat_cores):
         verbose("  Already proven unsat")
-        return SolverOutput(unsat, 0, path_id)
+        return SolverOutput(unsat, 0, path_id, str(ctx.dump_file))
 
     solver_output = solve_low_level(ctx)
     result, model = solver_output.result, solver_output.model
