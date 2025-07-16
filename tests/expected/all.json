@@ -6343,6 +6343,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Storage5.t.sol:Storage5Test": [
+            {
+                "name": "check_array_access(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/StorageSlot.t.sol:StorageSlotTest": [
             {
                 "name": "check_keccak_slot_1_pass(uint256)",
