@@ -1193,6 +1193,11 @@ def run_test(ctx: FunctionContext) -> TestResult:
             REVERT_ALL,
             f"{funsig}: all paths have been reverted; the setup state or inputs may have been too restrictive.",
         )
+    elif len(ctx.solver_outputs) < len(submitted_futures):
+        # some solver results are missing, likely due to exceptions.
+        # not an early exit, as counter["sat"] > 0 would have been handled earlier.
+        passfail = color_error("[ERROR]")
+        exitcode = Exitcode.EXCEPTION.value
     else:
         passfail = color_good("[PASS]")
         exitcode = Exitcode.PASS.value
