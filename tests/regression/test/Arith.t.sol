@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
+/// @custom:halmos --solver bitwuzla-abs
 contract ArithTest {
     function unchecked_div(uint x, uint y) public pure returns (uint ret) {
         assembly {

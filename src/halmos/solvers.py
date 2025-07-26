@@ -23,6 +23,8 @@ DEFAULT_YICES_VERSION = "2.6.4"
 
 DEFAULT_CVC5_VERSION = "1.2.1"
 
+DEFAULT_BITWUZLA_VERSION = "0.8.1"
+
 # Define the cache directory for solvers
 SOLVER_CACHE_DIR = Path.home() / ".halmos" / "solvers"
 SOLVER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,6 +39,10 @@ def yices_base_url(version: str) -> str:
 
 def cvc5_base_url(version: str) -> str:
     return f"https://github.com/cvc5/cvc5/releases/download/cvc5-{version}"
+
+
+def bitwuzla_base_url(version: str) -> str:
+    return f"https://github.com/bitwuzla/bitwuzla/releases/download/{version}"
 
 
 @dataclass(frozen=True, eq=True, order=False, slots=True, kw_only=True)
@@ -74,6 +80,7 @@ class SolverInfo:
 macos_intel = MachineInfo(system="Darwin", machine="x86_64")
 macos_arm64 = MachineInfo(system="Darwin", machine="arm64")
 linux_intel = MachineInfo(system="Linux", machine="x86_64")
+linux_arm64 = MachineInfo(system="Linux", machine="arm64")
 windows_intel = MachineInfo(system="Windows", machine="x86_64")
 
 # define known solvers
@@ -147,19 +154,37 @@ SOLVERS: dict[str, SolverInfo] = {
         downloads={},
         arguments=[],
     ),
-    "bitwuzla": SolverInfo(
-        name="bitwuzla",
+    "bitwuzla-0.8.1": SolverInfo(
+        name="bitwuzla-0.8.1",
         binary_name="bitwuzla",
-        # bitwuzla does not release static binaries, must build from source
-        downloads={},
+        downloads={
+            linux_intel: DownloadInfo(
+                base_url=bitwuzla_base_url("0.8.1"),
+                filename="Bitwuzla-Linux-x86_64-static.zip",
+                checksum="sha256:d88ca19bd0495df4e83296d37b8e3b5b588af0768623d674000c681b472bb1d8",
+                binary_name_in_archive="Bitwuzla-Linux-x86_64-static/bin/bitwuzla",
+            ),
+            linux_arm64: DownloadInfo(
+                base_url=bitwuzla_base_url("0.8.1"),
+                filename="Bitwuzla-Linux-arm64-static.zip",
+                checksum="sha256:9a353c9978a83cf8fec7e8305ebfcbf3d22a3dd78233e214f9cbe925b610856b",
+                binary_name_in_archive="Bitwuzla-Linux-arm64-static/bin/bitwuzla",
+            ),
+            macos_intel: None,
+            macos_arm64: DownloadInfo(
+                base_url=bitwuzla_base_url("0.8.1"),
+                filename="Bitwuzla-macOS-arm64-static.zip",
+                checksum="sha256:f603ff433151cb9f3929a9810a41405bfa57ffaa184fa736a38c32b64a3a9021",
+                binary_name_in_archive="Bitwuzla-macOS-arm64-static/bin/bitwuzla",
+            ),
+            windows_intel: DownloadInfo(
+                base_url=bitwuzla_base_url("0.8.1"),
+                filename="Bitwuzla-Win64-x86_64-static.zip",
+                checksum="sha256:7f0564183f19d9ad01854645f03ebec8769d5483394c9d48c7970879c6f5f068",
+                binary_name_in_archive="Bitwuzla-Win64-x86_64-static/bin/bitwuzla.exe",
+            ),
+        },
         arguments=["--produce-models"],
-    ),
-    "bitwuzla-abs": SolverInfo(
-        name="bitwuzla-abs",
-        binary_name="bitwuzla",
-        # bitwuzla does not release static binaries, must build from source
-        downloads={},
-        arguments=["--produce-models", "--abstraction"],
     ),
     "cvc5-1.2.1": SolverInfo(
         name="cvc5-1.2.1",
@@ -202,6 +227,12 @@ SOLVERS["cvc5-int"] = replace(
     name="cvc5-int",
     arguments=["--produce-models", "--solve-bv-as-int=iand", "--iand-mode=bitwise"],
 )
+SOLVERS["bitwuzla"] = SOLVERS[f"bitwuzla-{DEFAULT_BITWUZLA_VERSION}"]
+SOLVERS["bitwuzla-abs"] = replace(
+    SOLVERS["bitwuzla"],
+    name="bitwuzla-abs",
+    arguments=["--produce-models", "--abstraction"],
+)
 
 
 def get_platform_arch() -> MachineInfo:
@@ -234,13 +265,18 @@ def verify_checksum(file_path: Path, expected_checksum: str) -> bool:
     Raises a ValueError if the checksum does not match.
     """
 
+    expected = expected_checksum.lower().strip()
+
+    # for now we only support sha256 checksums
+    if expected.startswith("sha256:"):
+        expected = expected[7:]
+
     sha256_hash = hashlib.sha256()
     with open(file_path, "rb") as f:
         # Read and update hash string value in blocks of 4K
         for byte_block in iter(lambda: f.read(4096), b""):
             sha256_hash.update(byte_block)
     actual = sha256_hash.hexdigest().lower()
-    expected = expected_checksum.lower()
     if actual != expected:
         raise ValueError(f"{expected=}, {actual=}")
 
@@ -498,6 +534,10 @@ if __name__ == "__main__":
 
     with tempfile.TemporaryDirectory(delete=False) as tmpdir:
         for machine_tuple, download_info in solver_info.downloads.items():
+            if not download_info:
+                print(f"No download info for {machine_tuple}")
+                continue
+
             print(f"Downloading {download_info.base_url}/{download_info.filename}")
             archive_path = download(download_info, Path(tmpdir))
 
