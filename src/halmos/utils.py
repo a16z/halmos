@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import math
 import re
+import threading
 import uuid
-from functools import partial
+from functools import partial, wraps
 from timeit import default_timer as timer
 from typing import TYPE_CHECKING, Any, TypeAlias, Union
 
@@ -1237,6 +1238,23 @@ def timed(label=None):
                 result = func(*args, **kwargs)
 
             return result
+
+        return wrapper
+
+    return decorator
+
+
+def synchronized(lock=None):
+    """Decorator that synchronizes access to a method or function"""
+
+    def decorator(func):
+        # Create a lock for this specific function if none provided
+        func_lock = lock or threading.RLock()
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with func_lock:
+                return func(*args, **kwargs)
 
         return wrapper
 

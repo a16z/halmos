@@ -16,7 +16,7 @@ import requests
 
 from halmos.logs import debug, error
 from halmos.ui import ui
-from halmos.utils import format_size
+from halmos.utils import format_size, synchronized
 
 # not defaulting to latest because of https://github.com/a16z/halmos/issues/492
 DEFAULT_YICES_VERSION = "2.6.4"
@@ -475,6 +475,7 @@ def find_solver_binary(solver: SolverInfo) -> Path | None:
     return None
 
 
+@synchronized()
 def ensure_solver_available(solver: SolverInfo) -> Path:
     """
     Ensures the specified solver is available, downloading it if necessary.
