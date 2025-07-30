@@ -356,14 +356,14 @@ def test_solver_resolution_precedence(config):
     # command line overrides
     #########################################################
 
-    cli_config = config.with_overrides(ConfigSource.command_line, solver="cvc5")
-    assert cli_config.solver == "cvc5"
+    cli_config = config.with_overrides(ConfigSource.command_line, solver="z3")
+    assert cli_config.solver == "z3"
 
     # the solver command is inherited from the default config
     assert cli_config.solver_command == config.solver_command
 
     # but the actual command is derived from the solver option (at a higher precedence)
-    assert "cvc5" in " ".join(cli_config.resolved_solver_command)
+    assert "z3" in " ".join(cli_config.resolved_solver_command)
 
     #########################################################
     # contract annotation overrides
@@ -375,7 +375,7 @@ def test_solver_resolution_precedence(config):
     )
     # the solver option is inherited from the command line config
     assert contract_config.value_with_source("solver") == (
-        "cvc5",
+        "z3",
         ConfigSource.command_line,
     )
 
@@ -384,7 +384,7 @@ def test_solver_resolution_precedence(config):
 
     # the resolved solver command is derived from the solver option (command line)
     # because command line has higher precedence than contract annotation
-    assert "cvc5" in " ".join(contract_config.resolved_solver_command)
+    assert "z3" in " ".join(contract_config.resolved_solver_command)
 
 
 def test_command_line_precedence_over_annotations(config):
