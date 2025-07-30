@@ -866,31 +866,35 @@ class CounterexampleHandler:
             partial(
                 self._solve_end_to_end_callback,
                 ex=ex,
+                path_ctx=path_ctx,
                 description=description,
             )
         )
         self.submitted_futures.append(solve_future)
 
-    def _get_solver_output(self, future: Future) -> SolverOutput:
+    def _get_solver_output(self, future: Future, path_ctx: PathContext) -> SolverOutput:
+        path_id, query_file = path_ctx.path_id, str(path_ctx.dump_file)
+
         if self.ctx.solving_ctx.executor.is_shutdown():
             # if the thread pool is in the process of shutting down,
             # we want to stop processing remaining models/timeouts/errors, etc.
-            return SolverOutput.from_error("executor has been shutdown")
+            e = "executor has been shutdown"
+            return SolverOutput.from_error(e, path_id=path_id, query_file=query_file)
 
         if e := future.exception():
             if not is_benign_solving_error(e):
                 error(f"encountered exception during assertion solving: {e!r}")
-            return SolverOutput.from_error(e)
+            return SolverOutput.from_error(e, path_id=path_id, query_file=query_file)
 
         try:
             return future.result()
         except Exception as e:
             if not is_benign_solving_error(e):
                 error(f"encountered exception during assertion solving: {e!r}")
-            return SolverOutput.from_error(e)
+            return SolverOutput.from_error(e, path_id=path_id, query_file=query_file)
 
     def _solve_end_to_end_callback(
-        self, future: Future, ex: Exec, description: str
+        self, future: Future, ex: Exec, path_ctx: PathContext, description: str
     ) -> None:
         """
         Callback function for handling solver results.
@@ -906,7 +910,7 @@ class CounterexampleHandler:
         ctx = self.ctx
         args = ctx.args
 
-        solver_output: SolverOutput = self._get_solver_output(future)
+        solver_output: SolverOutput = self._get_solver_output(future, path_ctx)
         ctx.solver_outputs.append(solver_output)
         result, model = solver_output.result, solver_output.model
         path_id = solver_output.path_id
@@ -975,11 +979,7 @@ class CounterexampleHandler:
         ctx = self.ctx
         args = ctx.args
 
-        # not every solver output has a query file
         query_file = solver_output.query_file
-        if not query_file:
-            return
-
         debug_dir = f"{dirname(ctx.solving_ctx.dump_dir)}-{failure_type}"
         os.makedirs(debug_dir, exist_ok=True)
         debug_query_file = os.path.join(debug_dir, os.path.basename(query_file))

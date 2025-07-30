@@ -314,7 +314,7 @@ class SolverOutput:
     path_id: int
 
     # input query file path
-    query_file: str | None = None
+    query_file: str
 
     # solver model
     model: PotentialModel | None = None
@@ -358,13 +358,16 @@ class SolverOutput:
 
     @staticmethod
     def from_error(
-        error: Exception | str, returncode: int = -1, path_id: int = -1
+        error: Exception | str,
+        path_id: int,
+        query_file: str,
+        returncode: int = -1,
     ) -> "SolverOutput":
         return SolverOutput(
             result="err",
-            path_id=path_id,
             returncode=returncode,
-            query_file=None,
+            path_id=path_id,
+            query_file=query_file,
             error=str(error),
         )
 
