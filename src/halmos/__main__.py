@@ -777,6 +777,16 @@ def run_message(
                 reset(solver)
 
 
+def is_benign_solving_error(e: Exception) -> bool:
+    match e:
+        case ShutdownError():
+            return True
+        case OSError(errno=9):  # BAD_FILE_DESCRIPTOR
+            return True
+        case _:
+            return False
+
+
 @dataclass(frozen=True)
 class CounterexampleHandler:
     """Handles potential assertion violations and generates counterexamples."""
@@ -861,6 +871,24 @@ class CounterexampleHandler:
         )
         self.submitted_futures.append(solve_future)
 
+    def _get_solver_output(self, future: Future) -> SolverOutput:
+        if self.ctx.solving_ctx.executor.is_shutdown():
+            # if the thread pool is in the process of shutting down,
+            # we want to stop processing remaining models/timeouts/errors, etc.
+            return SolverOutput.from_error("executor has been shutdown")
+
+        if e := future.exception():
+            if not is_benign_solving_error(e):
+                error(f"encountered exception during assertion solving: {e!r}")
+            return SolverOutput.from_error(e)
+
+        try:
+            return future.result()
+        except Exception as e:
+            if not is_benign_solving_error(e):
+                error(f"encountered exception during assertion solving: {e!r}")
+            return SolverOutput.from_error(e)
+
     def _solve_end_to_end_callback(
         self, future: Future, ex: Exec, description: str
     ) -> None:
@@ -878,41 +906,10 @@ class CounterexampleHandler:
         ctx = self.ctx
         args = ctx.args
 
-        if ctx.solving_ctx.executor.is_shutdown():
-            # if the thread pool is in the process of shutting down,
-            # we want to stop processing remaining models/timeouts/errors, etc.
-            return
-
-        if e := future.exception():
-            if isinstance(e, ShutdownError):
-                return
-
-            # we close file descriptors forcibly to avoid this issue:
-            # https://github.com/a16z/halmos/pull/527
-            if isinstance(e, OSError) and e.errno == BAD_FILE_DESCRIPTOR:
-                return
-
-            error(f"encountered exception during assertion solving: {e!r}")
-            return
-
-        #
-        # we are done solving, process and triage the result
-        #
-
-        try:
-            solver_output: SolverOutput = future.result()
-        except OSError as e:
-            if e.errno == BAD_FILE_DESCRIPTOR:
-                return
-
-            # re-raise other OSErrors
-            raise
-
+        solver_output: SolverOutput = self._get_solver_output(future)
+        ctx.solver_outputs.append(solver_output)
         result, model = solver_output.result, solver_output.model
         path_id = solver_output.path_id
-
-        # keep track of the solver outputs, so that we can display PASS/FAIL/TIMEOUT/ERROR later
-        ctx.solver_outputs.append(solver_output)
 
         if result == unsat:
             if solver_output.unsat_core:
@@ -920,10 +917,8 @@ class CounterexampleHandler:
             return
 
         if result == "err":
+            error(f"{solver_output.error=} ({solver_output.returncode=})")
             self._save_failed_query(path_id, solver_output, "error")
-            error(
-                f"solver error: {solver_output.error} (returncode={solver_output.returncode})"
-            )
             return
 
         # handle "unknown" (timeout) result
@@ -980,9 +975,13 @@ class CounterexampleHandler:
         ctx = self.ctx
         args = ctx.args
 
+        # not every solver output has a query file
+        query_file = solver_output.query_file
+        if not query_file:
+            return
+
         debug_dir = f"{dirname(ctx.solving_ctx.dump_dir)}-{failure_type}"
         os.makedirs(debug_dir, exist_ok=True)
-        query_file = solver_output.query_file
         debug_query_file = os.path.join(debug_dir, os.path.basename(query_file))
         try:
             shutil.copy2(query_file, debug_query_file)

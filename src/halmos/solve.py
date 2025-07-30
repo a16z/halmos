@@ -314,7 +314,7 @@ class SolverOutput:
     path_id: int
 
     # input query file path
-    query_file: str
+    query_file: str | None = None
 
     # solver model
     model: PotentialModel | None = None
@@ -355,6 +355,18 @@ class SolverOutput:
                 return SolverOutput(
                     "err", returncode, path_id, query_file, error=stderr
                 )
+
+    @staticmethod
+    def from_error(
+        error: Exception | str, returncode: int = -1, path_id: int = -1
+    ) -> "SolverOutput":
+        return SolverOutput(
+            result="err",
+            path_id=path_id,
+            returncode=returncode,
+            query_file=None,
+            error=str(error),
+        )
 
 
 def parse_const_value(value: str) -> int:
