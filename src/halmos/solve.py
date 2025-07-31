@@ -356,6 +356,21 @@ class SolverOutput:
                     "err", returncode, path_id, query_file, error=stderr
                 )
 
+    @staticmethod
+    def from_error(
+        error: Exception | str,
+        path_id: int,
+        query_file: str,
+        returncode: int = -1,
+    ) -> "SolverOutput":
+        return SolverOutput(
+            result="err",
+            returncode=returncode,
+            path_id=path_id,
+            query_file=query_file,
+            error=str(error),
+        )
+
 
 def parse_const_value(value: str) -> int:
     match value[:2]:
