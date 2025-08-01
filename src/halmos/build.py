@@ -103,6 +103,7 @@ def parse_build_out(args: HalmosConfig) -> dict:
                     traceback.print_exc()
                 continue
 
+    ui.stop_status()
     return result
 
 
