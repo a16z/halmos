@@ -186,7 +186,7 @@ def render_trace(context: CallContext, file=sys.stdout) -> None:
             # TODO: print in debug mode
             ...
 
-        initcode_str = f"<{byte_length(message.data)} bytes of initcode>" if context.depth > 1 else "constructor()"
+        initcode_str = f"<{byte_length(message.data)} bytes of initcode>"
         print(
             f"{indent}{call_scheme_str}{addr_str}::{initcode_str}{value_str}", file=file
         )
