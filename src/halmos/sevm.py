@@ -1385,6 +1385,17 @@ class Exec:  # an execution path
         if match_dynamic_array_overflow_condition(cond):
             return unsat
 
+        # Check if the condition or its negation is already present in the path constraints.
+        # This quick existence check can make a significant difference when dealing with
+        # complex path constraints, where the solver might return unknown (under the 1ms timeout)
+        # even if the result is trivially sat or unsat.
+
+        if cond in self.path.conditions:
+            return sat
+
+        if simplify(Not(cond)) in self.path.conditions:
+            return unsat
+
     def check(self, cond: Any) -> Any:
         cond = simplify(cond)
 
