@@ -1106,9 +1106,15 @@ class hevm_cheat_code:
         # vm.assert*
         if funsig in assert_cheatcode_handler:
             vm_assert = assert_cheatcode_handler[funsig](arg)
-            not_cond = simplify(Not(vm_assert.cond))
+            cond = vm_assert.cond
+            not_cond = simplify(Not(cond))
 
-            if ex.check(not_cond) != unsat:
+            # if cond is trivially false, assertion fails and halts execution.
+            # this occurs with assert(false), or forge-std assertion logic (see: https://github.com/foundry-rs/forge-std/issues/705)
+            if ex.check(cond) == unsat:
+                ex.halt(data=ByteVec(), error=FailCheatcode(f"{vm_assert}"))
+
+            elif ex.check(not_cond) != unsat:
                 new_ex = sevm.create_branch(ex, not_cond, ex.pc)
                 new_ex.halt(data=ByteVec(), error=FailCheatcode(f"{vm_assert}"))
                 stack.push(new_ex)
