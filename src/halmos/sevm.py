@@ -1703,7 +1703,9 @@ class Exec:  # an execution path
             contract_name, filename, source_map = self._try_resolve_proxy_info(contract)
 
         if contract_name is None:
-            warn(f"unknown deployed bytecode: {hexify(bytecode.unwrap())}")
+            warn(
+                f"unknown deployed bytecode: {hexify(bytecode[:32].unwrap())}... ({byte_length(bytecode)} bytes total)"
+            )
 
         contract.contract_name = contract_name
         contract.filename = filename
