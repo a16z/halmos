@@ -49,6 +49,8 @@ from z3 import (
     is_true,
     sat,
     simplify,
+    substitute,
+    unknown,
     unsat,
 )
 from z3.z3util import is_expr_var
@@ -1403,7 +1405,18 @@ class Exec:  # an execution path
         if result := self.quick_custom_check(cond):
             return result
 
-        return self.path.check(cond)
+        new_cond = substitute(cond, *self.path.concretization.substitution.items())
+        if not eq(new_cond, cond) and (
+            new_result := self.quick_custom_check(simplify(new_cond))
+        ):
+            return new_result
+
+        # some examples where the quick custom solver fails to prove unsat:
+        # - inequality: x == 0  vs  not (x >= 0)
+        # - congruence closure: x == 2  vs  map[x] == 0 and map[2] == 1
+        # - bitvector: extract(31, 31, x) == 0  vs  x != 0 and extract(i, i, x) == 0 for all 0 <= i <= 30
+
+        return unknown
 
     def select(
         self, array: Any, key: Word, arrays: dict, symbolic: bool = False
