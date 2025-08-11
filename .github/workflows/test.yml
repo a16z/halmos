@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # note: it is faster to let foundry do a sparse checkout of the missing libraries rather than having the action do a git checkout of the submodules
           submodules: false
