@@ -78,7 +78,7 @@ jobs:
 
     steps:
       - name: Checkout halmos
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # we won't be needing tests/lib for this workflow
           submodules: false
