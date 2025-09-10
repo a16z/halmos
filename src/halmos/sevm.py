@@ -2102,7 +2102,7 @@ class SEVM:
         is_generic = self.options.storage_layout == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
 
-    def div_xy_y(self, w1: Word, w2: Word) -> Word:
+    def div_xy_y(self, w1: Word, w2: Word, signed: bool = False) -> Word:
         # return the number of bits required to represent the given value. default = 256
         def bitsize(w: Word) -> int:
             if (
@@ -2119,13 +2119,21 @@ class SEVM:
             x = w1.arg(0)
             y = w1.arg(1)
             if eq(w2, x) or eq(w2, y):  # xy/x or xy/y
-                size_x = bitsize(x)
-                size_y = bitsize(y)
-                if size_x + size_y <= 256:
-                    if eq(w2, x):  # xy/x == y
+                if signed:
+                    # Signed division: safe to simplify if divisor exactly matches factor
+                    if eq(w2, x):
                         return y
-                    else:  # xy/y == x
+                    elif eq(w2, y):
                         return x
+                else:
+                    # Unsigned division: check for overflow
+                    size_x = bitsize(x)
+                    size_y = bitsize(y)
+                    if size_x + size_y <= 256:
+                        if eq(w2, x):  # xy/x == y
+                            return y
+                        else:  # xy/y == x
+                            return x
         return None
 
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
@@ -2152,9 +2160,9 @@ class SEVM:
         if op == OP_DIV:
             # Check: div_xy_y
             #   Try simplification first: (x * y) / x → y, (x * y) / y → x
-            simplified = self.div_xy_y(w1, w2)
-            if simplified is not None:
-                return simplified
+            simplified_div = self.div_xy_y(w1, w2)
+            if simplified_div is not None:
+                return simplified_div
 
             term = w1.div(w2, abstraction=f_div)
             if term.is_symbolic:
@@ -2170,6 +2178,11 @@ class SEVM:
             return term
 
         if op == OP_SDIV:
+            # Try signed simplification
+            simplified_sdiv = self.div_xy_y(w1, w2, signed=True)
+            if simplified_sdiv is not None:
+                return simplified_sdiv
+
             return w1.sdiv(w2, abstraction=f_sdiv)
 
         if op == OP_SMOD:
