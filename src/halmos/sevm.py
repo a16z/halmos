@@ -2150,7 +2150,11 @@ class SEVM:
             return w1.mul(w2, abstraction=f_mul[w1.size])
 
         if op == OP_DIV:
-            # TODO: div_xy_y
+            # Check: div_xy_y
+            #   Try simplification first: (x * y) / x → y, (x * y) / y → x
+            simplified = self.div_xy_y(w1, w2)
+            if simplified is not None:
+                return simplified
 
             term = w1.div(w2, abstraction=f_div)
             if term.is_symbolic:
