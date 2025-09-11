@@ -2105,7 +2105,7 @@ class SEVM:
     def div_xy_y(self, w1: Word, w2: Word, signed: bool = False) -> Word:
         # return the number of bits required to represent the given value. default = 256
         def bitsize(w: Word) -> int:
-            z3w = w.as_z3() if hasattr(w, "as_z3") else w
+            z3w = w.as_z3() if isinstance(w, Word) else w
             if (
                 z3w.decl().name() == "concat"
                 and is_bv_value(z3w.arg(0))
@@ -2114,8 +2114,8 @@ class SEVM:
                 return 256 - z3w.arg(0).size()
             return 256
 
-        w1_z3 = w1.as_z3() if hasattr(w1, "as_z3") else w1
-        w2_z3 = w2.as_z3() if hasattr(w2, "as_z3") else w2
+        w1_z3 = w1.as_z3() if isinstance(w1, Word) else w1
+        w2_z3 = w2.as_z3() if isinstance(w2, Word) else w2
 
         if w1_z3.decl().name() == "bvmul" and w1_z3.num_args() == 2:
             x = w1_z3.arg(0)
@@ -2126,7 +2126,7 @@ class SEVM:
                     if eq(w2_z3, x):
                         return BV(y, w1.size)  # wrap back
                     elif eq(w2_z3, y):
-                        return BV(x, w1.size)
+                        return BV(x, w1.size)  # wrap back
                 else:
                     # Unsigned division: check for overflow
                     size_x = bitsize(x)
@@ -2135,7 +2135,7 @@ class SEVM:
                         if eq(w2_z3, x):  # xy/x == y
                             return BV(y, w1.size)  # wrap back
                         else:  # xy/y == x
-                            return BV(x, w1.size)
+                            return BV(x, w1.size)  # wrap back
         return None
 
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
