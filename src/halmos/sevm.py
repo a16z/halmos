@@ -2134,18 +2134,18 @@ class SEVM:
                 if signed:
                     # Signed division: safe to simplify if divisor exactly matches factor
                     if eq(w2_z3, x):
-                        return BV(y)  # wrap back
+                        return BV(y, size=w1.size)  # wrap back
                     elif eq(w2_z3, y):
-                        return BV(x, w1.size)  # wrap back
+                        return BV(x, size=w1.size)  # wrap back
                 else:
                     # Unsigned division: check for overflow
                     size_x = bitsize(x)
                     size_y = bitsize(y)
                     if size_x + size_y <= 256:
                         if eq(w2_z3, x):  # xy/x == y
-                            return BV(y, w1.size)  # wrap back
+                            return BV(y, size=w1.size)  # wrap back
                         else:  # xy/y == x
-                            return BV(x, w1.size)  # wrap back
+                            return BV(x, size=w1.size)  # wrap back
         return None
 
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
