@@ -2105,26 +2105,36 @@ class SEVM:
     def div_xy_y(self, w1: Word, w2: Word, signed: bool = False) -> Word:
         # return the number of bits required to represent the given value. default = 256
         def bitsize(w: Word) -> int:
-            z3w = w.as_z3() if isinstance(w, Word) else w
+            if isinstance(w, int):  # unwrap if it’s a Python int
+                return w.bit_length() or 1
+            elif isinstance(w, BV):
+                z3w = w.as_z3()
+            elif isinstance(w, BitVecRef):  # unwrap Z3 bit-vector directly
+                z3w = w
+            else:
+                raise TypeError(f"Unsupported Word type: {type(w)}")
+
+            # Handle zero-extended constants → concat(0, small_bv)
             if (
                 z3w.decl().name() == "concat"
                 and is_bv_value(z3w.arg(0))
                 and int(str(z3w.arg(0))) == 0
             ):
                 return 256 - z3w.arg(0).size()
-            return 256
+            # Default: use the actual width of the bitvec
+            return z3w.size()
 
         w1_z3 = w1.as_z3() if isinstance(w1, Word) else w1
         w2_z3 = w2.as_z3() if isinstance(w2, Word) else w2
 
-        if w1_z3.decl().name() == "bvmul" and w1_z3.num_args() == 2:
+        if "bvmul" in w1_z3.decl().name() and w1_z3.num_args() == 2:
             x = w1_z3.arg(0)
             y = w1_z3.arg(1)
             if eq(w2_z3, x) or eq(w2_z3, y):  # xy/x or xy/y
                 if signed:
                     # Signed division: safe to simplify if divisor exactly matches factor
                     if eq(w2_z3, x):
-                        return BV(y, w1.size)  # wrap back
+                        return BV(y)  # wrap back
                     elif eq(w2_z3, y):
                         return BV(x, w1.size)  # wrap back
                 else:
