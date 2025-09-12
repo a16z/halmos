@@ -561,8 +561,8 @@ def test_div_and_simplification(sevm: SEVM, solver, storage, x_bv, y_bv):
     )
 
     # Push raw symbolic operands
-    # Stack will be: [x, y, x] → MUL → (x * y), SDIV → (x * y) / x
-    ex_simplified.st.stack.append(x_bv)  # divisor for SDIV
+    # Stack will be: [x, y, x] → MUL → (x * y), DIV → (x * y) / x
+    ex_simplified.st.stack.append(x_bv)  # divisor for DIV
     ex_simplified.st.stack.append(y_bv)  # operand for MUL
     ex_simplified.st.stack.append(x_bv)  # operand for MUL
 
@@ -619,16 +619,16 @@ def test_signed_div_and_simplification(sevm: SEVM, solver, storage, x_bv, y_bv):
     )
 
     # Push raw symbolic operands
-    # Stack will be: [x, y, x] → MUL → (x * y), DIV → (x * y) / x
-    ex_simplified.st.stack.append(x_bv)  # divisor for DIV
+    # Stack will be: [x, y, x] → MUL → (x * y), SDIV → (x * y) / x
+    ex_simplified.st.stack.append(x_bv)  # divisor for SDIV
     ex_simplified.st.stack.append(y_bv)  # operand for MUL
     ex_simplified.st.stack.append(x_bv)  # operand for MUL
 
     [out_simplified] = list(sevm.run(ex_simplified))
     expr_simplified = out_simplified.st.stack[-1].as_z3()
 
-    # No "div" should remain
-    assert f_div.name() not in collect_opcodes(expr_simplified)
+    # No "sdiv" should remain
+    assert f_sdiv.name() not in collect_opcodes(expr_simplified)
 
     # ensure expression does not depend on x anymore
     assert "x" not in str(expr_simplified)
