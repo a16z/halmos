@@ -949,7 +949,7 @@ class CounterexampleHandler:
             print(ctx.traces[path_id], end="")
 
         if model.is_valid:
-            print(color_error(f"Counterexample: {model}"))
+            print(color_error(f"Counterexample: [{path_id}] {model}"))
             ctx.valid_counterexamples.append(model)
 
             # add the stacks from the temporary flamegraph to the global one
