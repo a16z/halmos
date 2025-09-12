@@ -2103,50 +2103,54 @@ class SEVM:
         self.storage_model = GenericStorage if is_generic else SolidityStorage
 
     def div_xy_y(self, w1: Word, w2: Word, signed: bool = False) -> Word:
-        # return the number of bits required to represent the given value. default = 256
-        def bitsize(w: Word) -> int:
-            if isinstance(w, int):  # unwrap if it’s a Python int
-                return w.bit_length() or 1
-            elif isinstance(w, BV):
-                z3w = w.as_z3()
-            elif isinstance(w, BitVecRef):  # unwrap Z3 bit-vector directly
-                z3w = w
-            else:
-                raise TypeError(f"Unsupported Word type: {type(w)}")
-
-            # Handle zero-extended constants → concat(0, small_bv)
-            if (
-                z3w.decl().name() == "concat"
-                and is_bv_value(z3w.arg(0))
-                and int(str(z3w.arg(0))) == 0
-            ):
-                return 256 - z3w.arg(0).size()
-            # Default: use the actual width of the bitvec
-            return z3w.size()
-
-        w1_z3 = w1.as_z3() if isinstance(w1, Word) else w1
-        w2_z3 = w2.as_z3() if isinstance(w2, Word) else w2
-
-        if "bvmul" in w1_z3.decl().name() and w1_z3.num_args() == 2:
-            x = w1_z3.arg(0)
-            y = w1_z3.arg(1)
-            if eq(w2_z3, x) or eq(w2_z3, y):  # xy/x or xy/y
-                if signed:
-                    # Signed division: safe to simplify if divisor exactly matches factor
-                    if eq(w2_z3, x):
-                        return BV(y, size=w1.size)  # wrap back
-                    elif eq(w2_z3, y):
-                        return BV(x, size=w1.size)  # wrap back
+        try:
+            # return the number of bits required to represent the given value. default = 256
+            def bitsize(w: Word) -> int:
+                if isinstance(w, int):  # unwrap if it’s a Python int
+                    return w.bit_length() or 1
+                elif isinstance(w, BV):
+                    z3w = w.as_z3()
+                elif isinstance(w, BitVecRef):  # unwrap Z3 bit-vector directly
+                    z3w = w
                 else:
-                    # Unsigned division: check for overflow
-                    size_x = bitsize(x)
-                    size_y = bitsize(y)
-                    if size_x + size_y <= 256:
-                        if eq(w2_z3, x):  # xy/x == y
+                    raise TypeError(f"Unsupported Word type: {type(w)}")
+
+                # Handle zero-extended constants → concat(0, small_bv)
+                if (
+                    z3w.decl().name() == "concat"
+                    and is_bv_value(z3w.arg(0))
+                    and int(str(z3w.arg(0))) == 0
+                ):
+                    return 256 - z3w.arg(0).size()
+
+                # Default: use the actual width of the bitvec
+                return z3w.size()
+
+            w1_z3 = w1.as_z3() if isinstance(w1, Word) else w1
+            w2_z3 = w2.as_z3() if isinstance(w2, Word) else w2
+
+            if "bvmul" in w1_z3.decl().name() and w1_z3.num_args() == 2:
+                x = w1_z3.arg(0)
+                y = w1_z3.arg(1)
+                if eq(w2_z3, x) or eq(w2_z3, y):  # xy/x or xy/y
+                    if signed:
+                        # Signed division: safe to simplify if divisor exactly matches factor
+                        if eq(w2_z3, x):
                             return BV(y, size=w1.size)  # wrap back
-                        else:  # xy/y == x
+                        elif eq(w2_z3, y):
                             return BV(x, size=w1.size)  # wrap back
-        return None
+                    else:
+                        # Unsigned division: check for overflow
+                        size_x = bitsize(x)
+                        size_y = bitsize(y)
+                        if size_x + size_y <= 256:
+                            if eq(w2_z3, x):  # xy/x == y
+                                return BV(y, size=w1.size)  # wrap back
+                            else:  # xy/y == x
+                                return BV(x, size=w1.size)  # wrap back
+            return None
+        except Exception:
+            return None
 
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_div(x, y)
