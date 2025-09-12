@@ -61,7 +61,7 @@ ModelVariables = dict[str, ModelVariable]
 halmos_var_pattern = re.compile(
     r"""
     \(\s*define-fun\s+               # Match "(define-fun"
-    \|?((?:halmos_|p_)[^ |]+)\|?\s+  # Capture either halmos_* or p_*, optionally wrapped in "|"
+    \|?((?:halmos_|p_)[^ |]+|storage_[^ |]+_00)\|?\s+  # Capture halmos_* or p_* or storage_*_00 optionally wrapped in "|"
     \(\)\s+\(_\s+([^ ]+)\s+          # Capture the SMTLIB type (e.g., "BitVec 256")
     (\d+)\)\s+                       # Capture the bit-width or type argument
     (                                # Group for the value
