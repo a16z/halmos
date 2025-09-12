@@ -5,6 +5,7 @@ from z3 import (
     BitVecSort,
     BitVecVal,
     Concat,
+    ExprRef,
     Extract,
     If,
     LShR,
@@ -504,3 +505,130 @@ def test_valid_jump(sevm, solver, storage):
     assert len(execs) == 1  # Only one valid path should execute
     assert execs[0].pc == 4  # PC should move to the stop
     assert execs[0].current_opcode() == EVM.STOP  # Should terminate cleanly
+
+
+def collect_opcodes(expr):
+    """Recursively collect operator names from a Z3 expression."""
+    seen = set()
+    stack = [expr]
+    while stack:
+        e = stack.pop()
+        if isinstance(e, ExprRef):
+            seen.add(e.decl().name())
+            stack.extend(e.children())
+    return seen
+
+
+@pytest.mark.parametrize(
+    "x_bv, y_bv",
+    [
+        (
+            BV(Concat(BitVecVal(0, 8), BitVec("x", 8)), size=256),
+            BV(Concat(BitVecVal(0, 8), BitVec("y", 8)), size=256),
+        ),
+        (
+            BV(Concat(BitVecVal(0, 8), BitVec("x", 128)), size=256),
+            BV(Concat(BitVecVal(0, 8), BitVec("y", 128)), size=256),
+        ),
+    ],
+)
+def test_div_and_simplification(sevm: SEVM, solver, storage, x_bv, y_bv):
+    """test: raw DIV vs simplified (x*y)/x"""
+
+    # --- Raw DIV ---
+    ex_div = mk_ex(
+        bytes.fromhex("04"),  # DIV
+        sevm,
+        solver,
+        storage,
+        caller,
+        this,
+    )
+    ex_div.st.stack.append(x_bv)
+    ex_div.st.stack.append(y_bv)
+    [out_div] = list(sevm.run(ex_div))
+    expr_div = out_div.st.stack[-1].as_z3()
+    assert f_div.name() in collect_opcodes(expr_div)
+
+    # --- Simplified DIV (x*y)/x ---
+    ex_simplified = mk_ex(
+        bytes.fromhex("0204"),  # 0x02 MUL, 0x04 DIV
+        sevm,
+        solver,
+        storage,
+        caller,
+        this,
+    )
+
+    # Push raw symbolic operands
+    # Stack will be: [x, y, x] → MUL → (x * y), DIV → (x * y) / x
+    ex_simplified.st.stack.append(x_bv)  # divisor for DIV
+    ex_simplified.st.stack.append(y_bv)  # operand for MUL
+    ex_simplified.st.stack.append(x_bv)  # operand for MUL
+
+    [out_simplified] = list(sevm.run(ex_simplified))
+    expr_simplified = out_simplified.st.stack[-1].as_z3()
+
+    # No "div" should remain
+    assert f_div.name() not in collect_opcodes(expr_simplified)
+
+    # ensure expression does not depend on x anymore
+    assert "x" not in str(expr_simplified)
+
+
+@pytest.mark.parametrize(
+    "x_bv, y_bv",
+    [
+        (
+            BV(Concat(BitVecVal(0, 8), BitVec("x", 8)), size=256),
+            BV(Concat(BitVecVal(0, 8), BitVec("y", 8)), size=256),
+        ),
+        (
+            BV(Concat(BitVecVal(0, 8), BitVec("x", 128)), size=256),
+            BV(Concat(BitVecVal(0, 8), BitVec("y", 128)), size=256),
+        ),
+        (x, y),
+    ],
+)
+def test_signed_div_and_simplification(sevm: SEVM, solver, storage, x_bv, y_bv):
+    """test: raw SDIV vs simplified (x*y)/x"""
+
+    # --- Raw SDIV ---
+    ex_sdiv = mk_ex(
+        bytes.fromhex("05"),  # 0x05 SDIV
+        sevm,
+        solver,
+        storage,
+        caller,
+        this,
+    )
+    ex_sdiv.st.stack.append(x_bv)
+    ex_sdiv.st.stack.append(y_bv)
+    [out_sdiv] = list(sevm.run(ex_sdiv))
+    expr_sdiv = out_sdiv.st.stack[-1].as_z3()
+    assert f_sdiv.name() in collect_opcodes(expr_sdiv)
+
+    # --- Simplified SDIV (x*y)/x ---
+    ex_simplified = mk_ex(
+        bytes.fromhex("0205"),  # 0x02 MUL, 0x05 SDIV
+        sevm,
+        solver,
+        storage,
+        caller,
+        this,
+    )
+
+    # Push raw symbolic operands
+    # Stack will be: [x, y, x] → MUL → (x * y), SDIV → (x * y) / x
+    ex_simplified.st.stack.append(x_bv)  # divisor for SDIV
+    ex_simplified.st.stack.append(y_bv)  # operand for MUL
+    ex_simplified.st.stack.append(x_bv)  # operand for MUL
+
+    [out_simplified] = list(sevm.run(ex_simplified))
+    expr_simplified = out_simplified.st.stack[-1].as_z3()
+
+    # No "sdiv" should remain
+    assert f_sdiv.name() not in collect_opcodes(expr_simplified)
+
+    # ensure expression does not depend on x anymore
+    assert "x" not in str(expr_simplified)

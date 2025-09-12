@@ -2102,31 +2102,55 @@ class SEVM:
         is_generic = self.options.storage_layout == "generic"
         self.storage_model = GenericStorage if is_generic else SolidityStorage
 
-    def div_xy_y(self, w1: Word, w2: Word) -> Word:
-        # return the number of bits required to represent the given value. default = 256
-        def bitsize(w: Word) -> int:
-            if (
-                w.decl().name() == "concat"
-                and is_bv_value(w.arg(0))
-                and int(str(w.arg(0))) == 0
-            ):
-                return 256 - w.arg(0).size()
-            return 256
+    def div_xy_y(self, w1: Word, w2: Word, signed: bool = False) -> Word:
+        try:
+            # return the number of bits required to represent the given value. default = 256
+            def bitsize(w: Word) -> int:
+                if isinstance(w, int):  # unwrap if it’s a Python int
+                    return w.bit_length() or 1
+                elif isinstance(w, BV):
+                    z3w = w.as_z3()
+                elif isinstance(w, BitVecRef):  # unwrap Z3 bit-vector directly
+                    z3w = w
+                else:
+                    raise TypeError(f"Unsupported Word type: {type(w)}")
 
-        w1 = normalize(w1)
+                # Handle zero-extended constants → concat(0, small_bv)
+                if (
+                    z3w.decl().name() == "concat"
+                    and is_bv_value(z3w.arg(0))
+                    and int(str(z3w.arg(0))) == 0
+                ):
+                    return 256 - z3w.arg(0).size()
 
-        if w1.decl().name() == "bvmul" and w1.num_args() == 2:
-            x = w1.arg(0)
-            y = w1.arg(1)
-            if eq(w2, x) or eq(w2, y):  # xy/x or xy/y
-                size_x = bitsize(x)
-                size_y = bitsize(y)
-                if size_x + size_y <= 256:
-                    if eq(w2, x):  # xy/x == y
-                        return y
-                    else:  # xy/y == x
-                        return x
-        return None
+                # Default: use the actual width of the bitvec
+                return z3w.size()
+
+            w1_z3 = w1.as_z3() if isinstance(w1, Word) else w1
+            w2_z3 = w2.as_z3() if isinstance(w2, Word) else w2
+
+            if "bvmul" in w1_z3.decl().name() and w1_z3.num_args() == 2:
+                x = w1_z3.arg(0)
+                y = w1_z3.arg(1)
+                if eq(w2_z3, x) or eq(w2_z3, y):  # xy/x or xy/y
+                    if signed:
+                        # Signed division: safe to simplify if divisor exactly matches factor
+                        if eq(w2_z3, x):
+                            return BV(y, size=w1.size)  # wrap back
+                        elif eq(w2_z3, y):
+                            return BV(x, size=w1.size)  # wrap back
+                    else:
+                        # Unsigned division: check for overflow
+                        size_x = bitsize(x)
+                        size_y = bitsize(y)
+                        if size_x + size_y <= 256:
+                            if eq(w2_z3, x):  # xy/x == y
+                                return BV(y, size=w1.size)  # wrap back
+                            else:  # xy/y == x
+                                return BV(x, size=w1.size)  # wrap back
+            return None
+        except Exception:
+            return None
 
     def mk_div(self, ex: Exec, x: Any, y: Any) -> Any:
         term = f_div(x, y)
@@ -2150,7 +2174,11 @@ class SEVM:
             return w1.mul(w2, abstraction=f_mul[w1.size])
 
         if op == OP_DIV:
-            # TODO: div_xy_y
+            # Check: div_xy_y
+            #   Try simplification first: (x * y) / x → y, (x * y) / y → x
+            simplified_div = self.div_xy_y(w1, w2)
+            if simplified_div is not None:
+                return simplified_div
 
             term = w1.div(w2, abstraction=f_div)
             if term.is_symbolic:
@@ -2166,6 +2194,11 @@ class SEVM:
             return term
 
         if op == OP_SDIV:
+            # Try signed simplification first
+            simplified_sdiv = self.div_xy_y(w1, w2, signed=True)
+            if simplified_sdiv is not None:
+                return simplified_sdiv
+
             return w1.sdiv(w2, abstraction=f_sdiv)
 
         if op == OP_SMOD:

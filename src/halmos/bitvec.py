@@ -545,8 +545,6 @@ class HalmosBitVec:
     def div(
         self, other: BV, *, abstraction: FuncDeclRef | None = None
     ) -> "HalmosBitVec":
-        # TODO: div_xy_y
-
         size = self._size
         assert size == other.size
 
@@ -578,7 +576,6 @@ class HalmosBitVec:
     def sdiv(
         self, other: BV, *, abstraction: FuncDeclRef | None = None
     ) -> "HalmosBitVec":
-        # TODO: sdiv_xy_y
         size = self._size
         assert size == other.size
 
