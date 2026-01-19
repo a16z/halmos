@@ -17,7 +17,7 @@
 - [Solady Verification]: verifies Solady's fixed-point math library.
 
 [Morpho Blue]: <https://github.com/morpho-org/morpho-blue>
-[HalmosTest]: <https://github.com/morpho-org/morpho-blue/blob/main/test/halmos/HalmosTest.sol>
+[HalmosTest]: <https://github.com/morpho-org/morpho-blue/blob/halmos/symbolicIrm/test/halmos/HalmosTest.sol>
 
 [Snekmate]: <https://github.com/pcaversaccio/snekmate>
 [ERC20TestHalmos]: <https://github.com/pcaversaccio/snekmate/blob/main/test/tokens/halmos/ERC20TestHalmos.t.sol>
