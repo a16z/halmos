@@ -144,7 +144,7 @@ for (uint160 sender = 0; sender < type(uint160).max; sender++) {
   ```
   Similarly, a dynamic array of integers can be created as shown below:
   ```solidity
-  uint256[] memory arr = new uint256[3];
+  uint256[] memory arr = new uint256[](3);
   for (uint i = 0; i < 3; i++) {
       arr[i] = svm.createUint256('element');
   }
