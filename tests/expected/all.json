@@ -4240,6 +4240,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/PayableMulticall.t.sol:PayableMulticallTest": [
+            {
+                "name": "check_multicall_no_double_credit_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_single_deposit_no_over_credit_pass(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Prank.t.sol:PrankSetUpTest": [
             {
                 "name": "check_prank(address)",
