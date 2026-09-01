@@ -192,6 +192,7 @@ def byte_of(i, x):
         (o(EVM.SMOD), [x, BV(0)], BV(0)),
         (o(EVM.SMOD), [x, BV(1)], BV(0)),
         (o(EVM.ADDMOD), [BV(4), BV(1), BV(3)], BV(2)),
+        (o(EVM.ADDMOD), [BV(4), BV(1), BV(0)], BV(0)),
         (o(EVM.ADDMOD), [x, y, BV(0)], BV(0)),
         (o(EVM.ADDMOD), [x, y, BV(1)], BV(0)),
         (
@@ -229,6 +230,7 @@ def byte_of(i, x):
             BV(1),
         ),
         (o(EVM.MULMOD), [BV(5), BV(1), BV(3)], BV(2)),
+        (o(EVM.MULMOD), [BV(5), BV(1), BV(0)], BV(0)),
         (o(EVM.MULMOD), [x, y, BV(0)], BV(0)),
         (o(EVM.MULMOD), [x, y, BV(1)], BV(0)),
         (

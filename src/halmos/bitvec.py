@@ -734,6 +734,8 @@ class HalmosBitVec:
         assert size == modulus.size
 
         if self.is_concrete and other.is_concrete and modulus.is_concrete:
+            if modulus.value == 0:
+                return modulus
             return HalmosBitVec((self.value + other.value) % modulus.value, size=size)
 
         # to avoid add overflow; and to be a multiple of 8-bit
@@ -762,6 +764,8 @@ class HalmosBitVec:
         assert size == modulus.size
 
         if self.is_concrete and other.is_concrete and modulus.is_concrete:
+            if modulus.value == 0:
+                return modulus
             return HalmosBitVec((self.value * other.value) % modulus.value, size=size)
 
         # to avoid mul overflow
