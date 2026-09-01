@@ -709,7 +709,7 @@ class HalmosBitVec:
                 return self
 
             if self.is_concrete:
-                return HalmosBitVec(lhs**rhs, size=size)
+                return HalmosBitVec(pow(lhs, rhs, 1 << size), size=size)
 
             if rhs <= smt_exp_by_const:
                 exp = self

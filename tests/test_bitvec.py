@@ -260,6 +260,18 @@ def test_bitvec_mul():
     assert x.mul(y, abstraction=f_mul) == BV(f_mul(x.as_z3(), y.as_z3()))
 
 
+@pytest.mark.parametrize(
+    ("base", "exponent"),
+    [(0, 0), (0, 5), (2, 8), (3, 5), (2**255, 2), (2**256 - 1, 2)],
+)
+def test_exp_concrete_matches_truncated_power(base, exponent):
+    assert BV(base).exp(BV(exponent)) == BV(base**exponent)
+
+
+def test_exp_concrete_large_exponent():
+    assert BV(2).exp(BV(2**256 - 1)) == BV(0)
+
+
 def test_bv_hashable():
     x_z3 = BitVec("x", 256)
     y_z3 = BitVec("y", 256)
