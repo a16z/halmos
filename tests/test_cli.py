@@ -8,10 +8,18 @@ from z3 import (
     eq,
 )
 
-from halmos.bitvec import HalmosBitVec as BV
+from halmos.__main__ import mk_invariant_msg_value
+from halmos.bitvec import ZERO, HalmosBitVec as BV
 from halmos.calldata import str_abi
 from halmos.sevm import Contract, Instruction
 from halmos.utils import EVM, hexify
+
+
+@pytest.mark.parametrize("state_mutability", ["nonpayable", "view", "pure"])
+def test_nonpayable_invariant_target_has_zero_msg_value(state_mutability):
+    # Neither address formatting nor symbol allocation should be reached for a
+    # target that the ABI says cannot accept value.
+    assert mk_invariant_msg_value(None, None, state_mutability) is ZERO
 
 
 @pytest.fixture

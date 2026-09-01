@@ -567,11 +567,8 @@ def run_target_contract(
                 else None
             )
 
-            # create a symbolic msg.value
-            msg_value = BitVec(
-                f"halmos_msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}",
-                BitVecSort256,
-            )
+            state_mutability = abi[fun_sig]["stateMutability"]
+            msg_value = mk_invariant_msg_value(ex, addr, state_mutability)
 
             yield from run_target_function(
                 args,
@@ -590,6 +587,22 @@ def run_target_contract(
             if args.debug:
                 traceback.print_exc()
             continue
+
+
+def mk_invariant_msg_value(
+    ex: Exec, addr: Address, state_mutability: str
+) -> Word:
+    """Return the call value modeled for an invariant target transaction."""
+    # Solidity dispatchers reject value before entering nonpayable functions.
+    # Model that value as zero up front so rejected calls do not create spurious
+    # balance histories in the invariant frontier.
+    if state_mutability != "payable":
+        return ZERO
+
+    return BitVec(
+        f"halmos_msg_value_{id_str(addr)}_{uid()}_{ex.new_symbol_id():>02}",
+        BitVecSort256,
+    )
 
 
 def _compute_frontier(ctx: ContractContext, depth: int) -> Iterator[Exec]:

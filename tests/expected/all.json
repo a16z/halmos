@@ -2329,6 +2329,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/InvariantMsgValue.t.sol:InvariantMsgValueTest": [
+            {
+                "name": "invariant_msg_value_can_be_positive()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "invariant_msg_value_transfer()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/InvariantProbes.t.sol:InvariantProbesTest": [
             {
                 "name": "invariant_probes_found()",
