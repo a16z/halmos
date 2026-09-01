@@ -270,10 +270,19 @@ contract SignatureTest is SymTest, Test {
         bytes32 digest
     ) public {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
+        uint8 malleableV = v == 27 ? 28 : 27;
+
+        assert(malleableV == 27 || malleableV == 28);
+        assertNotEq(v, malleableV);
 
         assertEq(
             ecrecover(digest, v, r, s),
-            ecrecover(digest, v ^ 1, r, bytes32(secp256k1n - uint256(s)))
+            ecrecover(
+                digest,
+                malleableV,
+                r,
+                bytes32(secp256k1n - uint256(s))
+            )
         );
     }
 

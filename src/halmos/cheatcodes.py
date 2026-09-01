@@ -1379,7 +1379,10 @@ class hevm_cheat_code:
 
                 # explicitly model malleability
                 recover = f_ecrecover(digest, v, r, s)
-                recover_malleable = f_ecrecover(digest, v ^ 1, r, secp256k1n - s)
+                malleable_v = 55 - v  # toggle between 27 and 28
+                recover_malleable = f_ecrecover(
+                    digest, malleable_v, r, secp256k1n - s
+                )
 
                 addr = apply_vmaddr(ex, key)
                 ex.path.append(recover == addr)
