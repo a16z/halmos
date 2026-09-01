@@ -2482,15 +2482,26 @@ class SEVM:
 
             elif to == SHA256_PRECOMPILE:
                 exit_code = ONE
-                f_sha256 = Function(
-                    f"f_sha256_{arg_size}", BitVecSorts[arg_size], BitVecSort256
-                )
-
                 unwrapped = arg.unwrap()
-                wrapped = (
-                    unwrapped if is_bv(unwrapped) else bytes_to_bv_value(unwrapped)
-                )
-                ret = ByteVec(f_sha256(wrapped))
+                if arg_size == 0:
+                    # Z3 has no zero-width bitvectors. Model SHA-256 of the
+                    # empty byte string as a stable symbolic constant instead.
+                    sha256 = BitVec("f_sha256_0", BitVecSort256)
+                else:
+                    # EVM memory sizes are bytes; Z3 bitvector sorts are bits.
+                    f_sha256 = Function(
+                        f"f_sha256_{arg_size}",
+                        BitVecSorts[arg_size * 8],
+                        BitVecSort256,
+                    )
+                    wrapped = (
+                        unwrapped
+                        if is_bv(unwrapped)
+                        else bytes_to_bv_value(unwrapped)
+                    )
+                    sha256 = f_sha256(wrapped)
+
+                ret = ByteVec(sha256)
 
             elif to == RIPEMD160_PRECOMPILE:
                 exit_code = ONE
