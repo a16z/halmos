@@ -2310,22 +2310,29 @@ class SEVM:
         if value.is_concrete and value.value == 0:
             return
 
+        caller = uint160(caller).as_z3()
+        to = uint160(to).as_z3()
         caller_balance: BitVecRef = ex.balance_of(caller)
 
         # assume balance is enough; otherwise ignore this path
         # note: evm requires enough balance even for self-transfer
         balance_cond = simplify(UGE(caller_balance, value.as_z3()))
-        if is_false(balance_cond):
+        if is_false(balance_cond) or ex.check(balance_cond) == unsat:
             raise InfeasiblePath("transfer_value: balance is not enough")
 
         ex.path.append(balance_cond)
+
+        # A self-transfer still requires sufficient funds, but has no net state
+        # change.  Check both structural equality and equality established by
+        # the current path before creating balance-array identities.
+        if eq(caller, to) or ex.check(caller != to) == unsat:
+            return
 
         # conditional transfer
         if condition is not None:
             value = If(condition, value, Z3_ZERO)
 
         ex.balance_update(caller, BV(caller_balance).sub(value))
-        # NOTE: ex.balance_of(to) must be called **after** updating the caller's balance above, to correctly handle the self-transfer case
         ex.balance_update(to, BV(ex.balance_of(to)).add(value))
 
     def call(
@@ -3009,11 +3016,14 @@ class SEVM:
         Executes the given transaction from the given input state.
 
         Note: As this involves executing a new transaction, the transient storage is reset to empty instead of being inherited from the input state.
+        Failed top-level calls yield an error state with persistent network state
+        restored to the input transaction state. Transient storage remains at its
+        fresh transaction-start state.
         """
         ex0 = Exec(
             code=pre_ex.code.copy(),  # shallow copy
             storage=deepcopy(pre_ex.storage),
-            transient_storage=self.fresh_transient_storage(pre_ex),  # empty
+            transient_storage=self.fresh_transient_storage(pre_ex),
             balance=pre_ex.balance,
             #
             block=deepcopy(pre_ex.block),
@@ -3035,7 +3045,30 @@ class SEVM:
             storages=pre_ex.storages.copy(),
             balances=pre_ex.balances.copy(),
         )
-        yield from self.run(ex0)
+
+        # Apply the top-level CALL value transfer to the copied transaction state.
+        # An underfunded transaction is invalid and therefore has no output state.
+        if message.call_scheme == OP_CALL:
+            try:
+                self.transfer_value(
+                    ex0,
+                    message.caller,
+                    message.target,
+                    uint256(message.value),
+                )
+            except InfeasiblePath:
+                return
+
+        for post_ex in self.run(ex0):
+            if isinstance(post_ex.context.output.error, EvmException):
+                post_ex.code = pre_ex.code.copy()
+                post_ex.storage = deepcopy(pre_ex.storage)
+                post_ex.transient_storage = self.fresh_transient_storage(pre_ex)
+                post_ex.balance = pre_ex.balance
+                post_ex.storages = pre_ex.storages.copy()
+                post_ex.balances = pre_ex.balances.copy()
+
+            yield post_ex
 
     def run(self, ex0: Exec) -> Iterator[Exec]:
         next_ex: Exec | None = ex0

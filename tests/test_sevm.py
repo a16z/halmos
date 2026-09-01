@@ -10,16 +10,20 @@ from z3 import (
     LShR,
     Select,
     SignExt,
+    Store,
+    UGE,
     ZeroExt,
 )
 
 from halmos.__main__ import mk_block
 from halmos.bitvec import HalmosBitVec as BV
 from halmos.bytevec import ByteVec
+from halmos.config import ConfigSource
 from halmos.exceptions import (
     InvalidJumpDestError,
     InvalidOpcode,
     OutOfGasError,
+    Revert,
     StackUnderflowError,
 )
 from halmos.sevm import (
@@ -80,6 +84,264 @@ def mk_ex(hexcode, sevm, solver, storage, caller, this):
         pgm=bytecode,
         path=Path(solver),
     )
+
+
+RUN_MESSAGE_CALLER = BitVecVal(0xCA11E2, 160)
+RUN_MESSAGE_TARGET = BitVecVal(0x7A26E7, 160)
+
+
+def mk_run_message_ex(
+    sevm,
+    solver,
+    *,
+    caller_balance,
+    target_balance,
+    value,
+    caller=RUN_MESSAGE_CALLER,
+    target=RUN_MESSAGE_TARGET,
+    hexcode="00",
+):
+    bytecode = Contract.from_hexcode(hexcode)
+    caller = uint160(caller).as_z3()
+    target = uint160(target).as_z3()
+    initial_balance = Store(balance, caller, uint256(caller_balance).as_z3())
+    if not caller.eq(target):
+        initial_balance = Store(
+            initial_balance, target, uint256(target_balance).as_z3()
+        )
+
+    message = Message(
+        target=target,
+        caller=caller,
+        origin=caller,
+        value=uint256(value).as_z3(),
+        data=ByteVec(),
+        call_scheme=EVM.CALL,
+    )
+    pre_ex = sevm.mk_exec(
+        code={target: bytecode},
+        storage={target: sevm.mk_storagedata()},
+        transient_storage={target: sevm.mk_storagedata()},
+        balance=initial_balance,
+        block=mk_block(),
+        context=CallContext(message),
+        pgm=bytecode,
+        path=Path(solver),
+    )
+    path = Path(solver)
+    path.extend_path(pre_ex.path)
+    return pre_ex, message, path
+
+
+def concrete_balance(ex, address):
+    value = BV(ex.balance_of(address))
+    assert value.is_concrete
+    return value.value
+
+
+def test_run_message_transfers_positive_value(sevm, solver):
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=10,
+        target_balance=4,
+        value=3,
+    )
+
+    post_exs = list(sevm.run_message(pre_ex, message, path))
+
+    assert len(post_exs) == 1
+    post_ex = post_exs[0]
+    assert post_ex.context.output.error is None
+    assert concrete_balance(post_ex, RUN_MESSAGE_CALLER) == 7
+    assert concrete_balance(post_ex, RUN_MESSAGE_TARGET) == 7
+
+
+def test_run_message_zero_value_reuses_balance_state(sevm, solver):
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=10,
+        target_balance=4,
+        value=0,
+    )
+
+    post_exs = list(sevm.run_message(pre_ex, message, path))
+
+    assert len(post_exs) == 1
+    post_ex = post_exs[0]
+    assert post_ex.balance is pre_ex.balance
+    assert post_ex.balances == pre_ex.balances == {}
+    assert concrete_balance(post_ex, RUN_MESSAGE_CALLER) == 10
+    assert concrete_balance(post_ex, RUN_MESSAGE_TARGET) == 4
+
+
+def test_run_message_rejects_definitely_insufficient_value_without_mutating_pre_ex(
+    sevm, solver
+):
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=2,
+        target_balance=4,
+        value=3,
+    )
+    pre_balance = pre_ex.balance
+    pre_balances = pre_ex.balances.copy()
+    pre_conditions = pre_ex.path.conditions.copy()
+
+    post_exs = list(sevm.run_message(pre_ex, message, path))
+
+    assert post_exs == []
+    assert pre_ex.balance is pre_balance
+    assert pre_ex.balances == pre_balances
+    assert pre_ex.path.conditions == pre_conditions
+    assert pre_ex.context.output.data is None
+
+
+def test_run_message_rejects_solver_proven_insufficient_value(sevm, solver):
+    symbolic_value = BitVec("run_message_value", 256)
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=2,
+        target_balance=4,
+        value=symbolic_value,
+    )
+    # This implies insufficient funds without being the syntactic negation of
+    # the funding condition, forcing the solver-backed feasibility check.
+    path.append(UGE(symbolic_value, con(3)))
+
+    post_exs = list(sevm.run_message(pre_ex, message, path))
+
+    assert post_exs == []
+
+
+@pytest.mark.parametrize(
+    "caller_balance,value,expected_outputs",
+    [(5, 5, 1), (4, 5, 0)],
+)
+def test_run_message_self_transfer_preserves_balance_but_requires_funds(
+    sevm, solver, caller_balance, value, expected_outputs
+):
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=caller_balance,
+        target_balance=caller_balance,
+        value=value,
+        target=RUN_MESSAGE_CALLER,
+    )
+
+    post_exs = list(sevm.run_message(pre_ex, message, path))
+
+    assert len(post_exs) == expected_outputs
+    if post_exs:
+        post_ex = post_exs[0]
+        assert post_ex.balance is pre_ex.balance
+        assert concrete_balance(post_ex, RUN_MESSAGE_CALLER) == caller_balance
+
+
+def test_run_message_path_equal_self_transfer_reuses_balance_state(sevm, solver):
+    symbolic_caller = BitVec("run_message_caller", 160)
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=5,
+        target_balance=5,
+        value=3,
+        caller=symbolic_caller,
+    )
+    path.append(symbolic_caller == RUN_MESSAGE_TARGET)
+
+    [post_ex] = list(sevm.run_message(pre_ex, message, path))
+
+    assert post_ex.balance is pre_ex.balance
+    assert concrete_balance(post_ex, RUN_MESSAGE_TARGET) == 5
+
+
+def test_run_message_success_does_not_mutate_pre_ex_balance_history(sevm, solver):
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=9,
+        target_balance=1,
+        value=2,
+    )
+    pre_balance = pre_ex.balance
+    pre_balances = pre_ex.balances.copy()
+    pre_conditions = pre_ex.path.conditions.copy()
+
+    [post_ex] = list(sevm.run_message(pre_ex, message, path))
+
+    assert concrete_balance(post_ex, RUN_MESSAGE_CALLER) == 7
+    assert concrete_balance(post_ex, RUN_MESSAGE_TARGET) == 3
+    assert pre_ex.balance is pre_balance
+    assert pre_ex.balances == pre_balances
+    assert pre_ex.path.conditions == pre_conditions
+    assert pre_ex.context.output.data is None
+
+
+def test_run_message_marks_reverted_top_level_call(sevm, solver):
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=9,
+        target_balance=1,
+        value=2,
+        hexcode="60006000fd",
+    )
+
+    [post_ex] = list(sevm.run_message(pre_ex, message, path))
+
+    assert isinstance(post_ex.context.output.error, Revert)
+    assert not post_ex.context.output.data
+    assert post_ex.balance is pre_ex.balance
+    assert concrete_balance(post_ex, RUN_MESSAGE_CALLER) == 9
+    assert concrete_balance(post_ex, RUN_MESSAGE_TARGET) == 1
+
+
+def test_run_message_exceptional_halt_restores_transaction_state(
+    args, fun_info, solver
+):
+    generic_args = args.with_overrides(
+        ConfigSource.function_annotation, storage_layout="generic"
+    )
+    sevm = SEVM(generic_args, fun_info)
+
+    # TSTORE(0, 1); SSTORE(0, 1); INVALID -- the exceptional halt must roll
+    # back the storage writes and the top-level value transfer.
+    pre_ex, message, path = mk_run_message_ex(
+        sevm,
+        solver,
+        caller_balance=9,
+        target_balance=1,
+        value=2,
+        hexcode="600160005d6001600055fe",
+    )
+    prior_transient_storage = pre_ex.transient_storage[RUN_MESSAGE_TARGET]
+    prior_transient_storage[8] = BitVecVal(123, 256)
+    prior_transient_digest = prior_transient_storage.digest()
+    empty_transient_digest = sevm.mk_storagedata().digest()
+
+    [post_ex] = list(sevm.run_message(pre_ex, message, path))
+
+    assert isinstance(post_ex.context.output.error, InvalidOpcode)
+    assert (
+        post_ex.storage[RUN_MESSAGE_TARGET].digest()
+        == pre_ex.storage[RUN_MESSAGE_TARGET].digest()
+    )
+    assert post_ex.transient_storage[RUN_MESSAGE_TARGET].digest() == (
+        empty_transient_digest
+    )
+    assert post_ex.transient_storage[RUN_MESSAGE_TARGET].digest() != (
+        prior_transient_digest
+    )
+    assert post_ex.balance is pre_ex.balance
+    assert post_ex.storages == pre_ex.storages == {}
+    assert post_ex.balances == pre_ex.balances == {}
+    assert concrete_balance(post_ex, RUN_MESSAGE_CALLER) == 9
+    assert concrete_balance(post_ex, RUN_MESSAGE_TARGET) == 1
 
 
 x = BV("x")
