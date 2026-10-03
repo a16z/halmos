@@ -4388,6 +4388,35 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Precompile.t.sol:PrecompileTest": [
+            {
+                "name": "check_modexp_symbolic(uint256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_ripemd160_symbolic(bytes32,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_sha256_symbolic(bytes32,bytes32)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Proxy.t.sol:ProxyTest": [
             {
                 "name": "check_foo(uint256,uint256,address)",

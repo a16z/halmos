@@ -2483,7 +2483,7 @@ class SEVM:
             elif to == SHA256_PRECOMPILE:
                 exit_code = ONE
                 f_sha256 = Function(
-                    f"f_sha256_{arg_size}", BitVecSorts[arg_size], BitVecSort256
+                    f"f_sha256_{arg_size}", BitVecSorts[arg_size * 8], BitVecSort256
                 )
 
                 unwrapped = arg.unwrap()
@@ -2495,7 +2495,7 @@ class SEVM:
             elif to == RIPEMD160_PRECOMPILE:
                 exit_code = ONE
                 f_ripemd160 = Function(
-                    f"f_ripemd160_{arg_size}", BitVecSorts[arg_size], BitVecSort160
+                    f"f_ripemd160_{arg_size}", BitVecSorts[arg_size * 8], BitVecSort160
                 )
 
                 unwrapped = arg.unwrap()
@@ -2513,8 +2513,8 @@ class SEVM:
                 modulus_size = ex.int_of(arg.get_word(64))
                 f_modexp = Function(
                     f"f_modexp_{arg_size}_{modulus_size}",
-                    BitVecSorts[arg_size],
-                    BitVecSorts[modulus_size],
+                    BitVecSorts[arg_size * 8],
+                    BitVecSorts[modulus_size * 8],
                 )
 
                 unwrapped = arg.unwrap()
