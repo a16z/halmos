@@ -6,9 +6,12 @@ import re
 import traceback
 
 from halmos.config import Config as HalmosConfig
+from halmos.exceptions import HalmosException
 from halmos.logs import PARSING_ERROR, debug, warn_code
 from halmos.mapper import Mapper, SourceFileMap
 from halmos.ui import ui
+
+SOL_ARTIFACT_DIR_RE = re.compile(r"\.sol(_\d+)?$")
 
 
 def get_contract_type(
@@ -40,22 +43,28 @@ def parse_build_out(args: HalmosConfig) -> dict:
         )
 
     ui.update_status(f"Parsing {out_path}")
-    for sol_dirname in os.listdir(out_path):  # for each source filename
-        if not sol_dirname.endswith(".sol"):
+    for root_dir, dirs, files in os.walk(out_path):
+        # exclude build-info cache and hidden directories from descending
+        dirs[:] = [d for d in dirs if d != "build-info" and not d.startswith(".")]
+
+        dirname = os.path.basename(root_dir)
+        if not SOL_ARTIFACT_DIR_RE.search(dirname):
             continue
 
-        sol_path = os.path.join(out_path, sol_dirname)
-        if not os.path.isdir(sol_path):
-            continue
+        # Found an artifact directory; do not descend into it
+        dirs.clear()
 
-        for json_filename in os.listdir(sol_path):  # for each contract name
+        # Normalize relative path to use forward slashes across platforms
+        sol_relpath = os.path.relpath(root_dir, out_path).replace("\\", "/")
+
+        for json_filename in files:  # for each contract name
             try:
                 if not json_filename.endswith(".json"):
                     continue
                 if json_filename.startswith("."):
                     continue
 
-                json_path = os.path.join(sol_path, json_filename)
+                json_path = os.path.join(root_dir, json_filename)
                 with open(json_path, encoding="utf8") as f:
                     json_out = json.load(f)
 
@@ -81,14 +90,14 @@ def parse_build_out(args: HalmosConfig) -> dict:
 
                 compiler_version = json_out["metadata"]["compiler"]["version"]
                 result.setdefault(compiler_version, {})
-                result[compiler_version].setdefault(sol_dirname, {})
-                contract_map = result[compiler_version][sol_dirname]
+                result[compiler_version].setdefault(sol_relpath, {})
+                contract_map = result[compiler_version][sol_relpath]
 
                 if contract_name in contract_map:
                     raise ValueError(
                         "duplicate contract names in the same file",
                         contract_name,
-                        sol_dirname,
+                        sol_relpath,
                     )
 
                 contract_map[contract_name] = (json_out, contract_type, natspec)
@@ -168,10 +177,94 @@ def import_libs(build_out_map: dict, hexcode: str, linkReferences: dict) -> dict
     libs = {}
 
     for filepath in linkReferences:
-        file_name = filepath.split("/")[-1]
+        normalized_path = filepath.replace("\\", "/")
+        file_name = normalized_path.split("/")[-1]
 
         for lib_name in linkReferences[filepath]:
-            (lib_json, _, _) = build_out_map[file_name][lib_name]
+            exact_ast_matches = []
+            path_matches = []
+            name_matches = []
+
+            for file_key, contracts in build_out_map.items():
+                if lib_name not in contracts:
+                    continue
+
+                entry = contracts[lib_name]
+                lib_json = entry[0]
+                ast_dict = lib_json.get("ast")
+                raw_ast_path = (
+                    ast_dict.get("absolutePath") if isinstance(ast_dict, dict) else None
+                )
+                ast_path = (
+                    raw_ast_path.replace("\\", "/")
+                    if isinstance(raw_ast_path, str)
+                    else None
+                )
+
+                if ast_path == normalized_path:
+                    exact_ast_matches.append((file_key, entry))
+                    continue
+
+                # If artifact explicitly declares a different source path, it cannot match
+                if ast_path is not None and ast_path != normalized_path:
+                    continue
+
+                # Strip potential Foundry collision suffix (e.g., .sol_1 -> .sol)
+                base_key = re.sub(r"\.sol_\d+$", ".sol", file_key)
+                key_basename = base_key.split("/")[-1]
+
+                if normalized_path == base_key or normalized_path.endswith(
+                    "/" + base_key
+                ):
+                    path_matches.append((file_key, entry))
+                elif key_basename == file_name:
+                    name_matches.append((file_key, entry))
+
+            if len(exact_ast_matches) == 1:
+                lib_entry = exact_ast_matches[0][1]
+            elif len(exact_ast_matches) > 1:
+                bytecodes = {
+                    e[0]["deployedBytecode"].get("object") for _, e in exact_ast_matches
+                }
+                if len(bytecodes) > 1:
+                    candidate_keys = [k for k, _ in exact_ast_matches]
+                    raise HalmosException(
+                        f"conflicting exact library artifacts for {filepath}:{lib_name} with different bytecode: {candidate_keys}"
+                    )
+                matching_exact = []
+                for k, e in exact_ast_matches:
+                    base_k = re.sub(r"\.sol_\d+$", ".sol", k)
+                    if normalized_path == base_k or normalized_path.endswith(
+                        "/" + base_k
+                    ):
+                        matching_exact.append((k, e))
+                if len(matching_exact) == 1:
+                    lib_entry = matching_exact[0][1]
+                else:
+                    candidate_keys = [k for k, _ in exact_ast_matches]
+                    raise HalmosException(
+                        f"ambiguous library reference {filepath}:{lib_name} matches multiple candidates: {candidate_keys}"
+                    )
+            elif len(path_matches) == 1:
+                lib_entry = path_matches[0][1]
+            elif len(path_matches) > 1:
+                candidate_keys = [k for k, _ in path_matches]
+                raise HalmosException(
+                    f"ambiguous library reference {filepath}:{lib_name} matches multiple candidates: {candidate_keys}"
+                )
+            elif len(name_matches) == 1:
+                lib_entry = name_matches[0][1]
+            elif len(name_matches) > 1:
+                candidate_keys = [k for k, _ in name_matches]
+                raise HalmosException(
+                    f"ambiguous library reference {filepath}:{lib_name} matches multiple candidates: {candidate_keys}"
+                )
+            else:
+                raise HalmosException(
+                    f"library {filepath}:{lib_name} not found in build output"
+                )
+
+            lib_json = lib_entry[0]
             lib_hexcode = lib_json["deployedBytecode"]["object"]
 
             # in bytes, multiply indices by 2 and offset 0x
