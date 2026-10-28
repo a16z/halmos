@@ -19,6 +19,7 @@ from halmos.bytevec import ByteVec
 from halmos.exceptions import (
     InvalidJumpDestError,
     InvalidOpcode,
+    OutOfBoundsRead,
     OutOfGasError,
     StackUnderflowError,
 )
@@ -407,6 +408,26 @@ def test_large_memory_offset(sevm: SEVM, solver, storage):
 
     [output_ex] = exs
     assert isinstance(output_ex.context.output.error, OutOfGasError)
+
+
+
+def test_mload_expands_msize(sevm: SEVM, solver, storage):
+    """MLOAD at offset 0 must expand active memory so MSIZE reports 32 (#597)."""
+    # PUSH1 0; MLOAD; POP; MSIZE; STOP
+    hexcode = bytes.fromhex("600051505900")
+    ex = mk_ex(hexcode, sevm, solver, storage, caller, this)
+    [out] = list(sevm.run(ex))
+    assert out.context.output.error is None
+    assert int_of(out.st.stack[0]) == 32
+
+
+def test_returndatacopy_zero_size_still_bounds_checks(sevm: SEVM, solver, storage):
+    """Zero-length RETURNDATACOPY must still reject offset past returndata (#596)."""
+    # PUSH1 0 (size); PUSH1 1 (offset); PUSH1 0 (dest); RETURNDATACOPY; STOP
+    hexcode = bytes.fromhex("6000600160003e00")
+    ex = mk_ex(hexcode, sevm, solver, storage, caller, this)
+    [out] = list(sevm.run(ex))
+    assert isinstance(out.context.output.error, OutOfBoundsRead)
 
 
 def test_jump_into_push_data(sevm, solver, storage):

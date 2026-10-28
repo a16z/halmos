@@ -3240,6 +3240,11 @@ class SEVM:
 
                 elif opcode == OP_MLOAD:
                     loc: int = ex.mloc(check_size=True)
+                    # MLOAD expands active memory to cover the 32-byte word (Yellow Paper)
+                    need = loc + 32
+                    mem_len = len(state.memory)
+                    if need > mem_len:
+                        state.memory.append(b"\x00" * (need - mem_len))
                     state.push_any(state.memory.get_word(loc))
 
                 elif opcode == OP_PUSH0:
@@ -3417,11 +3422,11 @@ class SEVM:
                     offset = ex.int_of(state.pop(), "symbolic RETURNDATACOPY offset")
                     size: int = ex.int_of(state.pop(), "symbolic RETURNDATACOPY size")
 
-                    if size:
-                        # no need to check for a huge size because reading out of bounds reverts
-                        if offset + size > ex.returndatasize():
-                            raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
+                    # EIP-211: offset + size must not exceed returndata length, even when size is 0
+                    if offset + size > ex.returndatasize():
+                        raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
 
+                    if size:
                         data: ByteVec = ex.returndata().slice(offset, offset + size)
                         state.set_mslice(loc, data)
 
