@@ -305,3 +305,15 @@ def test_bool_hashable():
     assert y not in dict
     assert TRUE not in dict
     assert FALSE in dict
+
+
+def test_addmod_zero_modulus_returns_zero():
+    # EVM Yellow Paper: ADDMOD with modulus 0 yields 0
+    assert BV(3).addmod(BV(2), BV(0)) == BV(0)
+    assert BV(0).addmod(BV(0), BV(0)) == BV(0)
+
+
+def test_mulmod_zero_modulus_returns_zero():
+    # EVM Yellow Paper: MULMOD with modulus 0 yields 0
+    assert BV(3).mulmod(BV(2), BV(0)) == BV(0)
+    assert BV(0).mulmod(BV(0), BV(0)) == BV(0)
