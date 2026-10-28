@@ -691,6 +691,7 @@ class EVM:
     SHL = 0x1B
     SHR = 0x1C
     SAR = 0x1D
+    CLZ = 0x1E
     SHA3 = 0x20
     ADDRESS = 0x30
     BALANCE = 0x31
@@ -841,6 +842,7 @@ str_opcode: dict[int, str] = {
     EVM.SHL: "SHL",
     EVM.SHR: "SHR",
     EVM.SAR: "SAR",
+    EVM.CLZ: "CLZ",
     EVM.SHA3: "SHA3",
     EVM.ADDRESS: "ADDRESS",
     EVM.BALANCE: "BALANCE",

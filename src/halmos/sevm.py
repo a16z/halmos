@@ -80,6 +80,7 @@ from halmos.contract import (
     OP_CALLER,
     OP_CALLVALUE,
     OP_CHAINID,
+    OP_CLZ,
     OP_CODECOPY,
     OP_CODESIZE,
     OP_COINBASE,
@@ -3577,6 +3578,9 @@ class SEVM:
                     w1 = state.popi()
                     w2 = state.popi()
                     state.push(w2.ashr(w1))  # bvashr
+
+                elif opcode == OP_CLZ:
+                    state.push(state.popi().clz())
 
                 elif opcode == OP_ADDMOD:
                     w1 = state.popi()

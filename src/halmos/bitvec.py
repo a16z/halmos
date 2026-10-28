@@ -849,6 +849,34 @@ class HalmosBitVec:
 
         return HalmosBitVec(~self.as_z3(), size=self.size)
 
+    def clz(self) -> BV:
+        """
+        Count leading zeros (EIP-7939 CLZ).
+
+        For a 256-bit word: CLZ(0) == 256, else CLZ(x) == 256 - bit_length(x).
+        """
+        size = self._size
+        if self.is_concrete:
+            value = self.value
+            if value == 0:
+                return HalmosBitVec(size, size=size)
+            return HalmosBitVec(size - int(value).bit_length(), size=size)
+
+        # Symbolic: binary partition over bit halves.
+        def _clz(bv: BitVecRef, width: int) -> BitVecRef:
+            if width == 1:
+                return If(bv == 0, BitVecVal(1, size), BitVecVal(0, size))
+            half = width // 2
+            hi = Extract(width - 1, half, bv)
+            lo = Extract(half - 1, 0, bv)
+            return If(
+                hi == 0,
+                BitVecVal(half, size) + _clz(lo, half),
+                _clz(hi, half),
+            )
+
+        return HalmosBitVec(_clz(self.as_z3(), size), size=size)
+
     def bitwise_and(self, other: BV) -> BV:
         assert self._size == other._size
         return HalmosBitVec(self._value & other._value, size=self._size)

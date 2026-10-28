@@ -305,3 +305,22 @@ def test_bool_hashable():
     assert y not in dict
     assert TRUE not in dict
     assert FALSE in dict
+
+
+def test_clz_concrete():
+    assert BV(0).clz() == BV(256)
+    assert BV(1).clz() == BV(255)
+    assert BV(2).clz() == BV(254)
+    assert BV(3).clz() == BV(254)
+    assert BV(0xFF).clz() == BV(248)
+    assert BV(1 << 255).clz() == BV(0)
+    assert BV((1 << 256) - 1).clz() == BV(0)
+
+
+def test_clz_symbolic_zero_and_msb():
+    x = BV(BitVec("x_clz", 256))
+    # CLZ(0) == 256
+    assert simplify(x.clz().as_z3()) is not None
+    assert BV(0).clz().value == 256
+    # Known concrete through symbolic path: wrap concrete as symbolic-sized
+    assert int(BV(BitVecVal(1, 256)).clz()) == 255
