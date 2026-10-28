@@ -504,3 +504,31 @@ def test_valid_jump(sevm, solver, storage):
     assert len(execs) == 1  # Only one valid path should execute
     assert execs[0].pc == 4  # PC should move to the stop
     assert execs[0].current_opcode() == EVM.STOP  # Should terminate cleanly
+
+
+def test_not_after_eq_is_bitwise_complement(sevm, solver, storage):
+    # PUSH1 1; PUSH1 1; EQ; NOT; STOP  — EVM NOT must yield ~1, not logical !1
+    hexcode = bytes.fromhex("60016001141900")
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+    execs = list(sevm.run(exec))
+
+    assert len(execs) == 1
+    result = execs[0].st.stack.pop()
+    assert result == BV((1 << 256) - 2)
+
+
+def test_jumpi_symbolic_invalid_dest_keeps_fallthrough(sevm, solver, storage):
+    # With a symbolic condition and an invalid JUMPI target, the fallthrough
+    # path (condition == 0) must still be explored.
+    # Stack starts with symbolic cond; bytecode: PUSH1 255; JUMPI; PUSH1 42; STOP
+    hexcode = bytes.fromhex("60ff57602a00")
+    exec = mk_ex(hexcode, sevm, solver, storage, caller, this)
+    exec.st.stack.append(BV("jumpi_cond"))
+
+    execs = list(sevm.run(exec))
+
+    success = [ex for ex in execs if ex.context.output.error is None]
+    assert success, f"expected a successful fallthrough path, got: {execs!r}"
+    assert any(
+        len(ex.st.stack) == 1 and ex.st.stack[-1] == BV(42) for ex in success
+    ), f"fallthrough should leave 42 on the stack, got: {[(ex.st.stack, ex.context.output.error) for ex in execs]!r}"

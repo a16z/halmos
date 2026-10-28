@@ -2888,11 +2888,19 @@ class SEVM:
 
         if follow_true:
             if target not in ex.pgm.valid_jumpdests():
-                raise InvalidJumpDestError(f"Invalid jump destination: 0x{target:X}")
+                # An invalid JUMPDEST exceptional-halts only the taken-jump path.
+                # When the fallthrough is also feasible, keep exploring it under
+                # ~cond instead of aborting the whole JUMPI (issue #594).
+                if follow_false:
+                    follow_true = False
+                else:
+                    raise InvalidJumpDestError(
+                        f"Invalid jump destination: 0x{target:X}"
+                    )
 
-            if follow_false:
+            if follow_true and follow_false:
                 new_ex_true = self.create_branch(ex, cond_true, target)
-            else:
+            elif follow_true:
                 new_ex_true = ex
                 new_ex_true.path.append(cond_true, branching=True)
                 new_ex_true.advance(pc=target + 1)
@@ -3314,7 +3322,9 @@ class SEVM:
                     state.set_top(w1.bitwise_xor(state.topi()))
 
                 elif opcode == OP_NOT:
-                    state.set_top(state.top().bitwise_not())
+                    # EVM NOT complements all 256 bits. Comparisons leave a Bool on
+                    # the stack; topi() widens it to a 256-bit 0/1 before ~.
+                    state.set_top(state.topi().bitwise_not())
 
                 elif OP_MUL <= opcode <= OP_SMOD:  # MUL SUB DIV SDIV MOD SMOD
                     w1 = state.popi()
