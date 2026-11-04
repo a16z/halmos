@@ -19,6 +19,7 @@ from halmos.bytevec import ByteVec
 from halmos.exceptions import (
     InvalidJumpDestError,
     InvalidOpcode,
+    OutOfBoundsRead,
     OutOfGasError,
     StackUnderflowError,
 )
@@ -504,3 +505,32 @@ def test_valid_jump(sevm, solver, storage):
     assert len(execs) == 1  # Only one valid path should execute
     assert execs[0].pc == 4  # PC should move to the stop
     assert execs[0].current_opcode() == EVM.STOP  # Should terminate cleanly
+
+
+def test_not_on_bool_result(sevm: SEVM, solver, storage):
+    # PUSH1 1, PUSH1 1, EQ, NOT, STOP
+    # EQ yields a boolean; NOT must be a 256-bit bitwise complement
+    ex = mk_ex(
+        BitVecVal(int("60016001141900", 16), 56), sevm, solver, storage, caller, this
+    )
+    [output_ex] = list(sevm.run(ex))
+    assert output_ex.st.stack == [BV(2**256 - 2)]
+
+
+def test_mload_expands_memory_for_msize(sevm: SEVM, solver, storage):
+    # PUSH1 0, MLOAD, POP, MSIZE, STOP
+    ex = mk_ex(
+        BitVecVal(int("600051505900", 16), 48), sevm, solver, storage, caller, this
+    )
+    [output_ex] = list(sevm.run(ex))
+    assert output_ex.st.stack == [BV(32)]
+
+
+def test_returndatacopy_zero_size_bounds_check(sevm: SEVM, solver, storage):
+    # PUSH1 0, PUSH1 1, PUSH1 0, RETURNDATACOPY, STOP
+    # offset(1) + size(0) > returndatasize(0) must raise even when size is zero
+    ex = mk_ex(
+        BitVecVal(int("6000600160003e00", 16), 64), sevm, solver, storage, caller, this
+    )
+    [output_ex] = list(sevm.run(ex))
+    assert isinstance(output_ex.context.output.error, OutOfBoundsRead)

@@ -3240,6 +3240,10 @@ class SEVM:
 
                 elif opcode == OP_MLOAD:
                     loc: int = ex.mloc(check_size=True)
+                    # reading a word expands the active memory to loc + 32 bytes
+                    new_len = loc + 32
+                    if new_len > len(state.memory):
+                        state.memory.append(b"\x00" * (new_len - len(state.memory)))
                     state.push_any(state.memory.get_word(loc))
 
                 elif opcode == OP_PUSH0:
@@ -3314,7 +3318,9 @@ class SEVM:
                     state.set_top(w1.bitwise_xor(state.topi()))
 
                 elif opcode == OP_NOT:
-                    state.set_top(state.top().bitwise_not())
+                    # NOT is a bitwise complement of the 256-bit word; convert a
+                    # boolean stack value (e.g. produced by EQ) to its bitvector form
+                    state.set_top(state.topi().bitwise_not())
 
                 elif OP_MUL <= opcode <= OP_SMOD:  # MUL SUB DIV SDIV MOD SMOD
                     w1 = state.popi()
@@ -3417,11 +3423,11 @@ class SEVM:
                     offset = ex.int_of(state.pop(), "symbolic RETURNDATACOPY offset")
                     size: int = ex.int_of(state.pop(), "symbolic RETURNDATACOPY size")
 
-                    if size:
-                        # no need to check for a huge size because reading out of bounds reverts
-                        if offset + size > ex.returndatasize():
-                            raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
+                    # the bounds check applies even when the copy size is zero
+                    if offset + size > ex.returndatasize():
+                        raise OutOfBoundsRead("RETURNDATACOPY out of bounds")
 
+                    if size:
                         data: ByteVec = ex.returndata().slice(offset, offset + size)
                         state.set_mslice(loc, data)
 
