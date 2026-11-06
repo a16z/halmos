@@ -485,7 +485,12 @@ class Config:
     )
 
     disable_gc: bool = arg(
-        help="disable Python's automatic garbage collection for cyclic objects. This does not affect reference counting based garbage collection.",
+        help=(
+            "disable Python's garbage collection for cyclic objects. By default, automatic "
+            "cyclic collection is suspended while halmos runs, and halmos collects between "
+            "test contracts instead; this option skips those collections as well. "
+            "This does not affect reference counting based garbage collection."
+        ),
         global_default=False,
         group=debugging,
     )

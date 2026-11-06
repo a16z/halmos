@@ -1711,6 +1711,19 @@ class MainResult:
 
 
 def _main(_args=None) -> MainResult:
+    # Cyclic collection can run in a solver worker and release Z3 objects while
+    # the execution thread is inside Z3. Defer it to explicit safe points on
+    # the execution thread, and restore the caller's GC policy on every exit.
+    auto_gc = gc.isenabled()
+    gc.disable()
+    try:
+        return _main_impl(_args, collect_garbage=auto_gc)
+    finally:
+        if auto_gc:
+            gc.enable()
+
+
+def _main_impl(_args=None, *, collect_garbage=True) -> MainResult:
     timer = NamedTimer("total")
     timer.create_subtimer("build")
 
@@ -1735,7 +1748,7 @@ def _main(_args=None) -> MainResult:
     init_env(args.root)
 
     if args.disable_gc:
-        gc.disable()
+        collect_garbage = False
 
     if args.debug:
         logger.setLevel(logging.DEBUG)
@@ -1902,6 +1915,16 @@ def _main(_args=None) -> MainResult:
             raise ValueError("already exists", contract_path)
 
         test_results_map[contract_path] = test_results
+
+        # All tests in this contract have joined their assertion solver workers.
+        # Collect here to bound retained execution histories without letting a
+        # worker's allocation trigger Z3 finalizers concurrently with execution.
+        if collect_garbage:
+            # Most garbage is recent execution state. Avoid repeatedly scanning
+            # the long-lived build artifacts, but periodically reclaim older
+            # histories too (including cycles that survived an earlier call).
+            generation = 2 if gc.get_count()[1] >= gc.get_threshold()[1] else 0
+            gc.collect(generation)
 
     if args.statistics:
         print(f"\n[time] {timer.report()}")
