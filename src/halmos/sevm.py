@@ -8,6 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import timedelta
 from functools import reduce
+from threading import local
 from timeit import default_timer as timer
 from typing import (
     Any,
@@ -782,6 +783,9 @@ class HashableTerm:
         return hash(self.term)
 
 
+_serialization_context = local()
+
+
 class Path:
     """
     A Path object represents a prefix of the path currently being executed, where a path is defined by a sequence of branching conditions.
@@ -893,8 +897,11 @@ class Path:
 
         ids = [str(cond.get_id()) for cond in self.conditions]
 
-        # TODO: investigate whether a separate context is necessary here
-        tmp_solver = create_solver(ctx=Context())
+        # Reuse an isolated context on this thread. Only the serialized string
+        # reaches solver workers; no execution terms or solver state are shared.
+        if not hasattr(_serialization_context, "ctx"):
+            _serialization_context.ctx = Context()
+        tmp_solver = create_solver(ctx=_serialization_context.ctx)
         for cond in self.conditions:
             cond_copied = cond.translate(tmp_solver.ctx)
             if args.cache_solver:
