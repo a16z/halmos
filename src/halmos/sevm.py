@@ -5,7 +5,7 @@ import re
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import reduce
 from timeit import default_timer as timer
@@ -518,6 +518,21 @@ class CallContext:
     depth: int = 1
     trace: list[TraceElement] = field(default_factory=list)
     prank: Prank = field(default_factory=Prank)
+
+    def copy(self) -> "CallContext":
+        """Copy the active call, sharing its completed trace history.
+
+        Entries are appended only after a subcall/event has completed and must
+        not be mutated afterwards. Copying the list isolates future appends;
+        copying calldata, output and prank state isolates the active call.
+        """
+        return CallContext(
+            message=replace(self.message, data=self.message.data.copy()),
+            output=deepcopy(self.output),
+            depth=self.depth,
+            trace=self.trace.copy(),
+            prank=Prank(active=self.prank.active, keep=self.prank.keep),
+        )
 
     def subcalls(self) -> Iterator["CallContext"]:
         return iter(t for t in self.trace if isinstance(t, CallContext))
@@ -2394,7 +2409,7 @@ class SEVM:
                 subcall = new_ex.context
 
                 # restore context
-                new_ex.context = deepcopy(ex.context)
+                new_ex.context = ex.context.copy()
                 new_ex.context.trace.append(subcall)
                 new_ex.callback = ex.callback
 
@@ -2753,7 +2768,7 @@ class SEVM:
 
             # continue execution in the context of the parent
             # pessimistic copy because the subcall results may diverge
-            new_ex.context = deepcopy(ex.context)
+            new_ex.context = ex.context.copy()
             new_ex.context.trace.append(subcall)
             new_ex.callback = ex.callback
 
@@ -2928,7 +2943,7 @@ class SEVM:
             #
             block=deepcopy(ex.block),
             #
-            context=deepcopy(ex.context),
+            context=ex.context.copy(),
             callback=ex.callback,
             #
             pgm=ex.pgm,
