@@ -3148,6 +3148,35 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/Label.t.sol:LabelTest": [
+            {
+                "name": "check_getLabel()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_label_fail(address)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_symbolic_label_fail()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Library.t.sol:LibraryTest": [
             {
                 "name": "check_add(uint256,uint256)",

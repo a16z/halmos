@@ -1664,7 +1664,6 @@ dict_of_unsupported_cheatcodes = {
     0xED7C5462: "createWallet(uint256,string)",
     0x6BCB2C1B: "deriveKey(string,string,uint32)",
     0x6229498B: "deriveKey(string,uint32)",
-    0x28A249B0: "getLabel(address)",
     0xC6CE059D: "parseAddress(string)",
     0x974EF924: "parseBool(string)",
     0x087E6E81: "parseBytes32(string)",

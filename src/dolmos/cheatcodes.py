@@ -21,6 +21,7 @@ from z3 import (
     Not,
     Or,
     is_bv,
+    is_bv_value,
     is_false,
     simplify,
     unsat,
@@ -54,7 +55,12 @@ from dolmos.expectations import (
 from dolmos.fs import parse_hex_bytes, read_file
 from dolmos.logs import debug
 from dolmos.mapper import BuildOut
-from dolmos.tostring import TO_STRING_SIGNATURES, to_string_cheatcode
+from dolmos.tostring import (
+    TO_STRING_SIGNATURES,
+    checksum_address,
+    encode_string,
+    to_string_cheatcode,
+)
 from dolmos.utils import (
     Address,
     BitVecSort8,
@@ -637,6 +643,30 @@ def parse_bytes_cheatcode(arg) -> ByteVec:
     return encode_tuple_bytes(parse_hex_bytes(value, "vm.parseBytes"))
 
 
+def get_label_cheatcode(ex, arg) -> ByteVec:
+    """
+    vm.getLabel(address) returns (string): the latest label of the address, or
+    `unlabeled:<checksummed address>`, as in foundry. The address and the addresses
+    of the labels that could match it must be concrete.
+    """
+    word = simplify(uint160(arg.get_word(4)).as_z3())
+    if not is_bv_value(word):
+        raise NotConcreteError(f"vm.getLabel: symbolic address {word}")
+    value = word.as_long()
+
+    for addr, label in reversed(ex.labels):
+        addr = simplify(addr)
+        if not is_bv_value(addr):
+            raise NotConcreteError(
+                f"vm.getLabel: can not compare with the symbolic address {addr} "
+                f"labeled {label!r}"
+            )
+        if addr.as_long() == value:
+            return encode_string(label.encode())
+
+    return encode_string(f"unlabeled:{checksum_address(value)}".encode())
+
+
 def project_root_cheatcode(sevm) -> ByteVec:
     """vm.projectRoot() returns (string)"""
     root = os.path.abspath(sevm.options.root)
@@ -1059,6 +1089,9 @@ class hevm_cheat_code:
 
     # label(address,string)
     label_sig: int = 0xC657C718
+
+    # getLabel(address)
+    get_label_sig: int = 0x28A249B0
 
     # bytes4(keccak256("getBlockNumber()"))
     get_block_number_sig: int = 0x42CBB15C
@@ -1543,12 +1576,17 @@ class hevm_cheat_code:
 
         # vm.label(address account, string calldata newLabel)
         elif funsig == hevm_cheat_code.label_sig:
-            addr = arg.get_word(4)
-
-            # TODO: no-op for now
-            # label = extract_string_argument(arg, 1)
-
+            # rendered in counterexamples (halmos#447); labels with a symbolic
+            # string are ignored
+            addr = uint160(arg.get_word(4)).as_z3()
+            label = extract_string_argument(arg, 1)
+            if isinstance(label, str):
+                ex.labels.append((addr, label))
             return ret
+
+        # vm.getLabel(address) returns (string)
+        elif funsig == hevm_cheat_code.get_label_sig:
+            return get_label_cheatcode(ex, arg)
 
         # vm.getBlockNumber() return (uint256)
         elif funsig == hevm_cheat_code.get_block_number_sig:

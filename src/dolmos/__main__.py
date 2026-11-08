@@ -98,6 +98,9 @@ from dolmos.mapper import BuildOut, DeployAddressMapper
 from dolmos.pcex import (
     CexLayout,
     RenderedCex,
+    address_hints,
+    collect_addr_names,
+    collect_labels,
     collect_layout,
     render_counterexample,
     repro_function,
@@ -1000,6 +1003,17 @@ class CounterexampleHandler:
             if "f_evm_exp_256" in query.smtlib:
                 exp_apps = mk_exp_apps(ex.path.conditions)
 
+        # what is known about the addresses of this path (deployed contracts and
+        # vm.label), as plain data, to annotate the counterexample (halmos#447)
+        address_info = None
+        try:
+            address_info = (
+                collect_addr_names(ex, ctx.contract_ctx.name),
+                collect_labels(ex),
+            )
+        except Exception as e:
+            debug(f"could not collect the address labels: {e!r}")
+
         # beware: because this object crosses thread boundaries, we must be careful to
         # avoid any reference to z3 objects
         path_ctx = PathContext(
@@ -1020,6 +1034,7 @@ class CounterexampleHandler:
                 path_ctx=path_ctx,
                 description=description,
                 layout=layout,
+                address_info=address_info,
             )
         )
         self.submitted_futures.append(solve_future)
@@ -1059,6 +1074,7 @@ class CounterexampleHandler:
         path_ctx: PathContext,
         description: str,
         layout: CexLayout | None = None,
+        address_info: tuple | None = None,
     ) -> None:
         """
         Callback function for handling solver results.
@@ -1122,7 +1138,8 @@ class CounterexampleHandler:
             print(ctx.traces[path_id], end="")
 
         if model.is_valid:
-            print(color_error(f"Counterexample: {model}"))
+            hints = address_hints(*address_info, model.model) if address_info else None
+            print(color_error(f"Counterexample: {model.render(hints)}"))
             ctx.valid_counterexamples.append(model)
 
             # add the stacks from the temporary flamegraph to the global one

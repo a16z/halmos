@@ -16,6 +16,13 @@ All notable changes to dolmos are documented here. The format follows
   case of the letters for `address`, with one path per value for `bool`; for `uint256`
   and `int256`, whose length depends on the value, the result is approximated by a
   string of digits of the maximal length, and a warning is printed (halmos#565)
+- addresses in counterexamples are annotated with what is known about them: their
+  label, set by `vm.label` (also on symbolic addresses, resolved with the values of the
+  counterexample), and the contract deployed there, e.g.
+  `p_user_address_… = 0xa11ce (alice)`; with `--pretty-counterexamples`, labels are
+  added to the existing hints (halmos#447)
+- `vm.getLabel`, which returns the latest label of an address, or
+  `unlabeled:<address>` as in foundry
 
 ### Fixed
 

@@ -29,7 +29,7 @@ import json
 import re
 import threading
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from eth_hash.auto import keccak
 
@@ -619,13 +619,27 @@ class RenderContext:
 
     index: SelectorIndex = field(default_factory=SelectorIndex)
 
+    # labels set by vm.label, in order (halmos#447)
+    labels: tuple["AddressLabel", ...] = ()
+
+    # the labels resolved with the values of the counterexample: address -> label
+    label_values: dict = field(default_factory=dict)
+
+    def with_model(self, model: Model) -> "RenderContext":
+        """the context for rendering a counterexample, with its labels resolved"""
+        if not self.labels:
+            return self
+        return replace(self, label_values=resolve_labels(self.labels, model))
+
     def address_hint(self, value: int) -> str | None:
         hints = []
+        if label := self.label_values.get(value):
+            hints.append(label)
         if var := self.test_vars.get(value):
             hints.append(var[0])
         if name := self.addr_names.get(value):
             hints.append(name)
-        return ", ".join(hints) or None
+        return ", ".join(dict.fromkeys(hints)) or None
 
     def selector_hint(self, selector: bytes) -> str | None:
         candidates = self.index.lookup(selector, self.deployed)
@@ -925,6 +939,72 @@ class Segment:
 
 
 @dataclass(frozen=True)
+class AddressLabel:
+    """A label set by vm.label, on an address made of constants and (bits of) symbols"""
+
+    segments: tuple[Segment, ...]
+    label: str
+
+    def address(self, model: Model) -> int:
+        result = 0
+        for segment in self.segments:
+            result = (result << segment.size) | segment.value(model)
+        return result % 2**160
+
+
+def resolve_labels(labels: tuple[AddressLabel, ...], model: Model) -> dict[int, str]:
+    """address -> label, with the values of the model; the latest label wins"""
+    result = {}
+    for label in labels:
+        result[label.address(model)] = label.label
+    return result
+
+
+def collect_labels(ex) -> tuple[AddressLabel, ...]:
+    """
+    The labels of the given execution, as plain data: labels on addresses that are not
+    made of constants and symbols (e.g. a hash) are dropped.
+    """
+    from z3 import simplify
+
+    result = []
+    for addr, label in getattr(ex, "labels", ()):
+        try:
+            segments = segments_of(simplify(addr))
+        except Exception:
+            segments = None
+        if segments:
+            result.append(AddressLabel(segments=tuple(segments), label=label))
+    return tuple(result)
+
+
+def collect_addr_names(ex, test_contract: str) -> dict[int, str]:
+    """contract names of the addresses where code is deployed"""
+    from dolmos.sevm import FOUNDRY_TEST
+
+    addr_names = {}
+    for addr, code in ex.code.items():
+        value = concrete_int(addr)
+        name = getattr(code, "contract_name", None)
+        if value is not None and name:
+            addr_names[value] = name
+    addr_names[concrete_int(FOUNDRY_TEST)] = test_contract
+    return addr_names
+
+
+def address_hints(
+    addr_names: dict[int, str], labels: tuple[AddressLabel, ...], model: Model
+) -> dict[int, str]:
+    """address -> what is known about it: its label and the contract deployed there"""
+    result = {}
+    label_values = resolve_labels(labels, model)
+    for value in set(addr_names) | set(label_values):
+        hints = [label_values.get(value), addr_names.get(value)]
+        result[value] = ", ".join(dict.fromkeys(h for h in hints if h))
+    return result
+
+
+@dataclass(frozen=True)
 class TraceCall:
     target: int | None
     value: Ref
@@ -957,7 +1037,7 @@ class RenderedCex:
 
 
 def render_counterexample(layout: CexLayout, model: Model) -> RenderedCex:
-    ctx = layout.render_ctx
+    ctx = layout.render_ctx.with_model(model)
     body: list[str] = []
     used: set[str] = set()
     indent = " " * 4
@@ -1322,7 +1402,7 @@ def render_reproduction(
     svm_symbols: list,
 ) -> list[str]:
     """Body of a forge test replaying the counterexample (without the function header)"""
-    ctx = layout.render_ctx
+    ctx = layout.render_ctx.with_model(model)
     lines: list[str] = []
     notes: list[str] = []
 
@@ -1706,13 +1786,7 @@ def collect_layout(fn_ctx, ex, is_invariant: bool, is_probe: bool) -> CexLayout:
     index = selector_index(contract_ctx.build_out_map)
 
     # contract names of the deployed addresses
-    addr_names = {}
-    for addr, code in ex.code.items():
-        value = concrete_int(addr)
-        name = getattr(code, "contract_name", None)
-        if value is not None and name:
-            addr_names[value] = name
-    addr_names[concrete_int(FOUNDRY_TEST)] = contract_ctx.name
+    addr_names = collect_addr_names(ex, contract_ctx.name)
 
     # state variables of the test contract that hold the deployed contracts
     test_vars = {}
@@ -1785,6 +1859,7 @@ def collect_layout(fn_ctx, ex, is_invariant: bool, is_probe: bool) -> CexLayout:
             test_vars=test_vars,
             deployed=frozenset(addr_names.values()),
             index=index,
+            labels=collect_labels(ex),
         ),
         test_overloaded=test_overloaded,
         trace_calls=trace_calls,

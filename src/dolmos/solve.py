@@ -82,11 +82,27 @@ class PotentialModel:
     is_valid: bool
 
     def __str__(self) -> str:
+        return self.render()
+
+    def render(self, address_hints: dict[int, str] | None = None) -> str:
+        """
+        The values of the model, one per line. Addresses that are known, e.g. labeled
+        with vm.label or where a contract is deployed, are annotated (halmos#447).
+        """
         formatted = []
         for v in self.model.values():
             # TODO: parse type and render accordingly
-            formatted.append(f"\n    {v.full_name} = {hexify(v.value)}")
+            line = f"\n    {v.full_name} = {hexify(v.value)}"
+            hint = address_hints.get(v.value) if address_hints else None
+            if hint and is_address_variable(v):
+                line += f" ({hint})"
+            formatted.append(line)
         return "".join(sorted(formatted)) if formatted else "∅"
+
+
+def is_address_variable(v: ModelVariable) -> bool:
+    """whether a model variable holds an address, from its size or its name"""
+    return v.size_bits == 160 or "_address_" in v.full_name
 
 
 @dataclass(frozen=True, slots=True)

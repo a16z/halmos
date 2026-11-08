@@ -1291,6 +1291,7 @@ class Exec:  # an execution path
     jumpis: dict[JumpID, dict[bool, int]]  # for loop detection
     addresses_to_delete: set[Address]
     created_in_tx: set[Address]  # accounts created in the current transaction
+    labels: list  # (address, label) pairs set by vm.label, latest last
 
     # path
     path: Path  # path conditions
@@ -1336,6 +1337,9 @@ class Exec:  # an execution path
         # note: an empty set must be preserved as-is, so that sub-contexts share it
         created_in_tx = kwargs.get("created_in_tx")
         self.created_in_tx = created_in_tx if created_in_tx is not None else set()
+        # vm.label(address, string): shared with sub-contexts, like the nonces
+        labels = kwargs.get("labels")
+        self.labels = labels if labels is not None else []
         #
         self.path = kwargs["path"]
         self.alias = kwargs["alias"]
@@ -2872,6 +2876,7 @@ class SEVM:
                 cnts=ex.cnts,
                 nonces=ex.nonces,
                 created_in_tx=ex.created_in_tx,
+                labels=ex.labels,
                 sha3s=ex.sha3s,
                 storages=ex.storages,
                 balances=ex.balances,
@@ -3266,6 +3271,7 @@ class SEVM:
             cnts=ex.cnts,
             nonces=ex.nonces,
             created_in_tx=ex.created_in_tx,
+            labels=ex.labels,
             sha3s=ex.sha3s,
             storages=ex.storages,
             balances=ex.balances,
@@ -3553,6 +3559,7 @@ class SEVM:
             cnts=deepcopy(ex.cnts),
             nonces=deepcopy(ex.nonces),
             created_in_tx=set(ex.created_in_tx),
+            labels=list(ex.labels),
             sha3s=ex.sha3s.copy(),
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
@@ -3645,6 +3652,7 @@ class SEVM:
             cnts=deepcopy(ex.cnts),
             nonces=deepcopy(ex.nonces),
             created_in_tx=set(ex.created_in_tx),
+            labels=list(ex.labels),
             sha3s=ex.sha3s.copy(),
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
@@ -3774,6 +3782,7 @@ class SEVM:
             #
             cnts=deepcopy(pre_ex.cnts),
             nonces=deepcopy(pre_ex.nonces),
+            labels=list(pre_ex.labels),
             sha3s=pre_ex.sha3s.copy(),
             storages=pre_ex.storages.copy(),
             balances=pre_ex.balances.copy(),
