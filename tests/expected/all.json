@@ -3759,6 +3759,26 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/NestedLibrary.t.sol:NestedLibraryTest": [
+            {
+                "name": "check_nested_library(uint8)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_nested_library_fail(uint8)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/OpCodesBlobBaseFee_BlobHash.t.sol:BlobBaseFeeTest": [
             {
                 "name": "check_blobbasefee_affordable(uint256)",

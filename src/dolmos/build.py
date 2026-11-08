@@ -537,24 +537,51 @@ def parse_natspec(natspec: dict) -> str:
 
 
 def import_libs(build_out_map: dict, hexcode: str, linkReferences: dict) -> dict:
+    """
+    The libraries to deploy for a contract, keyed by `path:Name`, each with its
+    placeholder in the bytecode that links it, its deployed bytecode, and the keys of
+    the libraries that its own bytecode links (`deps`).
+
+    Libraries linked by other libraries are included (halmos#555), and the result is
+    ordered so that every library comes after the libraries it links: deploying in
+    this order lets each placeholder be replaced before the code is deployed.
+    """
     libs = {}
+
+    def visit(filepath: str, lib_name: str, refs: dict, code: str, stack: tuple):
+        key = f"{filepath}:{lib_name}"
+        if key in libs:
+            return
+        if key in stack:
+            raise ValueError(f"circular library links: {' -> '.join(stack + (key,))}")
+
+        entry = find_contract(build_out_map, filepath, lib_name)
+        if entry is None:
+            raise ValueError(f"library {filepath}:{lib_name} not found")
+        (lib_json, _, _) = entry
+        lib_hexcode = lib_json["deployedBytecode"]["object"]
+        lib_refs = lib_json["deployedBytecode"].get("linkReferences") or {}
+
+        # in bytes, multiply indices by 2 and offset 0x
+        placeholder_index = refs[filepath][lib_name][0]["start"] * 2 + 2
+        placeholder = code[placeholder_index : placeholder_index + 40]
+
+        # the libraries linked by this library come first
+        deps = []
+        for dep_path in lib_refs:
+            for dep_name in lib_refs[dep_path]:
+                visit(dep_path, dep_name, lib_refs, lib_hexcode, stack + (key,))
+                deps.append(f"{dep_path}:{dep_name}")
+
+        libs[key] = {
+            "placeholder": placeholder,
+            "hexcode": lib_hexcode,
+            "deps": deps,
+        }
 
     for filepath in linkReferences:
         for lib_name in linkReferences[filepath]:
-            entry = find_contract(build_out_map, filepath, lib_name)
-            if entry is None:
-                raise ValueError(f"library {filepath}:{lib_name} not found")
-            (lib_json, _, _) = entry
-            lib_hexcode = lib_json["deployedBytecode"]["object"]
-
-            # in bytes, multiply indices by 2 and offset 0x
-            placeholder_index = linkReferences[filepath][lib_name][0]["start"] * 2 + 2
-            placeholder = hexcode[placeholder_index : placeholder_index + 40]
-
-            libs[f"{filepath}:{lib_name}"] = {
-                "placeholder": placeholder,
-                "hexcode": lib_hexcode,
-            }
+            visit(filepath, lib_name, linkReferences, hexcode, ())
 
     return libs
 

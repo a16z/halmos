@@ -42,6 +42,9 @@ All notable changes to dolmos are documented here. The format follows
   could sign a message "from" a contract: its result is now above `2**64`, where
   contracts are created, and differs from every concrete address with code at the
   time of the call, e.g. a contract etched at a hardcoded address (halmos#413)
+- a library that links another library crashed with `non-hexadecimal number found in
+  fromhex()`: the libraries linked by libraries are now deployed too, before the
+  libraries that link them, and their placeholders are replaced (halmos#555)
 
 - `NOT` applied to the result of a comparison (`EQ`, `LT`, `ISZERO`, ...) complements
   the 256-bit word, instead of negating it logically: `not(eq(1, 1))` is

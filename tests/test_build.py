@@ -19,7 +19,7 @@ def write_artifact(out, rel_dir, name, source_path, code="0x6000", link_refs=Non
     artifact = {
         "abi": [],
         "bytecode": {"object": code, "linkReferences": link_refs or {}},
-        "deployedBytecode": {"object": code},
+        "deployedBytecode": {"object": code, "linkReferences": link_refs or {}},
         "methodIdentifiers": {},
         "id": 0,
         "metadata": {"compiler": {"version": "0.8.30"}},
@@ -127,3 +127,34 @@ def test_resolve_artifact_path(conflicting_out):
 
     with pytest.raises(FileNotFoundError):
         resolve_artifact_path(conflicting_out, "A.sol", "Missing")
+
+
+def test_import_libs_nested(tmp_path):
+    """a library that links another library comes after it (halmos#555)"""
+    out = str(tmp_path / "out")
+
+    def placeholder(c):
+        return "__$" + c * 34 + "$__"
+
+    ph_a, ph_b = placeholder("a"), placeholder("b")
+    # LibA's deployed code links LibB
+    write_artifact(
+        out,
+        "Libs.sol",
+        "LibA",
+        "src/Libs.sol",
+        code="0x73" + ph_b + "00",
+        link_refs={"src/Libs.sol": {"LibB": [{"start": 1, "length": 20}]}},
+    )
+    write_artifact(out, "Libs.sol", "LibB", "src/Libs.sol", code="0x6033")
+    args = default_config().with_overrides(
+        source=ConfigSource.command_line, root=str(tmp_path)
+    )
+    files = parse_build_out(args)["0.8.30"]
+
+    link_refs = {"src/Libs.sol": {"LibA": [{"start": 1, "length": 20}]}}
+    libs = import_libs(files, "0x73" + ph_a + "00", link_refs)
+    assert list(libs) == ["src/Libs.sol:LibB", "src/Libs.sol:LibA"]
+    assert libs["src/Libs.sol:LibA"]["placeholder"] == ph_a
+    assert libs["src/Libs.sol:LibB"]["placeholder"] == ph_b
+    assert libs["src/Libs.sol:LibA"]["deps"] == ["src/Libs.sol:LibB"]

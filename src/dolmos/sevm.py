@@ -1797,18 +1797,31 @@ class Exec:  # an execution path
 
     # deploy libraries and resolve library placeholders in hexcode
     def resolve_libs(self, creation_hexcode, deployed_hexcode, lib_references) -> str:
+        """
+        Deploys the libraries (in the order of import_libs, which puts every library
+        after the libraries it links) and replaces their placeholders, in the code
+        of the libraries that link them (halmos#555) and in the given hexcodes.
+        """
         if lib_references:
+            addresses = {}  # placeholder -> hex address of the deployed library
+
+            def link(hexcode: str) -> str:
+                for placeholder, hex_address in addresses.items():
+                    hexcode = hexcode.replace(placeholder, hex_address)
+                return hexcode
+
             for lib in lib_references:
                 address = self.new_address()
 
-                lib_bytecode = Contract.from_hexcode(lib_references[lib]["hexcode"])
+                lib_hexcode = link(lib_references[lib]["hexcode"])
+                lib_bytecode = Contract.from_hexcode(lib_hexcode)
                 self.set_code(address, lib_bytecode)
 
                 placeholder = lib_references[lib]["placeholder"]
-                hex_address = stripped(hex(address.as_long())).zfill(40)
+                addresses[placeholder] = stripped(hex(address.as_long())).zfill(40)
 
-                creation_hexcode = creation_hexcode.replace(placeholder, hex_address)
-                deployed_hexcode = deployed_hexcode.replace(placeholder, hex_address)
+            creation_hexcode = link(creation_hexcode)
+            deployed_hexcode = link(deployed_hexcode)
 
         return (creation_hexcode, deployed_hexcode)
 
