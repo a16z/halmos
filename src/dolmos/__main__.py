@@ -1106,7 +1106,7 @@ class CounterexampleHandler:
             return
 
         if result == "err":
-            error(f"{solver_output.error=} ({solver_output.returncode=})")
+            error(f"solver error on path {path_id}: {solver_output.error}")
             self._save_failed_query(path_id, solver_output, "error")
             return
 

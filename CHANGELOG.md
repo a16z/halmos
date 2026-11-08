@@ -29,6 +29,11 @@ All notable changes to dolmos are documented here. The format follows
 - counterexamples were empty when the solver answers `(get-model)` with equalities,
   `(= p_x_uint256_… #b…)`, instead of `define-fun` (e.g. models saved in smt files):
   both formats are parsed (halmos#449)
+- solver failures are described instead of `solver_output.error=''
+  (solver_output.returncode=-4)`: a negative return code is named after the signal
+  that killed the solver, with the likely cause (e.g. SIGILL: a solver binary built
+  for another CPU; SIGKILL: out of memory), along with the solver and its stderr
+  (halmos#580)
 
 - `NOT` applied to the result of a comparison (`EQ`, `LT`, `ISZERO`, ...) complements
   the 256-bit word, instead of negating it logically: `not(eq(1, 1))` is

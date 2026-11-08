@@ -4,6 +4,7 @@ import re
 import shlex
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import suppress
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -74,6 +75,50 @@ dolmos_var_pattern = re.compile(
     """,
     re.VERBOSE,
 )
+
+
+def describe_solver_error(stderr: str, returncode: int | None, args=None) -> str:
+    """
+    A readable description of a solver failure (halmos#580): a negative return code
+    means that the solver process was killed by a signal, e.g. -4 (SIGILL) when the
+    solver binary uses CPU instructions that this machine does not support, or -9
+    (SIGKILL) when it ran out of memory. The solver's stderr, often empty in that
+    case, is kept.
+    """
+    import signal
+
+    stderr = (stderr or "").strip()
+    solver = None
+    if args is not None:
+        with suppress(Exception):
+            solver = args.solver_command or args.solver
+
+    parts = []
+    if returncode is not None and returncode < 0:
+        try:
+            name = signal.Signals(-returncode).name
+        except ValueError:
+            name = f"signal {-returncode}"
+        reason = {
+            "SIGILL": "illegal instruction: the solver binary is probably built for "
+            "another CPU; try another solver with --solver, or a build of this one "
+            "for your machine",
+            "SIGKILL": "killed, e.g. by the system when it ran out of memory; see "
+            "--solver-max-memory",
+            "SIGSEGV": "segmentation fault in the solver",
+            "SIGABRT": "the solver aborted",
+        }.get(name, "the solver was killed by a signal")
+        parts.append(f"solver terminated by {name} ({reason})")
+    elif returncode:
+        parts.append(f"solver exited with code {returncode}")
+    else:
+        parts.append("unexpected solver output")
+
+    if solver:
+        parts.append(f"solver: {solver}")
+    if stderr:
+        parts.append(f"stderr: {stderr}")
+    return "; ".join(parts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -390,7 +435,11 @@ class SolverOutput:
                 return SolverOutput(unknown, returncode, path_id, query_file)
             case _:
                 return SolverOutput(
-                    "err", returncode, path_id, query_file, error=stderr
+                    "err",
+                    returncode,
+                    path_id,
+                    query_file,
+                    error=describe_solver_error(stderr, returncode, args),
                 )
 
     @staticmethod
