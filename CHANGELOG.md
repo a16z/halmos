@@ -51,7 +51,9 @@ All notable changes to dolmos are documented here. The format follows
 - `SELFDESTRUCT` opcode, with the EIP-6780 (Cancun) semantics: the balance is sent to
   the beneficiary and the frame halts; the account (code, storage, balance, nonce) is
   deleted at the end of the transaction only if it was created in that transaction;
-  forbidden in static contexts (halmos#411)
+  forbidden in static contexts (halmos#411). With `BLOBHASH` and `BLOBBASEFEE`
+  (0.1.0), and `TLOAD`, `TSTORE` and `MCOPY` inherited from halmos, every opcode
+  introduced by Cancun is supported (halmos#290)
 - EVM version setting, `--evm-version VERSION` (also usable in `dolmos.toml` and
   `@custom:dolmos` annotations): opcodes introduced after the selected fork are invalid,
   and `SELFDESTRUCT` deletes the account unconditionally before Cancun. Defaults to the
@@ -108,10 +110,10 @@ First release of dolmos.
   nonces (EIP-161), so that CREATE3-style address prediction matches execution
 - nonce cheatcodes: `vm.getNonce`, `vm.setNonce`, `vm.setNonceUnsafe`,
   `vm.resetNonce`
-- opcodes `CLZ` (EIP-7939), `BLOBHASH` and `BLOBBASEFEE` (EIP-4844)
+- opcodes `CLZ` (EIP-7939, halmos#586), `BLOBHASH` and `BLOBBASEFEE` (EIP-4844)
 - experimental Vyper support: Vyper test contracts, Solidity tests targeting
   Vyper contracts, `@custom:dolmos` annotations in docstrings,
-  `--invalid-as-failure`
+  `--invalid-as-failure` (halmos#154)
 - `dolmos.toml` configuration file and `@custom:dolmos` annotations
   (`halmos.toml`, `@custom:halmos` and `HALMOS_ALLOW_DOWNLOAD` remain accepted)
 - PyPI package and Docker image `ghcr.io/dowsers/dolmos`
