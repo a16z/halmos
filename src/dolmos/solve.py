@@ -448,6 +448,48 @@ def _parse_dolmos_var_match(match: re.Match) -> ModelVariable:
     )
 
 
+# the model format of solvers that answer (get-model) with equalities, e.g. yices
+# with `--smt2-model-format` off, or the models saved in smt files (halmos#449):
+#   (= p_x_uint256_8d8a5a6_00 #b0101...)
+dolmos_eq_pattern = re.compile(
+    r"""
+    \(\s*=\s+
+    \|?((?:dolmos_|p_)[^ |()]+)\|?\s+  # the variable, optionally wrapped in "|"
+    (                                # its value
+        \#b[01]+
+        |\#x[0-9a-fA-F]+
+        |\(_\s+bv\d+\s+\d+\)
+    )
+    \s*\)
+    """,
+    re.VERBOSE,
+)
+
+
+def _const_size(value: str) -> int:
+    """bit size of a bitvector literal: #b..., #x... or (_ bvN size)"""
+    if value.startswith("#b"):
+        return len(value) - 2
+    if value.startswith("#x"):
+        return 4 * (len(value) - 2)
+    return int(value.strip("()").split()[-1])
+
+
+def _parse_dolmos_eq_match(match: re.Match) -> ModelVariable:
+    full_name = match.group(1).strip()
+    value_str = match.group(2)
+    size_bits = _const_size(value_str)
+    parts = full_name.split("_")
+    return ModelVariable(
+        full_name=full_name,
+        variable_name=parts[1],
+        solidity_type=parts[2],
+        smt_type=f"BitVec {size_bits}",
+        size_bits=size_bits,
+        value=parse_const_value(value_str),
+    )
+
+
 def parse_model_str(smtlib_str: str) -> ModelVariables:
     """Expects a whole smtlib model output file, as produced by a solver
     in response to a `(check-sat)` + `(get-model)` command.
@@ -468,6 +510,15 @@ def parse_model_str(smtlib_str: str) -> ModelVariables:
             model_variables[variable.full_name] = variable
         except Exception as e:
             error(f"error parsing smtlib string '{match.string.strip()}': {e}")
+            raise e
+
+    # models made of equalities instead of define-fun (halmos#449)
+    for match in dolmos_eq_pattern.finditer(smtlib_str):
+        try:
+            variable = _parse_dolmos_eq_match(match)
+            model_variables.setdefault(variable.full_name, variable)
+        except Exception as e:
+            error(f"error parsing smtlib string '{match.group(0).strip()}': {e}")
             raise e
 
     return model_variables

@@ -26,6 +26,10 @@ All notable changes to dolmos are documented here. The format follows
 
 ### Fixed
 
+- counterexamples were empty when the solver answers `(get-model)` with equalities,
+  `(= p_x_uint256_… #b…)`, instead of `define-fun` (e.g. models saved in smt files):
+  both formats are parsed (halmos#449)
+
 - `NOT` applied to the result of a comparison (`EQ`, `LT`, `ISZERO`, ...) complements
   the 256-bit word, instead of negating it logically: `not(eq(1, 1))` is
   `2**256 - 2`, not `0` (halmos#593)
