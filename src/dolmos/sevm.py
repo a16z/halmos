@@ -2390,6 +2390,25 @@ class Worklist:
     # for status reporting
     completed_paths: int = 0
 
+    # paths that ended without completing, also reported in the status (halmos#444):
+    # without them, the number of completed paths can stay frozen while the
+    # exploration goes on, e.g. when every path stops at a loop bound
+    bounded_paths: int = 0  # stopped at a loop bound (--loop)
+    infeasible_paths: int = 0  # dropped because their path condition is unsatisfiable
+    depth_limited_paths: int = 0  # stopped by --depth
+
+    def status(self) -> str:
+        """the path counts of the status line"""
+        parts = [f"completed paths: {self.completed_paths}"]
+        if self.bounded_paths:
+            parts.append(f"stopped at loop bounds: {self.bounded_paths}")
+        if self.infeasible_paths:
+            parts.append(f"infeasible: {self.infeasible_paths}")
+        if self.depth_limited_paths:
+            parts.append(f"stopped by --depth: {self.depth_limited_paths}")
+        parts.append(f"outstanding paths: {len(self)}")
+        return " | ".join(parts)
+
     def push(self, ex: Exec):
         self.stack.append(ex)
 
@@ -3404,6 +3423,13 @@ class SEVM:
         new_ex_true = None
         new_ex_false = None
 
+        # the path ends here without completing (halmos#444)
+        if not follow_true and not follow_false:
+            if potential_true or potential_false:
+                stack.bounded_paths += 1
+            else:
+                stack.infeasible_paths += 1
+
         if follow_true and target not in ex.pgm.valid_jumpdests():
             # the jump is an exceptional halt, but only when it is taken: the
             # fall-through is still a feasible path, and dropping it could hide a
@@ -3918,8 +3944,7 @@ class SEVM:
                     ui.update_status(
                         f"{fun_name}: "
                         f"[{elapsed_fmt}] {speed:.0f} ops/s"
-                        f" | completed paths: {stack.completed_paths}"
-                        f" | outstanding paths: {len(stack)}"
+                        f" | {stack.status()}"
                         f"\n{call_seq_str}"
                     )
 
@@ -3970,6 +3995,7 @@ class SEVM:
                         f"{self.fun_info.sig}: incomplete execution due to the specified limit: --depth {max_depth}",
                         allow_duplicate=False,
                     )
+                    stack.depth_limited_paths += 1
                     continue
 
                 if print_steps:
@@ -4510,6 +4536,7 @@ class SEVM:
 
             except InfeasiblePath:
                 # ignore infeasible path
+                stack.infeasible_paths += 1
                 continue
 
             except EvmException as err:

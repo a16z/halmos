@@ -49,6 +49,10 @@ All notable changes to dolmos are documented here. The format follows
   at each branch copied the whole tree of completed subcalls. The completed elements
   of the trace, which do not change, are now shared between paths, which also makes
   branching cheaper (halmos#416)
+- the status line could show a frozen number of completed paths while the
+  exploration went on, e.g. when every path stops at a loop bound: it now also counts
+  the paths stopped at a loop bound, dropped as infeasible, or stopped by `--depth`
+  (halmos#444)
 
 - `NOT` applied to the result of a comparison (`EQ`, `LT`, `ISZERO`, ...) complements
   the 256-bit word, instead of negating it logically: `not(eq(1, 1))` is

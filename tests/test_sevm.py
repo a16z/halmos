@@ -676,3 +676,18 @@ def test_addmod_mulmod_zero_modulus_symbolic_operands(opcode, sevm, solver, stor
     out = run_single(f"{opcode:02x}00", sevm, solver, storage, stack=[BV(0), y, x])
     assert out.context.output.error is None
     assert is_valid(solver, out.st.stack[-1].as_z3() == 0)
+
+
+def test_worklist_status_reports_paths_that_did_not_complete():
+    """halmos#444: the status must move even when no path completes"""
+    from dolmos.sevm import Worklist
+
+    stack = Worklist()
+    assert stack.status() == "completed paths: 0 | outstanding paths: 0"
+    stack.bounded_paths = 3
+    stack.infeasible_paths = 1
+    stack.depth_limited_paths = 2
+    assert stack.status() == (
+        "completed paths: 0 | stopped at loop bounds: 3 | infeasible: 1"
+        " | stopped by --depth: 2 | outstanding paths: 0"
+    )
