@@ -122,7 +122,14 @@ contract SignatureTest is SymTest, Test {
     /// we expect a counterexample (the key for a given address which is ofc nonsense)
     /// that's because we only add constraints about the relations between
     /// different vm.addr() calls, but not about specific addresses
+    /// (except that they are above 2**64 and not contracts, see halmos#413)
     function check_vmaddr_canFindKeyForAddr_concrete(uint256 privateKey) public {
+        address addr = vm.addr(privateKey);
+        assertNotEq(addr, address(0x4242424242424242424242424242424242424242));
+    }
+
+    /// addresses below 2**64, where contracts are created, are never returned (halmos#413)
+    function check_vmaddr_notBelow2pow64(uint256 privateKey) public {
         address addr = vm.addr(privateKey);
         assertNotEq(addr, address(0x42));
     }

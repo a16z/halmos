@@ -5216,6 +5216,15 @@
                 "num_bounded_loops": null
             },
             {
+                "name": "check_vmaddr_notBelow2pow64(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_vmsign_canFindKeyForGivenSig(uint256,uint256,bytes32)",
                 "exitcode": 1,
                 "num_models": 1,
@@ -8077,6 +8086,26 @@
             {
                 "name": "check_unsupported_opcode()",
                 "exitcode": 3,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/VmAddrNoContract.t.sol:VmAddrNoContractTest": [
+            {
+                "name": "check_vmaddr_can_be_anything_else_fail(uint256)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_vmaddr_not_deployed(uint256)",
+                "exitcode": 0,
                 "num_models": 0,
                 "models": null,
                 "num_paths": null,

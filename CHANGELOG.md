@@ -38,6 +38,10 @@ All notable changes to dolmos are documented here. The format follows
   could crash the callback (`AttributeError: 'cell' object has no attribute
   '_FileProxy__buffer'`): the solver callbacks and the status changes are serialized,
   and the replaced stdout proxies are kept alive (halmos#557)
+- `vm.addr` could return the address of a deployed contract, so a counterexample
+  could sign a message "from" a contract: its result is now above `2**64`, where
+  contracts are created, and differs from every concrete address with code at the
+  time of the call, e.g. a contract etched at a hardcoded address (halmos#413)
 
 - `NOT` applied to the result of a comparison (`EQ`, `LT`, `ISZERO`, ...) complements
   the 256-bit word, instead of negating it logically: `not(eq(1, 1))` is

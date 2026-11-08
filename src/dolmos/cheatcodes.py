@@ -98,6 +98,10 @@ from dolmos.utils import (
 # f_vmaddr(key) -> address
 f_vmaddr = Function("f_vmaddr", BitVecSort256, BitVecSort160)
 
+# lower bound of the addresses returned by vm.addr (halmos#413): the create/create2
+# addresses used by dolmos are below it
+VMADDR_MIN = 2**64
+
 # f_sign_v(key, digest) -> v
 f_sign_v = Function("f_sign_v", BitVecSort256, BitVecSort256, BitVecSort8)
 
@@ -946,6 +950,17 @@ def apply_vmaddr(ex, private_key: Word):
         for other_key, other_addr in known_keys.items():
             distinct = Implies(private_key != other_key, addr != other_addr)
             ex.path.append(distinct)
+
+        # an address derived from a private key is not the address of a contract
+        # (halmos#413), otherwise a counterexample could sign a message "from" a
+        # deployed contract:
+        # - it is above 2**64, where create/create2 deploy (0xaaaa..., 0xbbbb...)
+        # - it differs from every concrete address with code at this point, which
+        #   covers contracts etched at hardcoded addresses
+        ex.path.append(UGE(addr, VMADDR_MIN))
+        for code_addr in ex.code:
+            if is_bv_value(code_addr) or isinstance(code_addr, int):
+                ex.path.append(addr != code_addr)
 
         # associate the new address with the private key
         known_keys[private_key] = addr
