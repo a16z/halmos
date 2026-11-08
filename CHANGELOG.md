@@ -24,6 +24,12 @@ All notable changes to dolmos are documented here. The format follows
   `CREATE*` and `*CALL`, and the output region of `*CALL` whatever the size of the
   return data. A call with a huge output size therefore runs out of gas, as in the
   EVM, instead of succeeding (halmos#597)
+- artifacts that forge writes to a subdirectory of the build output to resolve a
+  name conflict (e.g. `out/nested/A.sol/Token.json` when `src/A.sol` and
+  `src/nested/A.sol` both define `Token`) are no longer ignored: their test contracts
+  are run, their contracts are named in traces, libraries are linked from them, and
+  `vm.getCode` finds them from a source path such as `src/nested/A.sol:Token` (a
+  bare file name matching several artifacts is an error, as in foundry) (halmos#582)
 
 ## [0.2.0] - 2026-10-16
 

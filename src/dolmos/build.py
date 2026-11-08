@@ -206,6 +206,144 @@ def get_contract_type(
     return None, None
 
 
+ARTIFACT_EXTENSIONS = SOLIDITY_EXTENSIONS + VYPER_EXTENSIONS
+
+# subdirectories of the build output that never hold contract artifacts
+NON_ARTIFACT_DIRS = ("build-info",)
+
+
+def iter_artifact_dirs(out_path: str):
+    """
+    Yield (relative path, absolute path) for every artifact directory of the build
+    output, i.e. every directory named after a source file (`Foo.sol`, `Foo.vy`).
+
+    forge writes the artifacts of `src/Foo.sol` to `out/Foo.sol/`, unless another
+    source file with the same name already claimed that directory: it then adds
+    parent directories of the source path until the path is unique, e.g.
+    `out/nested/Foo.sol/` for `src/nested/Foo.sol` (forge's
+    `conflict_free_output_file`). These nested directories must be found as well
+    (halmos#582).
+
+    The relative path uses `/` separators on every platform, and is just the
+    directory name for top-level artifact directories. The traversal is sorted, so
+    the result does not depend on the order of `os.listdir`.
+    """
+    for dirpath, dirnames, _ in os.walk(out_path):
+        rel_dir = os.path.relpath(dirpath, out_path)
+        if rel_dir == ".":
+            dirnames[:] = [d for d in dirnames if d not in NON_ARTIFACT_DIRS]
+        dirnames.sort()
+
+        # an artifact directory only holds json files, don't descend into it
+        descend = []
+        for dirname in dirnames:
+            if dirname.endswith(ARTIFACT_EXTENSIONS):
+                rel_path = dirname if rel_dir == "." else f"{rel_dir}/{dirname}"
+                yield _artifact_key(rel_path), os.path.join(dirpath, dirname)
+            else:
+                descend.append(dirname)
+        dirnames[:] = descend
+
+
+def find_contract(build_out_map: dict, source_path: str, contract_name: str):
+    """
+    Return the build output entry (json, type, natspec) of a contract, given the
+    path of its source file (e.g. `src/nested/Lib.sol`, as found in
+    `linkReferences`), or None if it is not found.
+
+    The entry is normally stored under the file name (`Lib.sol`), but under a longer
+    path when forge resolved a name conflict (see `iter_artifact_dirs`), so the
+    source path recorded in the artifact decides between candidates.
+    """
+    source_path = _artifact_key(source_path)
+    basename = posixpath.basename(source_path)
+
+    candidates = [
+        contracts[contract_name]
+        for filename, contracts in build_out_map.items()
+        if posixpath.basename(filename) == basename and contract_name in contracts
+    ]
+
+    for entry in candidates:
+        path = get_source_path(entry[0])
+        if path is not None and _artifact_key(path) == source_path:
+            return entry
+
+    # artifacts without a source path: only accept an unambiguous match
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def _artifact_json_in(dir_path: str, contract_name: str) -> str | None:
+    """
+    Return the artifact of a contract in an artifact directory: `Name.json`, or
+    `Name.<compiler version>.json` when it was compiled with several compiler versions
+    and there is only one such file.
+    """
+    plain = os.path.join(dir_path, f"{contract_name}.json")
+    if os.path.isfile(plain):
+        return plain
+    versioned = [
+        f
+        for f in os.listdir(dir_path)
+        if f.startswith(f"{contract_name}.") and f.endswith(".json")
+    ]
+    if len(versioned) == 1:
+        return os.path.join(dir_path, versioned[0])
+    return None
+
+
+def resolve_artifact_path(out_path: str, source: str, contract_name: str) -> str:
+    """
+    Return the path of the artifact of `contract_name`, defined in the source file
+    `source`, which is either a file name (`Foo.sol`) or a path (`src/nested/Foo.sol`),
+    as accepted by `vm.getCode`.
+
+    The artifact is normally `out/Foo.sol/Name.json`, but forge moves it to e.g.
+    `out/nested/Foo.sol/Name.json` when another `Foo.sol` exists (halmos#582). With a
+    path, the artifact whose source path matches it is chosen; with a file name, the
+    match must be unique, as in foundry.
+    """
+    source = _artifact_key(source)
+    basename = posixpath.basename(source)
+
+    candidates = []
+    for rel_path, dir_path in iter_artifact_dirs(out_path):
+        if posixpath.basename(rel_path) != basename:
+            continue
+        if json_path := _artifact_json_in(dir_path, contract_name):
+            candidates.append(json_path)
+
+    if not candidates:
+        raise FileNotFoundError(
+            f"no artifact found for {source}:{contract_name} in {out_path}"
+        )
+
+    if len(candidates) == 1:
+        return candidates[0]
+
+    if source != basename:
+        for json_path in candidates:
+            try:
+                with open(json_path, encoding="utf8") as f:
+                    path = get_source_path(json.load(f))
+            except (OSError, ValueError):
+                continue
+            if path is not None and (
+                _artifact_key(path) == source
+                or _artifact_key(path).endswith("/" + source)
+            ):
+                return json_path
+
+    rel_candidates = sorted(
+        _artifact_key(os.path.relpath(c, out_path)) for c in candidates
+    )
+    raise ValueError(
+        f"multiple artifacts match {source}:{contract_name}: "
+        + ", ".join(rel_candidates)
+        + "; use the full source path, e.g. `src/dir/File.sol:Name`"
+    )
+
+
 def parse_build_out(args: DolmosConfig) -> dict:
     result = {}  # compiler version -> source filename -> contract name -> (json, type)
 
@@ -226,15 +364,11 @@ def parse_build_out(args: DolmosConfig) -> dict:
     # only needed for vyper artifacts, loaded lazily
     forge_cache = None
 
-    for sol_dirname in os.listdir(out_path):  # for each source filename
-        if not sol_dirname.endswith(SOLIDITY_EXTENSIONS + VYPER_EXTENSIONS):
-            continue
-
-        sol_path = os.path.join(out_path, sol_dirname)
-        if not os.path.isdir(sol_path):
-            continue
-
-        for json_filename in os.listdir(sol_path):  # for each contract name
+    # for each source filename; `sol_dirname` is the path of the artifact directory
+    # relative to the build output, e.g. `Foo.sol`, or `nested/Foo.sol` for artifacts
+    # that forge moved to a subdirectory to resolve a name conflict
+    for sol_dirname, sol_path in iter_artifact_dirs(out_path):
+        for json_filename in sorted(os.listdir(sol_path)):  # for each contract name
             try:
                 if not json_filename.endswith(".json"):
                     continue
@@ -256,7 +390,7 @@ def parse_build_out(args: DolmosConfig) -> dict:
                         _artifact_key(f"{sol_dirname}/{json_filename}")
                     )
                     contract_type, compiler_version, natspec = normalize_vyper_artifact(
-                        json_out, sol_dirname, root, cache_entry
+                        json_out, posixpath.basename(sol_dirname), root, cache_entry
                     )
 
                     # note: coverage is not supported for vyper (no source maps),
@@ -406,10 +540,11 @@ def import_libs(build_out_map: dict, hexcode: str, linkReferences: dict) -> dict
     libs = {}
 
     for filepath in linkReferences:
-        file_name = filepath.split("/")[-1]
-
         for lib_name in linkReferences[filepath]:
-            (lib_json, _, _) = build_out_map[file_name][lib_name]
+            entry = find_contract(build_out_map, filepath, lib_name)
+            if entry is None:
+                raise ValueError(f"library {filepath}:{lib_name} not found")
+            (lib_json, _, _) = entry
             lib_hexcode = lib_json["deployedBytecode"]["object"]
 
             # in bytes, multiply indices by 2 and offset 0x

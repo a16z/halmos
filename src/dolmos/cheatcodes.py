@@ -30,6 +30,7 @@ from dolmos import env
 from dolmos.assertions import assert_cheatcode_handler
 from dolmos.bitvec import DolmosBitVec as BV
 from dolmos.bitvec import DolmosBool as Bool
+from dolmos.build import resolve_artifact_path
 from dolmos.bytevec import ByteVec
 from dolmos.calldata import (
     FunctionInfo,
@@ -1208,19 +1209,20 @@ class hevm_cheat_code:
             path = arg[68 : 68 + path_len].unwrap().decode("utf-8")
 
             out_dir = sevm.options.forge_build_out
+            target = sevm.options.root.rstrip("/")
+            out_path = target + "/" + out_dir
             if ":" in path:
                 # `File.sol:Name`, `path/to/File.vy:Name`
-                [filename, contract_name] = path.split(":")
-                filename = os.path.basename(filename)
-                path = f"{out_dir}/{filename}/{contract_name}.json"
+                [source, contract_name] = path.split(":")
+                path = resolve_artifact_path(out_path, source, contract_name)
             elif path.endswith((".sol", ".vy")):
                 # `File.sol`, `path/to/File.vy`: the contract named after the file
                 filename = os.path.basename(path)
                 contract_name = filename.rsplit(".", 1)[0]
-                path = f"{out_dir}/{filename}/{contract_name}.json"
-
-            target = sevm.options.root.rstrip("/")
-            path = target + "/" + path
+                path = resolve_artifact_path(out_path, path, contract_name)
+            else:
+                # artifact path, relative to the project root
+                path = target + "/" + path
 
             with open(path) as f:
                 artifact = json.loads(f.read())
