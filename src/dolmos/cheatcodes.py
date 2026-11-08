@@ -54,6 +54,7 @@ from dolmos.expectations import (
 from dolmos.fs import parse_hex_bytes, read_file
 from dolmos.logs import debug
 from dolmos.mapper import BuildOut
+from dolmos.tostring import TO_STRING_SIGNATURES, to_string_cheatcode
 from dolmos.utils import (
     Address,
     BitVecSort8,
@@ -1693,6 +1694,10 @@ class hevm_cheat_code:
         # vm.projectRoot() returns (string)
         elif funsig == hevm_cheat_code.project_root_sig:
             return project_root_cheatcode(sevm)
+
+        # vm.toString(address | bytes | bytes32 | bool | uint256 | int256)
+        elif funsig in TO_STRING_SIGNATURES:
+            return to_string_cheatcode(funsig, arg, ex)
 
         # vm.expectRevert(...) / vm.expectPartialRevert(...)
         elif funsig in REVERT_SIGNATURES:

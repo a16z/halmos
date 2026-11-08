@@ -203,6 +203,7 @@ from dolmos.logs import (
     warn_code,
 )
 from dolmos.mapper import BuildOut
+from dolmos.tostring import ConditionalReturn
 from dolmos.ui import ui
 from dolmos.utils import (
     Address,
@@ -3020,14 +3021,20 @@ class SEVM:
 
             last_idx = len(ret_lst) - 1
             for idx, ret_ in enumerate(ret_lst):
+                # return data that only holds under a condition (one path each)
+                cond = BoolVal(True)
+                if isinstance(ret_, ConditionalReturn):
+                    cond, ret_ = ret_.cond, ret_.data
+
                 if not isinstance(ret_, ByteVec):
                     raise DolmosException(f"Invalid return value: {ret_}")
 
-                new_ex = (
-                    self.create_branch(ex, BoolVal(True), ex.pc)
-                    if idx < last_idx
-                    else ex
-                )
+                if idx < last_idx:
+                    new_ex = self.create_branch(ex, cond, ex.pc)
+                else:
+                    new_ex = ex
+                    if not is_true(cond):
+                        new_ex.path.append(cond, branching=True)
                 copy_returndata_to_memory(ret_, ret_loc, ret_size, new_ex)
                 new_ex.context.trace.append(
                     CallContext(

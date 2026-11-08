@@ -7,6 +7,16 @@ All notable changes to dolmos are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `vm.toString` for `address`, `bytes`, `bytes32`, `bool`, `uint256` and `int256`, with
+  foundry's formatting (checksummed addresses, lowercase hex, signed decimals), e.g.
+  for forge-std's `bound(int256, int256, int256)`, which logs its result with it.
+  Symbolic values are converted exactly for `bytes` and `bytes32`, exactly up to the
+  case of the letters for `address`, with one path per value for `bool`; for `uint256`
+  and `int256`, whose length depends on the value, the result is approximated by a
+  string of digits of the maximal length, and a warning is printed (halmos#565)
+
 ### Fixed
 
 - `NOT` applied to the result of a comparison (`EQ`, `LT`, `ISZERO`, ...) complements
