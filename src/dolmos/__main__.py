@@ -144,7 +144,7 @@ from dolmos.traces import (
     rendered_call_sequence,
     rendered_trace,
 )
-from dolmos.ui import suspend_status, ui
+from dolmos.ui import OUTPUT_LOCK, suspend_status, ui
 from dolmos.utils import (
     EVM,
     Address,
@@ -1067,7 +1067,12 @@ class CounterexampleHandler:
             error(f"encountered exception during assertion solving: {e!r}")
             return SolverOutput.from_error(e, path_id=path_id, query_file=query_file)
 
-    def _solve_end_to_end_callback(
+    def _solve_end_to_end_callback(self, *args, **kwargs) -> None:
+        # printing from a solver thread must not race with a status change (halmos#557)
+        with OUTPUT_LOCK:
+            self._solve_end_to_end_callback_locked(*args, **kwargs)
+
+    def _solve_end_to_end_callback_locked(
         self,
         future: Future,
         ex: Exec,

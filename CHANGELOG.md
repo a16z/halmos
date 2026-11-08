@@ -34,6 +34,10 @@ All notable changes to dolmos are documented here. The format follows
   that killed the solver, with the likely cause (e.g. SIGILL: a solver binary built
   for another CPU; SIGKILL: out of memory), along with the solver and its stderr
   (halmos#580)
+- a counterexample printed by a solver thread while the status line starts or stops
+  could crash the callback (`AttributeError: 'cell' object has no attribute
+  '_FileProxy__buffer'`): the solver callbacks and the status changes are serialized,
+  and the replaced stdout proxies are kept alive (halmos#557)
 
 - `NOT` applied to the result of a comparison (`EQ`, `LT`, `ISZERO`, ...) complements
   the 256-bit word, instead of negating it logically: `not(eq(1, 1))` is
