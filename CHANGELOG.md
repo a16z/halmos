@@ -45,6 +45,10 @@ All notable changes to dolmos are documented here. The format follows
 - a library that links another library crashed with `non-hexadecimal number found in
   fromhex()`: the libraries linked by libraries are now deployed too, before the
   libraries that link them, and their placeholders are replaced (halmos#555)
+- a RecursionError could abort a test with a deep call tree: copying the call context
+  at each branch copied the whole tree of completed subcalls. The completed elements
+  of the trace, which do not change, are now shared between paths, which also makes
+  branching cheaper (halmos#416)
 
 - `NOT` applied to the result of a comparison (`EQ`, `LT`, `ISZERO`, ...) complements
   the 256-bit word, instead of negating it logically: `not(eq(1, 1))` is

@@ -1026,6 +1026,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/DeepTrace.t.sol:DeepTraceTest": [
+            {
+                "name": "check_deep_trace(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/EvmSemantics.t.sol:EvmSemanticsTest": [
             {
                 "name": "check_jumpi_invalid_target(uint256)",

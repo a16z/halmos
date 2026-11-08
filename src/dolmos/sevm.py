@@ -613,6 +613,37 @@ class CallContext:
     # (a call that reverted as expected is reported as successful)
     returndata_override: ByteVec | None = None
 
+    def __deepcopy__(self, memo) -> "CallContext":
+        """
+        Copies the mutable state of the frame, but shares the elements of its trace:
+        completed subcalls, logs and storage accesses are not modified once they are
+        appended to the trace (see `replace_last_subcall` for the one exception).
+
+        Copying the whole call tree at every branch made the copy recurse once per
+        level of nested calls, until a RecursionError for deep call trees
+        (halmos#416), and cost time and memory proportional to the size of the trace.
+        """
+        return CallContext(
+            message=self.message,
+            output=deepcopy(self.output, memo),
+            depth=self.depth,
+            trace=list(self.trace),
+            prank=deepcopy(self.prank, memo),
+            expectations=deepcopy(self.expectations, memo),
+            returndata_override=self.returndata_override,
+        )
+
+    def replace_last_subcall(self) -> "CallContext":
+        """
+        Replaces the last subcall of the trace with a copy, and returns the copy, so
+        that it can be modified without affecting the other paths that share it.
+        """
+        for i in range(len(self.trace) - 1, -1, -1):
+            if isinstance(self.trace[i], CallContext):
+                self.trace[i] = replace(self.trace[i])
+                return self.trace[i]
+        return None
+
     def subcalls(self) -> Iterator["CallContext"]:
         return iter(t for t in self.trace if isinstance(t, CallContext))
 
@@ -2659,6 +2690,8 @@ class SEVM:
             # for a creation) and dummy return data. The state stays reverted.
             ex.st.pop()
             ex.st.push(ONE)
+            # the subcall may be shared with other paths (see CallContext.__deepcopy__)
+            subcall = ex.context.replace_last_subcall()
             if subcall.message.is_create():
                 subcall.returndata_override = EMPTY_BYTES
             else:
