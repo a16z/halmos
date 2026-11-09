@@ -473,3 +473,32 @@ def test_command_line_precedence_over_annotations(config):
 )
 def test_split_command(command, windows, expected):
     assert split_command(command, windows=windows) == expected
+
+
+def test_detect_proxies_enabled_by_default(config, parser):
+    # halmos#553: ERC-1967 proxies are detected unless disabled
+    assert config.detect_proxies is True
+    assert parser.parse_args([]).detect_proxies is None  # not overridden
+
+
+def test_detect_proxies_disabled_in_toml(config, toml_parser):
+    data = toml_parser.parse_str("[global]\ndetect-proxies = false")
+    assert data == {"detect_proxies": False}
+    assert (
+        config.with_overrides(ConfigSource.config_file, **data).detect_proxies is False
+    )
+
+
+def test_detect_proxies_command_line(config, parser):
+    args = parser.parse_args(["--no-detect-proxies"])
+    overridden = config.with_overrides(ConfigSource.command_line, **vars(args))
+    assert overridden.detect_proxies is False
+
+    # the command line overrides the config file
+    data = {"detect_proxies": False}
+    from_file = config.with_overrides(ConfigSource.config_file, **data)
+    args = parser.parse_args(["--detect-proxies"])
+    assert (
+        from_file.with_overrides(ConfigSource.command_line, **vars(args)).detect_proxies
+        is True
+    )

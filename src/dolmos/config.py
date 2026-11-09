@@ -325,6 +325,11 @@ class Config:
         metavar="MAX_BOUND",
     )
 
+    detect_proxies: bool = arg(
+        help="in invariant testing, call the ERC-1967 proxies found after setUp with the ABI of their implementation; disable with --no-detect-proxies, or `detect-proxies = false` in dolmos.toml",
+        global_default=True,
+    )
+
     loop: int = arg(
         help="set loop unrolling bounds",
         global_default=2,
@@ -959,7 +964,18 @@ def _create_arg_parser() -> argparse.ArgumentParser:
 
         group = groups[group_name]
 
-        if field_info.type is bool:
+        if (
+            field_info.type is bool
+            and field_info.metadata.get("global_default") is True
+        ):
+            # enabled by default: --name and --no-name (and `name = false` in the toml)
+            group.add_argument(
+                *names,
+                help=arg_help + " (default: enabled)",
+                action=argparse.BooleanOptionalAction,
+                default=None,
+            )
+        elif field_info.type is bool:
             group.add_argument(*names, help=arg_help, action="store_true", default=None)
         elif field_info.metadata.get("countable", False):
             group.add_argument(*names, help=arg_help, action="count")

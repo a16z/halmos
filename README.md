@@ -144,6 +144,9 @@ Options can be set per project in `dolmos.toml` at the project root:
 ```toml
 [global]
 solver-timeout-assertion = 10000
+# invariant testing calls ERC-1967 proxies with the ABI of their implementation;
+# set to false to call them with their own ABI (same as --no-detect-proxies)
+detect-proxies = true
 ```
 
 `python -m dolmos.config` prints every option with its default value, in that

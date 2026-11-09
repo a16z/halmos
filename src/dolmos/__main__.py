@@ -1607,7 +1607,11 @@ def get_invariant_testing_context(
             excluded_contracts=get_excluded_contracts(ctx, setup_ex),
             excluded_selectors=get_excluded_selectors(ctx, setup_ex),
             target_interfaces=get_target_interfaces(ctx, setup_ex),
-            proxy_implementations=get_proxy_implementations(ctx, setup_ex),
+            proxy_implementations=(
+                get_proxy_implementations(ctx, setup_ex)
+                if ctx.args.detect_proxies
+                else MappingProxyType({})
+            ),
         )
     except Exception as err:
         warn(

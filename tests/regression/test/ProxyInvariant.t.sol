@@ -100,3 +100,20 @@ contract ProxyInterfaceInvariantTest is Test {
         assert(!vault.broken());
     }
 }
+
+/// with --no-detect-proxies (or `detect-proxies = false` in dolmos.toml), the proxy is
+/// called with its own ABI, which has no function: the invariant holds (halmos#553)
+/// @custom:dolmos --invariant-depth 1 --no-detect-proxies
+contract ProxyNoDetectInvariantTest is Test {
+    ProxyVault vault;
+
+    function setUp() public {
+        ProxyVault impl = new ProxyVault();
+        vault = ProxyVault(address(new ERC1967MiniProxy(address(impl))));
+        targetContract(address(vault));
+    }
+
+    function invariant_not_broken() public view {
+        assert(!vault.broken());
+    }
+}
