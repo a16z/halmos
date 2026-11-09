@@ -1,4 +1,8 @@
+# CLI options #
 
+New option : 
+detect-proxies
+This option allows to choose between the verification of the implementation code from proxy or the proxy code.
 
 # Modeling choices #
 
