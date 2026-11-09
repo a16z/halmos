@@ -77,16 +77,48 @@ dolmos_var_pattern = re.compile(
 )
 
 
+_SIGILL_REASON = (
+    "illegal instruction: the solver binary is probably built for another CPU; try "
+    "another solver with --solver, or a build of this one for your machine"
+)
+_OOM_REASON = (
+    "killed, e.g. by the system when it ran out of memory; see --solver-max-memory"
+)
+
+# POSIX signals, by number: a process killed by a signal has the return code -signum.
+# The numbers are fixed here rather than read from the signal module, which lacks
+# SIGKILL and others on Windows.
+_POSIX_SIGNALS = {
+    2: ("SIGINT", "interrupted"),
+    4: ("SIGILL", _SIGILL_REASON),
+    6: ("SIGABRT", "the solver aborted"),
+    7: ("SIGBUS", "bus error in the solver"),
+    8: ("SIGFPE", "arithmetic error in the solver"),
+    9: ("SIGKILL", _OOM_REASON),
+    11: ("SIGSEGV", "segmentation fault in the solver"),
+    15: ("SIGTERM", "terminated"),
+}
+
+# Windows reports a crash as an NTSTATUS exception code, as an unsigned (or, from some
+# runtimes, signed 32-bit) return code
+_WINDOWS_EXCEPTIONS = {
+    0xC000001D: ("STATUS_ILLEGAL_INSTRUCTION", _SIGILL_REASON),
+    0xC0000005: ("STATUS_ACCESS_VIOLATION", "segmentation fault in the solver"),
+    0xC00000FD: ("STATUS_STACK_OVERFLOW", "stack overflow in the solver"),
+    0xC0000017: ("STATUS_NO_MEMORY", _OOM_REASON),
+    0xC0000409: ("STATUS_STACK_BUFFER_OVERRUN", "the solver aborted"),
+}
+
+
 def describe_solver_error(stderr: str, returncode: int | None, args=None) -> str:
     """
     A readable description of a solver failure (halmos#580): a negative return code
     means that the solver process was killed by a signal, e.g. -4 (SIGILL) when the
     solver binary uses CPU instructions that this machine does not support, or -9
-    (SIGKILL) when it ran out of memory. The solver's stderr, often empty in that
-    case, is kept.
+    (SIGKILL) when it ran out of memory; on Windows, a crash is reported as an
+    exception code instead, e.g. 0xC000001D (illegal instruction). The solver's
+    stderr, often empty in that case, is kept.
     """
-    import signal
-
     stderr = (stderr or "").strip()
     solver = None
     if args is not None:
@@ -94,20 +126,14 @@ def describe_solver_error(stderr: str, returncode: int | None, args=None) -> str
             solver = args.solver_command or args.solver
 
     parts = []
-    if returncode is not None and returncode < 0:
-        try:
-            name = signal.Signals(-returncode).name
-        except ValueError:
-            name = f"signal {-returncode}"
-        reason = {
-            "SIGILL": "illegal instruction: the solver binary is probably built for "
-            "another CPU; try another solver with --solver, or a build of this one "
-            "for your machine",
-            "SIGKILL": "killed, e.g. by the system when it ran out of memory; see "
-            "--solver-max-memory",
-            "SIGSEGV": "segmentation fault in the solver",
-            "SIGABRT": "the solver aborted",
-        }.get(name, "the solver was killed by a signal")
+    windows_code = returncode % 2**32 if returncode is not None else None
+    if windows_code in _WINDOWS_EXCEPTIONS:
+        name, reason = _WINDOWS_EXCEPTIONS[windows_code]
+        parts.append(f"solver crashed with {name} (0x{windows_code:08X}, {reason})")
+    elif returncode is not None and returncode < 0:
+        name, reason = _POSIX_SIGNALS.get(
+            -returncode, (f"signal {-returncode}", "the solver was killed by a signal")
+        )
         parts.append(f"solver terminated by {name} ({reason})")
     elif returncode:
         parts.append(f"solver exited with code {returncode}")

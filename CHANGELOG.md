@@ -39,7 +39,8 @@ All notable changes to dolmos are documented here. The format follows
 - solver failures are described instead of `solver_output.error=''
   (solver_output.returncode=-4)`: a negative return code is named after the signal
   that killed the solver, with the likely cause (e.g. SIGILL: a solver binary built
-  for another CPU; SIGKILL: out of memory), along with the solver and its stderr
+  for another CPU; SIGKILL: out of memory), or on Windows after the exception code
+  (e.g. 0xC000001D, illegal instruction), along with the solver and its stderr
   (halmos#580)
 - a counterexample printed by a solver thread while the status line starts or stops
   could crash the callback (`AttributeError: 'cell' object has no attribute
