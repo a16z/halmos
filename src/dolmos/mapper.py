@@ -359,12 +359,28 @@ class BuildOut(metaclass=SingletonMeta):
 
         if filename is None:
             if len(mapping) > 1:
-                raise DolmosException(
-                    f"{contract_name} exists in multiple files: {list(mapping.keys())}"
-                )
-            [filename] = mapping.keys()
+                # forge writes the artifacts of a source file whose name is already
+                # taken to a subdirectory of the build output, and their key is then a
+                # path, e.g. `ERC20/IERC20.sol` (halmos#582). These artifacts used to be
+                # ignored: without a filename, the top-level one is still the one meant.
+                top_level = [f for f in mapping if "/" not in f]
+                if len(top_level) != 1:
+                    raise DolmosException(
+                        f"{contract_name} exists in multiple files: "
+                        f"{list(mapping.keys())}; give the file, e.g. "
+                        f"svm.createCalldata(filename, contractName)"
+                    )
+                [filename] = top_level
+            else:
+                [filename] = mapping.keys()
 
         result = mapping.get(filename)
+
+        if not result and "/" not in filename:
+            # the file name of an artifact that forge moved to a subdirectory
+            nested = [f for f in mapping if f.endswith("/" + filename)]
+            if len(nested) == 1:
+                result = mapping[nested[0]]
 
         if not result:
             raise DolmosException(f"{contract_name} is not found in {filename}")

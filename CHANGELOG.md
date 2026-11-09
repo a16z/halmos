@@ -86,7 +86,9 @@ All notable changes to dolmos are documented here. The format follows
   `src/nested/A.sol` both define `Token`) are no longer ignored: their test contracts
   are run, their contracts are named in traces, libraries are linked from them, and
   `vm.getCode` finds them from a source path such as `src/nested/A.sol:Token` (a
-  bare file name matching several artifacts is an error, as in foundry) (halmos#582)
+  bare file name matching several artifacts is an error, as in foundry). A contract
+  name alone, e.g. `svm.createCalldata("IERC20")`, still resolves to the top-level
+  artifact when nested artifacts share its name (halmos#582)
 
 ## [0.2.0] - 2026-10-16
 
