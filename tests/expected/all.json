@@ -4577,6 +4577,28 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/ProxyInvariant.t.sol:ProxyInterfaceInvariantTest": [
+            {
+                "name": "invariant_not_broken()",
+                "exitcode": 1,
+                "num_models": 6,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/ProxyInvariant.t.sol:ProxyInvariantTest": [
+            {
+                "name": "invariant_not_broken()",
+                "exitcode": 1,
+                "num_models": 3,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Revert.t.sol:CTest": [
             {
                 "name": "check_BalanceTransfer_Known(uint256,uint256)",

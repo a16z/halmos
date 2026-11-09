@@ -9,6 +9,13 @@ All notable changes to dolmos are documented here. The format follows
 
 ### Added
 
+- invariant testing through proxies (halmos#553): an ERC-1967 proxy found after
+  `setUp` is called with the ABI of its implementation (read once from the
+  implementation slot, upgrades during the run are not followed), and forge-std's
+  `targetInterfaces()` gives the ABI to use for any address, e.g. a proxy with a
+  non-standard layout (`targetInterface(FuzzInterface(proxy, ["Impl"]))`). The target
+  functions panel shows the ABI used, e.g. `Proxy @ 0x… (as Impl)`
+
 - `vm.toString` for `address`, `bytes`, `bytes32`, `bool`, `uint256` and `int256`, with
   foundry's formatting (checksummed addresses, lowercase hex, signed decimals), e.g.
   for forge-std's `bound(int256, int256, int256)`, which logs its result with it.

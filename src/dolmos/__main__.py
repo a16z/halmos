@@ -17,6 +17,7 @@ import traceback
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator
 from concurrent.futures import Future
+from copy import deepcopy
 from dataclasses import asdict, dataclass
 from datetime import timedelta
 from enum import Enum
@@ -34,7 +35,9 @@ from z3 import (
     Solver,
     ZeroExt,
     eq,
+    is_bv_value,
     set_option,
+    simplify,
     unknown,
     unsat,
 )
@@ -653,20 +656,21 @@ def run_target_contract(
     # TODO: implement memoization
     effective_target_senders = inv_ctx.target_senders - excluded_senders
 
-    # retrieve the contract name and metadata from the given address
-    code = ex.code[addr]
-    contract_name = code.contract_name
-    filename = code.filename
-
-    if not contract_name:
-        raise ValueError(f"couldn't find the contract name for: {addr}")
-
-    contract_json = BuildOut().get_by_name(contract_name, filename)
-    abi = get_abi(contract_json)
+    # the ABI used to call the address: its own, or that of the implementation behind
+    # a proxy or of the artifacts given by targetInterfaces() (halmos#553)
+    target_functions = []
+    seen_selectors = set()
+    for contract_name, contract_json in get_target_abis(inv_ctx, ex, addr):
+        abi = get_abi(contract_json)
+        for fun_sig, fun_selector in resolve_target_selectors(
+            inv_ctx, addr, contract_json
+        ):
+            if fun_selector not in seen_selectors:
+                seen_selectors.add(fun_selector)
+                target_functions.append((contract_name, abi, fun_sig, fun_selector))
 
     # iterate over each function in the target contract
-    target_selectors = resolve_target_selectors(ctx.inv_ctx, addr, contract_json)
-    for fun_sig, fun_selector in target_selectors:
+    for contract_name, abi, fun_sig, fun_selector in target_functions:
         fun_name = fun_sig.split("(")[0]
         fun_info = FunctionInfo(contract_name, fun_name, fun_sig, fun_selector)
 
@@ -1602,6 +1606,8 @@ def get_invariant_testing_context(
             excluded_senders=get_excluded_senders(ctx, setup_ex),
             excluded_contracts=get_excluded_contracts(ctx, setup_ex),
             excluded_selectors=get_excluded_selectors(ctx, setup_ex),
+            target_interfaces=get_target_interfaces(ctx, setup_ex),
+            proxy_implementations=get_proxy_implementations(ctx, setup_ex),
         )
     except Exception as err:
         warn(
@@ -1786,6 +1792,133 @@ def get_excluded_selectors(
 
 
 # TODO: implement memoization to prevent redundant computation when ex.code remains unchanged
+# bytes32(uint256(keccak256("eip1967.proxy.implementation")) - 1)
+ERC1967_IMPLEMENTATION_SLOT = (
+    0x360894A13BA1A3210667C828492DB98DCA3E2076CC3735A920A3CA505D382BBC
+)
+
+
+def get_target_interfaces(
+    ctx: ContractContext, setup_ex: Exec
+) -> MappingProxyType[Address, tuple[str, ...]]:
+    """
+    targetInterfaces() of forge-std: the artifacts whose ABI is used to call an address,
+    e.g. the implementation behind a proxy (halmos#553)
+    """
+    if "targetInterfaces()" not in ctx.abi:
+        return MappingProxyType({})
+
+    # function targetInterfaces() public view returns (FuzzInterface[] memory)
+    selector = "2ade3880"
+    funname = "targetInterfaces"
+    fun_info = FunctionInfo(ctx.name, funname, f"{funname}()", selector)
+
+    returndata = execute_simple_getter(ctx, setup_ex, fun_info)
+    result = defaultdict(list)
+    for addr, artifacts in abi_decode_FuzzInterface_array(returndata):
+        result[addr].extend(a for a in artifacts if a not in result[addr])
+    return MappingProxyType({addr: tuple(names) for addr, names in result.items()})
+
+
+def abi_decode_FuzzInterface_array(
+    returndata: ByteVec,
+) -> Iterator[tuple[Address, list[str]]]:
+    """Decodes a FuzzInterface array: (address addr, string[] artifacts)[]"""
+
+    def word(offset: int) -> int:
+        return int_of(returndata.get_word(offset), "symbolic FuzzInterface data")
+
+    def string_at(offset: int) -> str:
+        length = word(offset)
+        data = returndata[offset + 32 : offset + 32 + length].unwrap()
+        if not isinstance(data, bytes | bytearray):
+            raise DolmosException("symbolic artifact name in targetInterfaces()")
+        return bytes(data).decode()
+
+    offset = word(0)
+    length = word(offset)
+    start = offset + 32
+    for idx in range(length):
+        item_start = start + word(start + idx * 32)
+        addr = con_addr(word(item_start))
+        array_start = item_start + word(item_start + 32)
+        num_artifacts = word(array_start)
+        names_start = array_start + 32
+        names = [
+            string_at(names_start + word(names_start + i * 32))
+            for i in range(num_artifacts)
+        ]
+        yield addr, names
+
+
+def get_proxy_implementations(
+    ctx: ContractContext, setup_ex: Exec
+) -> MappingProxyType[Address, Address]:
+    """
+    The ERC-1967 proxies of the state after setUp, with their implementation: the
+    concrete address in the implementation slot, where a known contract is deployed
+    (halmos#553). The implementation is read once, after setUp: upgrades during the
+    invariant run are not followed.
+    """
+    sevm = SEVM(ctx.args, FunctionInfo(ctx.name, "proxy", "proxy()", "00000000"))
+    storage = deepcopy(setup_ex.storage)
+    slot = con(ERC1967_IMPLEMENTATION_SLOT)
+
+    result = {}
+    for addr, code in setup_ex.code.items():
+        if eq(addr, FOUNDRY_TEST) or not getattr(code, "contract_name", None):
+            continue
+        if addr not in storage:
+            continue
+        try:
+            value = simplify(sevm.storage_model.load(setup_ex, storage, addr, slot))
+        except Exception as err:
+            debug(f"could not read the implementation slot of {addr}: {err!r}")
+            continue
+        if not is_bv_value(value) or value.as_long() == 0:
+            continue
+        impl = con_addr(value.as_long() % 2**160)
+        impl_code = setup_ex.code.get(impl)
+        if impl_code is not None and getattr(impl_code, "contract_name", None):
+            result[addr] = impl
+    return MappingProxyType(result)
+
+
+def get_target_abis(
+    inv_ctx: InvariantTestingContext, ex: Exec, addr: Address
+) -> list[tuple[str, dict]]:
+    """
+    The (contract name, build output) whose ABI is used to call a target address:
+    the artifacts of targetInterfaces() for this address, else the implementation of an
+    ERC-1967 proxy, else the contract deployed at the address (halmos#553).
+    """
+    if artifacts := inv_ctx.target_interfaces.get(addr):
+        result = []
+        for artifact in artifacts:
+            path, _, name = artifact.rpartition(":")
+            filename = os.path.basename(path) if path else None
+            try:
+                contract_json = BuildOut().get_by_name(name, filename)
+            except Exception:
+                contract_json = BuildOut().get_by_name(name)
+            result.append((name, contract_json))
+        return result
+
+    if (impl := inv_ctx.proxy_implementations.get(addr)) is not None:
+        impl_code = ex.code[impl]
+        contract_json = BuildOut().get_by_name(
+            impl_code.contract_name, impl_code.filename
+        )
+        return [(impl_code.contract_name, contract_json)]
+
+    code = ex.code[addr]
+    if not code.contract_name:
+        raise ValueError(f"couldn't find the contract name for: {addr}")
+    return [
+        (code.contract_name, BuildOut().get_by_name(code.contract_name, code.filename))
+    ]
+
+
 def resolve_target_contracts(ctx: InvariantTestingContext, ex: Exec) -> set[Address]:
     target_contracts = ctx.target_contracts
     target_selectors = ctx.target_selectors
@@ -1794,6 +1927,7 @@ def resolve_target_contracts(ctx: InvariantTestingContext, ex: Exec) -> set[Addr
     resolved_target_contracts = target_contracts if target_contracts else ex.code.keys()
     resolved_target_contracts -= ctx.excluded_contracts
     resolved_target_contracts |= target_selectors.keys()
+    resolved_target_contracts |= ctx.target_interfaces.keys()
 
     # Note: FOUNDRY_TEST is excluded unless a targetSelector() is specified for it
     # or targetContract(FOUNDRY_TEST) is provided.
@@ -1919,16 +2053,25 @@ def print_invariant_targets(ctx: ContractContext, ex: Exec):
         code = ex.code.get(target_contract)
         contract_name = code.contract_name
         filename = code.filename
-        contract_json = BuildOut().get_by_name(contract_name, filename)
 
         addr_str = rendered_address(target_contract, replace_with_contract_name=False)
-        tree = Tree(f"[bold]{filename}:{contract_name}[/bold] @ {addr_str}")
+        title = f"[bold]{filename}:{contract_name}[/bold] @ {addr_str}"
 
-        target_selectors = resolve_target_selectors(
-            ctx.inv_ctx, target_contract, contract_json
-        )
-        for fun_sig, _ in target_selectors:
-            tree.add(f"{fun_sig}")
+        # the ABI used to call it: its own, a proxy's implementation, or interfaces
+        target_abis = get_target_abis(ctx.inv_ctx, ex, target_contract)
+        abi_names = [name for name, _ in target_abis]
+        if abi_names != [contract_name]:
+            title += f" (as {', '.join(abi_names)})"
+        tree = Tree(title)
+
+        seen = set()
+        for _, contract_json in target_abis:
+            for fun_sig, fun_selector in resolve_target_selectors(
+                ctx.inv_ctx, target_contract, contract_json
+            ):
+                if fun_selector not in seen:
+                    seen.add(fun_selector)
+                    tree.add(f"{fun_sig}")
 
         panel_content.append(tree)
         panel_content.append(Text(""))

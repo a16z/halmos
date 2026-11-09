@@ -165,6 +165,16 @@ class InvariantTestingContext:
     # whether to print debug information
     debug: bool = False
 
+    # targetInterfaces(): the artifacts whose ABI is used for an address (halmos#553)
+    target_interfaces: MappingProxyType[Address, tuple[str, ...]] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
+
+    # ERC-1967 proxies found after setUp: proxy -> implementation (halmos#553)
+    proxy_implementations: MappingProxyType[Address, Address] = field(
+        default_factory=lambda: MappingProxyType({})
+    )
+
     @staticmethod
     def empty() -> "InvariantTestingContext":
         return empty_invariant_testing_context
