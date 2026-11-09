@@ -4581,7 +4581,7 @@
             {
                 "name": "invariant_not_broken()",
                 "exitcode": 1,
-                "num_models": 6,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -4592,7 +4592,7 @@
             {
                 "name": "invariant_not_broken()",
                 "exitcode": 1,
-                "num_models": 3,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,

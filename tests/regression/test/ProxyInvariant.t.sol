@@ -65,6 +65,10 @@ contract CustomMiniProxy {
 
 /// invariant testing through an ERC-1967 proxy: the implementation's ABI is used
 /// (halmos#553)
+/// depth 1: deeper sequences repeat the idempotent breakIt(), and whether the repeated
+/// state is deduplicated depends on the storage layout, which changes the number of
+/// counterexamples
+/// @custom:dolmos --invariant-depth 1
 contract ProxyInvariantTest is Test {
     ProxyVault vault;
 
@@ -80,6 +84,7 @@ contract ProxyInvariantTest is Test {
 }
 
 /// targetInterfaces() gives the ABI of a proxy that is not detected (halmos#553)
+/// @custom:dolmos --invariant-depth 1
 contract ProxyInterfaceInvariantTest is Test {
     ProxyVault vault;
 
