@@ -13,6 +13,6 @@ fi
 for test_name in "PostExampleTest" "PostExampleTwoTest" "PostExampleTwoLiveTest" "FooTest" "MiniVatTest"; do
     echo
     echo -e "▀▄▀▄▀▄   🎀  Running ${GREEN}${test_name}${NC}  🎀   ▄▀▄▀▄▀"
-    time halmos --root symexec-bench/SymTest --contract ${test_name} "--function" test
+    time dolmos --root symexec-bench/SymTest --contract ${test_name} "--function" test
 done
 

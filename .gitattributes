@@ -1,0 +1,3 @@
+# the file cheatcode tests (tests/regression/test/File.t.sol) hash these fixtures byte for byte:
+# never convert their line endings (core.autocrlf is on by default on the Windows runners)
+tests/regression/test/data/** -text

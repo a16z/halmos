@@ -40,7 +40,7 @@ contract Context is Test {
             }
         } else if (mode == 9) {
             vm.prank(address(0));
-            vm.prank(address(0)); // HalmosException
+            vm.prank(address(0)); // DolmosException
         } else if (mode == 10) {
             fail();
         }
@@ -179,7 +179,7 @@ contract ContextTest is Test {
         ensure_test_context();
     }
 
-    function check_create_halmos_exception() public payable {
+    function check_create_dolmos_exception() public payable {
         assert(returndatasize() == 0); // empty initial returndata
         ensure_test_context();
 
@@ -198,7 +198,7 @@ contract ContextTest is Test {
         _check_call0(mode0);
     }
 
-    function check_call0_halmos_exception() public payable {
+    function check_call0_dolmos_exception() public payable {
         _check_call0(9);
     }
 
@@ -231,7 +231,7 @@ contract ContextTest is Test {
         _check_call1(mode1, mode0);
     }
 
-    function check_call1_halmos_exception(uint mode1) public payable {
+    function check_call1_dolmos_exception(uint mode1) public payable {
         _check_call1(mode1, 9);
     }
 

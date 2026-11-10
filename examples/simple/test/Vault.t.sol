@@ -15,7 +15,7 @@ contract VaultMock is Vault {
     }
 }
 
-/// @custom:halmos --solver-timeout-assertion 0
+/// @custom:dolmos --solver-timeout-assertion 0
 contract VaultTest is SymTest {
     VaultMock vault;
 
@@ -27,7 +27,7 @@ contract VaultTest is SymTest {
     }
 
     /// need to set a timeout for this test, the solver can run for hours
-    /// @custom:halmos --solver-timeout-assertion 10000
+    /// @custom:dolmos --solver-timeout-assertion 10000
     function check_deposit(uint assets) public {
         uint A1 = vault.totalAssets();
         uint S1 = vault.totalShares();

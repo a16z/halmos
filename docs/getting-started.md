@@ -1,4 +1,4 @@
-# How to write symbolic tests with Halmos
+# How to write symbolic tests with dolmos
 
 Symbolic tests look similar to fuzz tests, but there are certain differences that need to be understood. This guide will walk you through the process of writing symbolic tests, highlighting the differences compared to fuzz tests. It is intended for those who are already familiar with [Dapptools]-/[Foundry]-style fuzz tests. If you haven't experienced fuzz tests before, please refer to the [Foundry document][Foundry Fuzz Testing] to grasp the basic concepts.
 
@@ -6,21 +6,17 @@ Symbolic tests look similar to fuzz tests, but there are certain differences tha
 [Foundry]: <https://book.getfoundry.sh/>
 [Foundry Fuzz Testing]: <https://book.getfoundry.sh/forge/fuzz-testing>
 
-## 0. Install Halmos
+## 0. Install dolmos
 
-If you haven't installed Halmos yet, please refer to the [installation guide](../README.md#installation) or quickly install it with:
-
-```sh
-uv tool install halmos
-```
+If you haven't installed dolmos yet, follow the [installation guide](../README.md#installation).
 
 ## 1. Write setUp()
 
 Similar to foundry tests, you can provide the `setUp()` function that will be executed before each test. In the setup function, you can create an instance of the target contracts, and initialize their state. These initialized contracts will then be accessible for every test.
 
-Furthermore, you are also allowed to call the constructor with symbolic arguments, initializing the contract state to be symbolic. You can create those symbols using [Halmos cheatcodes].
+Furthermore, you are also allowed to call the constructor with symbolic arguments, initializing the contract state to be symbolic. You can create those symbols using the cheatcodes of the [halmos-cheatcodes] library, which dolmos supports.
 
-[Halmos cheatcodes]: <https://github.com/a16z/halmos-cheatcodes>
+[halmos-cheatcodes]: <https://github.com/a16z/halmos-cheatcodes>
 
 For example, consider a basic ERC20 token contract as shown below:
 ```solidity
@@ -53,12 +49,14 @@ By using the symbolic initial supply, you can check if the given tests pass for 
 
 **Tips:**
 
-- The Halmos cheatcodes can be installed like any other Solidity dependencies:
+- The cheatcodes library can be installed like any other Solidity dependency:
   ```
   forge install a16z/halmos-cheatcodes
   ```
 
-- The current list of available Halmos cheatcodes can be found [here][halmos-cheatcodes-list].
+- The current list of available cheatcodes can be found [here][halmos-cheatcodes-list].
+
+- `setUp()` may branch on symbolic values (or revert on some of them): every feasible successful path becomes a separate setup state, and each test (and each invariant test sequence) is run from each of them. Counterexamples include the symbolic values that select the setup state. Run with `-v` to display the number of setup states.
 
 [halmos-cheatcodes-list]: <https://github.com/a16z/halmos-cheatcodes/blob/main/src/SVM.sol>
 
@@ -128,7 +126,7 @@ for (uint160 sender = 0; sender < type(uint160).max; sender++) {
 
 **Tips:**
 
-- Instead of declaring symbolic input parameters, you can dynamically create symbols inside the test using the Halmos cheatcodes. For instance, our running example can be rewritten as follows:
+- Instead of declaring symbolic input parameters, you can dynamically create symbols inside the test using the symbolic cheatcodes. For instance, our running example can be rewritten as follows:
   ```solidity
   function check_transfer() {
       address sender = svm.createAddress("sender");
@@ -138,7 +136,7 @@ for (uint160 sender = 0; sender < type(uint160).max; sender++) {
   }
   ```
 
-- Halmos requires dynamically-sized arrays (including `bytes` and `string`) to be given with a fixed size. Thus they cannot be declared as input parameters, but need to be programmatically constructed. For example, a byte array can be generated using the `svm.createBytes()` cheatcode as follows:
+- Dolmos requires dynamically-sized arrays (including `bytes` and `string`) to be given with a fixed size. Thus they cannot be declared as input parameters, but need to be programmatically constructed. For example, a byte array can be generated using the `svm.createBytes()` cheatcode as follows:
   ```solidity
   bytes memory data = svm.createBytes(96, 'data');
   ```
@@ -200,6 +198,15 @@ token.transfer(receiver, amount);
   }
   ```
 
+- Foundry's `vm.expectRevert()` (all variants, including `expectPartialRevert`, the reverter address and the `count` overloads) and `vm.expectEmit()` (including `expectEmitAnonymous`, the emitter address and the `count` overloads) are supported, with the same semantics as in foundry. With symbolic inputs, dolmos reports a counterexample whenever the expectation can be violated:
+  ```solidity
+  vm.assume(amount > balanceOfSender);
+  vm.expectRevert(abi.encodeWithSelector(Token.InsufficientBalance.selector, sender));
+  vm.prank(sender);
+  token.transfer(receiver, amount);
+  ```
+  Note that like foundry, logs emitted by reverted subcalls are taken into account by `expectEmit`.
+
 ### 2.4 Check output states
 
 After calling the target contracts, you can write assertions against the output state of the contracts.
@@ -210,15 +217,17 @@ assert(token.balanceOf(sender) == balanceOfSender - amount);
 assert(token.balanceOf(receiver) == balanceOfReceiver + amount);
 ```
 
-If there are any inputs that violate these assertions, Halmos will reports those inputs, referred to as counterexamples.
+If there are any inputs that violate these assertions, dolmos will report those inputs, referred to as counterexamples.
 
-For our example, Halmos will identify an input combination where the sender address is identical to the receiver address. This is because self-transfers do not alter the balance, leading to scenarios where the above assertions are not satisfied.
+For our example, dolmos will identify an input combination where the sender address is identical to the receiver address. This is because self-transfers do not alter the balance, leading to scenarios where the above assertions are not satisfied.
 
 **Tips:**
 
-- Halmos focuses solely on assertion violations (i.e., revert with `Panic(1)`), disregarding other revert cases. This means that Halmos doesn't report any inputs that lead to other types of revert. For instance, in our example, any inputs that trigger an overflow in `balanceOfReceiver + amount`, or inputs causing the external contract call to fail will be ignored. To avoid disregarding such inputs, you can utilize an `unchecked` block or a low-level call.
+- Run with `--pretty-counterexamples` (`-pcex`) to get counterexamples decoded with the ABI (arguments, calldata, selectors, invariant call sequences), without duplicates, and with a forge test that replays each of them. See [pretty counterexamples](pretty-counterexamples.md).
 
-- If you're using an older compiler version (`< 0.8.0`) that uses the `INVALID` opcode for assertion violation, rather than the `Panic(1)` error code, then Halmos will _not_ report any counterexamples. In that case, you will need to use a custom assertion that reverts with `Panic(1)` upon failure, as shown below:
+- Dolmos focuses solely on assertion violations (i.e., revert with `Panic(1)`), disregarding other revert cases. This means that dolmos doesn't report any inputs that lead to other types of revert. For instance, in our example, any inputs that trigger an overflow in `balanceOfReceiver + amount`, or inputs causing the external contract call to fail will be ignored. To avoid disregarding such inputs, you can utilize an `unchecked` block or a low-level call.
+
+- If you're using an older compiler version (`< 0.8.0`) that uses the `INVALID` opcode for assertion violation, rather than the `Panic(1)` error code, then dolmos will _not_ report any counterexamples by default. In that case, run with `--invalid-as-failure` (the default when the build contains Vyper contracts), or use a custom assertion that reverts with `Panic(1)` upon failure, as shown below:
   ```solidity
   function myAssert(bool cond) internal pure {
       if (!cond) {
@@ -245,7 +254,3 @@ However, since symbolic tests are performed symbolically, certain behavioral dif
 - The `vm.assume()` cheatcode performs better than `bound()`.
 
 For further insights, refer to [examples of symbolic tests](../examples/README.md).
-
-Join the [Halmos Telegram Group] for any inquiries or further discussions.
-
-[Halmos Telegram Group]: <https://t.me/+4UhzHduai3MzZmUx>

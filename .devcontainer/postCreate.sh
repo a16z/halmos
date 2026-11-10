@@ -14,4 +14,4 @@ curl -L https://foundry.paradigm.xyz | bash
 echo 'source .venv/bin/activate' >> ~/.bashrc
 
 # just a test
-# pytest -v -k "not long and not ffi" --ignore=tests/lib --halmos-options="-v -st --storage-layout solidity --solver-timeout-assertion 0"
+# pytest -v -k "not long and not ffi" --ignore=tests/lib --dolmos-options="-v -st --storage-layout solidity --solver-timeout-assertion 0"

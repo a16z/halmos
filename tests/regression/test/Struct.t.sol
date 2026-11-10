@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-/// @custom:halmos --solver-timeout-assertion 0
+/// @custom:dolmos --solver-timeout-assertion 0
 contract StructTest {
     struct Point {
         uint x;
@@ -15,7 +15,7 @@ contract StructTest {
         assert(result == 0); // expected to fail and generate a counterexample that incorporates all calldata symbols
     }
 
-    /// @custom:halmos --array-lengths p=1
+    /// @custom:dolmos --array-lengths p=1
     function check_StructArray(Point[] memory p, Point[2] memory q) public pure returns (uint result) {
         for (uint i = 0; i < p.length; i++) {
             unchecked {
@@ -30,7 +30,7 @@ contract StructTest {
         assert(result == 0); // expected to fail and generate a counterexample that incorporates all calldata symbols
     }
 
-    /// @custom:halmos --array-lengths p=1,p[0]=1 --default-array-lengths 2
+    /// @custom:dolmos --array-lengths p=1,p[0]=1 --default-array-lengths 2
     function check_StructArrayArray(
         Point[][] memory p,
         Point[2][] memory q,
@@ -69,7 +69,7 @@ contract StructTest {
     }
 }
 
-/// @custom:halmos --solver-timeout-assertion 0 --default-array-lengths 2
+/// @custom:dolmos --solver-timeout-assertion 0 --default-array-lengths 2
 contract StructTest2 {
     struct P {
         uint x;
@@ -86,7 +86,7 @@ contract StructTest2 {
         P[][] f6;
     }
 
-    /// @custom:halmos --array-lengths s=1
+    /// @custom:dolmos --array-lengths s=1
     function check_S(P memory p, S[] memory s) public pure returns (uint result) {
         unchecked {
             result += sum_P(p);

@@ -86,7 +86,7 @@ contract InvariantTargetTest_target_contract_this is InvariantTargetTest {
         c = new C();
         d = new D();
 
-        // https://github.com/a16z/halmos/issues/506
+        // upstream halmos issue #506
         // C and D are not set as a targets, because targetContract(address(this)) is used
         targetContract(address(this));
     }

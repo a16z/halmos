@@ -185,7 +185,7 @@ contract TestNotEtchFriendly is Test {
     NotEtchFriendly target;
 
     function setUp() public {
-        /// @dev this is supported in foundry, but not halmos (can't vm.store to uninitialized account)
+        /// @dev this is supported in foundry, but not dolmos (can't vm.store to uninitialized account)
         // make address(this) the owner of the yet-to-be-deployed contract
         // vm.store(address(42), 0, bytes32(uint256(uint160(address(this)))));
 

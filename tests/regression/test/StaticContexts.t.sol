@@ -64,9 +64,8 @@ contract StaticContextsTest is Test {
     //     assertFalse(success);
     // }
 
-    // TODO: selfdestruct not implemented yet
-    // function check_selfdestruct_fails() public {
-    //     (bool success, ) = address(this).staticcall(abi.encodeWithSignature("do_selfdestruct()"));
-    //     assertFalse(success);
-    // }
+    function check_selfdestruct_fails() public {
+        (bool success, ) = address(this).staticcall(abi.encodeWithSignature("do_selfdestruct()"));
+        assertFalse(success);
+    }
 }

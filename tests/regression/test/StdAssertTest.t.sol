@@ -43,14 +43,14 @@ contract StdAssertPassTest is Test {
     }
 
     // times out after 1min with yices and --cache-solver
-    /// @custom:halmos --solver z3
+    /// @custom:dolmos --solver z3
     function check_assertEq(string memory x, string memory y) public {
         vm.assume(keccak256(bytes(x)) == keccak256(bytes(y)));
         assertEq(x, y);
     }
 
     // times out after 1min with yices and --cache-solver
-    /// @custom:halmos --solver z3
+    /// @custom:dolmos --solver z3
     function check_assertEq(bytes memory x, bytes memory y) public {
         vm.assume(keccak256(x) == keccak256(y));
         assertEq(x, y);
@@ -517,14 +517,14 @@ contract StdAssertFailLogTest is Test {
     }
 
     // times out after 1min with yices and --cache-solver
-    /// @custom:halmos --solver z3
+    /// @custom:dolmos --solver z3
     function check_assertNotEq(string memory x, string memory y) public {
         vm.assume(!(keccak256(bytes(x)) != keccak256(bytes(y))));
         assertNotEq(x, y, "");
     }
 
     // times out after 1min with yices and --cache-solver
-    /// @custom:halmos --solver z3
+    /// @custom:dolmos --solver z3
     function check_assertNotEq(bytes memory x, bytes memory y) public {
         vm.assume(!(keccak256(x) != keccak256(y)));
         assertNotEq(x, y, "");

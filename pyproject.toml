@@ -1,24 +1,35 @@
 [build-system]
-requires = ["setuptools>=61.0", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=77.0", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
+# the version comes from the git tag (vX.Y.Z); a missing tag gives 0.1.devN
 
 [project]
-name = "halmos"
+name = "dolmos"
 description = "A symbolic testing tool for EVM smart contracts"
 readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE", "NOTICE"]
+keywords = ["ethereum", "evm", "solidity", "vyper", "symbolic-execution", "formal-verification", "foundry"]
+# dolmos is derived from other authors' work, see NOTICE
 authors = [
-    { name="a16z crypto" },
+    { name="Dowsers SAS" },
 ]
 maintainers = [
-    { name="Daejun Park" },
-    { name="karmacoma <karma@coma.lol>" },
+    { name="Dowsers SAS" },
 ]
 classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -36,10 +47,13 @@ dependencies = [
 dynamic = ["version"]
 
 [project.scripts]
-halmos = "halmos.__main__:main"
+dolmos = "dolmos.__main__:main"
 
 [project.urls]
-"Homepage" = "https://github.com/a16z/halmos"
+"Homepage" = "https://github.com/Dowsers/dolmos"
+"Documentation" = "https://github.com/Dowsers/dolmos/blob/main/docs/getting-started.md"
+"Issues" = "https://github.com/Dowsers/dolmos/issues"
+"Changelog" = "https://github.com/Dowsers/dolmos/blob/main/CHANGELOG.md"
 
 # development dependencies, can be installed with
 #   uv sync --extra dev
@@ -50,6 +64,7 @@ halmos = "halmos.__main__:main"
 dev = [
     "pre-commit>=4.0.1",
     "pytest>=8.3.4",
+    "pytest-github-actions-annotate-failures>=0.3.0",
     "ruff>=0.8.1",
 ]
 

@@ -13,11 +13,11 @@ from z3 import (
     simplify,
 )
 
-from halmos.bitvec import FALSE, TRUE
-from halmos.bitvec import HalmosBitVec as BV
-from halmos.bitvec import HalmosBool as Bool
-from halmos.bytevec import Chunk
-from halmos.exceptions import NotConcreteError
+from dolmos.bitvec import FALSE, TRUE
+from dolmos.bitvec import DolmosBitVec as BV
+from dolmos.bitvec import DolmosBool as Bool
+from dolmos.bytevec import Chunk
+from dolmos.exceptions import NotConcreteError
 
 a, b = Bool("a"), Bool("b")
 x, y = BV("x"), BV("y")

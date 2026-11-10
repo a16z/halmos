@@ -16,7 +16,7 @@ Please provide a reproducible example.
 **Environment:**
  - OS: [e.g., Linux / Windows / macOS]
  - Python version: [e.g., `python --version`]
- - Halmos and other dependency versions: [e.g., `pip list`]
+ - dolmos and other dependency versions: [e.g., `pip list`]
 
 **Additional context**
 Add any other context about the problem here.

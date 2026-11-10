@@ -43,7 +43,7 @@ contract PanicTest is Test {
         }
     }
 
-    /// @custom:halmos --panic-error-codes 0x00
+    /// @custom:dolmos --panic-error-codes 0x00
     function check_panic_0_fail(bool x) public {
         if (x) _panic(0);
     }
@@ -56,7 +56,7 @@ contract PanicTest is Test {
         if (x) _panic(1); // default error code is 1
     }
 
-    /// @custom:halmos --panic-error-codes 0x00
+    /// @custom:dolmos --panic-error-codes 0x00
     function check_panic_1_pass(bool x) public {
         if (x) _panic(1);
     }
@@ -65,17 +65,17 @@ contract PanicTest is Test {
     // multiple error codes
     //
 
-    /// @custom:halmos --panic-error-codes 0x02,0x03
+    /// @custom:dolmos --panic-error-codes 0x02,0x03
     function check_panic_2_or_3_fail_2(bool x) public {
         if (x) _panic(2);
     }
 
-    /// @custom:halmos --panic-error-codes 0x02,0x03
+    /// @custom:dolmos --panic-error-codes 0x02,0x03
     function check_panic_2_or_3_fail_3(bool x) public {
         if (x) _panic(3);
     }
 
-    /// @custom:halmos --panic-error-codes *
+    /// @custom:dolmos --panic-error-codes *
     function check_panic_any_fail_4(bool x) public {
         if (x) _panic(4);
     }
@@ -84,7 +84,7 @@ contract PanicTest is Test {
     // old compiler revert
     //
 
-    /// @custom:halmos --panic-error-codes 0x05
+    /// @custom:dolmos --panic-error-codes 0x05
     function check_panic_5_fail_old(bool x) public {
         if (x) _panic_old_compiler(5);
     }
@@ -94,25 +94,25 @@ contract PanicTest is Test {
     //
 
     // binary
-    /// @custom:halmos --panic-error-codes 0b111
+    /// @custom:dolmos --panic-error-codes 0b111
     function check_panic_7_fail(bool x) public {
         if (x) _panic(7);
     }
 
     // octal
-    /// @custom:halmos --panic-error-codes 0o10
+    /// @custom:dolmos --panic-error-codes 0o10
     function check_panic_8_fail(bool x) public {
         if (x) _panic(8);
     }
 
     // decimal
-    /// @custom:halmos --panic-error-codes 10
+    /// @custom:dolmos --panic-error-codes 10
     function check_panic_10_fail(bool x) public {
         if (x) _panic(10);
     }
 
     // hex
-    /// @custom:halmos --panic-error-codes 0x10
+    /// @custom:dolmos --panic-error-codes 0x10
     function check_panic_16_fail(bool x) public {
         if (x) _panic(16);
     }
@@ -121,7 +121,7 @@ contract PanicTest is Test {
     // panic error code semantics
     //
 
-    /// @custom:halmos --panic-error-codes 0x11
+    /// @custom:dolmos --panic-error-codes 0x11
     function check_panic_0x11_fail(uint x) public returns (uint) {
         // 0x11: overflow
         return x + 1; // counterexample: x == 2^256 - 1
@@ -131,7 +131,7 @@ contract PanicTest is Test {
         return x + 1;
     }
 
-    /// @custom:halmos --panic-error-codes 0x12
+    /// @custom:dolmos --panic-error-codes 0x12
     function check_panic_0x12_fail(uint x) public returns (uint) {
         // 0x12: div-by-zero
         return 10 / x; // counterexample: x == 0
@@ -145,7 +145,7 @@ contract PanicTest is Test {
     // panic propagation
     //
 
-    /// @custom:halmos --panic-error-codes 0x11
+    /// @custom:dolmos --panic-error-codes 0x11
     function check_panic_inc_fail(uint x) public returns (uint) {
         // 0x11: overflow
         return c.inc(x); // counterexample: x == 2^256 - 1
@@ -155,7 +155,7 @@ contract PanicTest is Test {
     // capturing different types of reverts
     //
 
-    /// @custom:halmos --panic-error-codes 0x11
+    /// @custom:dolmos --panic-error-codes 0x11
     function check_panic_inc_overflow_fail(uint x) public returns (uint) {
         // fail due to overflow, Panic(0x11)
         // but no assertion violation
@@ -175,7 +175,7 @@ contract PanicTest is Test {
         }
     }
 
-    /// @custom:halmos --panic-error-codes 0x11
+    /// @custom:dolmos --panic-error-codes 0x11
     function check_panic_inc_assert_pass(uint x) public returns (uint) {
         // pass because the assertion violation error code is ignored, and there's no overflow
         unchecked {
@@ -183,7 +183,7 @@ contract PanicTest is Test {
         }
     }
 
-    /// @custom:halmos --panic-error-codes 0xff
+    /// @custom:dolmos --panic-error-codes 0xff
     function check_panic_inc_cheatcode_fail(uint x) public returns (uint) {
         // fail even if Panic(1) is ignored,
         // because assertion cheatcode failures are handled separately and are always captured

@@ -19,12 +19,12 @@ contract SymAccount is SymTest {
 }
 
 /// @notice This example shows how to find the DEI token bug exploited by the Deus DAO hack: https://rekt.news/deus-dao-r3kt/
-/// @custom:halmos --solver-timeout-assertion 0
+/// @custom:dolmos --solver-timeout-assertion 0
 contract DEIStablecoinTest is ERC20Test {
     DEIStablecoin token_;
     address lossless;
 
-    /// @custom:halmos --solver-timeout-branching 1000
+    /// @custom:dolmos --solver-timeout-branching 1000
     function setUp() public override {
         token = address(new EmptyContract());
         // Source of Deployed Bytecode: https://etherscan.io/address/0x63c28e2ff796e1480eb9ac8c3c55dcb9ae7b3df6#code

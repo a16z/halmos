@@ -5,12 +5,12 @@ contract OldCompilerTest {
 
     function check_assert(uint x) public pure {
         if (x == 0) return;
-        assert(false); // old compiler versions don't revert with panic; instead, they run invalid opcode, which halmos ignores, resulting in no error here.
+        assert(false); // old compiler versions don't revert with panic; instead, they run invalid opcode, which dolmos ignores, resulting in no error here.
     }
 
     function check_myAssert(uint x) public pure {
         if (x == 0) return;
-        myAssert(false); // you can use your own assertion that panic-reverts if assertion fails, when using halmos for old version code.
+        myAssert(false); // you can use your own assertion that panic-reverts if assertion fails, when using dolmos for old version code.
     }
 
     function myAssert(bool cond) internal pure {

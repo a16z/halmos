@@ -1,0 +1,3 @@
+openzeppelin/=../lib/openzeppelin-contracts/contracts/
+ds-test/=../lib/forge-std/lib/ds-test/src/
+forge-std/=../lib/forge-std/src/

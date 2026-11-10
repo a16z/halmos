@@ -4,7 +4,7 @@ import pickle
 
 import pytest
 
-from halmos.config import (
+from dolmos.config import (
     Config,
     ConfigSource,
     ParseArrayLengths,
@@ -13,8 +13,9 @@ from halmos.config import (
     arg_parser,
     default_config,
     resolve_config_files,
+    split_command,
 )
-from halmos.config import (
+from dolmos.config import (
     toml_parser as get_toml_parser,
 )
 
@@ -131,7 +132,23 @@ def test_config_file_in_project_root():
     config_files = resolve_config_files(args, include_missing=True)
 
     # then the config file should be in the project root
-    assert config_files == [os.path.join(base_path, "halmos.toml")]
+    # (dolmos.toml is the preferred name when neither file exists)
+    assert config_files == [os.path.join(base_path, "dolmos.toml")]
+
+
+def test_config_file_halmos_toml_fallback(tmp_path):
+    # halmos.toml is still picked up when there is no dolmos.toml
+    (tmp_path / "halmos.toml").write_text("[global]\n")
+    config_files = resolve_config_files(["--root", str(tmp_path)])
+    assert config_files == [str(tmp_path / "halmos.toml")]
+
+
+def test_config_file_dolmos_toml_first(tmp_path):
+    # dolmos.toml takes precedence when both exist
+    (tmp_path / "halmos.toml").write_text("[global]\n")
+    (tmp_path / "dolmos.toml").write_text("[global]\n")
+    config_files = resolve_config_files(["--root", str(tmp_path)])
+    assert config_files == [str(tmp_path / "dolmos.toml")]
 
 
 def test_config_file_explicit():
@@ -428,4 +445,60 @@ def test_command_line_precedence_over_annotations(config):
     assert function_config.value_with_source("solver") == (
         "cvc5",
         ConfigSource.command_line,
+    )
+
+
+@pytest.mark.parametrize(
+    "command, windows, expected",
+    [
+        (
+            "path/to/bitwuzla --produce-models",
+            False,
+            ["path/to/bitwuzla", "--produce-models"],
+        ),
+        ("'/opt/my solver/z3' -in", False, ["/opt/my solver/z3", "-in"]),
+        (r"a\ b -x", False, ["a b", "-x"]),
+        (
+            r"D:\a\dolmos\.venv\Scripts\yices-smt2.exe --smt2-model-format",
+            True,
+            [r"D:\a\dolmos\.venv\Scripts\yices-smt2.exe", "--smt2-model-format"],
+        ),
+        (
+            r'"C:\Program Files\z3\z3.exe" -in',
+            True,
+            [r"C:\Program Files\z3\z3.exe", "-in"],
+        ),
+        (r"'D:\x\y.exe' --z", True, [r"D:\x\y.exe", "--z"]),
+    ],
+)
+def test_split_command(command, windows, expected):
+    assert split_command(command, windows=windows) == expected
+
+
+def test_detect_proxies_enabled_by_default(config, parser):
+    # halmos#553: ERC-1967 proxies are detected unless disabled
+    assert config.detect_proxies is True
+    assert parser.parse_args([]).detect_proxies is None  # not overridden
+
+
+def test_detect_proxies_disabled_in_toml(config, toml_parser):
+    data = toml_parser.parse_str("[global]\ndetect-proxies = false")
+    assert data == {"detect_proxies": False}
+    assert (
+        config.with_overrides(ConfigSource.config_file, **data).detect_proxies is False
+    )
+
+
+def test_detect_proxies_command_line(config, parser):
+    args = parser.parse_args(["--no-detect-proxies"])
+    overridden = config.with_overrides(ConfigSource.command_line, **vars(args))
+    assert overridden.detect_proxies is False
+
+    # the command line overrides the config file
+    data = {"detect_proxies": False}
+    from_file = config.with_overrides(ConfigSource.config_file, **data)
+    args = parser.parse_args(["--detect-proxies"])
+    assert (
+        from_file.with_overrides(ConfigSource.command_line, **vars(args)).detect_proxies
+        is True
     )

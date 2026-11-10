@@ -11,9 +11,9 @@ contract SolverTest is SymTest, Test {
         numbers = new uint[](5); // shouldn't generate loop bounds warning
     }
 
-    /// @custom:halmos --solver-timeout-assertion 1
+    /// @custom:dolmos --solver-timeout-assertion 1
     function check_too_many_open_files() public {
-        // regression test for too many open files error: https://github.com/a16z/halmos/issues/523
+        // regression test for too many open files error: upstream halmos issue #523
         // this test simulates a situation where many solver processes are killed due to timeout.
         // if file descriptors are not properly closed, this test will fail with "Too many open files" error.
         if (svm.createBool("*")) { some_hard_query(); } else { some_hard_query(); }

@@ -68,7 +68,7 @@ contract Attacker is SymTest, Test {
     }
 }
 
-/// @custom:halmos --early-exit
+/// @custom:dolmos --early-exit
 contract ReentrancyTest is Test, ERC1155Holder {
     ERC1155Mock token;
     BuggyVault vault;

@@ -1,9 +1,9 @@
 import pytest
 
-from halmos.__main__ import mk_solver
-from halmos.calldata import FunctionInfo
-from halmos.config import default_config
-from halmos.sevm import SEVM
+from dolmos.__main__ import mk_solver
+from dolmos.calldata import FunctionInfo
+from dolmos.config import default_config
+from dolmos.sevm import SEVM
 
 
 @pytest.fixture
@@ -27,5 +27,5 @@ def solver(args):
 
 
 @pytest.fixture
-def halmos_options(request):
-    return request.config.getoption("--halmos-options")
+def dolmos_options(request):
+    return request.config.getoption("--dolmos-options")

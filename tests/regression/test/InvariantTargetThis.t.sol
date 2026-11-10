@@ -38,13 +38,13 @@ contract InvariantTargetBase {
     }
 }
 
-// https://github.com/a16z/halmos/issues/514
+// upstream halmos issue #514
 // special functions like test_, check_, setUp(), invariant_, etc.
 // should not be considered as targets when selecting targetContract(address(this))
 
 // FIXME: this test generates 1 model with the solidity storage layout, but 2 models (at depth 2)
 //        with the generic storage layout, so we set depth to 1 for consistent results
-/// @custom:halmos --invariant-depth 1
+/// @custom:dolmos --invariant-depth 1
 contract InvariantTargetThis is InvariantTargetBase, Test {
     // not a test contract, but deployed by the test contract
     // so it should be included, and its target functions included even if they

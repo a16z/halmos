@@ -1,0 +1,6 @@
+# setuptools-scm puts every git-tracked file in the sdist, submodules included.
+# Keep the sdist to what is needed to build and test dolmos itself.
+prune tests/lib
+prune benchmarks
+prune .github
+prune .devcontainer

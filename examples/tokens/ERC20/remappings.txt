@@ -1,2 +1,3 @@
 openzeppelin/=../../../tests/lib/openzeppelin-contracts/contracts/
 ds-test/=../../../tests/lib/forge-std/lib/ds-test/src/
+solady/=../../../tests/lib/solady/src/

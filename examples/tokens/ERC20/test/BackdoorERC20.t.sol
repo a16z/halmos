@@ -10,10 +10,10 @@ import {IERC20} from "forge-std/interfaces/IERC20.sol";
 // empty interface
 interface IEmpty { }
 
-/// @custom:halmos --solver-timeout-assertion 0
+/// @custom:dolmos --solver-timeout-assertion 0
 contract BackdoorERC20Test is ERC20Test {
 
-    /// @custom:halmos --solver-timeout-branching 1000
+    /// @custom:dolmos --solver-timeout-branching 1000
     function setUp() public override {
         address deployer = address(0x1000);
 

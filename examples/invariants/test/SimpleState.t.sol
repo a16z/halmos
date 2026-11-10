@@ -30,7 +30,7 @@ contract SimpleStateTest is Test {
         target = new SimpleState();
     }
 
-    /// @custom:halmos --invariant-depth 10
+    /// @custom:dolmos --invariant-depth 10
     function invariant_buggy() public view {
         assertFalse(target.buggy());
     }

@@ -15,10 +15,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           # let's use the oldest version of python that is supported by the project
           python-version: "3.11"
@@ -27,9 +27,9 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           version: "0.5.21"
 
-      - name: Install halmos and its dependencies
+      - name: Install dolmos and its dependencies
         run: uv sync --extra dev

@@ -90,7 +90,7 @@ contract Sha3Test is Test, SymTest {
     }
 
     // we assume that the lower 160-bit parts do not collide
-    // see: https://github.com/a16z/halmos/issues/347
+    // see: upstream halmos issue #347
     function check_address_collision_pass(uint256 x, uint256 y) public {
         vm.assume(x != y);
         assertNotEq(to_address(x), to_address(y)); // pass

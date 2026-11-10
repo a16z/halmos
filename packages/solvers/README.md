@@ -6,10 +6,10 @@ A minimalist Docker image containing high-performance SMT solvers.
 
 ```sh
 # Step 1: Pull the image
-docker pull ghcr.io/a16z/solvers:latest
+docker pull ghcr.io/dowsers/solvers:latest
 
 # Step 2: Tag the image with a shorter name
-docker tag ghcr.io/a16z/solvers:latest solvers
+docker tag ghcr.io/dowsers/solvers:latest solvers
 
 # Step 3: Run the container using the shorter name,
 for solver in bitwuzla boolector cvc5 stp yices z3 ; do \
@@ -48,12 +48,12 @@ z3: 4.13.3
 
 Everyone is welcome to contribute new solvers or new versions to the image via pull requests. If a solver is competitive at [SMT-COMP](https://smt-comp.github.io), it would be great to have it included in the image.
 
-When possible, we prefer release binaries from an official source like the Github releases for the project to minimize the time it takes to build the image. If you're unsure about a particular solver or how to integrate it, consider reaching out on the [Halmos Dev Chat](https://t.me/+4UhzHduai3MzZmUx).
+When possible, we prefer release binaries from an official source like the Github releases for the project to minimize the time it takes to build the image.
 
 Before opening the pull request, please test your changes by verifying:
 
 * that you can build the image locally
-* that you can correctly invoke the solver as described in the [Quick Start](https://github.com/a16z/halmos/tree/main/packages/solvers#quick-start) section
+* that you can correctly invoke the solver as described in the [Quick Start](#quick-start) section
 * update this README with the name, version and source of the solver
 
 Thank you in advance!

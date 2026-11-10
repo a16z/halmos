@@ -3,7 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../src/TotalPrice.sol";
 
-/// @custom:halmos --solver-timeout-assertion 0
+/// @custom:dolmos --solver-timeout-assertion 0
 contract TotalPriceTest {
     TotalPrice target;
 

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-// from https://github.com/a16z/halmos/issues/57
+// from upstream halmos issue #57
 
-/// @custom:halmos --solver-timeout-assertion 10000
+/// @custom:dolmos --solver-timeout-assertion 10000
 contract SolverTest {
 
     function foo(uint x) public pure returns (uint) {

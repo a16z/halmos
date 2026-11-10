@@ -3,7 +3,7 @@ pragma solidity >=0.8.0 <0.9.0;
 
 import "../src/IsPowerOfTwo.sol";
 
-/// @custom:halmos --solver-timeout-assertion 0
+/// @custom:dolmos --solver-timeout-assertion 0
 contract IsPowerOfTwoTest {
     IsPowerOfTwo target;
 
@@ -17,7 +17,7 @@ contract IsPowerOfTwoTest {
         assert(result1 == result2);
     }
 
-    /// @custom:halmos --loop 256
+    /// @custom:dolmos --loop 256
     function check_isPowerOfTwo(uint256 x) public view {
         bool result1 = target.isPowerOfTwo(x);
         bool result2 = false;
@@ -30,7 +30,7 @@ contract IsPowerOfTwoTest {
         assert(result1 == result2);
     }
 
-    /// @custom:halmos --loop 256
+    /// @custom:dolmos --loop 256
     function check_eq_isPowerOfTwo_isPowerOfTwoIter(uint x) public view {
         bool result1 = target.isPowerOfTwo(x);
         bool result2 = target.isPowerOfTwoIter(x);

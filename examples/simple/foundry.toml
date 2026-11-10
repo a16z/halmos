@@ -6,5 +6,5 @@ libs = ["../../tests/lib", 'lib']
 evm_version = 'cancun'
 
 force = false
-# compile options used by halmos (to prevent unnecessary recompilation when running forge test and halmos together)
+# compile options used by dolmos (to prevent unnecessary recompilation when running forge test and dolmos together)
 extra_output = ["storageLayout", "metadata"]

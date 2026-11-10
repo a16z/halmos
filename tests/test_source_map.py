@@ -3,7 +3,7 @@ import tempfile
 
 import pytest
 
-from halmos.mapper import SourceFileMap
+from dolmos.mapper import SourceFileMap
 
 
 @pytest.fixture
