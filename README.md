@@ -3,6 +3,9 @@
 [![License](https://img.shields.io/github/license/Dowsers/dolmos)](https://github.com/Dowsers/dolmos/blob/main/LICENSE)
 [![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FDowsers%2Fdolmos%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](pyproject.toml)
 
+(https://github.com/a16z/halmos/wiki/FAQ
+
+
 Dolmos is a _symbolic testing_ tool for EVM smart contracts, driven by
 Foundry-style tests, maintained by [Dowsers](https://github.com/Dowsers) for its
 audit and formal verification work. Tests look like fuzz tests, but inputs are
