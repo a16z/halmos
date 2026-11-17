@@ -2725,6 +2725,45 @@ class SEVM:
 
         return ex
 
+    def check_static_callvalue(self, ex: Exec, stack: Worklist) -> None:
+        """
+        EIP-214: a CALL with a nonzero value in a static context halts the current
+        frame exceptionally, before any other check (balance, call depth, target).
+        CALLCODE is not restricted: its value is sent to the caller itself.
+
+        Called before the operands of CALL are popped. With a symbolic value, the
+        path where the value is nonzero is pushed as a new branch that executes the
+        CALL again, and halts since its value is now known to be nonzero; the current
+        path goes on with the value constrained to zero.
+        """
+        value = ex.st.peek(3)  # gas, to, value
+
+ 	"""
+	Symbolic case
+	"""
+        if type(value) is Bool:
+            value = value.as_bv(size=256)
+
+	"""
+	Concrete case with nonzero value
+	"""
+        if value.is_concrete:
+            if value.value != 0:
+                raise WriteInStaticContext(ex.context_str())
+            return
+
+	"""
+	TODO : Détailler les didférents cas en commentaires
+	"""
+        nonzero = simplify(value.as_z3() != 0)
+        if is_true(nonzero) or ex.check(Not(nonzero)) == unsat:
+            raise WriteInStaticContext(ex.context_str())
+
+        if not is_false(nonzero) and ex.check(nonzero) != unsat:
+            stack.push(self.create_branch(ex, nonzero, ex.pc))
+
+        ex.path.append(Not(nonzero), branching=True)
+
     def handle_insufficient_fund_case(
         self,
         caller: Address,
@@ -2848,7 +2887,7 @@ class SEVM:
         def send_callvalue(condition: BoolRef | None = None) -> None:
             # no balance update for CALLCODE which transfers to itself
             if op == OP_CALL:
-                # TODO: revert if context is static
+                # in a static context, the value is zero (see check_static_callvalue)
                 # NOTE: we cannot use `to_alias` here because it could be None
                 self.transfer_value(ex, pranked_caller, to, fund, condition)
 
@@ -4278,6 +4317,8 @@ class SEVM:
                     ex.context.expectations.capture_log(log)
 
                 elif opcode in CALL_OPCODES:
+                    if opcode == OP_CALL and ex.message().is_static:
+                        self.check_static_callvalue(ex, stack)
                     to = uint160(state.peek(2))
                     to_alias = self.resolve_address_alias(ex, to, stack)
                     self.call(ex, opcode, to_alias, stack)
