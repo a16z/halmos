@@ -2738,23 +2738,23 @@ class SEVM:
         """
         value = ex.st.peek(3)  # gas, to, value
 
- 	"""
-	Symbolic case
-	"""
+        """
+        Symbolic case
+        """
         if type(value) is Bool:
             value = value.as_bv(size=256)
 
-	"""
-	Concrete case with nonzero value
-	"""
+        """
+        Concrete case
+        """
         if value.is_concrete:
             if value.value != 0:
                 raise WriteInStaticContext(ex.context_str())
             return
 
-	"""
-	TODO : Détailler les didférents cas en commentaires
-	"""
+        """
+        TODO : Détailler les didférents cas en commentaires
+        """
         nonzero = simplify(value.as_z3() != 0)
         if is_true(nonzero) or ex.check(Not(nonzero)) == unsat:
             raise WriteInStaticContext(ex.context_str())
