@@ -38,3 +38,11 @@ Refinement then starts. Dolmos takes the model's preimage, 0, computes the real 
 The same mechanism behaves differently when a real preimage exists. In check_keccak_known_preimage, the test searches for an amt such that keccak256(amt) == keccak256(42). The solver proposes amt = 42, and the refinement step confirms that this matches the real hash. The counterexample is therefore validated immediately.
 
 The example also shows the effect of the two other modeling choices. With the generic storage layout, h is structurally understood as the hash of amt. It therefore cannot simply be treated as the unrelated constant key, so the problematic path can be eliminated before SMT solving. This is why the test uses the Solidity storage layout. Finally, if key were a compile-time constant, the optimizer could fold keccak256(key . 0) into a PUSH32 constant (halmos#579). The value would initially be stored under the raw location and then moved to the structured location when that location is later decoded. This is why the test keeps key in a state variable.
+
+# EIP/Code table de correspondance choices #
+
+Cette section vise à indiquer la correspondance entre les exigences issues des EIP et le code pour faciliter l'évolution en cas de modifications
+
+EIP214 :
+
+sevm.py
