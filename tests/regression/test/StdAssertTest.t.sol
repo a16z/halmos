@@ -204,6 +204,33 @@ contract StdAssertPassTest is Test {
         vm.assume(x >= y);
         assertGe(x, y);
     }
+
+    function check_assertApproxEqAbs(uint x, uint y, uint maxDelta) public {
+        vm.assume(stdMath.delta(x, y) <= maxDelta);
+        assertApproxEqAbs(x, y, maxDelta);
+    }
+
+    function check_assertApproxEqAbs(int x, int y, uint maxDelta) public {
+        vm.assume(stdMath.delta(x, y) <= maxDelta);
+        assertApproxEqAbs(x, y, maxDelta);
+    }
+
+    function check_assertApproxEqAbsDecimal(uint x, uint y, uint maxDelta, uint decimals) public {
+        vm.assume(stdMath.delta(x, y) <= maxDelta);
+        assertApproxEqAbsDecimal(x, y, maxDelta, decimals);
+    }
+
+    function check_assertApproxEqAbsDecimal(int x, int y, uint maxDelta, uint decimals) public {
+        vm.assume(stdMath.delta(x, y) <= maxDelta);
+        assertApproxEqAbsDecimal(x, y, maxDelta, decimals);
+    }
+
+    // the extremes are exactly type(uint).max apart
+    function check_assertApproxEqAbs_extremes() public {
+        assertApproxEqAbs(type(uint).max, 0, type(uint).max);
+        assertApproxEqAbs(type(int).max, type(int).min, type(uint).max);
+        assertApproxEqAbs(type(int).min, type(int).max, type(uint).max);
+    }
 }
 
 contract StdAssertFailTest is Test {
@@ -402,6 +429,31 @@ contract StdAssertFailTest is Test {
     function check_assertGe(int x, int y) public {
         vm.assume(!(x >= y));
         assertGe(x, y);
+    }
+
+    function check_assertApproxEqAbs(uint x, uint y, uint maxDelta) public {
+        vm.assume(!(stdMath.delta(x, y) <= maxDelta));
+        assertApproxEqAbs(x, y, maxDelta);
+    }
+
+    function check_assertApproxEqAbs(int x, int y, uint maxDelta) public {
+        vm.assume(!(stdMath.delta(x, y) <= maxDelta));
+        assertApproxEqAbs(x, y, maxDelta);
+    }
+
+    function check_assertApproxEqAbsDecimal(uint x, uint y, uint maxDelta, uint decimals) public {
+        vm.assume(!(stdMath.delta(x, y) <= maxDelta));
+        assertApproxEqAbsDecimal(x, y, maxDelta, decimals);
+    }
+
+    function check_assertApproxEqAbsDecimal(int x, int y, uint maxDelta, uint decimals) public {
+        vm.assume(!(stdMath.delta(x, y) <= maxDelta));
+        assertApproxEqAbsDecimal(x, y, maxDelta, decimals);
+    }
+
+    // the extremes are exactly type(uint).max apart
+    function check_assertApproxEqAbs_extremes() public {
+        assertApproxEqAbs(type(int).max, type(int).min, type(uint).max - 1);
     }
 }
 
@@ -605,5 +657,30 @@ contract StdAssertFailLogTest is Test {
     function check_assertGe(int x, int y) public {
         vm.assume(!(x >= y));
         assertGe(x, y, "");
+    }
+
+    function check_assertApproxEqAbs(uint x, uint y, uint maxDelta) public {
+        vm.assume(!(stdMath.delta(x, y) <= maxDelta));
+        assertApproxEqAbs(x, y, maxDelta, "");
+    }
+
+    function check_assertApproxEqAbs(int x, int y, uint maxDelta) public {
+        vm.assume(!(stdMath.delta(x, y) <= maxDelta));
+        assertApproxEqAbs(x, y, maxDelta, "");
+    }
+
+    function check_assertApproxEqAbsDecimal(uint x, uint y, uint maxDelta, uint decimals) public {
+        vm.assume(!(stdMath.delta(x, y) <= maxDelta));
+        assertApproxEqAbsDecimal(x, y, maxDelta, decimals, "");
+    }
+
+    function check_assertApproxEqAbsDecimal(int x, int y, uint maxDelta, uint decimals) public {
+        vm.assume(!(stdMath.delta(x, y) <= maxDelta));
+        assertApproxEqAbsDecimal(x, y, maxDelta, decimals, "");
+    }
+
+    // the extremes are exactly type(uint).max apart
+    function check_assertApproxEqAbs_extremes() public {
+        assertApproxEqAbs(type(int).max, type(int).min, type(uint).max - 1, "");
     }
 }
