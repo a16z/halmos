@@ -5323,6 +5323,51 @@
         ],
         "test/StdAssertTest.t.sol:StdAssertFailLogTest": [
             {
+                "name": "check_assertApproxEqAbs(int256,int256,uint256)",
+                "exitcode": 1,
+                "num_models": 15,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbs(uint256,uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbsDecimal(int256,int256,uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 15,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbs_extremes()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_assertEq(address,address)",
                 "exitcode": 1,
                 "num_models": 1,
@@ -5631,6 +5676,51 @@
         ],
         "test/StdAssertTest.t.sol:StdAssertFailTest": [
             {
+                "name": "check_assertApproxEqAbs(int256,int256,uint256)",
+                "exitcode": 1,
+                "num_models": 15,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbs(uint256,uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbsDecimal(int256,int256,uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 15,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256)",
+                "exitcode": 1,
+                "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbs_extremes()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_assertEq(address,address)",
                 "exitcode": 1,
                 "num_models": 1,
@@ -5938,6 +6028,51 @@
             }
         ],
         "test/StdAssertTest.t.sol:StdAssertPassTest": [
+            {
+                "name": "check_assertApproxEqAbs(int256,int256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbs(uint256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbsDecimal(int256,int256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_assertApproxEqAbs_extremes()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
             {
                 "name": "check_assertEq(address,address)",
                 "exitcode": 0,

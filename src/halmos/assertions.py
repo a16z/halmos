@@ -10,6 +10,7 @@ from z3 import (
     ULT,
     BitVecRef,
     BoolVal,
+    If,
     is_bv,
 )
 
@@ -21,6 +22,7 @@ from halmos.utils import (
     extract_bytes_argument,
     extract_string_argument,
     test,
+    try_bytes_to_bv_value,
     uint256,
 )
 
@@ -171,6 +173,39 @@ def vm_assert_unary(expected: bool, log: bool = False):
     return _f
 
 
+def abs_diff(x: BitVecRef, y: BitVecRef, signed: bool) -> BitVecRef:
+    """
+    The distance |x - y| between two 256-bit words, as an unsigned word.
+
+    The distance always fits: two uint256 values, or two int256 values, are
+    less than 2^256 apart. Subtracting the smaller value from the larger one
+    therefore gives the exact distance even in 256-bit modular arithmetic; for
+    example, type(int256).max - type(int256).min wraps to 2^256 - 1, which is
+    their distance.
+    """
+    x_ge_y = x >= y if signed else UGE(x, y)
+    return If(x_ge_y, x - y, y - x)
+
+
+def vm_assert_approx_eq_abs(signed: bool, log_idx: int | None):
+    """
+    assertApproxEqAbs(left, right, maxDelta) and assertApproxEqAbsDecimal(left,
+    right, maxDelta, decimals), each with an optional message: as in forge,
+    the assertion holds iff |left - right| <= maxDelta. The decimals only
+    change how forge prints the values, so they do not enter the condition.
+    """
+
+    def _f(arg):
+        left = try_bytes_to_bv_value(extract_bytes(arg, 4, 32))
+        right = try_bytes_to_bv_value(extract_bytes(arg, 36, 32))
+        max_delta = try_bytes_to_bv_value(extract_bytes(arg, 68, 32))
+        cond = ULE(abs_diff(left, right, signed), max_delta)
+        msg = extract_string_argument(arg, log_idx) if log_idx is not None else None
+        return VmAssertion(cond, msg)
+
+    return _f
+
+
 def mk_assert_handler(signature):
     # pattern: assert<operator>(<params>)
     match = re.search(r"assert([^(]+)\(([^)]+)\)", signature)
@@ -179,6 +214,12 @@ def mk_assert_handler(signature):
         params = match.group(2).split(",")
     else:
         raise HalmosException(f"not supported signatures: {signature}")
+
+    # approximate equality: (left, right, maxDelta[, decimals][, message])
+    if operator in ["ApproxEqAbs", "ApproxEqAbsDecimal"]:
+        n_values = 4 if operator == "ApproxEqAbsDecimal" else 3
+        log_idx = n_values if len(params) > n_values else None
+        return vm_assert_approx_eq_abs(params[0] == "int256", log_idx)
 
     # operator type:
     # - binary: compare two arguments
@@ -284,4 +325,22 @@ assert_cheatcode_handler = {
     0xE25242C0: mk_assert_handler("assertGe(uint256,uint256,string)"),
     0x0A30B771: mk_assert_handler("assertGe(int256,int256)"),
     0xA84328DD: mk_assert_handler("assertGe(int256,int256,string)"),
+    # assertApproxEqAbs(T, T, uint256)
+    0x16D207C6: mk_assert_handler("assertApproxEqAbs(uint256,uint256,uint256)"),
+    0xF710B062: mk_assert_handler("assertApproxEqAbs(uint256,uint256,uint256,string)"),
+    0x240F839D: mk_assert_handler("assertApproxEqAbs(int256,int256,uint256)"),
+    0x8289E621: mk_assert_handler("assertApproxEqAbs(int256,int256,uint256,string)"),
+    # assertApproxEqAbsDecimal(T, T, uint256, uint256)
+    0x045C55CE: mk_assert_handler(
+        "assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256)"
+    ),
+    0x60429EB2: mk_assert_handler(
+        "assertApproxEqAbsDecimal(uint256,uint256,uint256,uint256,string)"
+    ),
+    0x3D5BC8BC: mk_assert_handler(
+        "assertApproxEqAbsDecimal(int256,int256,uint256,uint256)"
+    ),
+    0x6A5066D4: mk_assert_handler(
+        "assertApproxEqAbsDecimal(int256,int256,uint256,uint256,string)"
+    ),
 }
