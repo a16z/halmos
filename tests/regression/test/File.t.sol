@@ -44,6 +44,28 @@ contract FileTest is Test {
         assert(keccak256(bytes(text)) == keccak256("hello\nworld\n"));
     }
 
+    function check_exists() public view {
+        assert(vm.exists("test/data/hello.txt"));
+        assert(vm.exists("test/data"));
+        assert(!vm.exists("test/data/missing.txt"));
+        assert(vm.isFile("test/data/hello.txt"));
+        assert(!vm.isFile("test/data"));
+        assert(!vm.isFile("test/data/missing.txt"));
+        assert(vm.isDir("test/data"));
+        assert(!vm.isDir("test/data/hello.txt"));
+        assert(vm.exists(string.concat(vm.projectRoot(), "/test/data/hello.txt")));
+    }
+
+    function check_exists_notPermitted() public view {
+        // must error, as under forge test
+        vm.exists("foundry.toml");
+    }
+
+    function check_exists_symbolic(string memory path) public view {
+        // must error: the path must be concrete
+        vm.exists(path);
+    }
+
     function check_projectRoot() public view {
         string memory path = string.concat(vm.projectRoot(), "/test/data/hello.txt");
         assert(keccak256(bytes(vm.readFile(path))) == keccak256("hello\nworld\n"));

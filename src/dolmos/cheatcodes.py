@@ -52,7 +52,7 @@ from dolmos.expectations import (
     parse_expect_emit,
     parse_expect_revert,
 )
-from dolmos.fs import parse_hex_bytes, read_file
+from dolmos.fs import is_dir, is_file, parse_hex_bytes, path_exists, read_file
 from dolmos.logs import debug
 from dolmos.mapper import BuildOut
 from dolmos.tostring import (
@@ -639,6 +639,24 @@ def read_file_binary_cheatcode(sevm, arg) -> ByteVec:
     """vm.readFileBinary(string path) returns (bytes)"""
     path = concrete_string_argument(arg, 0, "vm.readFileBinary")
     return encode_tuple_bytes(read_file(sevm.options.root, path, "vm.readFileBinary"))
+
+
+# vm.exists(string) / vm.isFile(string) / vm.isDir(string) returns (bool)
+FS_PREDICATES = {
+    0x261A323E: ("vm.exists", path_exists),
+    0xE0EB04D4: ("vm.isFile", is_file),
+    0x7D15D019: ("vm.isDir", is_dir),
+}
+
+
+def fs_predicate_cheatcode(sevm, funsig: int, arg) -> ByteVec:
+    """
+    vm.exists / vm.isFile / vm.isDir (string path) returns (bool). As in foundry,
+    the path must be readable according to fs_permissions, and must be concrete.
+    """
+    name, predicate = FS_PREDICATES[funsig]
+    path = concrete_string_argument(arg, 0, name)
+    return ByteVec(BV(1 if predicate(sevm.options.root, path, name) else 0))
 
 
 def parse_bytes_cheatcode(arg) -> ByteVec:
@@ -1739,6 +1757,10 @@ class hevm_cheat_code:
         # vm.readFileBinary(string) returns (bytes)
         elif funsig == hevm_cheat_code.read_file_binary_sig:
             return read_file_binary_cheatcode(sevm, arg)
+
+        # vm.exists(string) / vm.isFile(string) / vm.isDir(string) returns (bool)
+        elif funsig in FS_PREDICATES:
+            return fs_predicate_cheatcode(sevm, funsig, arg)
 
         # vm.parseBytes(string) returns (bytes)
         elif funsig == hevm_cheat_code.parse_bytes_sig:

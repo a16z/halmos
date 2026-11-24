@@ -178,3 +178,27 @@ def test_parse_hex_bytes(value, expected):
 def test_parse_hex_bytes_invalid(value, reason):
     with pytest.raises(DolmosException, match=reason):
         parse_hex_bytes(value)
+
+
+def test_fs_predicates(tmp_path):
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "a.txt").write_text("a")
+    (tmp_path / "secret.txt").write_text("s")
+    root = str(tmp_path)
+    fs.load_fs_permissions.cache_clear()
+    permissions = parse_fs_permissions(root, [{"access": "read", "path": "data"}])
+    original = fs.load_fs_permissions
+    fs.load_fs_permissions = lambda _root: permissions
+    try:
+        assert fs.path_exists(root, "data/a.txt", "vm.exists")
+        assert fs.path_exists(root, "data", "vm.exists")
+        assert not fs.path_exists(root, "data/missing.txt", "vm.exists")
+        assert fs.is_file(root, "data/a.txt", "vm.isFile")
+        assert not fs.is_file(root, "data", "vm.isFile")
+        assert fs.is_dir(root, "data", "vm.isDir")
+        assert not fs.is_dir(root, "data/a.txt", "vm.isDir")
+        # as in foundry, a path that is not readable is an error, not `false`
+        with pytest.raises(DolmosException, match="vm.exists"):
+            fs.path_exists(root, "secret.txt", "vm.exists")
+    finally:
+        fs.load_fs_permissions = original

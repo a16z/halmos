@@ -7,6 +7,13 @@ All notable changes to dolmos are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `vm.exists`, `vm.isFile` and `vm.isDir`, subject to `fs_permissions` like
+  `vm.readFile` (the path must be readable, and concrete). They are used by setups
+  that load an optional deployment or configuration file, which previously failed
+  with `Unsupported cheat code: exists(string)`
+
 ## [0.3.0] - 2026-11-09
 
 ### Added

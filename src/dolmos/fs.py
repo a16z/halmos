@@ -148,6 +148,21 @@ def read_file(root: str, path: str, cheatcode: str) -> bytes:
         raise DolmosException(f"{cheatcode}: failed to read {abs_path}: {e}") from e
 
 
+def path_exists(root: str, path: str, cheatcode: str) -> bool:
+    """Whether path is an existing file or directory, subject to fs_permissions."""
+    return os.path.exists(ensure_readable(root, path, cheatcode))
+
+
+def is_file(root: str, path: str, cheatcode: str) -> bool:
+    """Whether path is an existing regular file, subject to fs_permissions."""
+    return os.path.isfile(ensure_readable(root, path, cheatcode))
+
+
+def is_dir(root: str, path: str, cheatcode: str) -> bool:
+    """Whether path is an existing directory, subject to fs_permissions."""
+    return os.path.isdir(ensure_readable(root, path, cheatcode))
+
+
 _HEX_DIGITS = re.compile(r"[0-9a-fA-F]*")
 
 
