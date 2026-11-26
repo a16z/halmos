@@ -7,6 +7,41 @@ All notable changes to dolmos are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-26
+
+### Added
+
+- `--keccak-exhaustive-bits K` (disabled by default): when the preimage of a symbolic
+  keccak256 has at most `K` free bits (`keccak256(abi.encode(uint8 x))`, a
+  `mapping(uint8 => ...)` slot, a masked value), the queries define the hash by cases
+  on its `2^K` possible preimages, computed natively. They are then exact on this hash:
+  no counterexample relying on a wrong hash value, and properties that depend on the
+  value of the hash can be proved. See [docs/keccak-sat.md](docs/keccak-sat.md)
+- `dolmos.keccak_sat`: bit-precise CNF encodings of keccak256 (textbook, optimized,
+  and by cofactoring on the free bits of the message), with Lean proofs of their
+  equivalence with keccak-f[1600] in `proofs/keccak_sat`, and
+  `benchmarks/keccak_sat.py`
+- `vm.exists`, `vm.isFile` and `vm.isDir`, subject to `fs_permissions` like
+  `vm.readFile` (the path must be readable, and concrete). They are used by setups
+  that load an optional deployment or configuration file, which previously failed
+  with `Unsupported cheat code: exists(string)`
+
+### Changed
+
+- keccak256 is computed with pycryptodome instead of pysha3 (`eth_hash[pycryptodome]`):
+  pysha3 has no binary wheels and required a C toolchain to install dolmos (halmos#446).
+  `eth_hash` still uses pysha3 if it is the only backend installed
+- symbolic terms are interned (`dolmos.zfast`): each z3 term has a single Python object,
+  which caches its structure (kind, declaration, arguments, size, value, simplified
+  form), and terms are built with direct calls to the z3 library instead of going through
+  z3py. Identical terms being identical objects, path conditions are found by identity
+  instead of building and inspecting an equality term. Path exploration is 1.2 to 1.5
+  times faster on the regression tests and the examples, with the same verdicts; solver
+  time is unchanged. The z3 references of dead terms are no longer released by whichever
+  thread runs the garbage collector, but queued and released by the thread that builds
+  terms. `DOLMOS_NO_ZFAST=1` in the environment disables interning: terms are then plain
+  z3py objects, as before
+
 ### Performance
 
 - a branching condition that already timed out, on this path or on another one, is
@@ -39,40 +74,9 @@ All notable changes to dolmos are documented here. The format follows
 - a segmentation fault when Python's garbage collector, running in a solver thread,
   released z3 terms while the main thread was inside a z3 call: z3 now queues these
   releases (`Z3_enable_concurrent_dec_ref`)
-
-### Changed
-
-- keccak256 is computed with pycryptodome instead of pysha3 (`eth_hash[pycryptodome]`):
-  pysha3 has no binary wheels and required a C toolchain to install dolmos (halmos#446).
-  `eth_hash` still uses pysha3 if it is the only backend installed
-- symbolic terms are interned (`dolmos.zfast`): each z3 term has a single Python object,
-  which caches its structure (kind, declaration, arguments, size, value, simplified
-  form), and terms are built with direct calls to the z3 library instead of going through
-  z3py. Identical terms being identical objects, path conditions are found by identity
-  instead of building and inspecting an equality term. Path exploration is 1.2 to 1.5
-  times faster on the regression tests and the examples, with the same verdicts; solver
-  time is unchanged. The z3 references of dead terms are no longer released by whichever
-  thread runs the garbage collector, but queued and released by the thread that builds
-  terms. `DOLMOS_NO_ZFAST=1` in the environment disables interning: terms are then plain
-  z3py objects, as before
-
-### Added
-
-- `--keccak-exhaustive-bits K` (disabled by default): when the preimage of a symbolic
-  keccak256 has at most `K` free bits (`keccak256(abi.encode(uint8 x))`, a
-  `mapping(uint8 => ...)` slot, a masked value), the queries define the hash by cases
-  on its `2^K` possible preimages, computed natively. They are then exact on this hash:
-  no counterexample relying on a wrong hash value, and properties that depend on the
-  value of the hash can be proved. See [docs/keccak-sat.md](docs/keccak-sat.md)
-- `dolmos.keccak_sat`: bit-precise CNF encodings of keccak256 (textbook, optimized,
-  and by cofactoring on the free bits of the message), with Lean proofs of their
-  equivalence with keccak-f[1600] in `proofs/keccak_sat`, and
-  `benchmarks/keccak_sat.py`
-
-- `vm.exists`, `vm.isFile` and `vm.isDir`, subject to `fs_permissions` like
-  `vm.readFile` (the path must be readable, and concrete). They are used by setups
-  that load an optional deployment or configuration file, which previously failed
-  with `Unsupported cheat code: exists(string)`
+- a `CALL` with a nonzero value in a static context (EIP-214) now halts the frame
+  exceptionally, as `SSTORE`, `LOG`, `CREATE` and `SELFDESTRUCT` already did. The value
+  was transferred. With a symbolic value, the nonzero case is a separate path
 
 ## [0.3.0] - 2026-11-09
 
@@ -264,7 +268,8 @@ First release of dolmos.
   `forge build`, since it rewrites `new C()` into unsupported `vm.deployCode`
   calls
 
-[Unreleased]: https://github.com/Dowsers/dolmos/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Dowsers/dolmos/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Dowsers/dolmos/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Dowsers/dolmos/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Dowsers/dolmos/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Dowsers/dolmos/releases/tag/v0.1.0
