@@ -17,12 +17,34 @@ All notable changes to dolmos are documented here. The format follows
 
 ### Fixed
 
+- `InvalidJumpDestError` on a valid jump destination that follows a symbolic immutable.
+  solar writes an address immutable held in a `PUSH20` with a read-modify-write of a
+  32-byte word, so the 12 bytes of code after the immutable were part of a symbolic term
+  when the immutable is symbolic (e.g. `vm.addr(1)`), and the `JUMPDEST`s after them were
+  not found. The code of a contract is now split into its concrete and symbolic parts
+  when it is deployed (halmos#608)
+- the values of the symbolic storage (`svm.enableSymbolicStorage`) are part of the
+  counterexamples, which were printed as `∅` when they only depended on the storage:
+  scalar slots as `storage_<address>_<slot>_0_0_00 = <value>`, and the entries of
+  mappings that the query reads as `storage_<address>_..._00[<key>]... = <value>`, with
+  the models of yices and z3. They are also in the JSON output, and listed under "Other
+  symbols" with `--pretty-counterexamples` (halmos#577)
+- the counterexamples tell which function the calldata created by `svm.createCalldata`
+  calls, e.g. `svm.createCalldata: Token.burn(uint256) [selector 0x42966c68]`, including
+  for functions without arguments, `receive()` and `fallback()`. Only the arguments were
+  printed. `--pretty-counterexamples` already decoded these calls (halmos#374)
+- `--function` and `--match-test` in a contract annotation (`/// @custom:dolmos
+  --function verify_`) select the tests of the contract: annotations are now processed
+  before the tests are selected. The command line still takes precedence (halmos#184)
 - a segmentation fault when Python's garbage collector, running in a solver thread,
   released z3 terms while the main thread was inside a z3 call: z3 now queues these
   releases (`Z3_enable_concurrent_dec_ref`)
 
 ### Changed
 
+- keccak256 is computed with pycryptodome instead of pysha3 (`eth_hash[pycryptodome]`):
+  pysha3 has no binary wheels and required a C toolchain to install dolmos (halmos#446).
+  `eth_hash` still uses pysha3 if it is the only backend installed
 - symbolic terms are interned (`dolmos.zfast`): each z3 term has a single Python object,
   which caches its structure (kind, declaration, arguments, size, value, simplified
   form), and terms are built with direct calls to the z3 library instead of going through

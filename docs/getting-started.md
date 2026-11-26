@@ -240,6 +240,12 @@ For our example, dolmos will identify an input combination where the sender addr
   }
   ```
 
+- A counterexample lists the values of the symbolic inputs of the test (`p_amount_uint256_... = 0x40`). It also gives what these values do not tell:
+  - the function called by calldata created with `svm.createCalldata`: `svm.createCalldata: Token.burn(uint256) [selector 0x42966c68]`;
+  - the initial storage of the accounts whose storage is symbolic (`svm.enableSymbolicStorage`): `storage_<address>_<slot>_0_0_00 = 0x01` for a scalar slot, and `storage_<address>_<slot>_..._00[<key>][...] = 0x4d` for the entries of a mapping that the test reads (one `[...]` per 256-bit word of the keys). The entry `[...]` is the value of all the entries when the solver gives no particular one. Mapping entries are read from the models of yices and z3.
+
+  Run with `--pretty-counterexamples` for decoded values and a forge test that replays the counterexample, see [pretty counterexamples](pretty-counterexamples.md).
+
 ## Summary
 
 Similar to fuzz tests, symbolic tests are structured as follows:

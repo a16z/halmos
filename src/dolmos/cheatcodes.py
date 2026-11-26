@@ -39,6 +39,7 @@ from dolmos.logs import debug
 from dolmos.mapper import BuildOut
 from dolmos.tostring import (
     TO_STRING_SIGNATURES,
+    DescribedReturn,
     checksum_address,
     encode_string,
     to_string_cheatcode,
@@ -329,12 +330,12 @@ def _get_contract_name(ex, arg) -> tuple[str | None, str | None]:
     return contract_name, code.filename
 
 
-def create_calldata_address(ex, arg, sevm, stack) -> list[ByteVec]:
+def create_calldata_address(ex, arg, sevm, stack) -> list[DescribedReturn]:
     contract_name, filename = _get_contract_name(ex, arg)
     return create_calldata_generic(ex, sevm, contract_name, filename)
 
 
-def create_calldata_address_bool(ex, arg, sevm, stack) -> list[ByteVec]:
+def create_calldata_address_bool(ex, arg, sevm, stack) -> list[DescribedReturn]:
     contract_name, filename = _get_contract_name(ex, arg)
     include_view = int_of(
         arg.get_word(4 + 32 * 1),
@@ -345,12 +346,12 @@ def create_calldata_address_bool(ex, arg, sevm, stack) -> list[ByteVec]:
     )
 
 
-def create_calldata_contract(ex, arg, sevm, stack) -> list[ByteVec]:
+def create_calldata_contract(ex, arg, sevm, stack) -> list[DescribedReturn]:
     contract_name = name_of(extract_string_argument(arg, 0))
     return create_calldata_generic(ex, sevm, contract_name)
 
 
-def create_calldata_contract_bool(ex, arg, sevm, stack) -> list[ByteVec]:
+def create_calldata_contract_bool(ex, arg, sevm, stack) -> list[DescribedReturn]:
     contract_name = name_of(extract_string_argument(arg, 0))
     include_view = int_of(
         arg.get_word(4 + 32 * 1),
@@ -361,13 +362,13 @@ def create_calldata_contract_bool(ex, arg, sevm, stack) -> list[ByteVec]:
     )
 
 
-def create_calldata_file_contract(ex, arg, sevm, stack) -> list[ByteVec]:
+def create_calldata_file_contract(ex, arg, sevm, stack) -> list[DescribedReturn]:
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     return create_calldata_generic(ex, sevm, contract_name, filename)
 
 
-def create_calldata_file_contract_bool(ex, arg, sevm, stack) -> list[ByteVec]:
+def create_calldata_file_contract_bool(ex, arg, sevm, stack) -> list[DescribedReturn]:
     filename = name_of(extract_string_argument(arg, 0))
     contract_name = name_of(extract_string_argument(arg, 1))
     include_view = int_of(
@@ -393,7 +394,7 @@ def encode_tuple_bytes(data: BitVecRef | ByteVec | bytes) -> ByteVec:
 
 def create_calldata_generic(
     ex, sevm, contract_name, filename=None, include_view=False
-) -> list[ByteVec]:
+) -> list[DescribedReturn]:
     """
     Generate arbitrary symbolic calldata for the given contract.
 
@@ -409,8 +410,14 @@ def create_calldata_generic(
 
     results = []
 
+    # the function that each calldata calls is recorded on its path, as the symbols of
+    # the calldata only name its arguments (halmos#374)
+    def add(calldata, target: str) -> None:
+        description = f"svm.createCalldata: {contract_name}.{target}"
+        results.append(DescribedReturn(encode_tuple_bytes(calldata), description))
+
     # empty calldata for receive() and fallback()
-    results.append(encode_tuple_bytes(b""))
+    add(b"", "receive() or fallback(), with empty calldata")
 
     # nonempty calldata for fallback()
     fallback_selector = BitVec(
@@ -420,7 +427,10 @@ def create_calldata_generic(
     fallback_input = BitVec(
         f"fallback_input_{uid()}_{ex.new_symbol_id():>02}", fallback_input_length * 8
     )
-    results.append(encode_tuple_bytes(Concat(fallback_selector, fallback_input)))
+    add(
+        Concat(fallback_selector, fallback_input),
+        "fallback(), with a selector that is not one of the contract",
+    )
 
     for funsig in methodIdentifiers:
         funname = funsig.split("(")[0]
@@ -446,7 +456,7 @@ def create_calldata_generic(
         # which is not optimal, as unnecessary size candidates will need to be copied during path branching for each calldata.
         ex.path.process_dyn_params(dyn_params)
 
-        results.append(encode_tuple_bytes(calldata))
+        add(calldata, f"{funsig} [selector 0x{funselector}]")
 
     return results
 

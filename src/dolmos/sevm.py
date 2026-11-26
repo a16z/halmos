@@ -170,7 +170,7 @@ from dolmos.logs import (
     warn_code,
 )
 from dolmos.mapper import BuildOut
-from dolmos.tostring import ConditionalReturn
+from dolmos.tostring import ConditionalReturn, DescribedReturn
 from dolmos.ui import ui
 from dolmos.utils import (
     Address,
@@ -1355,6 +1355,7 @@ class Exec:  # an execution path
     addresses_to_delete: set[Address]
     created_in_tx: set[Address]  # accounts created in the current transaction
     labels: list  # (address, label) pairs set by vm.label, latest last
+    calldata_choices: list  # what the calldata created by svm.createCalldata calls
 
     # path
     path: Path  # path conditions
@@ -1403,6 +1404,8 @@ class Exec:  # an execution path
         # vm.label(address, string): shared with sub-contexts, like the nonces
         labels = kwargs.get("labels")
         self.labels = labels if labels is not None else []
+        calldata_choices = kwargs.get("calldata_choices")
+        self.calldata_choices = calldata_choices if calldata_choices is not None else []
         #
         self.path = kwargs["path"]
         self.alias = kwargs["alias"]
@@ -3013,6 +3016,7 @@ class SEVM:
                 nonces=ex.nonces,
                 created_in_tx=ex.created_in_tx,
                 labels=ex.labels,
+                calldata_choices=ex.calldata_choices,
                 sha3s=ex.sha3s,
                 storages=ex.storages,
                 balances=ex.balances,
@@ -3164,8 +3168,11 @@ class SEVM:
             for idx, ret_ in enumerate(ret_lst):
                 # return data that only holds under a condition (one path each)
                 cond = BoolVal(True)
+                description = None
                 if isinstance(ret_, ConditionalReturn):
                     cond, ret_ = ret_.cond, ret_.data
+                elif isinstance(ret_, DescribedReturn):
+                    description, ret_ = ret_.description, ret_.data
 
                 if not isinstance(ret_, ByteVec):
                     raise DolmosException(f"Invalid return value: {ret_}")
@@ -3176,6 +3183,8 @@ class SEVM:
                     new_ex = ex
                     if not is_true(cond):
                         new_ex.path.append(cond, branching=True)
+                if description is not None:
+                    new_ex.calldata_choices.append(description)
                 copy_returndata_to_memory(ret_, ret_loc, ret_size, new_ex)
                 new_ex.context.trace.append(
                     CallContext(
@@ -3408,6 +3417,7 @@ class SEVM:
             nonces=ex.nonces,
             created_in_tx=ex.created_in_tx,
             labels=ex.labels,
+            calldata_choices=ex.calldata_choices,
             sha3s=ex.sha3s,
             storages=ex.storages,
             balances=ex.balances,
@@ -3703,6 +3713,7 @@ class SEVM:
             nonces=deepcopy(ex.nonces),
             created_in_tx=set(ex.created_in_tx),
             labels=list(ex.labels),
+            calldata_choices=list(ex.calldata_choices),
             sha3s=ex.sha3s.copy(),
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
@@ -3796,6 +3807,7 @@ class SEVM:
             nonces=deepcopy(ex.nonces),
             created_in_tx=set(ex.created_in_tx),
             labels=list(ex.labels),
+            calldata_choices=list(ex.calldata_choices),
             sha3s=ex.sha3s.copy(),
             storages=ex.storages.copy(),
             balances=ex.balances.copy(),
@@ -3926,6 +3938,7 @@ class SEVM:
             cnts=deepcopy(pre_ex.cnts),
             nonces=deepcopy(pre_ex.nonces),
             labels=list(pre_ex.labels),
+            calldata_choices=list(pre_ex.calldata_choices),
             sha3s=pre_ex.sha3s.copy(),
             storages=pre_ex.storages.copy(),
             balances=pre_ex.balances.copy(),

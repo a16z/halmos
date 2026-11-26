@@ -67,6 +67,21 @@ class ConditionalReturn:
     data: ByteVec
 
 
+@dataclass(frozen=True)
+class DescribedReturn:
+    """
+    Return data of a cheatcode, with a description of the choice it stands for.
+
+    A cheatcode returning a list of DescribedReturn creates one path per item, and the
+    description is recorded on the path (Exec.calldata_choices), to be printed with the
+    counterexamples of this path: e.g. the function whose calldata svm.createCalldata()
+    returns, which the symbols of the calldata do not tell (halmos#374).
+    """
+
+    data: ByteVec
+    description: str
+
+
 def encode_string(data: bytes | BitVecRef) -> ByteVec:
     """ABI encoding of the return value `(string)`: offset, length, padded data"""
     length = data.size() // 8 if is_bv(data) else len(data)

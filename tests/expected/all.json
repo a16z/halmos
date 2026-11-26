@@ -934,6 +934,17 @@
                 "num_bounded_loops": null
             }
         ],
+        "test/CreateCalldataCex.t.sol:CreateCalldataCexTest": [
+            {
+                "name": "check_calldata_cex()",
+                "exitcode": 1,
+                "num_models": 2,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
         "test/Deal.t.sol:DealTest": [
             {
                 "name": "check_concretized_transfer_over_max_eth(bytes)",
@@ -3791,6 +3802,28 @@
                 "name": "check_Loop2Fail(uint256)",
                 "exitcode": 1,
                 "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/NatspecFunction.t.sol:NatspecFunctionTest": [
+            {
+                "name": "verify_selected(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/NatspecFunction.t.sol:NatspecMatchTest": [
+            {
+                "name": "check_selected(uint256)",
+                "exitcode": 0,
+                "num_models": 0,
                 "models": null,
                 "num_paths": null,
                 "time": null,
@@ -7935,6 +7968,75 @@
                 "name": "check_foo(address)",
                 "exitcode": 0,
                 "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SymbolicImmutable.t.sol:SymbolicImmutableTest": [
+            {
+                "name": "check_concrete_immutable()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_jump_after_symbolic_immutable()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_other_caller_reverts(address)",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SymbolicStorageCex.t.sol:ConcreteStorageCexTest": [
+            {
+                "name": "check_storage_cex_concrete(address)",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            }
+        ],
+        "test/SymbolicStorageCex.t.sol:SymbolicStorageCexTest": [
+            {
+                "name": "check_storage_cex_increment()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_storage_cex_mapping()",
+                "exitcode": 1,
+                "num_models": 1,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
+                "name": "check_storage_cex_scalar()",
+                "exitcode": 1,
+                "num_models": 1,
                 "models": null,
                 "num_paths": null,
                 "time": null,

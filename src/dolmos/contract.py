@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 from dolmos.bitvec import DolmosBitVec as BV
-from dolmos.bytevec import ByteVec, ConcreteChunk
+from dolmos.bytevec import ByteVec, ConcreteChunk, SymbolicChunk
 from dolmos.constants import MAX_MEMORY_SIZE
 from dolmos.exceptions import (
     NotConcreteError,
@@ -19,14 +19,17 @@ from dolmos.mapper import SingletonMeta, SourceFileMap
 from dolmos.utils import (
     Address,
     Byte,
+    bv_value_to_bytes,
     con_addr,
     hexify,
     int_of,
+    is_concat,
     is_concrete,
     str_opcode,
     stripped,
     uint256,
 )
+from dolmos.zfast import is_bv_value, simplify
 
 OP_STOP = 0x00
 OP_ADD = 0x01
@@ -251,6 +254,61 @@ class Instruction:
 Instruction.STOP = Instruction(OP_STOP)
 
 
+def split_symbolic_chunks(code: ByteVec) -> ByteVec:
+    """
+    Returns the given code with the symbolic chunks split into their concrete and symbolic
+    parts, e.g. `Or(immutable << 96, 0x...3314601d57)` into the 20 bytes of the immutable
+    followed by 12 concrete bytes.
+
+    Compilers may write an immutable into the code with a read-modify-write of a whole
+    word: solar does so for an address held in a PUSH20, where solc reserves a PUSH32.
+    When the immutable is symbolic, the bytes of code that share its word are then part of
+    a symbolic term although their value is known. Without this, they could not be decoded
+    as instructions, and the JUMPDESTs that follow them were not found (halmos#608).
+
+    The code is returned unchanged when it has no symbolic chunk, or when nothing can be
+    split.
+    """
+
+    if not any(isinstance(chunk, SymbolicChunk) for chunk in code.chunks.values()):
+        return code
+
+    parts = []
+    changed = False
+    for chunk in code.chunks.values():
+        if not isinstance(chunk, SymbolicChunk):
+            parts.append(chunk)
+            continue
+
+        term = simplify(chunk.unwrap())
+        items = term.children() if is_concat(term) else [term]
+
+        # only byte-aligned parts can be chunks of their own
+        if any(item.size() % 8 != 0 for item in items):
+            parts.append(chunk)
+            continue
+
+        if len(items) > 1 or is_bv_value(term):
+            changed = True
+            parts.extend(
+                bv_value_to_bytes(item) if is_bv_value(item) else item for item in items
+            )
+        else:
+            parts.append(chunk)
+
+    if not changed:
+        return code
+
+    result = ByteVec()
+    for part in parts:
+        result.append(part)
+
+    if len(result) != len(code):
+        raise ValueError(f"split_symbolic_chunks: {len(result)} != {len(code)}")
+
+    return result
+
+
 class Contract:
     """Abstraction over contract bytecode. Can include concrete and symbolic elements."""
 
@@ -278,7 +336,7 @@ class Contract:
         if not isinstance(code, ByteVec):
             code = ByteVec(code)
 
-        self._code = code
+        self._code = code = split_symbolic_chunks(code)
         self._fastcode = None
 
         # if the bytecode starts with a concrete prefix, we store it separately for fast access

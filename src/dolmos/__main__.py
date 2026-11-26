@@ -1020,6 +1020,17 @@ class CounterexampleHandler:
         except Exception as e:
             debug(f"could not collect the address labels: {e!r}")
 
+        # what the calldata created by svm.createCalldata on this path calls (halmos#374)
+        calldata_choices = tuple(ex.calldata_choices)
+
+        # the accounts whose storage is symbolic: their initial storage is part of the
+        # counterexample (halmos#577)
+        symbolic_storage = tuple(
+            f"storage_{id_str(addr)}_"
+            for addr, storage in ex.storage.items()
+            if storage.symbolic
+        )
+
         # beware: because this object crosses thread boundaries, we must be careful to
         # avoid any reference to z3 objects
         path_ctx = PathContext(
@@ -1042,6 +1053,8 @@ class CounterexampleHandler:
                 description=description,
                 layout=layout,
                 address_info=address_info,
+                symbolic_storage=symbolic_storage,
+                calldata_choices=calldata_choices,
             )
         )
         self.submitted_futures.append(solve_future)
@@ -1087,6 +1100,8 @@ class CounterexampleHandler:
         description: str,
         layout: CexLayout | None = None,
         address_info: tuple | None = None,
+        symbolic_storage: tuple[str, ...] = (),
+        calldata_choices: tuple[str, ...] = (),
     ) -> None:
         """
         Callback function for handling solver results.
@@ -1131,6 +1146,8 @@ class CounterexampleHandler:
         if model is None:
             return
 
+        model.keep_storage_of(symbolic_storage)
+
         if args.pretty_counterexamples:
             self._report_pretty_counterexample(ex, solver_output, description, layout)
             return
@@ -1151,7 +1168,8 @@ class CounterexampleHandler:
 
         if model.is_valid:
             hints = address_hints(*address_info, model.model) if address_info else None
-            print(color_error(f"Counterexample: {model.render(hints)}"))
+            rendered = model.render(hints, notes=calldata_choices)
+            print(color_error(f"Counterexample: {rendered}"))
             ctx.valid_counterexamples.append(model)
 
             # add the stacks from the temporary flamegraph to the global one
@@ -1165,7 +1183,8 @@ class CounterexampleHandler:
                 debug(f"Shutting down {ctx.info.name}'s solver executor")
                 ctx.solving_ctx.executor.shutdown(wait=False)
         else:
-            warn_str = f"Counterexample (potentially invalid): {model}"
+            rendered = model.render(notes=calldata_choices)
+            warn_str = f"Counterexample (potentially invalid): {rendered}"
             warn_code(COUNTEREXAMPLE_INVALID, warn_str)
 
             ctx.invalid_counterexamples.append(model)
@@ -2320,7 +2339,6 @@ def _main(_args=None) -> MainResult:
     #
 
     _contract_regex = contract_regex(args)
-    _test_regex = test_regex(args)
 
     for build_out_map, filename, contract_name in build_output_iterator(build_out):
         if not re.search(_contract_regex, contract_name):
@@ -2329,6 +2347,11 @@ def _main(_args=None) -> MainResult:
         (contract_json, contract_type, natspec) = build_out_map[filename][contract_name]
         if contract_type != "contract":
             continue
+
+        # support for `/// @custom:dolmos` annotations: they are processed before the
+        # tests are selected, so that --function and --match-test apply (halmos#184)
+        contract_args = with_natspec(args, contract_name, natspec)
+        _test_regex = test_regex(contract_args)
 
         methodIdentifiers = contract_json["methodIdentifiers"]
         funsigs = [f for f in methodIdentifiers if re.search(_test_regex, f)]
@@ -2351,8 +2374,6 @@ def _main(_args=None) -> MainResult:
         # Set the test contract address in DeployAddressMapper
         DeployAddressMapper().add_deployed_contract(hexify(FOUNDRY_TEST), contract_name)
 
-        # support for `/// @custom:dolmos` annotations
-        contract_args = with_natspec(args, contract_name, natspec)
         contract_args = with_evm_version(contract_args, contract_json)
         contract_ctx = ContractContext(
             args=contract_args,

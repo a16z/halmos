@@ -62,11 +62,17 @@ class ModelVariable:
 
 ModelVariables = dict[str, ModelVariable]
 
+# Prefix and suffix of the variables that hold the initial storage of an account, see
+# SolidityStorage and GenericStorage: a scalar slot is a bitvector, a mapping is an array.
+# The storage variables with another suffix are intermediate states of the storage.
+STORAGE_PREFIX = "storage_"
+INITIAL_STORAGE_SUFFIX = "_00"
+
 # Regular expression for capturing dolmos variables
 dolmos_var_pattern = re.compile(
     r"""
     \(\s*define-fun\s+               # Match "(define-fun"
-    \|?((?:dolmos_|p_)[^ |]+)\|?\s+  # Capture either dolmos_* or p_*, optionally wrapped in "|"
+    \|?((?:dolmos_|p_|storage_)[^ |]+)\|?\s+  # Capture dolmos_*, p_* or storage_*, optionally wrapped in "|"
     \(\)\s+\(_\s+([^ ]+)\s+          # Capture the SMTLIB type (e.g., "BitVec 256")
     (\d+)\)\s+                       # Capture the bit-width or type argument
     (                                # Group for the value
@@ -157,10 +163,18 @@ class PotentialModel:
     def __str__(self) -> str:
         return self.render()
 
-    def render(self, address_hints: dict[int, str] | None = None) -> str:
+    def render(
+        self,
+        address_hints: dict[int, str] | None = None,
+        notes: tuple[str, ...] = (),
+    ) -> str:
         """
         The values of the model, one per line. Addresses that are known, e.g. labeled
         with vm.label or where a contract is deployed, are annotated (halmos#447).
+
+        The notes are what the values do not tell about the path of the counterexample,
+        e.g. the function called by calldata created by svm.createCalldata (halmos#374).
+        They are printed after the values, in the given order.
         """
         formatted = []
         for v in self.model.values():
@@ -170,7 +184,25 @@ class PotentialModel:
             if hint and is_address_variable(v):
                 line += f" ({hint})"
             formatted.append(line)
-        return "".join(sorted(formatted)) if formatted else "∅"
+        formatted = sorted(formatted) + [f"\n    {note}" for note in notes]
+        return "".join(formatted) if formatted else "∅"
+
+    def keep_storage_of(self, prefixes: tuple[str, ...]) -> None:
+        """
+        Removes the storage variables that do not start with one of the given prefixes.
+
+        Only the accounts with symbolic storage (svm.enableSymbolicStorage) have initial
+        storage values that belong to a counterexample (halmos#577). For the other ones,
+        the initial storage is empty, and the model only states that the slots that are
+        read hold zero.
+        """
+        for name in [n for n in self.model if is_storage_variable(n)]:
+            if not name.startswith(prefixes):
+                del self.model[name]
+
+
+def is_storage_variable(name: str) -> bool:
+    return name.startswith(STORAGE_PREFIX)
 
 
 def is_address_variable(v: ModelVariable) -> bool:
@@ -519,6 +551,16 @@ def parse_const_value(value: str) -> int:
     raise ValueError(f"unknown value format: {value}")
 
 
+def _name_and_type(full_name: str, size_bits: int) -> tuple[str, str]:
+    """the name and the solidity type that a variable name encodes"""
+    if is_storage_variable(full_name):
+        # storage_<address>_<slot>_...: a raw storage word
+        return full_name, f"uint{size_bits}"
+
+    parts = full_name.split("_")
+    return parts[1], parts[2]
+
+
 def _parse_dolmos_var_match(match: re.Match) -> ModelVariable:
     full_name = match.group(1).strip()
     smt_type = f"{match.group(2)} {match.group(3)}"
@@ -526,9 +568,7 @@ def _parse_dolmos_var_match(match: re.Match) -> ModelVariable:
     value = parse_const_value(match.group(4))
 
     # Extract name and typename from the variable name
-    parts = full_name.split("_")
-    variable_name = parts[1]
-    solidity_type = parts[2]
+    variable_name, solidity_type = _name_and_type(full_name, size_bits)
 
     return ModelVariable(
         full_name=full_name,
@@ -546,7 +586,7 @@ def _parse_dolmos_var_match(match: re.Match) -> ModelVariable:
 dolmos_eq_pattern = re.compile(
     r"""
     \(\s*=\s+
-    \|?((?:dolmos_|p_)[^ |()]+)\|?\s+  # the variable, optionally wrapped in "|"
+    \|?((?:dolmos_|p_|storage_)[^ |()]+)\|?\s+  # the variable, optionally wrapped in "|"
     (                                # its value
         \#b[01]+
         |\#x[0-9a-fA-F]+
@@ -571,15 +611,161 @@ def _parse_dolmos_eq_match(match: re.Match) -> ModelVariable:
     full_name = match.group(1).strip()
     value_str = match.group(2)
     size_bits = _const_size(value_str)
-    parts = full_name.split("_")
+    variable_name, solidity_type = _name_and_type(full_name, size_bits)
     return ModelVariable(
         full_name=full_name,
-        variable_name=parts[1],
-        solidity_type=parts[2],
+        variable_name=variable_name,
+        solidity_type=solidity_type,
         smt_type=f"BitVec {size_bits}",
         size_bits=size_bits,
         value=parse_const_value(value_str),
     )
+
+
+_CONST = r"(?:\#b[01]+|\#x[0-9a-fA-F]+|\(_\s+bv\d+\s+\d+\))"
+
+# the definition of an initial storage mapping in a model, up to its body:
+#   (define-fun storage_0x..._00 ((x!0 (_ BitVec 160))) (_ BitVec 256) <body>)   yices, cvc5, ...
+#   (define-fun storage_0x..._00 () (Array (_ BitVec 160) (_ BitVec 256)) <body>)   z3
+_storage_map_head = re.compile(
+    r"\(\s*define-fun\s+\|?(storage_[^ |()]+_00)\|?\s+"
+    r"(?:\(\s*\(\s*[^\s()]+\s+\(_\s+BitVec\s+\d+\)\s*\)\s*\)\s+\(_\s+BitVec\s+\d+\)"
+    r"|\(\s*\)\s+\(Array\s+\(_\s+BitVec\s+\d+\)\s+\(_\s+BitVec\s+\d+\)\s*\))"
+)
+
+# an entry in the body of a function: (ite (= x!0 <key>) <value> ...
+_storage_ite_entry = re.compile(rf"\(=\s+[^\s()]+\s+({_CONST})\s*\)\s+({_CONST})")
+
+# an entry in the body of an array: (store ... <key> <value>)
+_storage_store_entry = re.compile(rf"({_CONST})\s+({_CONST})\s*\)")
+
+# the value of the entries that are not given: ((as const (Array ...)) <default>)
+_storage_const_default = re.compile(
+    r"\(as\s+const\s+\(Array\s+\(_\s+BitVec\s+\d+\)\s+\(_\s+BitVec\s+\d+\)\s*\)\s*\)\s*"
+    rf"({_CONST})"
+)
+
+# the last value of a function body: the one of the last else branch
+_storage_last_const = re.compile(rf"({_CONST})[\s)]*$")
+
+# an entry of a function given by equalities: (= (storage_0x..._00 <key>) <value>)
+_storage_eq_entry = re.compile(
+    rf"\(\s*=\s+\(\s*\|?(storage_[^ |()]+_00)\|?\s+({_CONST})\s*\)\s+({_CONST})\s*\)"
+)
+
+
+# an initial storage mapping given as a function defined elsewhere in the model:
+#   (= storage_0x..._00 @fun_6)
+_storage_eq_alias = re.compile(
+    r"\(\s*=\s+\|?(storage_[^ |()]+_00)\|?\s+(@[^\s()]+)\s*\)"
+)
+
+
+def _balanced(text: str, start: int) -> int:
+    """index just after the parenthesis that closes the one open at text[start]"""
+    depth = 0
+    for i in range(start, len(text)):
+        c = text[i]
+        if c == "(":
+            depth += 1
+        elif c == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(text)
+
+
+def _storage_key(key_str: str) -> str:
+    """
+    A mapping key as printed in a counterexample: `[key]`, or one `[word]` per 256-bit
+    word, from the most significant one, for the concatenated keys of the storage layouts
+    (the last one is shorter when the size is not a multiple of 256 bits).
+    """
+    size = _const_size(key_str)
+    key = parse_const_value(key_str)
+
+    words = []
+    remaining = size
+    while remaining > 0:
+        width = min(256, remaining)
+        remaining -= width
+        words.append((key >> remaining) % 2**width)
+
+    return "".join(f"[{w:#04x}]" for w in words)
+
+
+def _storage_entry(name: str, key: str, value_str: str) -> ModelVariable:
+    size_bits = _const_size(value_str)
+    full_name = f"{name}{key}"
+    return ModelVariable(
+        full_name=full_name,
+        variable_name=full_name,
+        solidity_type=f"uint{size_bits}",
+        smt_type=f"BitVec {size_bits}",
+        size_bits=size_bits,
+        value=parse_const_value(value_str),
+    )
+
+
+def parse_storage_entries(smtlib_str: str) -> list[ModelVariable]:
+    """
+    The entries of the initial storage mappings in a model (halmos#577), as variables
+    named `storage_<address>_..._00[<key>]`.
+
+    A mapping is an array from the keys (concatenated, for nested mappings) to the values.
+    Solvers print the value of an array as a function defined by cases, as a chain of
+    stores, or as a list of equalities. The entries that are given explicitly are
+    returned: they are the ones that the query reads, unless the value that the solver
+    gives to all the other entries suits them. For a mapping with no explicit entry, this
+    default value is returned as the entry `[...]`, when it is not zero. An array printed
+    in another way has no entry reported.
+    """
+
+    if STORAGE_PREFIX not in smtlib_str:
+        return []
+
+    entries = []
+
+    def add_default(name: str, value_str: str | None) -> None:
+        if value_str and parse_const_value(value_str):
+            entries.append(_storage_entry(name, "[...]", value_str))
+
+    for head in _storage_map_head.finditer(smtlib_str):
+        name = head.group(1)
+        body = smtlib_str[head.end() : _balanced(smtlib_str, head.start()) - 1]
+
+        if "(as const" in body or "store" in body:
+            # (store (store ((as const (Array ...)) <default>) <key> <value>) ...)
+            pattern = _storage_store_entry
+            default = _storage_const_default.search(body)
+        else:
+            # (ite (= x!0 <key>) <value> (ite ... <default>)), or <default> alone
+            pattern = _storage_ite_entry
+            default = _storage_last_const.search(body)
+
+        explicit = [
+            _storage_entry(name, _storage_key(m.group(1)), m.group(2))
+            for m in pattern.finditer(body)
+        ]
+        entries.extend(explicit)
+
+        # with explicit entries, the default value is one the solver did not need to choose
+        if not explicit:
+            add_default(name, default.group(1) if default else None)
+
+    for m in _storage_eq_entry.finditer(smtlib_str):
+        entries.append(_storage_entry(m.group(1), _storage_key(m.group(2)), m.group(3)))
+
+    # (= storage_0x..._00 @fun_6) (function @fun_6 (type ...) (= (@fun_6 <key>) <value>) ...)
+    for alias in _storage_eq_alias.finditer(smtlib_str):
+        name, fun = alias.group(1), re.escape(alias.group(2))
+        entry = re.compile(rf"\(\s*=\s+\(\s*{fun}\s+({_CONST})\s*\)\s+({_CONST})\s*\)")
+        entries.extend(
+            _storage_entry(name, _storage_key(m.group(1)), m.group(2))
+            for m in entry.finditer(smtlib_str)
+        )
+
+    return entries
 
 
 def parse_model_str(smtlib_str: str) -> ModelVariables:
@@ -612,6 +798,15 @@ def parse_model_str(smtlib_str: str) -> ModelVariables:
         except Exception as e:
             error(f"error parsing smtlib string '{match.group(0).strip()}': {e}")
             raise e
+
+    # symbolic storage (halmos#577): among the storage variables, only the initial
+    # storage is reported, not the intermediate states
+    for name in [n for n in model_variables if is_storage_variable(n)]:
+        if not name.endswith(INITIAL_STORAGE_SUFFIX):
+            del model_variables[name]
+
+    for variable in parse_storage_entries(smtlib_str):
+        model_variables.setdefault(variable.full_name, variable)
 
     return model_variables
 
