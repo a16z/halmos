@@ -44,7 +44,7 @@ contract Storage5Test {
         // the form of an addition, `keccak(x) + (index % y)`, is automatically
         // simplified to a concatenation form when the keccak value ends with
         // zero bits and y is a power of two. This simplified form is not
-        // currently supported by the decoding logic of halmos.
+        // currently supported by the decoding logic of dolmos.
 
         assert(arr0[index % 1] == 0); // sload(keccak(0) + (index % 1))
         assert(arr0[index % 2] == 0); // sload(keccak(0) + (index % 2))

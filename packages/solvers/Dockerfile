@@ -15,7 +15,8 @@ RUN apt-get update && apt-get install --no-install-recommends -y \
     python3-venv \
     ninja-build \
     software-properties-common \
-    g++ zlib1g-dev libboost-all-dev flex bison
+    g++ zlib1g-dev libboost-all-dev flex bison \
+    pkg-config libgmp-dev libmpfr-dev
 
 # Install Z3
 ARG Z3_VERSION=4.13.3
@@ -48,8 +49,11 @@ RUN wget https://github.com/cvc5/cvc5/releases/download/cvc5-${CVC5_VERSION}/cvc
     rm -rf /cvc5
 
 # Install Bitwuzla
+# pinned: its main branch changes without notice (since 0.9, GMP and MPFR must be
+# installed on the system, found through pkg-config, and are linked statically)
 WORKDIR /bitwuzla
-RUN git clone --depth 1 https://github.com/bitwuzla/bitwuzla . && \
+ARG BITWUZLA_VERSION=0.9.1
+RUN git clone --depth 1 --branch ${BITWUZLA_VERSION} https://github.com/bitwuzla/bitwuzla . && \
     python3 -m venv .venv && \
     . .venv/bin/activate && \
     python3 -m pip install meson && \
@@ -83,6 +87,10 @@ COPY --from=builder \
     /usr/local/bin/bitwuzla \
     /usr/local/bin/boolector \
     /usr/local/bin/
+
+# Fail the build now rather than at test time if a solver misses a shared library
+RUN ! ldd /usr/local/bin/* 2>/dev/null | grep "not found" && \
+    bitwuzla --version && z3 --version
 
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/

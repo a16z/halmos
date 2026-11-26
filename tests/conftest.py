@@ -5,8 +5,8 @@ from test_fixtures import *  # noqa
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--halmos-options",
+        "--dolmos-options",
         metavar="OPTIONS",
         default="",
-        help="Halmos commandline options",
+        help="dolmos command line options",
     )

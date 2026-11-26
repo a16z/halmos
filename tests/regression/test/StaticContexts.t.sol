@@ -58,15 +58,13 @@ contract StaticContextsTest is Test {
         assertFalse(success);
     }
 
-    // TODO: value check not implemented yet
-    // function check_call_with_value_fails() public {
-    //     (bool success, ) = address(this).staticcall(abi.encodeWithSignature("do_call_with_value()"));
-    //     assertFalse(success);
-    // }
+    function check_call_with_value_fails() public {
+        (bool success, ) = address(this).staticcall(abi.encodeWithSignature("do_call_with_value()"));
+        assertFalse(success);
+    }
 
-    // TODO: selfdestruct not implemented yet
-    // function check_selfdestruct_fails() public {
-    //     (bool success, ) = address(this).staticcall(abi.encodeWithSignature("do_selfdestruct()"));
-    //     assertFalse(success);
-    // }
+    function check_selfdestruct_fails() public {
+        (bool success, ) = address(this).staticcall(abi.encodeWithSignature("do_selfdestruct()"));
+        assertFalse(success);
+    }
 }

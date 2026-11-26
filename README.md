@@ -1,102 +1,213 @@
-# Halmos
+# Dolmos
 
-[![PyPI - Version](https://img.shields.io/pypi/v/halmos)](https://pypi.org/project/halmos)
-[![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fa16z%2Fhalmos%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](https://github.com/a16z/halmos)
-[![License](https://img.shields.io/github/license/a16z/halmos)](https://github.com/a16z/halmos/blob/main/LICENSE)
-[![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+4UhzHduai3MzZmUx)
+[![License](https://img.shields.io/github/license/Dowsers/dolmos)](https://github.com/Dowsers/dolmos/blob/main/LICENSE)
+[![Python Version from PEP 621 TOML](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FDowsers%2Fdolmos%2Frefs%2Fheads%2Fmain%2Fpyproject.toml)](pyproject.toml)
 
-[**Install**](https://github.com/a16z/halmos?tab=readme-ov-file#installation)
-| [**Getting Started**](https://github.com/a16z/halmos/blob/main/docs/getting-started.md)
-| [**Examples**](https://github.com/a16z/halmos/blob/main/examples/README.md)
-| [**FAQ**](https://github.com/a16z/halmos/wiki/FAQ)
-| [**Chat**][chat]
-| [**awesome-halmos**](https://github.com/redtrama/awesome-halmos)
+(https://github.com/Dowsers/dolmos/wiki/FAQ)
 
-Halmos is a _symbolic testing_ tool for EVM smart contracts. A Solidity/Foundry frontend is currently offered by default, with plans to provide support for other languages, such as Vyper and Huff, in the future.
 
-You can read more in our post: "_[Symbolic testing with Halmos: Leveraging existing tests for formal verification][post]_."
+Dolmos is a _symbolic testing_ tool for EVM smart contracts, driven by
+Foundry-style tests, maintained by [Dowsers](https://github.com/Dowsers) for its
+audit and formal verification work. Tests look like fuzz tests, but inputs are
+symbolic: a passing test holds for every input, and a failing one comes with a
+counterexample.
 
-Join the [Halmos Telegram Group][chat] for any inquiries or further discussions.
+Start with the [getting started guide](https://github.com/Dowsers/dolmos/blob/main/docs/getting-started.md) and the
+[examples](https://github.com/Dowsers/dolmos/blob/main/examples/README.md).
+Loops that reach the unrolling bound can be exported for termination analysis with
+PaSTTeL (experimental): see [docs/loop-termination.md](https://github.com/Dowsers/dolmos/blob/main/docs/loop-termination.md).
 
-[post]: https://a16zcrypto.com/symbolic-testing-with-halmos-leveraging-existing-tests-for-formal-verification/
-[chat]: https://t.me/+4UhzHduai3MzZmUx
+## Features
+
+On top of symbolic execution of Solidity (and Vyper) tests with `check_*` and
+`invariant_*` functions, dolmos provides the following.
+
+**CREATE address derivation and account nonces.** Accounts carry nonces (1 for a
+newly created account per EIP-161, incremented by CREATE and CREATE2 even when
+the creation fails), and CREATE addresses are derived from
+`keccak256(rlp([sender, nonce]))`, mapped to a magic address as for CREATE2. A
+contract that predicts its own deployment address, as every CREATE3 library
+does, therefore agrees with the executor.
+
+**Nonce cheatcodes.** `vm.getNonce`, `vm.setNonce`, `vm.setNonceUnsafe` and
+`vm.resetNonce`, with foundry's semantics: `setNonce` only raises a nonce,
+`resetNonce` gives 0 to EOAs and 1 to accounts with code.
+
+**File cheatcodes.** `vm.readFile`, `vm.readFileBinary`, `vm.parseBytes` and
+`vm.projectRoot`, so a test can deploy bytecode compiled outside solc (Huff, for
+instance) from a file. Reads are subject to `fs_permissions` in `foundry.toml`,
+resolved with `forge config` and applied as foundry does (paths normalized
+against the project root, most specific permission wins, denied by default), so
+a test that reads a file passes or fails the same way under `forge test`.
+
+**Fusaka / Cancun opcodes.** `CLZ` (EIP-7939), with a concrete fast path and a
+logarithmic symbolic encoding, plus `BLOBHASH` and `BLOBBASEFEE` (EIP-4844).
+
+**Vyper.** Test contracts can be written in Vyper, and Solidity tests can target
+Vyper contracts. forge's Vyper artifacts have no AST, no metadata and an empty
+`methodIdentifiers`; dolmos reads `.vy`/`.vyi` artifacts, computes the selectors
+from the ABI, takes the source path and compiler version from forge's cache, and
+makes Vyper contracts visible to Solidity tests (deployed code, ABI for
+invariant targets and traces, including contracts with immutables).
+`vm.getCode` accepts `Foo.vy`, `src/Foo.vy` and `Foo.vy:Foo`.
+
+A Vyper test looks like a Solidity one: `setUp()` and `check_*`/`invariant_*`
+functions, with cheatcodes called through an interface at
+`0x7109709ECfa91a80626fF3989D68f67F5b1DD12D`. Use `assert ..., UNREACHABLE` for
+properties: it compiles to the INVALID opcode, which the `--invalid-as-failure`
+option reports as a failure, even when it is hit in a nested call and bubbles up
+as an empty revert. A plain `assert` is an empty revert, indistinguishable from
+a `require`, so the path is silently discarded. The `vm.assert*` cheatcodes work
+as well. `@custom:dolmos` annotations go in the module and function docstrings.
+
+When the build contains Vyper contracts, `--storage-layout generic` (Vyper
+computes `HashMap` slots as `keccak256(slot . key)`) and `--invalid-as-failure`
+become the defaults; a value set in `dolmos.toml`, an annotation or on the
+command line still wins. Coverage reports do not include Vyper code, since forge
+emits no source maps for it. See `tests/vyper` for examples.
+
+## Compatibility with halmos
+
+Dolmos is derived from halmos (see [NOTICE](https://github.com/Dowsers/dolmos/blob/main/NOTICE)) and accepts the names used
+by test suites written for it, so they should run without changes:
+
+| halmos | dolmos | |
+|---|---|---|
+| `@custom:halmos` | `@custom:dolmos` | both accepted, in contracts and functions |
+| `halmos.toml` | `dolmos.toml` | `dolmos.toml` is read first |
+| `HALMOS_ALLOW_DOWNLOAD` | `DOLMOS_ALLOW_DOWNLOAD` | both honored |
+| `halmos-cheatcodes` | unchanged | the `svm.*` cheatcodes of this library are supported |
+
+Some things do change: the command and the Python package are named `dolmos`
+(`import dolmos`), symbolic variables in counterexamples are prefixed with
+`dolmos_`, and solvers downloaded on demand are cached in `~/.dolmos/solvers`.
 
 ## Installation
 
-### ⭐ Using `uv` (recommended for most users)
+Requires Python ≥ 3.11 and [Foundry](https://getfoundry.sh).
+
+With [uv](https://docs.astral.sh/uv/) (recommended, installs `dolmos` as an
+isolated command-line tool):
 
 ```sh
-# install uv if you don't have it already
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# install the latest version of halmos for the current user and add it to PATH
-uv tool install --python 3.12 halmos
-
-# or, install the development version from the repository
-# uv tool install --python 3.12 git+https://github.com/a16z/halmos
-
-# after installing, you can update halmos to the latest version with:
-uv tool upgrade halmos
+uv tool install dolmos
+dolmos --version
 ```
 
-### Using `docker`
-
-You can download a pre-built Docker image that contains python, halmos, its dependencies, foundry, solvers, etc.:
+With pipx or pip:
 
 ```sh
-docker pull ghcr.io/a16z/halmos:latest
+pipx install dolmos
+# or, in a virtual environment
+pip install dolmos
 ```
 
-### Using `pip` (for advanced users)
+Upgrade with `uv tool upgrade dolmos` (or `pipx upgrade dolmos`,
+`pip install -U dolmos`).
 
-Note: this is not recommended because of the extra work required to manage the python version and the virtual environment. But if you know what you are doing, and need the extra control, you can do it like this:
+### Docker
+
+Each release is published as a Docker image that bundles dolmos, Foundry and the
+SMT solvers (yices, z3, cvc5, bitwuzla, stp):
 
 ```sh
-# make sure you have a suitable python version installed, e.g.:
-python3.12 --version
-
-# create and activate a virtual environment with an explicit python version
-python3.12 -m venv .venv && source .venv/bin/activate
-
-# install the latest version of halmos
-pip install halmos
-
-# or, install the development version from the repository
-pip install git+https://github.com/a16z/halmos
+docker run --rm -v "$PWD":/workspace ghcr.io/dowsers/dolmos:latest dolmos
+# or a fixed version
+docker run --rm -v "$PWD":/workspace ghcr.io/dowsers/dolmos:0.1.0 dolmos
 ```
+
+### From source
+
+```sh
+git clone https://github.com/Dowsers/dolmos.git
+cd dolmos
+uv sync --extra dev        # or: python -m venv .venv && pip install -e ".[dev]"
+uv run dolmos --version
+```
+
+See [CONTRIBUTING.md](https://github.com/Dowsers/dolmos/blob/main/CONTRIBUTING.md)
+for the development setup.
 
 ## Usage
 
 ```sh
-cd /path/to/src
-halmos
+cd /path/to/foundry/project
+forge build
+dolmos
 ```
-
-For more details:
 
 ```sh
-halmos --help
+dolmos --help
+dolmos -test <regex>          # alias for --match-test
+dolmos --match-contract <regex>
 ```
 
-Alternatively, you can run the latest halmos Docker image available at [ghcr.io/a16z/halmos](https://ghcr.io/a16z/halmos):
+Options can be set per project in `dolmos.toml` at the project root:
+
+```toml
+[global]
+solver-timeout-assertion = 10000
+# invariant testing calls ERC-1967 proxies with the ABI of their implementation;
+# set to false to call them with their own ABI (same as --no-detect-proxies)
+detect-proxies = true
+```
+
+`python -m dolmos.config` prints every option with its default value, in that
+format. Warnings link to their explanation in [docs/warnings.md](https://github.com/Dowsers/dolmos/blob/main/docs/warnings.md).
+
+## Tests
 
 ```sh
-cd /path/to/src
-
-# mount '.' under /workspace in the container
-docker run -v .:/workspace ghcr.io/a16z/halmos:latest
+pytest                                   # unit tests and integration tests
+pytest tests/test_dolmos.py -k "not long"
 ```
 
-## Getting Started
+The regression suite lives in `tests/regression` and runs with both forge (real
+EVM) and dolmos (symbolic):
 
-Refer to the [getting started guide](docs/getting-started.md) and the [examples](examples/README.md) directory.
+```sh
+cd tests/regression
+forge build
+dolmos
+```
 
-## Contributing / Developing
+A few notes on the toolchain:
 
-Refer to the [contributing guidelines](CONTRIBUTING.md), and explore the list of issues labeled ["good first issue" or "help wanted."][issues]
+- The suite sets `evm_version = 'osaka'` because of the CLZ tests, and
+  `test/OpCodesCLZ.sol` needs a solc recent enough to accept `clz()` in assembly
+  (0.8.31 or later); an older compiler fails with `Function "clz" not found`.
+- `test/Invalid.t.sol` requires solc `^0.5.2`; if that version is unavailable,
+  `forge build` stops there.
+- `test/Arith.t.sol` uses the `bitwuzla-abs` solver; set
+  `DOLMOS_ALLOW_DOWNLOAD=1` to let dolmos download it.
+- The Vyper tests live in `tests/vyper` and need the `vyper` compiler in `PATH`
+  (`pip install vyper`); pytest skips them otherwise.
 
-[issues]: https://github.com/a16z/halmos/issues?q=is%3Aopen+is%3Aissue+label%3A%22good+first+issue%22%2C%22help+wanted%22
+## Contributing
+
+See [CONTRIBUTING.md](https://github.com/Dowsers/dolmos/blob/main/CONTRIBUTING.md).
+
+## Roadmap
+
+- MODEXP precompile (EIP-198): concrete evaluation and a typed uninterpreted
+  function instead of the current opaque one
+- performance: skip the Z3 `substitute()` traversal when no free variable
+  matches, bound the concurrency of solver subprocesses, memoize invariant
+  target resolution
+- support multiple `setUp()` states
+
+## License
+
+AGPL-3.0, see [LICENSE](https://github.com/Dowsers/dolmos/blob/main/LICENSE). Dolmos is a modified version of another
+AGPL-3.0 program; [NOTICE](https://github.com/Dowsers/dolmos/blob/main/NOTICE) gives its origin and the notices that come
+with it.
 
 ## Disclaimer
 
-_These smart contracts and code are being provided as is. No guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the user interface or the smart contracts and code. They have not been audited and as such there can be no assurance they will work as intended, and users may experience delays, failures, errors, omissions or loss of transmitted information. THE SMART CONTRACTS AND CODE CONTAINED HEREIN ARE FURNISHED AS IS, WHERE IS, WITH ALL FAULTS AND WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING ANY WARRANTY OF MERCHANTABILITY, NON-INFRINGEMENT OR FITNESS FOR ANY PARTICULAR PURPOSE. Further, use of any of these smart contracts and code may be restricted or prohibited under applicable law, including securities laws, and it is therefore strongly advised for you to contact a reputable attorney in any jurisdiction where these smart contracts and code may be accessible for any questions or concerns with respect thereto. Further, no information provided in this repo should be construed as investment advice or legal advice for any particular facts or circumstances, and is not meant to replace competent counsel. a16z is not liable for any use of the foregoing, and users should proceed with caution and use at their own risk. See a16z.com/disclosures for more info._
+_This software and the smart contracts in this repository are provided as is,
+without warranty of any kind, express or implied, including any warranty of
+merchantability, non-infringement or fitness for a particular purpose. They have
+not been audited. Passing symbolic tests is not a proof that a contract is free
+of bugs. Nothing in this repository is investment or legal advice. See
+[NOTICE](https://github.com/Dowsers/dolmos/blob/main/NOTICE) for the disclaimers attached to the original work this code is
+derived from._

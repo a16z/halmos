@@ -1,0 +1,11 @@
+[profile.default]
+src = 'src'
+out = 'out'
+libs = ['../lib', 'lib']
+
+evm_version = 'cancun'
+
+force = false
+
+# compile options used by dolmos (to prevent unnecessary recompilation when running forge test and dolmos together)
+extra_output = ["storageLayout", "metadata"]

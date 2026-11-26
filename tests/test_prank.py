@@ -1,14 +1,14 @@
 import pytest
 from z3 import BitVec
 
-from halmos.cheatcodes import (
+from dolmos.cheatcodes import (
     NO_PRANK,
     Prank,
     PrankResult,
-    halmos_cheat_code,
     hevm_cheat_code,
+    svm_cheat_code,
 )
-from halmos.sevm import CallContext, Message
+from dolmos.sevm import CallContext, Message
 
 
 @pytest.fixture
@@ -99,7 +99,7 @@ def test_lookup_no_active_prank(prank, other):
     # when we call lookup() without an active prank, it returns NO_PRANK
     assert prank.lookup(other) == NO_PRANK
     assert prank.lookup(hevm_cheat_code.address) == NO_PRANK
-    assert prank.lookup(halmos_cheat_code.address) == NO_PRANK
+    assert prank.lookup(svm_cheat_code.address) == NO_PRANK
 
 
 def test_prank_lookup(prank, sender, other):
@@ -107,7 +107,7 @@ def test_prank_lookup(prank, sender, other):
     prank.prank(sender)
 
     # when calling lookup(to=<cheat-address>)
-    for cheat_code in [hevm_cheat_code, halmos_cheat_code]:
+    for cheat_code in [hevm_cheat_code, svm_cheat_code]:
         result = prank.lookup(cheat_code.address)
 
         # then the active prank is ignored
@@ -130,7 +130,7 @@ def test_startPrank_lookup(prank, sender, origin, other):
     prank.startPrank(sender, origin)
 
     # when calling lookup(to=<cheat-address>)
-    for cheat_code in [hevm_cheat_code, halmos_cheat_code]:
+    for cheat_code in [hevm_cheat_code, svm_cheat_code]:
         result = prank.lookup(cheat_code.address)
 
         # then the active prank is ignored

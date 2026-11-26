@@ -34,3 +34,6 @@ uv.lock
 
 # https://docs.astral.sh/uv/concepts/projects/layout/#the-build-directory
 build/
+
+# Lean build files
+.lake/

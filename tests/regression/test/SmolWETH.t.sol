@@ -39,7 +39,7 @@ contract SmolWETH {
     }
 }
 
-/// @custom:halmos --storage-layout=generic
+/// @custom:dolmos --storage-layout=generic
 contract SmolWETHTest is Test, SymTest {
     SmolWETH weth;
 

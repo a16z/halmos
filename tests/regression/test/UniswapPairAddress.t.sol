@@ -77,7 +77,7 @@ contract UniswapPairAddressTest is Test {
         console.log("uniswapV2Factory", address(uniswapV2Factory));
     }
 
-    // https://github.com/a16z/halmos/issues/393
+    // upstream halmos issue #393
     function check_inferred_address_matches_deployed_address() public {
         // uses the actual hash of the init code
         address deployedPair = uniswapV2Factory.createPair(address(tokenA), address(tokenB));

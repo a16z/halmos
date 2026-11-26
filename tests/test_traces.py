@@ -13,11 +13,11 @@ from z3 import (
     is_bv,
 )
 
-import halmos.sevm
-from halmos.__main__ import mk_block, render_trace
-from halmos.bytevec import ByteVec
-from halmos.exceptions import MessageDepthLimitError, Revert, WriteInStaticContext
-from halmos.sevm import (
+import dolmos.sevm
+from dolmos.__main__ import mk_block, render_trace
+from dolmos.bytevec import ByteVec
+from dolmos.exceptions import MessageDepthLimitError, Revert, WriteInStaticContext
+from dolmos.sevm import (
     SEVM,
     ZERO,
     CallContext,
@@ -31,7 +31,7 @@ from halmos.sevm import (
     con,
     int_of,
 )
-from halmos.utils import EVM
+from dolmos.utils import EVM
 
 # keccak256("FooEvent()")
 FOO_EVENT_SIG = 0x34E21A9428B1B47E73C4E509EABEEA7F2B74BECA07D82AAC87D4DD28B74C2A4A
@@ -730,7 +730,7 @@ def test_static_context_propagates(sevm: SEVM, solver):
     assert next(inner_call.logs(), None) is None
 
 
-def test_halmos_exception_halts_path(sevm: SEVM, solver):
+def test_dolmos_exception_halts_path(sevm: SEVM, solver):
     _, runtime_hexcode = get_bytecode(
         """
         contract Foo {
@@ -853,7 +853,7 @@ def test_call_limit_with_create(monkeypatch, sevm: SEVM, solver):
 
     # override the call depth limit to 3 (the test runs faster)
     MAX_CALL_DEPTH_OVERRIDE = 3
-    monkeypatch.setattr(halmos.sevm, "MAX_CALL_DEPTH", MAX_CALL_DEPTH_OVERRIDE)
+    monkeypatch.setattr(dolmos.sevm, "MAX_CALL_DEPTH", MAX_CALL_DEPTH_OVERRIDE)
 
     (is_single_exec, output_exec) = single(sevm.run(input_exec))
     assert is_single_exec

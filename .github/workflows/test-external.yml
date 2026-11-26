@@ -5,8 +5,8 @@ on:
     branches: [main, chore-workflows]
   workflow_dispatch:
     inputs:
-      halmos-options:
-        description: "additional halmos options"
+      dolmos-options:
+        description: "additional dolmos options"
         required: false
         type: string
         default: ""
@@ -28,8 +28,10 @@ jobs:
           - repo: "morpho-org/morpho-blue"
             dir: "morpho-blue"
             cmd: "--solver-threads 3"
-            branch: ""
-            profile: "test"
+            # morpho-blue removed its halmos tests in January 2026 (d788823);
+            # pin the last commit that still has test/halmos/HalmosTest.sol
+            branch: "e773d85cd24d5162c836ec01ebcfa1d84550b668"
+            profile: ""
           - repo: "a16z/cicada"
             dir: "cicada"
             cmd: "--contract LibUint1024Test --function testProve --loop 256 --solver-threads 3"
@@ -77,43 +79,51 @@ jobs:
             profile: ""
 
     steps:
-      - name: Checkout halmos
-        uses: actions/checkout@v4
+      - name: Checkout dolmos
+        uses: actions/checkout@v6
         with:
           # we won't be needing tests/lib for this workflow
           submodules: false
 
       - name: Build image
-        run: docker build -t halmos-image . --file packages/halmos/Dockerfile
+        run: docker build -t dolmos-image . --file packages/dolmos/Dockerfile
 
       - name: Run foundryup
         run: |
-          # run foundryup in halmos-image, save the result as a new image
-          docker run --name halmos-image-foundryup halmos-image foundryup
+          # run foundryup in dolmos-image, save the result as a new image
+          docker run --name dolmos-image-foundryup dolmos-image foundryup
 
-          # commit the result back to halmos-image
-          docker commit halmos-image-foundryup halmos-image
+          # commit the result back to dolmos-image
+          docker commit dolmos-image-foundryup dolmos-image
 
       # for snekmate
       - name: Install Vyper
         if: ${{ matrix.project.dir == 'snekmate' }}
         run: |
-          docker run --name halmos-image-vyper halmos-image uv pip install git+https://github.com/vyperlang/vyper@master
-          docker commit halmos-image-vyper halmos-image
+          docker run --name dolmos-image-vyper dolmos-image uv pip install git+https://github.com/vyperlang/vyper@master
+          docker commit dolmos-image-vyper dolmos-image
 
       # for sys-asm-halmos
       - name: Install Geas
+        if: ${{ matrix.project.dir == 'sys-asm-halmos' }}
         run: |
-          docker run --name tmp-halmos-image halmos-image bash -c "\
+          # proxy.golang.org occasionally resets HTTP/2 streams mid-download:
+          # force HTTP/1.1, fall back to direct git fetch on any proxy error, retry
+          docker run --name tmp-dolmos-image dolmos-image bash -c "\
+            set -e; \
             apt-get update && \
-            apt-get install -y golang-go && \
+            apt-get install -y --no-install-recommends golang-go ca-certificates git && \
             go version && \
-            env 'GOBIN=/halmos/bin' go install github.com/fjl/geas/cmd/geas@latest && \
+            export GOBIN=/dolmos/bin GOPROXY='https://proxy.golang.org|direct' GODEBUG=http2client=0; \
+            for i in 1 2 3; do \
+              go install github.com/fjl/geas/cmd/geas@v0.3.3 && break; \
+              [ \$i -lt 3 ] || exit 1; echo \"retry \$i...\"; sleep 10; \
+            done; \
             geas -h"
-          docker commit tmp-halmos-image halmos-image
+          docker commit tmp-dolmos-image dolmos-image
 
       - name: Checkout external repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ matrix.project.repo }}
           path: ${{ matrix.project.dir }}
@@ -121,13 +131,13 @@ jobs:
           submodules: recursive
 
       - name: Print forge version
-        run: docker run halmos-image forge --version
+        run: docker run dolmos-image forge --version
 
-      - name: Print halmos version
-        run: docker run halmos-image halmos --version
+      - name: Print dolmos version
+        run: docker run dolmos-image dolmos --version
 
       - name: Test external repo
-        run: docker run -e FOUNDRY_PROFILE -v .:/workspace halmos-image halmos ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}
+        run: docker run -e FOUNDRY_PROFILE -v .:/workspace dolmos-image dolmos ${{ matrix.project.cmd }} --statistics --solver-timeout-assertion 0 ${{ matrix.cache-solver }} ${{ inputs.dolmos-options }}
         working-directory: ${{ matrix.project.dir }}
         env:
           FOUNDRY_PROFILE: ${{ matrix.project.profile }}

@@ -1,0 +1,45 @@
+dolmos
+Copyright (C) 2026 Dowsers SAS
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3. See LICENSE.
+
+
+ORIGIN
+======
+
+dolmos is a modified version of halmos (https://github.com/a16z/halmos),
+a symbolic testing tool for EVM smart contracts developed by a16z crypto and its
+contributors (maintainers at the time of the fork: Daejun Park, karmacoma),
+distributed under the GNU Affero General Public License v3.
+
+dolmos is based on halmos as of upstream commit "fix: shorten bytecode output in
+unknown deployed bytecode warning (#573)" (2025-08-06). Dowsers SAS has modified
+it since 2026-05-15; the modifications include CREATE address derivation and
+account nonces, nonce cheatcodes, the CLZ, BLOBHASH and BLOBBASEFEE opcodes,
+Vyper support, and the renaming of the command, the Python package and the
+Docker images to dolmos. The git history records every change.
+
+dolmos is maintained by Dowsers SAS and is not affiliated with or endorsed by
+a16z crypto or the halmos maintainers.
+
+
+COMPATIBILITY WITH HALMOS
+=========================
+
+For compatibility with existing test suites, dolmos still accepts the
+`@custom:halmos` natspec tag, the `halmos.toml` configuration file name and the
+HALMOS_ALLOW_DOWNLOAD environment variable, and it supports the cheatcodes of
+the halmos-cheatcodes Solidity library (https://github.com/a16z/halmos-cheatcodes),
+which is a separate project used by the test suite as a git submodule.
+
+
+DISCLAIMER OF THE ORIGINAL WORK
+===============================
+
+The following disclaimer accompanies halmos and applies to the original work:
+
+_These smart contracts and code are being provided as is. No guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the user interface or the smart contracts and code. They have not been audited and as such there can be no assurance they will work as intended, and users may experience delays, failures, errors, omissions or loss of transmitted information. THE SMART CONTRACTS AND CODE CONTAINED HEREIN ARE FURNISHED AS IS, WHERE IS, WITH ALL FAULTS AND WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING ANY WARRANTY OF MERCHANTABILITY, NON-INFRINGEMENT OR FITNESS FOR ANY PARTICULAR PURPOSE. Further, use of any of these smart contracts and code may be restricted or prohibited under applicable law, including securities laws, and it is therefore strongly advised for you to contact a reputable attorney in any jurisdiction where these smart contracts and code may be accessible for any questions or concerns with respect thereto. Further, no information provided in this repo should be construed as investment advice or legal advice for any particular facts or circumstances, and is not meant to replace competent counsel. a16z is not liable for any use of the foregoing, and users should proceed with caution and use at their own risk. See a16z.com/disclosures for more info._
+
+The same absence of warranty applies to the modifications made by Dowsers SAS.

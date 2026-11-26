@@ -29,13 +29,19 @@ $ forge test
 
 Once it passes, you can also perform **symbolic testing** to verify the same properties for **all possible inputs** (up to a specified limit):
 ```
-$ halmos --function test
+$ dolmos --function test
 [FAIL] testTotalPriceBuggy(uint96,uint32) (paths: 6, time: 0.10s, bounds: [])
 Counterexample: [p_price_uint96 = 39614081294025656978550816768, p_quantity_uint32 = 1073741824]
 ```
 
-_(In this specific example, Halmos discovered an input that violated the assertion, which was missed by the fuzzer!)_
+_(In this specific example, Dolmos discovered an input that violated the assertion, which was missed by the fuzzer!)_
 
 ## Disclaimer
 
-_These smart contracts and code are being provided as is. No guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the user interface or the smart contracts and code. They have not been audited and as such there can be no assurance they will work as intended, and users may experience delays, failures, errors, omissions or loss of transmitted information. THE SMART CONTRACTS AND CODE CONTAINED HEREIN ARE FURNISHED AS IS, WHERE IS, WITH ALL FAULTS AND WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING ANY WARRANTY OF MERCHANTABILITY, NON-INFRINGEMENT OR FITNESS FOR ANY PARTICULAR PURPOSE. Further, use of any of these smart contracts and code may be restricted or prohibited under applicable law, including securities laws, and it is therefore strongly advised for you to contact a reputable attorney in any jurisdiction where these smart contracts and code may be accessible for any questions or concerns with respect thereto. Further, no information provided in this repo should be construed as investment advice or legal advice for any particular facts or circumstances, and is not meant to replace competent counsel. a16z is not liable for any use of the foregoing, and users should proceed with caution and use at their own risk. See a16z.com/disclosures for more info._
+_This software and the smart contracts in this repository are provided as is,
+without warranty of any kind, express or implied, including any warranty of
+merchantability, non-infringement or fitness for a particular purpose. They have
+not been audited. Passing symbolic tests is not a proof that a contract is free
+of bugs. Nothing in this repository is investment or legal advice. See
+[NOTICE](../../NOTICE) for the disclaimers attached to the original work this code is
+derived from._

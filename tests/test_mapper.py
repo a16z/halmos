@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from halmos.mapper import AstNode, ContractMappingInfo, Mapper, SingletonMeta
+from dolmos.mapper import AstNode, ContractMappingInfo, Mapper, SingletonMeta
 
 
 @pytest.fixture
@@ -303,3 +303,39 @@ def test_parse_multicontract_ast(read_json_file, mapper):
     node = next(iter(contract_C.nodes.values()))
     assert node.name == "foo"
     assert node.selector == "0xc2985578"
+
+
+def test_build_out_get_by_name_prefers_top_level_artifact():
+    """
+    forge writes the artifacts of a source file whose name is already taken to a
+    subdirectory (halmos#582): a name alone still resolves to the top-level artifact,
+    as before these artifacts were read
+    """
+    from dolmos.exceptions import DolmosException
+    from dolmos.mapper import BuildOut
+
+    top, nested, other = {"id": "top"}, {"id": "nested"}, {"id": "other"}
+    build_out = BuildOut()
+    build_out.set_build_out(
+        {
+            "IERC20.sol": {"IERC20": (top, None, None)},
+            "ERC20/IERC20.sol": {"IERC20": (nested, None, None)},
+            "interfaces/IERC20.sol": {"IERC20": (other, None, None)},
+            "nested/Only.sol": {"Only": (nested, None, None)},
+            "a/Twice.sol": {"Twice": (top, None, None)},
+            "b/Twice.sol": {"Twice": (other, None, None)},
+        }
+    )
+
+    assert build_out.get_by_name("IERC20") is top
+    assert build_out.get_by_name("IERC20", "IERC20.sol") is top
+    assert build_out.get_by_name("IERC20", "ERC20/IERC20.sol") is nested
+
+    # a unique nested artifact, by name or by file name
+    assert build_out.get_by_name("Only") is nested
+    assert build_out.get_by_name("Only", "Only.sol") is nested
+
+    # no top-level artifact and several nested ones: ambiguous
+    with pytest.raises(DolmosException, match="multiple files"):
+        build_out.get_by_name("Twice")
+    assert build_out.get_by_name("Twice", "b/Twice.sol") is other

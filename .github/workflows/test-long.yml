@@ -5,8 +5,8 @@ on:
     branches: [main, chore-workflows]
   workflow_dispatch:
     inputs:
-      halmos-options:
-        description: "additional halmos options"
+      dolmos-options:
+        description: "additional dolmos options"
         required: false
         type: string
         default: ""
@@ -28,17 +28,17 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
       - name: Build image
         run: |
-          docker build -t halmos-image . --file packages/halmos/Dockerfile
+          docker build -t dolmos-image . --file packages/dolmos/Dockerfile
 
-      - name: Print halmos version
-        run: docker run halmos-image halmos --version
+      - name: Print dolmos version
+        run: docker run dolmos-image dolmos --version
 
       - name: Run pytest
         run: |
-          docker run -v .:/workspace halmos-image pytest -x -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options='-st --solver-threads 3 ${{ matrix.cache-solver }} ${{ inputs.halmos-options }}' -s --log-cli-level=
+          docker run -v .:/workspace dolmos-image pytest -x -v tests/test_dolmos.py -k ${{ matrix.testname }} --dolmos-options='-st --solver-threads 3 ${{ matrix.cache-solver }} ${{ inputs.dolmos-options }}' -s --log-cli-level=

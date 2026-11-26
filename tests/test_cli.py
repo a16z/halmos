@@ -8,10 +8,10 @@ from z3 import (
     eq,
 )
 
-from halmos.bitvec import HalmosBitVec as BV
-from halmos.calldata import str_abi
-from halmos.sevm import Contract, Instruction
-from halmos.utils import EVM, hexify
+from dolmos.bitvec import DolmosBitVec as BV
+from dolmos.calldata import str_abi
+from dolmos.sevm import Contract, Instruction
+from dolmos.utils import EVM, hexify
 
 
 @pytest.fixture

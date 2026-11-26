@@ -5,7 +5,7 @@ import "forge-std/Test.sol";
 
 import {Vat} from "../src/Vat.sol";
 
-/// @custom:halmos --early-exit
+/// @custom:dolmos --early-exit
 contract VatTest is Test {
     Vat public vat;
     bytes32 ilk;

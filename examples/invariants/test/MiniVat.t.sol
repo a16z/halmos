@@ -7,7 +7,7 @@ import "forge-std/Test.sol";
 
 import {MiniVat} from "../src/MiniVat.sol";
 
-/// @custom:halmos --early-exit
+/// @custom:dolmos --early-exit
 contract MiniVatTest is Test {
     MiniVat public minivat;
 

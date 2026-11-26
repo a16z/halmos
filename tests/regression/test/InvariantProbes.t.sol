@@ -43,7 +43,7 @@ contract InvariantProbesTest is Test {
     }
 
     // XFAIL: we should report failures when asserts are hit in the target contract
-    /// @custom:halmos --invariant-depth 4
+    /// @custom:dolmos --invariant-depth 4
     function invariant_probes_found() public {
         assertGe(c.num(), 0);
     }

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-// from https://github.com/a16z/halmos/issues/82
+// from upstream halmos issue #82
 
-/// @custom:halmos --storage-layout=generic
+/// @custom:dolmos --storage-layout=generic
 contract GetterTest {
     uint256[3] public v;
     uint w;

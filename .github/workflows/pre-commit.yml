@@ -6,6 +6,15 @@ jobs:
   pre-commit:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
-    - uses: pre-commit/action@v3.0.1
+    - uses: actions/checkout@v6
+    - uses: actions/setup-python@v6
+      with:
+        python-version: "3.12"
+    # pre-commit/action@v3.0.1 still uses actions/cache@v4 (node20) internally:
+    # run pre-commit directly, with a node24 cache
+    - uses: actions/cache@v5
+      with:
+        path: ~/.cache/pre-commit
+        key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+    - run: pip install pre-commit
+    - run: pre-commit run --show-diff-on-failure --color=always --all-files

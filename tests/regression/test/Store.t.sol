@@ -50,7 +50,7 @@ contract StoreTest is Test {
 
     function check_store_nonexistent_account() public {
         // vm.store() is not allowed for a nonexistent account
-        vm.store(address(0xdeadbeef), bytes32(0), bytes32(0)); // HalmosException
+        vm.store(address(0xdeadbeef), bytes32(0), bytes32(0)); // DolmosException
     }
 
     function check_load_nonexistent_account(uint slot) public {

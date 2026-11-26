@@ -18,12 +18,12 @@ contract BadElectionsTest is SymTest, Test {
     ///
     ///     Running 1 tests for test/BadElections.t.sol:BadElectionsTest
     ///     Counterexample:
-    ///         halmos_fakeSig_bytes_01 = 0x00000000000000000000000000000000000000000000000000000000000000003fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a100 (65 bytes)
+    ///         dolmos_fakeSig_bytes_01 = 0x00000000000000000000000000000000000000000000000000000000000000003fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a100 (65 bytes)
     ///         p_proposalId_uint256 = 0x0000000000000000000000000000000000000000000000000000000000000000 (0)
     ///     [FAIL] check_canNotVoteTwice(uint256) (paths: 7, time: 0.63s, bounds: [])
     ///
     /// the counterexample values are not meaningful, but examining the trace shows
-    /// that halmos found a signature s.t. the voter can vote twice on the same proposal,
+    /// that dolmos found a signature s.t. the voter can vote twice on the same proposal,
     /// and the final vote count is 2
     function check_canNotVoteTwice(uint256 proposalId) public {
         // setup

@@ -18,16 +18,16 @@ jobs:
         - testname: "tests/ffi"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
       - name: Build image
         run: |
-          docker build -t halmos-image . --file packages/halmos/Dockerfile
+          docker build -t dolmos-image . --file packages/dolmos/Dockerfile
 
-      - name: Print halmos version
-        run: docker run halmos-image halmos --version
+      - name: Print dolmos version
+        run: docker run dolmos-image dolmos --version
 
       - name: Run pytest
-        run: docker run -v .:/workspace halmos-image pytest -v tests/test_halmos.py -k ${{ matrix.testname }} --halmos-options="--ffi -v -st"
+        run: docker run -v .:/workspace dolmos-image pytest -v tests/test_dolmos.py -k ${{ matrix.testname }} --dolmos-options="--ffi -v -st"

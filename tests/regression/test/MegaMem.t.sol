@@ -6,7 +6,7 @@ import {console2} from "forge-std/console2.sol";
 
 import {SymTest} from "halmos-cheatcodes/SymTest.sol";
 
-/// @dev This checks that halmos can handle large memory operations without raising
+/// @dev This checks that dolmos can handle large memory operations without raising
 /// internal errors like "cannot fit 'int' into an index-sized integer".
 /// Instead, we should catch the error and revert the current path, but letting other
 /// paths continue. This is why these tests do a symbolic coinflip, we case split:
@@ -239,8 +239,14 @@ contract MegaMemTest is Test, SymTest {
     }
 
     /// @dev only the effective length is copied, not a big requested length
-    function check_megaMem_call_out_len_ok() external {
-        call_op({in_ptr: 0, in_len: 32, out_ptr: 0, out_len: BIG_LEN});
+    function check_megaMem_call_out_len_reverts() external {
+        // the output region is expanded before the call, whatever the size of the return
+        // data, so a huge out_len runs out of gas as in the EVM (halmos#597)
+        try this.call_op({in_ptr: 0, in_len: 32, out_ptr: 0, out_len: BIG_LEN}) {
+            assert(false);
+        } catch {
+            // success
+        }
     }
 
     function check_megaMem_mcopy_dst_ptr_reverts() external view {

@@ -12,8 +12,8 @@ from z3 import (
     simplify,
 )
 
-from halmos.solve import dirname
-from halmos.utils import (
+from dolmos.solve import dirname
+from dolmos.utils import (
     f_sha3_256,
     match_dynamic_array_overflow_condition,
 )

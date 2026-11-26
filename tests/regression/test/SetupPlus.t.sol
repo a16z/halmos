@@ -18,7 +18,7 @@ contract SetupPlusTest {
         a = new A(11, 200);
     }
 
-    // if setUpSymbolic() is provided, Halmos uses setUpSymbolic() instead of setUp().
+    // if setUpSymbolic() is provided, Dolmos uses setUpSymbolic() instead of setUp().
     // setUpSymbolic() is symbolically executed.
 
     // if multiple setUpSymbolic() functions are provided, the last one in the lexicographical order will be used.

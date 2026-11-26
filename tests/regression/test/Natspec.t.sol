@@ -16,7 +16,7 @@ contract NatspecTestNone {
     }
 }
 
-/// @custom:halmos --loop 3
+/// @custom:dolmos --loop 3
 contract NatspecTestContract {
     Loop l;
 
@@ -35,7 +35,7 @@ contract NatspecTestContract {
 contract NatspecTestSetup {
     Loop l;
 
-    /// @custom:halmos --loop 3
+    /// @custom:dolmos --loop 3
     function setUp() public {
         l = new Loop();
     }
@@ -55,11 +55,11 @@ contract NatspecTestFunction {
         l = new Loop();
     }
 
-    /// @custom:halmos --loop 3
+    /// @custom:dolmos --loop 3
     function check_Loop3(uint n) public view {
         assert(l.iter(n) <= 3); // pass
     }
-    /// @custom:halmos --loop 3
+    /// @custom:dolmos --loop 3
     function check_Loop3Fail(uint n) public view {
         assert(l.iter(n) <= 2); // fail
     }
@@ -72,7 +72,7 @@ contract NatspecTestFunction {
     }
 }
 
-/// @custom:halmos --loop 4
+/// @custom:dolmos --loop 4
 contract NatspecTestOverwrite {
     Loop l;
 
@@ -87,13 +87,35 @@ contract NatspecTestOverwrite {
         assert(l.iter(n) <= 3); // fail // inherited from contract
     }
 
-    /// @custom:halmos --loop 3
+    /// @custom:dolmos --loop 3
     function check_Loop3(uint n) public view {
         assert(l.iter(n) <= 3); // pass // overwrite
     }
-    /// @custom:halmos --loop 3
+    /// @custom:dolmos --loop 3
     function check_Loop3Fail(uint n) public view {
         assert(l.iter(n) <= 2); // fail // overwrite
+    }
+}
+
+// the legacy tag used by test suites written for halmos is still honored
+/// @custom:halmos --loop 3
+contract NatspecTestLegacyTag {
+    Loop l;
+
+    function setUp() public {
+        l = new Loop();
+    }
+
+    function check_Loop3(uint n) public view {
+        assert(l.iter(n) <= 3); // pass // inherited from contract (legacy tag)
+    }
+    function check_Loop3Fail(uint n) public view {
+        assert(l.iter(n) <= 2); // fail // inherited from contract (legacy tag)
+    }
+
+    /// @custom:halmos --loop 4
+    function check_Loop4(uint n) public view {
+        assert(l.iter(n) <= 4); // pass // legacy tag on the function
     }
 }
 

@@ -1,5 +1,6 @@
 import pytest
 from z3 import (
+    And,
     Array,
     BitVec,
     BitVecSort,
@@ -7,22 +8,27 @@ from z3 import (
     Concat,
     Extract,
     If,
+    Implies,
     LShR,
+    Not,
+    Or,
     Select,
     SignExt,
     ZeroExt,
+    unsat,
 )
 
-from halmos.__main__ import mk_block
-from halmos.bitvec import HalmosBitVec as BV
-from halmos.bytevec import ByteVec
-from halmos.exceptions import (
+from dolmos.__main__ import mk_block
+from dolmos.bitvec import DolmosBitVec as BV
+from dolmos.bytevec import ByteVec
+from dolmos.exceptions import (
     InvalidJumpDestError,
     InvalidOpcode,
+    OutOfBoundsRead,
     OutOfGasError,
     StackUnderflowError,
 )
-from halmos.sevm import (
+from dolmos.sevm import (
     SEVM,
     CallContext,
     Contract,
@@ -40,7 +46,7 @@ from halmos.sevm import (
     uint160,
     uint256,
 )
-from halmos.utils import EVM
+from dolmos.utils import EVM
 
 caller = BitVec("msg_sender", 160)
 origin = BitVec("tx_origin", 160)
@@ -504,3 +510,184 @@ def test_valid_jump(sevm, solver, storage):
     assert len(execs) == 1  # Only one valid path should execute
     assert execs[0].pc == 4  # PC should move to the stop
     assert execs[0].current_opcode() == EVM.STOP  # Should terminate cleanly
+
+
+#
+# EVM semantics regressions reported upstream (halmos#593, #594, #596, #597)
+#
+
+
+def run_single(hexcode: str, sevm, solver, storage, stack=()) -> Exec:
+    ex = mk_ex(bytes.fromhex(hexcode), sevm, solver, storage, caller, this)
+    ex.st.stack.extend(stack)
+    [output_ex] = list(sevm.run(ex))
+    return output_ex
+
+
+def stack_ints(ex: Exec) -> list[int]:
+    return [int_of(w) for w in ex.st.stack]
+
+
+def is_valid(solver, claim) -> bool:
+    """True if the z3 boolean `claim` holds for every value of its free symbols."""
+    solver.push()
+    solver.add(Not(claim))
+    result = solver.check()
+    solver.pop()
+    return result == unsat
+
+
+# halmos#593: NOT complements all 256 bits, even of a comparison result
+
+
+def test_not_of_concrete_comparison(sevm, solver, storage):
+    # PUSH1 1; PUSH1 1; EQ; NOT; STOP
+    out = run_single("60016001141900", sevm, solver, storage)
+    assert out.context.output.error is None
+    assert stack_ints(out) == [2**256 - 2]
+
+
+@pytest.mark.parametrize("cmp", [EVM.EQ, EVM.LT, EVM.GT, EVM.SLT, EVM.SGT, EVM.ISZERO])
+def test_not_of_symbolic_comparison(cmp, sevm, solver, storage):
+    # x on the stack; PUSH1 1; <cmp>; NOT; STOP  (ISZERO ignores the pushed 1)
+    out = run_single(f"6001{cmp:02x}1900", sevm, solver, storage, stack=[x])
+    assert out.context.output.error is None
+    top = out.st.stack[-1]
+    assert type(top) is BV and top.size == 256
+    # the result is the bitwise complement of a 0/1 word: 2**256 - 1 or 2**256 - 2
+    word = top.as_z3()
+    assert is_valid(solver, Or(word == 2**256 - 1, word == 2**256 - 2))
+
+
+def test_not_of_iszero_branches(sevm, solver, storage):
+    # x on the stack; ISZERO; NOT; PUSH1 8; JUMPI; STOP; STOP; STOP; JUMPDEST; STOP
+    # NOT(ISZERO(x)) is never zero, so the jump is always taken
+    out = run_single("15196008570000005b00", sevm, solver, storage, stack=[x])
+    assert out.context.output.error is None
+    assert out.pc == 9
+
+
+# halmos#594: an invalid JUMPI target only halts the taken branch
+
+
+def test_jumpi_invalid_target_symbolic_condition(sevm, solver, storage):
+    # cond on the stack; PUSH1 0xff; JUMPI; PUSH1 42; STOP
+    ex = mk_ex(bytes.fromhex("60ff57602a00"), sevm, solver, storage, caller, this)
+    ex.st.stack.append(x)
+    exs = list(sevm.run(ex))
+    assert len(exs) == 2
+
+    [failed] = [e for e in exs if e.context.output.error is not None]
+    [passed] = [e for e in exs if e.context.output.error is None]
+
+    assert isinstance(failed.context.output.error, InvalidJumpDestError)
+    assert is_valid(solver, Implies(And(*failed.path.conditions), x.as_z3() != 0))
+
+    assert stack_ints(passed) == [42]
+    assert is_valid(solver, Implies(And(*passed.path.conditions), x.as_z3() == 0))
+
+
+def test_jumpi_invalid_target_condition_always_true(sevm, solver, storage):
+    # x | 1 can't be zero: only the (invalid) jump is feasible
+    # cond on the stack; PUSH1 1; OR; PUSH1 0xff; JUMPI; PUSH1 42; STOP
+    out = run_single("60011760ff57602a00", sevm, solver, storage, stack=[x])
+    assert isinstance(out.context.output.error, InvalidJumpDestError)
+
+
+def test_jumpi_invalid_target_condition_never_true(sevm, solver, storage):
+    # x & 0 is zero: only the fall-through is feasible
+    # cond on the stack; PUSH1 0; AND; PUSH1 0xff; JUMPI; PUSH1 42; STOP
+    out = run_single("60001660ff57602a00", sevm, solver, storage, stack=[x])
+    assert out.context.output.error is None
+    assert stack_ints(out) == [42]
+
+
+# halmos#596: RETURNDATACOPY checks its bounds even when it copies nothing
+
+
+@pytest.mark.parametrize(
+    "hexcode",
+    [
+        "6000600160003e00",  # size 0, offset 1, empty return data
+        "6000607f60003e00",  # size 0, offset 127
+    ],
+)
+def test_returndatacopy_zero_size_out_of_bounds(hexcode, sevm, solver, storage):
+    out = run_single(hexcode, sevm, solver, storage)
+    assert isinstance(out.context.output.error, OutOfBoundsRead)
+
+
+def test_returndatacopy_zero_size_in_bounds(sevm, solver, storage):
+    # size 0, offset 0, empty return data: valid, and memory is not expanded
+    # PUSH1 0; PUSH1 0; PUSH1 0x40; RETURNDATACOPY; MSIZE; STOP
+    out = run_single("60006000604a3e5900", sevm, solver, storage)
+    assert out.context.output.error is None
+    assert stack_ints(out) == [0]
+
+
+# halmos#597: every memory access expands the active memory reported by MSIZE
+
+
+@pytest.mark.parametrize(
+    "hexcode, msize",
+    [
+        ("600051505900", 32),  # PUSH1 0; MLOAD; POP; MSIZE
+        ("600151505900", 64),  # PUSH1 1; MLOAD; POP; MSIZE (33 bytes, rounded up)
+        ("604051505900", 96),  # PUSH1 0x40; MLOAD; POP; MSIZE
+        ("6020604020505900", 96),  # PUSH1 32; PUSH1 0x40; SHA3; POP; MSIZE
+        ("6000604020505900", 0),  # PUSH1 0; PUSH1 0x40; SHA3; POP; MSIZE (size 0)
+        ("6020604060005e5900", 96),  # MCOPY 32 bytes from 0x40 to 0: source too
+        ("60206040a05900", 96),  # PUSH1 32; PUSH1 0x40; LOG0; MSIZE
+        ("60006040a05900", 0),  # PUSH1 0; PUSH1 0x40; LOG0; MSIZE (size 0)
+    ],
+)
+def test_memory_reads_expand_msize(hexcode, msize, sevm, solver, storage):
+    out = run_single(hexcode, sevm, solver, storage)
+    assert out.context.output.error is None
+    assert stack_ints(out)[-1] == msize
+
+
+def test_mload_does_not_change_memory_contents(sevm, solver, storage):
+    # PUSH1 0xaa; PUSH1 0; MSTORE8; PUSH1 0x10; MLOAD; POP; PUSH1 0; MLOAD; MSIZE; STOP
+    out = run_single("60aa600053601051506000515900", sevm, solver, storage)
+    assert out.context.output.error is None
+    assert stack_ints(out) == [0xAA << 248, 64]
+
+
+# halmos#595: ADDMOD and MULMOD return 0 when the modulus is 0
+
+
+@pytest.mark.parametrize(
+    "hexcode",
+    [
+        "6000600260030800",  # PUSH1 0; PUSH1 2; PUSH1 3; ADDMOD; STOP
+        "6000600260030900",  # PUSH1 0; PUSH1 2; PUSH1 3; MULMOD; STOP
+    ],
+)
+def test_addmod_mulmod_zero_modulus(hexcode, sevm, solver, storage):
+    out = run_single(hexcode, sevm, solver, storage)
+    assert out.context.output.error is None
+    assert stack_ints(out) == [0]
+
+
+@pytest.mark.parametrize("opcode", [EVM.ADDMOD, EVM.MULMOD])
+def test_addmod_mulmod_zero_modulus_symbolic_operands(opcode, sevm, solver, storage):
+    # stack (top first): x, y, 0
+    out = run_single(f"{opcode:02x}00", sevm, solver, storage, stack=[BV(0), y, x])
+    assert out.context.output.error is None
+    assert is_valid(solver, out.st.stack[-1].as_z3() == 0)
+
+
+def test_worklist_status_reports_paths_that_did_not_complete():
+    """halmos#444: the status must move even when no path completes"""
+    from dolmos.sevm import Worklist
+
+    stack = Worklist()
+    assert stack.status() == "completed paths: 0 | outstanding paths: 0"
+    stack.bounded_paths = 3
+    stack.infeasible_paths = 1
+    stack.depth_limited_paths = 2
+    assert stack.status() == (
+        "completed paths: 0 | stopped at loop bounds: 3 | infeasible: 1"
+        " | stopped by --depth: 2 | outstanding paths: 0"
+    )

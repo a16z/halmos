@@ -23,7 +23,7 @@ contract CreateTest is Test {
     }
 
     function check_immutable() public {
-        assertEq(create.halmos(), 0x220E);
+        assertEq(create.dolmos(), 0x220E);
     }
 
     function check_initialized() public {

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.0 <0.9.0;
 
-// from https://github.com/a16z/halmos/issues/109
+// from upstream halmos issue #109
 
 import "forge-std/Test.sol";
 
@@ -86,7 +86,7 @@ contract CTest is Test {
         (bool success, ) = address(c).call{value: amount}(abi.encodeWithSignature("deposit(bool)", false));
 
         // we are looking for a counterexample here
-        // i.e., halmos should find the case amount > balance
+        // i.e., dolmos should find the case amount > balance
         assert(success);
     }
 
@@ -97,7 +97,7 @@ contract CTest is Test {
         (bool success, ) = address(42).call{value: amount}("");
 
         // we are looking for a counterexample here
-        // i.e., halmos should find the case amount > balance
+        // i.e., dolmos should find the case amount > balance
         assert(success);
     }
 

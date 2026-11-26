@@ -14,7 +14,7 @@ contract C {
     }
 }
 
-/// @custom:halmos --storage-layout solidity
+/// @custom:dolmos --storage-layout solidity
 contract SnapshotTest is SymTest, Test {
     C c;
 
@@ -22,7 +22,7 @@ contract SnapshotTest is SymTest, Test {
         c = new C();
     }
 
-    // NOTE: In halmos, the state snapshot ID is constructed by concatenating three hashes of: balance (64 bits), code (64 bits), and storage (128 bits).
+    // NOTE: In dolmos, the state snapshot ID is constructed by concatenating three hashes of: balance (64 bits), code (64 bits), and storage (128 bits).
 
     function check_snapshot() public {
         uint storage0 = svm.snapshotStorage(address(c));

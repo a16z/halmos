@@ -7,8 +7,8 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      halmos-options:
-        description: "additional halmos options"
+      dolmos-options:
+        description: "additional dolmos options"
         required: false
         type: string
         default: ""
@@ -22,7 +22,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     env:
-      HALMOS_ALLOW_DOWNLOAD: 1
+      DOLMOS_ALLOW_DOWNLOAD: 1
 
     strategy:
       fail-fast: false
@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           # note: it is faster to let foundry do a sparse checkout of the missing libraries rather than having the action do a git checkout of the submodules
           submodules: false
@@ -46,7 +46,7 @@ jobs:
         run: forge --version
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
           # Install a specific version of uv.
           version: "0.5.21"
@@ -54,20 +54,25 @@ jobs:
       - name: Set up python ${{ matrix.python-version }}
         run: uv python install ${{ matrix.python-version }}
 
-      - name: Install halmos and its dependencies
+      - name: Install dolmos and its dependencies
         run: |
           uv sync --extra dev
 
-      - name: Write halmos.toml
+      - name: Write dolmos.toml
         shell: bash
         run: |
-          uv run python -m halmos.config \
+          uv run python -m dolmos.config \
             --storage-layout ${{ matrix.storage-layout }} \
             ${{ matrix.cache-solver }} \
-            | tee tests/regression/halmos.toml
+            | tee tests/regression/dolmos.toml
 
       - name: Run pytest
         shell: bash
         run: |
-          uv run pytest -v -k "not long and not ffi" --ignore=tests/lib \
-            --halmos-options="-st --disable-gc --solver-threads 1 ${{ inputs.halmos-options }}" ${{ inputs.pytest-options }}
+          # failed tests are reported as annotations on the run page (readable without
+          # signing in, pytest-github-actions-annotate-failures in the dev extras), and
+          # summarized at the end of the log (-rfE).
+          # no `uv run --with`: it runs pytest in an overlay environment, where dolmos
+          # does not find z3.exe (installed in .venv\bin, not on PATH, on Windows)
+          uv run pytest -v -rfE -k "not long and not ffi" --ignore=tests/lib \
+            --dolmos-options="-st --disable-gc --solver-threads 1 ${{ inputs.dolmos-options }}" ${{ inputs.pytest-options }}

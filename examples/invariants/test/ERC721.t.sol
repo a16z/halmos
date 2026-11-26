@@ -4,7 +4,7 @@ pragma solidity >=0.8.0 <0.9.0;
 import {ERC721} from "../src/ERC721.sol";
 import {Test} from "forge-std/Test.sol";
 
-/// @custom:halmos --solver bitwuzla-abs --solver-timeout-assertion 0
+/// @custom:dolmos --solver bitwuzla-abs --solver-timeout-assertion 0
 contract ERC721Test is Test {
     // ERC721 token address
     ERC721 internal token;

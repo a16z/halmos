@@ -5,10 +5,10 @@ import {ERC721Test} from "./ERC721Test.sol";
 
 import {SoladyERC721} from "../src/SoladyERC721.sol";
 
-/// @custom:halmos --storage-layout=generic --solver-timeout-assertion 0
+/// @custom:dolmos --storage-layout=generic --solver-timeout-assertion 0
 contract SoladyERC721Test is ERC721Test {
 
-    /// @custom:halmos --solver-timeout-branching 1000
+    /// @custom:dolmos --solver-timeout-branching 1000
     function setUp() public override {
         deployer = address(0x1000);
 

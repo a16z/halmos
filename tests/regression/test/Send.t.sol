@@ -8,7 +8,7 @@ contract C {
     constructor() payable { }
 }
 
-/// @custom:halmos --solver-timeout-assertion 0
+/// @custom:dolmos --solver-timeout-assertion 0
 contract SendTest is Test, SymTest {
     address sender;
     address payable receiver;
@@ -96,7 +96,7 @@ contract SendTest is Test, SymTest {
     }
 
     function check_create(uint amount, bytes32 salt, uint mode) public {
-        // note: deployer is set to concrete, to prevent halmos from treating the contract creation target as aliasing with the deployer
+        // note: deployer is set to concrete, to prevent dolmos from treating the contract creation target as aliasing with the deployer
         address deployer = address(0xbeef);
         vm.deal(deployer, svm.createUint(96, "deployer.balance"));
 
