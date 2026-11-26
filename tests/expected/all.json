@@ -5766,6 +5766,15 @@
         ],
         "test/StaticContexts.t.sol:StaticContextsTest": [
             {
+                "name": "check_call_with_value_fails()",
+                "exitcode": 0,
+                "num_models": 0,
+                "models": null,
+                "num_paths": null,
+                "time": null,
+                "num_bounded_loops": null
+            },
+            {
                 "name": "check_create2_fails()",
                 "exitcode": 0,
                 "num_models": 0,

@@ -2773,27 +2773,22 @@ class SEVM:
         """
         value = ex.st.peek(3)  # gas, to, value
 
-        """
-        Symbolic case
-        """
         if type(value) is Bool:
             value = value.as_bv(size=256)
 
-        """
-        Concrete case
-        """
+        # concrete value: halt if nonzero, otherwise nothing to do
         if value.is_concrete:
             if value.value != 0:
                 raise WriteInStaticContext(ex.context_str())
             return
 
-        """
-        TODO : Détailler les didférents cas en commentaires
-        """
+        # symbolic value that is nonzero on every path: halt
         nonzero = simplify(value.as_z3() != 0)
         if is_true(nonzero) or ex.check(Not(nonzero)) == unsat:
             raise WriteInStaticContext(ex.context_str())
 
+        # symbolic value that may be nonzero: the nonzero case is a new branch that
+        # re-executes the CALL and halts there; this path continues with value == 0
         if not is_false(nonzero) and ex.check(nonzero) != unsat:
             stack.push(self.create_branch(ex, nonzero, ex.pc))
 
