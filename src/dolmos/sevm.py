@@ -245,6 +245,7 @@ from dolmos.zfast import (
     is_true,
     sat,
     simplify,
+    unknown,
     unsat,
 )
 
@@ -1056,7 +1057,38 @@ class Path:
         return SMTQuery(query, ids)
 
     def check(self, cond):
-        return self.solver.check(cond)
+        """
+        Checks the satisfiability of the path condition with the given condition.
+
+        Most checks time out (--solver-timeout-branching): the useful answers are the
+        quick `unsat` ones, which prune infeasible branches. The same condition is
+        typically checked again on many sibling paths, and times out again: a condition
+        that already timed out, on this path or on another one, is checked again with a
+        reduced budget (--solver-retry-rlimit), which still finds the quick `unsat`.
+
+        This only affects the pruning of infeasible paths, not the results: `unknown`
+        is always a valid answer here, and the paths that reach an assertion are
+        checked by the assertion solver.
+        """
+        solver = self.solver
+        retry_rlimit = getattr(solver, "retry_rlimit", 0)
+        if not retry_rlimit:
+            return solver.check(cond)
+
+        unknown_conds = solver.unknown_conds
+        cond_id = cond.get_id()
+        if cond_id in unknown_conds:
+            solver.set(rlimit=retry_rlimit)
+            try:
+                return solver.check(cond)
+            finally:
+                solver.set(rlimit=0)
+
+        result = solver.check(cond)
+        if result == unknown:
+            # the term is kept alive, so that its id is not reused by another term
+            unknown_conds[cond_id] = cond
+        return result
 
     def branch(self, cond):
         if len(self.pending) > 0:

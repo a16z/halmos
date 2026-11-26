@@ -283,9 +283,15 @@ def is_concat(x: BitVecRef) -> bool:
     return is_app_of(x, Z3_OP_CONCAT)
 
 
-def create_solver(logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0) -> Solver:
+def create_solver(
+    logic="QF_AUFBV", ctx=None, timeout=0, max_memory=0, retry_rlimit=0
+) -> Solver:
     # QF_AUFBV: quantifier-free bitvector + array theory: https://smtlib.cs.uiowa.edu/logics.shtml
     solver = SolverFor(logic, ctx=ctx)
+
+    # reduced budget for the conditions that already timed out; see Path.check()
+    solver.retry_rlimit = retry_rlimit if timeout > 0 else 0
+    solver.unknown_conds = {}
 
     # set timeout
     solver.set(timeout=timeout)

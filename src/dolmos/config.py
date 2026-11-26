@@ -613,6 +613,17 @@ class Config:
         action=ParseTimeout,
     )
 
+    solver_retry_rlimit: int = arg(
+        help=(
+            "z3 resource limit for checking again a branching condition that already timed out "
+            "on another path, instead of the full --solver-timeout-branching; "
+            "0 means that every check gets the full timeout"
+        ),
+        global_default=100,
+        metavar="N",
+        group=solver_group,
+    )
+
     solver_timeout_assertion: str = arg(
         help=(
             "set timeout for solving assertion violation conditions; 0 means no timeout. "

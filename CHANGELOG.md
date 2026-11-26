@@ -7,6 +7,20 @@ All notable changes to dolmos are documented here. The format follows
 
 ## [Unreleased]
 
+### Performance
+
+- a branching condition that already timed out, on this path or on another one, is
+  checked again with a reduced budget (`--solver-retry-rlimit N`, a z3 resource limit,
+  100 by default; 0 gives the full `--solver-timeout-branching` to every check). Most
+  branching checks time out, and the same conditions are checked again on many sibling
+  paths. Only the pruning of infeasible paths is affected, not the results
+
+### Fixed
+
+- a segmentation fault when Python's garbage collector, running in a solver thread,
+  released z3 terms while the main thread was inside a z3 call: z3 now queues these
+  releases (`Z3_enable_concurrent_dec_ref`)
+
 ### Changed
 
 - symbolic terms are interned (`dolmos.zfast`): each z3 term has a single Python object,

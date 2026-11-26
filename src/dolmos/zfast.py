@@ -39,6 +39,12 @@ from z3.z3types import Ast
 _MAIN = z3.main_ctx()
 _CTX = _MAIN.ref().value
 
+# The objects of z3py (solvers, models, terms that are not interned) are released by
+# whichever thread runs Python's garbage collector, possibly while the main thread is
+# inside a z3 call, and z3 contexts are not thread-safe: this crashed with a segmentation
+# fault. With this flag, z3 queues the releases instead of applying them immediately.
+z3core.Z3_enable_concurrent_dec_ref(_MAIN.ref())
+
 
 def _proto(name, restype, *argtypes):
     """the library function behind z3core.<name>, with a prototype that takes and returns

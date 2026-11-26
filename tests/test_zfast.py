@@ -208,3 +208,23 @@ def test_dead_terms_are_not_released_from_other_threads():
     # nothing was released by the thread: the addresses are only queued
     assert len(zfast._pending) >= 50
     zfast._drain()
+
+
+def test_z3py_objects_can_be_released_from_other_threads():
+    """objects that are not interned are released by z3py itself, from any thread"""
+    x = z3.BitVec("zf_t", 64)
+    terms = [[x + i for i in range(2000)] for _ in range(40)]
+
+    def release():
+        while terms:
+            terms.pop().clear()
+
+    t = threading.Thread(target=release)
+    t.start()
+    n = 0
+    while t.is_alive():
+        s = z3.Solver()
+        s.add(z3.ULT(x + n, 1000), x != n)
+        assert s.check() == z3.sat
+        n += 1
+    t.join()

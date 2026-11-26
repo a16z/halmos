@@ -354,6 +354,7 @@ def mk_solver(args: DolmosConfig, logic="QF_AUFBV", ctx=None) -> Solver:
         ctx=ctx,
         timeout=timeout_ms,
         max_memory=args.solver_max_memory,
+        retry_rlimit=args.solver_retry_rlimit,
     )
 
 
