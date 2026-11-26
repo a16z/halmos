@@ -628,6 +628,8 @@ if __name__ == "__main__":
     import sys
 
     if sys.argv[1:] == ["lean-templates"]:
-        sys.stdout.write(lean_templates())
+        # utf8 with LF line endings, whatever the platform (the file is compared byte for
+        # byte by the tests, and the encoding of stdout is cp1252 on Windows)
+        sys.stdout.buffer.write(lean_templates().encode("utf8"))
     else:
         sys.exit("usage: python -m dolmos.keccak_sat lean-templates")

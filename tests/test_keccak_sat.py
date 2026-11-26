@@ -52,7 +52,8 @@ def test_templates(name):
 
 def test_lean_templates_in_sync():
     """the templates proved in Lean are the ones used by the encoder"""
-    assert LEAN_TEMPLATES.read_text() == lean_templates()
+    # utf8: the default encoding of read_text is the locale one (cp1252 on Windows)
+    assert LEAN_TEMPLATES.read_text(encoding="utf8") == lean_templates()
 
 
 @pytest.mark.parametrize("optimized", [True, False])
