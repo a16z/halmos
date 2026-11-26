@@ -36,6 +36,17 @@ All notable changes to dolmos are documented here. The format follows
 
 ### Added
 
+- `--keccak-exhaustive-bits K` (disabled by default): when the preimage of a symbolic
+  keccak256 has at most `K` free bits (`keccak256(abi.encode(uint8 x))`, a
+  `mapping(uint8 => ...)` slot, a masked value), the queries define the hash by cases
+  on its `2^K` possible preimages, computed natively. They are then exact on this hash:
+  no counterexample relying on a wrong hash value, and properties that depend on the
+  value of the hash can be proved. See [docs/keccak-sat.md](docs/keccak-sat.md)
+- `dolmos.keccak_sat`: bit-precise CNF encodings of keccak256 (textbook, optimized,
+  and by cofactoring on the free bits of the message), with Lean proofs of their
+  equivalence with keccak-f[1600] in `proofs/keccak_sat`, and
+  `benchmarks/keccak_sat.py`
+
 - `vm.exists`, `vm.isFile` and `vm.isDir`, subject to `fs_permissions` like
   `vm.readFile` (the path must be readable, and concrete). They are used by setups
   that load an optional deployment or configuration file, which previously failed

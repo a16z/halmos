@@ -1,0 +1,5 @@
+name = "KeccakSat"
+defaultTargets = ["KeccakSat"]
+
+[[lean_lib]]
+name = "KeccakSat"

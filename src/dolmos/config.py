@@ -674,6 +674,16 @@ class Config:
         group=solver_group,
     )
 
+    keccak_exhaustive_bits: int = arg(
+        help="when the preimage of a symbolic keccak256 has at most this many free bits (e.g. a uint8, a bool, "
+        "or a masked value), add the real hash of each of its 2^K possible values to the queries, "
+        "which makes them exact on this hash: no spurious counterexample, and properties that depend "
+        "on its value can be proved (0 disables it; see docs/keccak-sat.md)",
+        global_default=0,
+        metavar="K",
+        group=solver_group,
+    )
+
     ### Experimental options
 
     symbolic_jump: bool = arg(

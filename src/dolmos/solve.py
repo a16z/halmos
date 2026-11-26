@@ -6,6 +6,7 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass, field, replace
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import MappingProxyType
@@ -15,6 +16,7 @@ from eth_hash.auto import keccak
 
 from dolmos.calldata import FunctionInfo
 from dolmos.config import Config as DolmosConfig
+from dolmos.keccak_sat import free_bits
 from dolmos.logs import (
     debug,
     error,
@@ -393,6 +395,10 @@ class PathContext:
     # exponentiation with --pretty-counterexamples; see mk_exp_apps() and refine_exp()
     exp_apps: "ExpApps | None" = None
 
+    # real keccak values of the preimages with few free bits, as smtlib assertions;
+    # see mk_keccak_facts()
+    keccak_facts: str = ""
+
     # distinguishes the query files of keccak refinement rounds
     suffix: str = ""
 
@@ -412,6 +418,7 @@ class PathContext:
             is_refined=True,
             sha3_args=self.sha3_args,
             exp_apps=self.exp_apps,
+            keccak_facts=self.keccak_facts,
             suffix=self.suffix,
         )
 
@@ -721,6 +728,21 @@ def solve_low_level(path_ctx: PathContext) -> SolverOutput:
 
 def solve_end_to_end(ctx: PathContext) -> SolverOutput:
     """Solves the given query, then checks the keccak values the model relies on (see refine_keccak)."""
+    if ctx.keccak_facts:
+        # exhaustive keccak values of the small preimage domains (see mk_keccak_facts)
+        seeded_query = SMTQuery(
+            ctx.query.smtlib + ctx.keccak_facts, ctx.query.assertions
+        )
+        solver_output = solve_end_to_end(
+            replace(ctx, query=seeded_query, keccak_facts="")
+        )
+
+        # as in refine_keccak, an unsat core may depend on the (unnamed) keccak facts,
+        # so it cannot be reused for other queries
+        if solver_output.unsat_core is not None:
+            solver_output = replace(solver_output, unsat_core=None)
+        return solver_output
+
     if ctx.exp_apps:
         return solve_with_exp_refinement(ctx)
 
@@ -820,6 +842,98 @@ def mk_sha3_args(sha3s) -> tuple[tuple[int, str], ...]:
         if len(result) >= MAX_SHA3_ARGS:
             break
     return tuple(result)
+
+
+# upper bound on the number of keccak values added to a query by mk_keccak_facts()
+MAX_KECCAK_FACTS = 1 << 16
+
+SHA3_DOM_PREFIX = "sha3dom_"
+SHA3_IMG_PREFIX = "sha3img_"
+
+
+@lru_cache(maxsize=256)
+def _keccak_cases_of_domain(size: int, mask: int, value: int) -> tuple[str, ...]:
+    """
+    The case split of keccak256 on a preimage domain, given as the free bits (mask) and
+    the constant bits (value) of the preimage: one assertion `preimage == v => hash == keccak256(v)`
+    for each value v of the domain, over the placeholders {dom} and {img}. Only the free
+    bits of the preimage are compared.
+    """
+    positions = [i for i in range(size) if mask >> i & 1]
+
+    # maximal runs of consecutive free bits, as (lo, hi)
+    runs: list[tuple[int, int]] = []
+    for pos in positions:
+        if runs and runs[-1][1] == pos - 1:
+            runs[-1] = (runs[-1][0], pos)
+        else:
+            runs.append((pos, pos))
+
+    cases = []
+    for u in range(1 << len(positions)):
+        v = value
+        for j, pos in enumerate(positions):
+            if u >> j & 1:
+                v |= 1 << pos
+        # a hash outside of the range assumed for hash values is left to refine_keccak()
+        if (fact := keccak_fact(size, v)) is None:
+            continue
+        conds = [
+            f"(= ((_ extract {hi} {lo}) {{dom}}) (_ bv{(v >> lo) & ((1 << (hi - lo + 1)) - 1)} {hi - lo + 1}))"
+            for lo, hi in runs
+        ]
+        cond = conds[0] if len(conds) == 1 else f"(and {' '.join(conds)})"
+        cases.append(f"(assert (=> {cond} (= {{img}} (_ bv{fact[1]} 256))))\n")
+    return tuple(cases)
+
+
+def mk_keccak_facts(sha3s, max_bits: int) -> str:
+    """
+    Returns the real keccak values of the symbolic preimages of the given KeccakRegistry
+    that have at most max_bits free bits (--keccak-exhaustive-bits), as smtlib assertions.
+
+    A full keccak256 cannot be reasoned about by a solver, other than by enumerating the
+    candidate preimages, and a bit-precise encoding makes each candidate cost a propagation
+    of the whole circuit. On a small domain, the enumeration is done here, natively, and the
+    hash is defined by cases (Shannon cofactoring on the free bits of the preimage, see
+    keccak_sat.py and docs/keccak-sat.md): the query is exact on these hashes.
+
+    The assertions are true statements about keccak256, like the ones of refine_keccak().
+    They are implications on the hash term itself rather than facts `f_sha3_N(v) == h`
+    on constants, which solvers handle poorly in large numbers (Ackermann expansion).
+    """
+    if max_bits <= 0:
+        return ""
+
+    result = []
+    count = 0
+    for expr in sha3s:
+        if expr.num_args() != 1 or not is_f_sha3_name(expr.decl().name()):
+            continue
+        data = expr.arg(0)
+        if is_bv_value(data) or data.size() % 8:
+            continue
+        domain = free_bits(data)
+        if domain is None:
+            continue
+        mask, value = domain
+        if not 0 < mask.bit_count() <= max_bits:
+            continue
+        if count + (1 << mask.bit_count()) > MAX_KECCAK_FACTS:
+            break
+        count += 1 << mask.bit_count()
+
+        size, term = data.size(), data.sexpr()
+        dom, img = f"{SHA3_DOM_PREFIX}{len(result)}", f"{SHA3_IMG_PREFIX}{len(result)}"
+        cases = _keccak_cases_of_domain(size, mask, value)
+        result.append(
+            f"(declare-fun {dom} () (_ BitVec {size}))\n"
+            f"(assert (= {dom} {term}))\n"
+            f"(declare-fun {img} () (_ BitVec 256))\n"
+            f"(assert (= {img} ({f_sha3_name(size)} {term})))\n"
+            + "".join(cases).replace("{dom}", dom).replace("{img}", img)
+        )
+    return "".join(result)
 
 
 def sha3_arg_decls(sha3_args) -> str:
