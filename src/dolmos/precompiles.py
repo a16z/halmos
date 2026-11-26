@@ -13,7 +13,9 @@ uninterpreted functions constrained by the properties that always hold.
 
 import hashlib
 
-from z3 import (
+from dolmos.bytevec import ByteVec
+from dolmos.utils import BitVecSorts, bytes_to_bv_value, con
+from dolmos.zfast import (
     ULT,
     BitVecRef,
     Extract,
@@ -24,9 +26,6 @@ from z3 import (
     ZeroExt,
     is_bv,
 )
-
-from dolmos.bytevec import ByteVec
-from dolmos.utils import BitVecSorts, bytes_to_bv_value, con
 
 # EIP-7823 (osaka): each length field of a MODEXP input is capped at 1024 bytes;
 # larger inputs make the precompile fail

@@ -20,39 +20,6 @@ from typing import (
 
 import xxhash
 from eth_hash.auto import keccak
-from z3 import (
-    UGE,
-    ULE,
-    ULT,
-    And,
-    Array,
-    ArrayRef,
-    BitVec,
-    BitVecRef,
-    BitVecVal,
-    BoolRef,
-    BoolVal,
-    CheckSatResult,
-    Concat,
-    Context,
-    Extract,
-    Function,
-    If,
-    Not,
-    Select,
-    Solver,
-    Store,
-    ZeroExt,
-    eq,
-    is_const,
-    is_eq,
-    is_false,
-    is_true,
-    sat,
-    simplify,
-    unsat,
-)
-from z3.z3util import is_expr_var
 
 from dolmos import lasso, precompiles
 from dolmos.bitvec import ONE, ZERO, is_power_of_two
@@ -246,6 +213,39 @@ from dolmos.utils import (
     uint160,
     uint256,
     unbox_int,
+)
+from dolmos.zfast import (
+    UGE,
+    ULE,
+    ULT,
+    And,
+    Array,
+    ArrayRef,
+    BitVec,
+    BitVecRef,
+    BitVecVal,
+    BoolRef,
+    BoolVal,
+    CheckSatResult,
+    Concat,
+    Context,
+    Extract,
+    Function,
+    If,
+    Not,
+    Select,
+    Solver,
+    Store,
+    ZeroExt,
+    eq,
+    is_const,
+    is_eq,
+    is_expr_var,
+    is_false,
+    is_true,
+    sat,
+    simplify,
+    unsat,
 )
 
 EMPTY_BYTES = ByteVec()

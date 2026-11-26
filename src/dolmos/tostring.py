@@ -25,7 +25,11 @@ forge-std calls vm.toString on values that are usually symbolic in dolmos tests
 from dataclasses import dataclass
 
 from eth_hash.auto import keccak
-from z3 import (
+
+from dolmos.bytevec import ByteVec
+from dolmos.logs import warn
+from dolmos.utils import extract_bytes_argument, is_bv_value, uid
+from dolmos.zfast import (
     UGE,
     ULE,
     And,
@@ -41,10 +45,6 @@ from z3 import (
     simplify,
     unsat,
 )
-
-from dolmos.bytevec import ByteVec
-from dolmos.logs import warn
-from dolmos.utils import extract_bytes_argument, is_bv_value, uid
 
 # maximal number of decimal digits of an uint256 (2**256 - 1 has 78 digits)
 MAX_UINT256_DIGITS = 78

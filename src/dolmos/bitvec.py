@@ -2,7 +2,8 @@
 
 from typing import Any, TypeAlias
 
-from z3 import (
+from dolmos.exceptions import NotConcreteError
+from dolmos.zfast import (
     UGE,
     UGT,
     ULE,
@@ -33,8 +34,6 @@ from z3 import (
     is_true,
     simplify,
 )
-
-from dolmos.exceptions import NotConcreteError
 
 BV: TypeAlias = "DolmosBitVec"
 AnyValue: TypeAlias = "int | bytes | BitVecRef | BV | DolmosBool | str"

@@ -12,7 +12,6 @@ from types import MappingProxyType
 from typing import Literal
 
 from eth_hash.auto import keccak
-from z3 import CheckSatResult, Solver, is_app, sat, unknown, unsat
 
 from dolmos.calldata import FunctionInfo
 from dolmos.config import Config as DolmosConfig
@@ -29,6 +28,7 @@ from dolmos.processes import (
 )
 from dolmos.sevm import Address, Exec, SMTQuery
 from dolmos.utils import f_sha3_name, hexify, is_bv_value, is_f_sha3_name
+from dolmos.zfast import CheckSatResult, Solver, is_app, sat, unknown, unsat
 
 EXIT_TIMEDOUT = 124
 

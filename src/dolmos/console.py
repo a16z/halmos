@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0
 
-from z3 import BitVec
-
 from dolmos.bitvec import DolmosBitVec as BV
 from dolmos.logs import (
     info,
@@ -21,6 +19,7 @@ from dolmos.utils import (
     render_int,
     render_uint,
 )
+from dolmos.zfast import BitVec
 
 
 def log_uint256(arg: BitVec) -> None:

@@ -4,8 +4,6 @@ import io
 import sys
 from contextvars import ContextVar
 
-from z3 import Z3_OP_CONCAT, BitVecNumRef, BitVecRef, is_app
-
 from dolmos.bytevec import ByteVec
 from dolmos.config import Config, TraceEvent
 from dolmos.exceptions import DolmosException
@@ -30,6 +28,7 @@ from dolmos.utils import (
     unbox_int,
     yellow,
 )
+from dolmos.zfast import Z3_OP_CONCAT, BitVecNumRef, BitVecRef, is_app
 
 config_context: ContextVar[Config | None] = ContextVar("config", default=None)
 

@@ -27,7 +27,17 @@ forks a failing path when the condition can be false.
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 
-from z3 import (
+from dolmos.bitvec import DolmosBitVec as BV
+from dolmos.bytevec import ByteVec
+from dolmos.exceptions import DolmosException
+from dolmos.utils import (
+    bytes_to_bv_value,
+    con,
+    extract_bytes_argument,
+    int_of,
+    uint160,
+)
+from dolmos.zfast import (
     And,
     BitVecRef,
     BoolRef,
@@ -39,17 +49,6 @@ from z3 import (
     Sum,
     is_bv,
     simplify,
-)
-
-from dolmos.bitvec import DolmosBitVec as BV
-from dolmos.bytevec import ByteVec
-from dolmos.exceptions import DolmosException
-from dolmos.utils import (
-    bytes_to_bv_value,
-    con,
-    extract_bytes_argument,
-    int_of,
-    uint160,
 )
 
 # foundry reports a successful call with 8192 zero bytes when a revert was expected

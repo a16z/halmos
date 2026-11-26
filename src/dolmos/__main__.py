@@ -29,18 +29,6 @@ from rich.console import Group
 from rich.panel import Panel
 from rich.text import Text
 from rich.tree import Tree
-from z3 import (
-    BitVec,
-    BoolRef,
-    Solver,
-    ZeroExt,
-    eq,
-    is_bv_value,
-    set_option,
-    simplify,
-    unknown,
-    unsat,
-)
 
 import dolmos.traces
 from dolmos.build import (
@@ -171,6 +159,18 @@ from dolmos.utils import (
     smt_or,
     uid,
     unbox_int,
+)
+from dolmos.zfast import (
+    BitVec,
+    BoolRef,
+    Solver,
+    ZeroExt,
+    eq,
+    is_bv_value,
+    set_option,
+    simplify,
+    unknown,
+    unsat,
 )
 
 BAD_FILE_DESCRIPTOR = 9

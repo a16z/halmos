@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Any
 
 from sortedcontainers import SortedDict
-from z3 import BitVecRef, If, eq, is_bool, is_bv, is_bv_value, simplify, substitute
 
 from dolmos.bitvec import DolmosBitVec as BV
 from dolmos.logs import warn
@@ -20,6 +19,16 @@ from dolmos.utils import (
     hexify,
     try_bv_value_to_bytes,
     unbox_int,
+)
+from dolmos.zfast import (
+    BitVecRef,
+    If,
+    eq,
+    is_bool,
+    is_bv,
+    is_bv_value,
+    simplify,
+    substitute,
 )
 
 UnwrappedBytes = bytes | Byte

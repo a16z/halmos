@@ -8,24 +8,6 @@ from dataclasses import dataclass
 from subprocess import PIPE, Popen
 
 from xxhash import xxh3_64, xxh3_64_digest
-from z3 import (
-    UGE,
-    ULE,
-    ULT,
-    And,
-    BitVec,
-    BitVecRef,
-    Concat,
-    Function,
-    Implies,
-    Not,
-    Or,
-    is_bv,
-    is_bv_value,
-    is_false,
-    simplify,
-    unsat,
-)
 
 from dolmos import env
 from dolmos.assertions import assert_cheatcode_handler
@@ -93,6 +75,24 @@ from dolmos.utils import (
     uid,
     uint160,
     uint256,
+)
+from dolmos.zfast import (
+    UGE,
+    ULE,
+    ULT,
+    And,
+    BitVec,
+    BitVecRef,
+    Concat,
+    Function,
+    Implies,
+    Not,
+    Or,
+    is_bv,
+    is_bv_value,
+    is_false,
+    simplify,
+    unsat,
 )
 
 # f_vmaddr(key) -> address

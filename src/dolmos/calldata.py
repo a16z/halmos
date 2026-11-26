@@ -5,15 +5,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import reduce
 
-from z3 import (
-    BitVec,
-    BitVecRef,
-)
-
 from dolmos.bytevec import ByteVec
 from dolmos.config import Config as DolmosConfig
 from dolmos.logs import debug_once
 from dolmos.utils import con, uid
+from dolmos.zfast import (
+    BitVec,
+    BitVecRef,
+)
 
 
 @dataclass(frozen=True)

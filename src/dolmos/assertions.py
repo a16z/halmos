@@ -3,16 +3,6 @@
 import re
 from dataclasses import dataclass
 
-from z3 import (
-    UGE,
-    UGT,
-    ULE,
-    ULT,
-    BitVecRef,
-    BoolVal,
-    is_bv,
-)
-
 from dolmos.exceptions import DolmosException
 from dolmos.utils import (
     bytes_to_bv_value,
@@ -22,6 +12,15 @@ from dolmos.utils import (
     extract_string_argument,
     test,
     uint256,
+)
+from dolmos.zfast import (
+    UGE,
+    UGT,
+    ULE,
+    ULT,
+    BitVecRef,
+    BoolVal,
+    is_bv,
 )
 
 

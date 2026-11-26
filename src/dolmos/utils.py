@@ -10,7 +10,13 @@ from functools import partial, wraps
 from timeit import default_timer as timer
 from typing import TYPE_CHECKING, Any, TypeAlias, Union
 
-from z3 import (
+from dolmos.bitvec import DolmosBitVec as BV
+from dolmos.bitvec import DolmosBool as Bool
+from dolmos.exceptions import DolmosException, NotConcreteError
+from dolmos.hashes import keccak256_256, keccak256_512
+from dolmos.logs import warn
+from dolmos.mapper import Mapper
+from dolmos.zfast import (
     Z3_OP_BADD,
     Z3_OP_CONCAT,
     Z3_OP_ULEQ,
@@ -42,13 +48,6 @@ from z3 import (
     simplify,
     substitute,
 )
-
-from dolmos.bitvec import DolmosBitVec as BV
-from dolmos.bitvec import DolmosBool as Bool
-from dolmos.exceptions import DolmosException, NotConcreteError
-from dolmos.hashes import keccak256_256, keccak256_512
-from dolmos.logs import warn
-from dolmos.mapper import Mapper
 
 # order of the secp256k1 curve
 secp256k1n = (

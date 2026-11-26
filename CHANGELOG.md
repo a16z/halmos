@@ -7,6 +7,18 @@ All notable changes to dolmos are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- symbolic terms are interned (`dolmos.zfast`): each z3 term has a single Python object,
+  which caches its structure (kind, declaration, arguments, size, value, simplified
+  form), and terms are built with direct calls to the z3 library instead of going through
+  z3py. Identical terms being identical objects, path conditions are found by identity
+  instead of building and inspecting an equality term. Path exploration is 1.2 to 1.5
+  times faster on the regression tests and the examples, with the same verdicts; solver
+  time is unchanged. The z3 references of dead terms are no longer released by whichever
+  thread runs the garbage collector, but queued and released by the thread that builds
+  terms
+
 ### Added
 
 - `vm.exists`, `vm.isFile` and `vm.isDir`, subject to `fs_permissions` like
