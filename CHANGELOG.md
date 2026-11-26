@@ -31,7 +31,8 @@ All notable changes to dolmos are documented here. The format follows
   times faster on the regression tests and the examples, with the same verdicts; solver
   time is unchanged. The z3 references of dead terms are no longer released by whichever
   thread runs the garbage collector, but queued and released by the thread that builds
-  terms
+  terms. `DOLMOS_NO_ZFAST=1` in the environment disables interning: terms are then plain
+  z3py objects, as before
 
 ### Added
 

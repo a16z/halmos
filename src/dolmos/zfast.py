@@ -25,9 +25,13 @@ interned on the way out. Terms of other contexts are left to z3py.
 
 Everything is exported, so that `from dolmos.zfast import X` can replace
 `from z3 import X`.
+
+With DOLMOS_NO_ZFAST=1 in the environment, the module exports the functions of z3py
+unchanged (see the end of the file): terms are then plain z3py objects, as before.
 """
 
 import ctypes
+import os
 import weakref
 from ctypes import c_char_p, c_uint, c_void_p
 
@@ -741,3 +745,18 @@ def eq(a, b):
     if a is b:
         return True
     return a.eq(b)
+
+
+#
+# switch
+#
+
+ENABLED = not os.environ.get("DOLMOS_NO_ZFAST")
+
+if not ENABLED:
+    # the definitions above are replaced by the ones of z3py
+    from z3 import *  # noqa: F403
+    from z3.z3util import is_expr_var  # noqa: F401
+
+    def intern_expr(x):
+        return x

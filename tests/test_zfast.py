@@ -2,6 +2,7 @@
 
 import copy
 import gc
+import os
 import threading
 
 import pytest
@@ -31,6 +32,10 @@ from dolmos.zfast import (
     is_false,
     is_true,
     simplify,
+)
+
+pytestmark = pytest.mark.skipif(
+    not zfast.ENABLED, reason="interned terms are disabled (DOLMOS_NO_ZFAST)"
 )
 
 
@@ -228,3 +233,21 @@ def test_z3py_objects_can_be_released_from_other_threads():
         assert s.check() == z3.sat
         n += 1
     t.join()
+
+
+def test_switch():
+    """DOLMOS_NO_ZFAST=1 gives the functions of z3py"""
+    import subprocess
+    import sys
+
+    code = (
+        "import z3, dolmos.zfast as zf;"
+        "assert not zf.ENABLED;"
+        "assert zf.BitVec is z3.BitVec and zf.simplify is z3.simplify;"
+        "assert zf.If is z3.If and zf.Function is z3.Function;"
+        "x = zf.BitVec('x', 8);"
+        "assert type(x) is z3.BitVecRef and zf.is_expr_var(x);"
+        "assert zf.intern_expr(x) is x"
+    )
+    env = dict(os.environ, DOLMOS_NO_ZFAST="1")
+    subprocess.run([sys.executable, "-c", code], env=env, check=True)
